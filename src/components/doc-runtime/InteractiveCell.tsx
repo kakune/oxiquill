@@ -1,22 +1,17 @@
-import { useEffect, useMemo, useRef, useState } from 'preact/hooks';
+import { useState } from 'preact/hooks';
 import {
-  coerceInputValue,
-  formatInputValue,
-  idleOutputMessage,
-  initialValues,
   labelsForLanguage,
   shouldShowRunButton
 } from '../../lib/doc-runtime/interactive-cell-model';
-import { getCell, getManifestSnapshot, subscribeManifest } from '../../lib/doc-runtime/manifest';
-import { normalizeCellExecutionResult } from '../../lib/doc-runtime/output-artifacts';
-import { runInteractiveCell } from '../../lib/doc-runtime/runtime-client';
-import type {
-  CellExecutionResult,
-  CellManifest,
-  InputSpec,
-  InputValues
-} from '../../lib/doc-runtime/types';
-import OutputRenderer from './OutputRenderer';
+import { getCell } from '../../lib/doc-runtime/manifest';
+import type { CellManifest } from '../../lib/doc-runtime/types';
+import { CellOutput } from './CellOutput';
+import { InputControl } from './InputControl';
+import {
+  useManifestSnapshot,
+  useRuntimeLabels
+} from './manifest-hooks';
+import { useInteractiveCellRun } from './useInteractiveCellRun';
 
 interface InteractiveCellProps {
   cellId: string;
@@ -47,46 +42,8 @@ function InteractiveCellPanel({
   labels: ReturnType<typeof labelsForLanguage>;
   runtimeVersion: string;
 }) {
-  const [values, setValues] = useState<InputValues>(() => initialValues(cell.inputs));
-  const [result, setResult] = useState<CellExecutionResult>();
-  const [error, setError] = useState<string>();
-  const [isRunning, setIsRunning] = useState(false);
   const [isSourceVisible, setIsSourceVisible] = useState(cell.showSource);
-  const latestRunId = useRef(0);
-
-  const serializedValues = useMemo(() => JSON.stringify(values), [values]);
-
-  useEffect(() => {
-    if (cell.run !== 'autorun') return;
-    void run();
-  }, [cell.id, runtimeVersion]);
-
-  useEffect(() => {
-    if (cell.run !== 'reactive') return;
-    void run();
-  }, [cell.id, runtimeVersion, serializedValues]);
-
-  async function run() {
-    const runId = latestRunId.current + 1;
-    latestRunId.current = runId;
-    setIsRunning(true);
-    setError(undefined);
-
-    try {
-      const nextResult = await runInteractiveCell(cell, values);
-      if (latestRunId.current === runId) {
-        setResult(nextResult);
-      }
-    } catch (caught) {
-      if (latestRunId.current === runId) {
-        setError(caught instanceof Error ? caught.message : String(caught));
-      }
-    } finally {
-      if (latestRunId.current === runId) {
-        setIsRunning(false);
-      }
-    }
-  }
+  const runtime = useInteractiveCellRun(cell, runtimeVersion);
 
   return (
     <section class="doc-cell" data-language={cell.language} data-testid={`cell-${cell.id}`}>
@@ -105,8 +62,8 @@ function InteractiveCellPanel({
             {isSourceVisible ? labels.hideCode : labels.showCode}
           </button>
           {shouldShowRunButton(cell.run) ? (
-            <button type="button" class="run-button" disabled={isRunning} onClick={run}>
-              {isRunning ? labels.running : labels.run}
+            <button type="button" class="run-button" disabled={runtime.isRunning} onClick={runtime.run}>
+              {runtime.isRunning ? labels.running : labels.run}
             </button>
           ) : null}
         </div>
@@ -119,8 +76,8 @@ function InteractiveCellPanel({
               key={input.name}
               cellId={cell.id}
               input={input}
-              value={values[input.name]}
-              onChange={(value) => setValues((current) => ({ ...current, [input.name]: value }))}
+              value={runtime.values[input.name]}
+              onChange={(value) => runtime.setInputValue(input.name, value)}
             />
           ))}
         </div>
@@ -134,167 +91,13 @@ function InteractiveCellPanel({
         />
       ) : null}
 
-      <CellOutput result={result} error={error} isRunning={isRunning} labels={labels} runMode={cell.run} />
-    </section>
-  );
-}
-
-function useManifestSnapshot() {
-  const [snapshot, setSnapshot] = useState(getManifestSnapshot);
-
-  useEffect(() => subscribeManifest(() => setSnapshot(getManifestSnapshot())), []);
-
-  return snapshot;
-}
-
-function useRuntimeLabels() {
-  return useMemo(() => labelsForLanguage(globalThis.document?.documentElement.lang), []);
-}
-
-function InputControl({
-  cellId,
-  input,
-  value,
-  onChange
-}: {
-  cellId: string;
-  input: InputSpec;
-  onChange: (value: string | number | boolean) => void;
-  value: string | number | boolean;
-}) {
-  const id = inputControlId(cellId, input.name);
-
-  if (input.type === 'checkbox') {
-    return (
-      <label class="doc-input doc-input--checkbox" for={id}>
-        <input
-          id={id}
-          type="checkbox"
-          checked={Boolean(value)}
-          onInput={(event) => onChange(event.currentTarget.checked)}
-        />
-        <span>{input.label}</span>
-      </label>
-    );
-  }
-
-  if (input.type === 'select') {
-    return (
-      <label class="doc-input" for={id}>
-        <span>{input.label}</span>
-        <select id={id} value={String(value)} onInput={(event) => onChange(event.currentTarget.value)}>
-          {input.options.map((option) => (
-            <option key={option.value} value={option.value}>
-              {option.label}
-            </option>
-          ))}
-        </select>
-      </label>
-    );
-  }
-
-  if (input.type === 'radio') {
-    return (
-      <fieldset class="doc-input doc-input--radio">
-        <legend>{input.label}</legend>
-        {input.options.map((option) => (
-          <label key={option.value}>
-            <input
-              type="radio"
-              name={id}
-              value={option.value}
-              checked={String(value) === option.value}
-              onInput={(event) => onChange(event.currentTarget.value)}
-            />
-            <span>{option.label}</span>
-          </label>
-        ))}
-      </fieldset>
-    );
-  }
-
-  if (input.type === 'textarea') {
-    return (
-      <label class="doc-input" for={id}>
-        <span>{input.label}</span>
-        <textarea id={id} value={String(value)} onInput={(event) => onChange(event.currentTarget.value)} />
-      </label>
-    );
-  }
-
-  if (input.type === 'range') {
-    return (
-      <label class="doc-input" for={id}>
-        <span>
-          {input.label} <strong data-testid={`${input.name}-value`}>{formatInputValue(value)}</strong>
-        </span>
-        <input
-          id={id}
-          aria-label={input.name}
-          type="range"
-          min={input.min}
-          max={input.max}
-          step={input.step}
-          value={Number(value)}
-          onInput={(event) => onChange(Number(event.currentTarget.value))}
-        />
-      </label>
-    );
-  }
-
-  const numeric = input.type === 'number' || input.type === 'integer';
-
-  return (
-    <label class="doc-input" for={id}>
-      <span>{input.label}</span>
-      <input
-        id={id}
-        aria-label={input.name}
-        type={numeric ? 'number' : 'text'}
-        min={input.min}
-        max={input.max}
-        step={input.step}
-        value={String(value)}
-        onInput={(event) => {
-          onChange(coerceInputValue(input, event.currentTarget.value));
-        }}
+      <CellOutput
+        result={runtime.result}
+        error={runtime.error}
+        isRunning={runtime.isRunning}
+        labels={labels}
+        runMode={cell.run}
       />
-    </label>
-  );
-}
-
-function inputControlId(cellId: string, inputName: string): string {
-  return `doc-input-${cellId}-${inputName}`;
-}
-
-function CellOutput({
-  error,
-  isRunning,
-  labels,
-  result,
-  runMode
-}: {
-  error?: string;
-  isRunning: boolean;
-  labels: ReturnType<typeof labelsForLanguage>;
-  result?: CellExecutionResult;
-  runMode: CellManifest['run'];
-}) {
-  if (error) return <p class="error-state">{error}</p>;
-  if (isRunning) return <p class="empty-state">{labels.runningCell}</p>;
-  if (!result) {
-    return (
-      <p class="empty-state">
-        {idleOutputMessage(runMode, labels)}
-      </p>
-    );
-  }
-
-  const normalizedResult = normalizeCellExecutionResult(result);
-
-  return (
-    <div class="doc-cell__outputs">
-      <OutputRenderer outputs={normalizedResult.outputs} />
-    </div>
+    </section>
   );
 }
