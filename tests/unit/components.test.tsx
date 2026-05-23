@@ -53,6 +53,7 @@ vi.mock('../../src/lib/doc-runtime/runtime-client', () => ({
 
 const { default: InteractiveCell } = await import('../../src/components/doc-runtime/InteractiveCell');
 const { default: MermaidDiagram } = await import('../../src/components/doc-runtime/MermaidDiagram');
+const { default: OutputRenderer } = await import('../../src/components/doc-runtime/OutputRenderer');
 const { default: PlotOutput } = await import('../../src/components/doc-runtime/PlotOutput');
 
 class TestResizeObserver {
@@ -473,5 +474,26 @@ describe('PlotOutput', () => {
 
     unmount();
     expect(mocks.chart.dispose).toHaveBeenCalled();
+  });
+});
+
+describe('OutputRenderer', () => {
+  it('renders sandboxed HTML and reports unsupported artifacts', () => {
+    render(
+      <OutputRenderer
+        outputs={[
+          { kind: 'html', html: '<strong>safe</strong>', sandboxed: true, title: 'HTML preview' },
+          { kind: 'table', columns: [{ key: 'x', label: 'x' }], rows: [[1]] },
+          { kind: 'unknown' }
+        ]}
+      />
+    );
+
+    expect(screen.getByTestId('html-output')).toHaveAttribute('sandbox', '');
+    expect(screen.getByTestId('html-output')).toHaveAttribute('srcdoc', '<strong>safe</strong>');
+    expect(screen.getByTestId('html-output')).toHaveAttribute('title', 'HTML preview');
+    expect(screen.getAllByTestId('artifact-error')).toHaveLength(2);
+    expect(screen.getByText('Unsupported table output artifact.')).toBeVisible();
+    expect(screen.getByText('Unsupported output artifact.')).toBeVisible();
   });
 });
