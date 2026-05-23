@@ -364,7 +364,9 @@ describe('doc runtime core', () => {
         'emit_json!(&serde_json::json!({"ok": true}));',
         'emit_html!("<strong>hello</strong>");',
         'emit_image_svg!("<svg />");',
-        'emit_image_png!("abc");'
+        'emit_image_png!("abc");',
+        'emit_svg!("<svg />");',
+        'emit_png_base64!("abc");'
       ].join('\n'),
       inputs: []
     };
@@ -394,6 +396,8 @@ describe('doc runtime core', () => {
     expect(generateRustFunction(rustCell)).not.toContain('macro_rules! emit_json');
     expect(generateRustFunction(preludeCell)).toContain('macro_rules! emit_json');
     expect(generateRustFunction(preludeCell)).toContain('macro_rules! emit_image_svg');
+    expect(generateRustFunction(preludeCell)).toContain('macro_rules! emit_svg');
+    expect(generateRustFunction(preludeCell)).toContain('macro_rules! emit_png_base64');
     expect(generateRustFunction(tableCell)).toContain('macro_rules! emit_table');
     expect(generateRustFunction(tableCell)).toContain('macro_rules! emit_table_with_columns');
     expect(generateRustFunction(tableCell)).toContain('macro_rules! emit_records_table');
@@ -413,6 +417,10 @@ describe('doc runtime core', () => {
     expect(generateRustLib([preludeCell])).toContain('Json(JsonArtifact)');
     expect(generateRustLib([preludeCell])).toContain('Html(HtmlArtifact)');
     expect(generateRustLib([preludeCell])).toContain('Image(ImageArtifact)');
+    expect(generateRustLib([preludeCell])).toContain('fn ensure_output_size');
+    expect(generateRustLib([preludeCell])).toContain('fn json_artifact');
+    expect(generateRustLib([preludeCell])).toContain('fn html_artifact');
+    expect(generateRustLib([preludeCell])).toContain('fn image_artifact');
     expect(generateRustLib([tableCell])).toContain('Table(TableArtifact)');
     expect(generateRustLib([tableCell])).toContain('fn table_artifact_from_value');
     expect(generateRustLib([tableCell])).toContain('row_count: usize');

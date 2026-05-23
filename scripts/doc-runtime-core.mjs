@@ -530,11 +530,27 @@ ${capabilities.json ? `#[derive(Debug, Serialize)]
 struct JsonArtifact {
     value: Value,
 }
+
+fn json_artifact(value: Value) -> Result<JsonArtifact, String> {
+    let byte_count = serde_json::to_string(&value)
+        .map_err(|error| error.to_string())?
+        .len();
+    ensure_output_size("JSON output", byte_count, 500_000)?;
+    Ok(JsonArtifact { value })
+}
 ` : ''}
 ${capabilities.html ? `#[derive(Debug, Serialize)]
 struct HtmlArtifact {
     html: String,
     sandboxed: bool,
+}
+
+fn html_artifact(html: String) -> Result<HtmlArtifact, String> {
+    ensure_output_size("HTML output", html.len(), 500_000)?;
+    Ok(HtmlArtifact {
+        html,
+        sandboxed: true,
+    })
 }
 ` : ''}
 ${capabilities.image ? `#[derive(Debug, Serialize)]
@@ -543,6 +559,27 @@ struct ImageArtifact {
     data: String,
     #[serde(skip_serializing_if = "Option::is_none")]
     alt: Option<String>,
+}
+
+fn image_artifact(
+    mime: &'static str,
+    data: String,
+    alt: Option<String>,
+) -> Result<ImageArtifact, String> {
+    ensure_output_size("image output", data.len(), 2_000_000)?;
+    Ok(ImageArtifact { mime, data, alt })
+}
+` : ''}
+${capabilities.json || capabilities.html || capabilities.image ? `fn ensure_output_size(
+    label: &str,
+    byte_count: usize,
+    limit: usize,
+) -> Result<(), String> {
+    if byte_count > limit {
+        Err(format!("{label} is {byte_count} bytes, exceeding the {limit} byte limit"))
+    } else {
+        Ok(())
+    }
 }
 ` : ''}
 ${capabilities.table ? `#[derive(Debug, Serialize)]
@@ -791,7 +828,10 @@ function rustOutputCapabilities(rustCells) {
     histogramChart: source.includes('emit_histogram!'),
     heatmapChart: source.includes('emit_heatmap!'),
     html: source.includes('emit_html!'),
-    image: source.includes('emit_image_svg!') || source.includes('emit_image_png!'),
+    image: source.includes('emit_image_svg!')
+      || source.includes('emit_image_png!')
+      || source.includes('emit_svg!')
+      || source.includes('emit_png_base64!'),
     json: source.includes('emit_json!'),
     table: source.includes('emit_table!')
       || source.includes('emit_table_with_columns!')
@@ -1027,8 +1067,10 @@ function generateRustPreludeMacros(source) {
     source.includes('emit_text!') ? generateTextMacro() : '',
     source.includes('emit_json!') ? generateJsonMacro() : '',
     source.includes('emit_html!') ? generateHtmlMacro() : '',
-    source.includes('emit_image_svg!') ? generateImageSvgMacro() : '',
-    source.includes('emit_image_png!') ? generateImagePngMacro() : '',
+    source.includes('emit_image_svg!') || source.includes('emit_svg!') ? generateImageSvgMacro() : '',
+    source.includes('emit_image_png!') || source.includes('emit_png_base64!') ? generateImagePngMacro() : '',
+    source.includes('emit_svg!') ? generateSvgMacro() : '',
+    source.includes('emit_png_base64!') ? generatePngBase64Macro() : '',
     source.includes('emit_table!') ? generateTableMacro() : '',
     source.includes('emit_table_with_columns!') ? generateTableWithColumnsMacro() : '',
     source.includes('emit_records_table!') ? generateRecordsTableMacro() : '',
@@ -1070,9 +1112,10 @@ function generateTextMacro() {
 function generateJsonMacro() {
   return `    macro_rules! emit_json {
         ($value:expr) => {{
-            __outputs.borrow_mut().push(OutputArtifact::Json(JsonArtifact {
-                value: serde_json::to_value(&$value).map_err(|error| error.to_string())?,
-            }));
+            let artifact = json_artifact(
+                serde_json::to_value(&$value).map_err(|error| error.to_string())?,
+            )?;
+            __outputs.borrow_mut().push(OutputArtifact::Json(artifact));
         }};
     }`;
 }
@@ -1080,10 +1123,8 @@ function generateJsonMacro() {
 function generateHtmlMacro() {
   return `    macro_rules! emit_html {
         ($html:expr) => {{
-            __outputs.borrow_mut().push(OutputArtifact::Html(HtmlArtifact {
-                html: ($html).to_string(),
-                sandboxed: true,
-            }));
+            let artifact = html_artifact(($html).to_string())?;
+            __outputs.borrow_mut().push(OutputArtifact::Html(artifact));
         }};
     }`;
 }
@@ -1091,18 +1132,16 @@ function generateHtmlMacro() {
 function generateImageSvgMacro() {
   return `    macro_rules! emit_image_svg {
         ($svg:expr) => {{
-            __outputs.borrow_mut().push(OutputArtifact::Image(ImageArtifact {
-                mime: "image/svg+xml",
-                data: ($svg).to_string(),
-                alt: None,
-            }));
+            let artifact = image_artifact("image/svg+xml", ($svg).to_string(), None)?;
+            __outputs.borrow_mut().push(OutputArtifact::Image(artifact));
         }};
         ($svg:expr, $alt:expr) => {{
-            __outputs.borrow_mut().push(OutputArtifact::Image(ImageArtifact {
-                mime: "image/svg+xml",
-                data: ($svg).to_string(),
-                alt: Some(($alt).to_string()),
-            }));
+            let artifact = image_artifact(
+                "image/svg+xml",
+                ($svg).to_string(),
+                Some(($alt).to_string()),
+            )?;
+            __outputs.borrow_mut().push(OutputArtifact::Image(artifact));
         }};
     }`;
 }
@@ -1110,18 +1149,38 @@ function generateImageSvgMacro() {
 function generateImagePngMacro() {
   return `    macro_rules! emit_image_png {
         ($base64:expr) => {{
-            __outputs.borrow_mut().push(OutputArtifact::Image(ImageArtifact {
-                mime: "image/png",
-                data: ($base64).to_string(),
-                alt: None,
-            }));
+            let artifact = image_artifact("image/png", ($base64).to_string(), None)?;
+            __outputs.borrow_mut().push(OutputArtifact::Image(artifact));
         }};
         ($base64:expr, $alt:expr) => {{
-            __outputs.borrow_mut().push(OutputArtifact::Image(ImageArtifact {
-                mime: "image/png",
-                data: ($base64).to_string(),
-                alt: Some(($alt).to_string()),
-            }));
+            let artifact = image_artifact(
+                "image/png",
+                ($base64).to_string(),
+                Some(($alt).to_string()),
+            )?;
+            __outputs.borrow_mut().push(OutputArtifact::Image(artifact));
+        }};
+    }`;
+}
+
+function generateSvgMacro() {
+  return `    macro_rules! emit_svg {
+        ($svg:expr) => {{
+            emit_image_svg!($svg);
+        }};
+        ($svg:expr, $alt:expr) => {{
+            emit_image_svg!($svg, $alt);
+        }};
+    }`;
+}
+
+function generatePngBase64Macro() {
+  return `    macro_rules! emit_png_base64 {
+        ($base64:expr) => {{
+            emit_image_png!($base64);
+        }};
+        ($base64:expr, $alt:expr) => {{
+            emit_image_png!($base64, $alt);
         }};
     }`;
 }
