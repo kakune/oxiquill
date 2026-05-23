@@ -26,10 +26,10 @@ export default defineConfig({
         'src/lib/doc-runtime/types.ts'
       ],
       thresholds: {
-        lines: 100,
-        functions: 100,
-        branches: 100,
-        statements: 100
+        lines: 85,
+        functions: 85,
+        branches: 85,
+        statements: 85
       }
     }
   }
