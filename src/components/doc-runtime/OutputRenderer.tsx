@@ -1,6 +1,7 @@
 import { isOutputArtifact } from '../../lib/doc-runtime/output-artifacts';
 import type { OutputArtifact, TextArtifact } from '../../lib/doc-runtime/types';
 import ChartOutput from './ChartOutput';
+import TableOutput from './TableOutput';
 
 interface OutputRendererProps {
   outputs: readonly unknown[];
@@ -35,6 +36,7 @@ function ArtifactOutput({ output }: { output: unknown }) {
     case 'chart':
       return <ChartOutput spec={output.spec} />;
     case 'table':
+      return <TableOutput table={output} />;
     case 'image':
       return <UnknownOutput message={`Unsupported ${output.kind} output artifact.`} />;
     default:
