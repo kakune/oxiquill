@@ -1,0 +1,38 @@
+---
+title: Logistic Map
+description: A sample note that calculates and visualizes a model with a Rust cell written directly in MDX.
+---
+
+This note combines math, Rust/Wasm, and plot output. The prose is normal MDX, and the Rust code needed for the computation lives in a code block inside the page.
+
+## Model
+
+The logistic map is a discrete dynamical system where complex behavior emerges from a simple recurrence relation.
+
+$$
+x_{n+1} = r x_n (1 - x_n)
+$$
+
+Here, $x_n$ is the state at step $n$, and `r` is the growth rate. Changing `r` or `x0` recomputes the series in Rust/Wasm and updates the plot.
+
+```rust
+//| id: logistic-map-note
+//| title: Explore logistic map parameters
+//| run: reactive
+//| crates: [doc-rust]
+//| inputs:
+//|   r: { type: range, label: r, min: 0, max: 4, step: 0.01, value: 3.2 }
+//|   x0: { type: range, label: x0, min: 0, max: 1, step: 0.01, value: 0.2 }
+//|   steps: { type: integer, label: steps, min: 10, max: 300, step: 10, value: 120 }
+let points = doc_rust::logistic_series(r, x0, steps).map_err(|error| error.to_string())?;
+let final_point = points.last().ok_or_else(|| "series is empty".to_owned())?;
+
+println!("x_{} = {:.6}", final_point.n, final_point.x);
+emit_line_plot!(&points, "n", "x");
+```
+
+## How to Read It
+
+For smaller values of `r`, the series approaches a stable value. As `r` increases, periodic behavior appears. At larger values, the output becomes sensitive to the initial state.
+
+This page shape works well for computational notes: explain the model with math, let readers adjust parameters in an executable cell, and show the result as a plot.

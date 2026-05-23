@@ -1,0 +1,40 @@
+---
+title: Media
+description: Examples of embedding PNG, JPEG, PDF, and similar files in MDX notes.
+---
+
+This project uses `public/media` for static files that should be served as-is. MDX pages can reference those files with `/media/...` URLs, so authors do not need imports for common images or PDFs.
+
+## PNG
+
+Markdown image syntax is the shortest option.
+
+```md
+![PNG sample with color bands](/media/examples/sample.png)
+```
+
+![PNG sample with color bands](/media/examples/sample.png)
+
+## JPEG
+
+JPEG files use the same URL pattern.
+
+```md
+![JPEG sample with a grid and gradient](/media/examples/sample.jpg)
+```
+
+![JPEG sample with a grid and gradient](/media/examples/sample.jpg)
+
+## PDF
+
+For PDFs, include both an embedded frame and a normal link.
+
+```md
+<iframe class="media-frame" src="/media/examples/sample.pdf" title="Sample PDF"></iframe>
+
+[Open the PDF in a new tab](/media/examples/sample.pdf)
+```
+
+<iframe class="media-frame" src="/media/examples/sample.pdf" title="Sample PDF"></iframe>
+
+[Open the PDF in a new tab](/media/examples/sample.pdf)

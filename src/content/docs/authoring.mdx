@@ -1,0 +1,99 @@
+---
+title: Authoring
+description: Basic rules for writing notes in Oxiquill.
+---
+
+Add notes as MDX files. English pages live in `src/content/docs`, and Japanese translations live in `src/content/docs/ja` with the same slug. In addition to normal Markdown, pages can include Rust/Python executable cells, KaTeX math, Mermaid diagrams, images, and PDFs.
+
+## Preview While Editing
+
+Use `pnpm dev` while writing. It generates the executable-cell runtime on startup, then watches MDX and Rust sources.
+
+```sh
+pnpm dev
+```
+
+Plain prose, normal code blocks, math, Mermaid diagrams, and media changes are handled by Astro HMR. Python cell changes update only the manifest. Rust cells and `crates/*` changes rebuild the Wasm runtime.
+
+To run Astro and the runtime watcher separately, start these commands in separate terminals:
+
+```sh
+pnpm dev:runtime
+pnpm dev:astro
+```
+
+## Add a Page
+
+Each page starts with Starlight frontmatter. `title` is used for the page heading and sidebar. `description` is used for metadata and search results.
+
+```md
+---
+title: Page title
+description: Explain the page in one sentence.
+---
+
+Write the body here.
+```
+
+Topic notes work well under `notes/<category>/<slug>.mdx`. Add a page to the sidebar by adding its slug to `astro.config.mjs`.
+
+## Write Rust Cells
+
+Rust cells are `rust` code blocks with `//|` metadata. The `id` must be unique within the page. English and Japanese versions can reuse the same local `id`; the build creates page-scoped internal IDs.
+
+````md
+```rust
+//| id: sample-rust-cell
+//| title: Rust calculation
+//| run: button
+//| crates: [doc-rust]
+let next = doc_rust::logistic_step(3.2, 0.2);
+println!("next = {next:.6}");
+```
+````
+
+Use `crates` to list workspace crates under `crates/*`. Cells that do not need shared Rust logic should use `crates: []`.
+
+## Add Inputs
+
+Add `inputs` metadata to let the runtime generate form controls. Supported input types are `range`, `number`, `integer`, `text`, `textarea`, `checkbox`, `select`, and `radio`.
+
+````md
+```python
+#| id: sample-python-cell
+#| title: Python input example
+#| run: reactive
+#| inputs:
+#|   scale: { type: number, label: scale, min: 1, max: 10, step: 1, value: 2 }
+#|   label: { type: text, label: label, value: "sample" }
+print(f"{label}: {scale * 10}")
+```
+````
+
+`run` can be `button`, `reactive`, `autorun`, or `hidden`. Use `reactive` when readers should see output update as inputs change. Use `button` when execution should be explicit.
+
+## Add Media
+
+Put unprocessed static files such as PNG, JPEG, and PDF files in `public/media`. Reference them from MDX with `/media/...` URLs.
+
+```md
+![Sample image](/media/examples/sample.png)
+
+<iframe class="media-frame" src="/media/examples/sample.pdf" title="Sample PDF"></iframe>
+```
+
+Use specific alt text for images. For PDFs, include a regular link as well as an embedded frame so readers can open the file directly.
+
+## Write Mermaid Diagrams
+
+Mermaid diagrams are plain `mermaid` code blocks. No imports are required.
+
+````md
+```mermaid
+flowchart LR
+  MDX[MDX body] --> Build[Static build]
+  Build --> Site[Published site]
+```
+````
+
+Diagrams are rendered as SVG in the browser. Keep Mermaid source in repository-owned MDX and do not pass untrusted external input directly to Mermaid.

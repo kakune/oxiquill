@@ -1,0 +1,52 @@
+---
+title: Mermaid
+description: Examples of rendering Mermaid diagrams from Markdown/MDX code blocks.
+---
+
+Mermaid is a text format for diagrams rendered as SVG. In this template, a `mermaid` code block is enough; the page converts it into a diagram in the browser.
+
+## Build Flow
+
+This flowchart shows how prose, code cells, and static site generation fit together.
+
+```mermaid
+flowchart LR
+  Author[Author] --> MDX[MDX body]
+  MDX --> Extract[Extract cells and diagrams]
+  Extract --> Wasm[Compile Rust cells to Wasm]
+  Extract --> Mermaid[Register Mermaid diagrams]
+  Wasm --> Build[Astro build]
+  Mermaid --> Build
+  Build --> Site[Static site]
+```
+
+## Reader Flow
+
+This sequence diagram shows how a reader opens a page and changes an input-driven cell.
+
+```mermaid
+sequenceDiagram
+  participant Reader as Reader
+  participant Page as Page
+  participant Worker as Worker
+  Reader->>Page: Open the page
+  Page->>Worker: Run the cell with initial inputs
+  Worker-->>Page: Return stdout and plots
+  Reader->>Page: Change a slider
+  Page->>Worker: Run again with new inputs
+  Worker-->>Page: Return updated output
+```
+
+## Cell States
+
+This state diagram shows the cell UI states.
+
+```mermaid
+stateDiagram-v2
+  [*] --> Waiting
+  Waiting --> Running: Run
+  Running --> Ready: Success
+  Running --> Error: Failure
+  Ready --> Running: Input changed
+  Error --> Running: Run again
+```
