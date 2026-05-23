@@ -1,6 +1,9 @@
 import { describe, expect, it } from 'vitest';
 import remarkInteractiveCells from '../../src/lib/doc-runtime/remark-interactive-cells.mjs';
 import remarkMermaidDiagrams from '../../src/lib/doc-runtime/remark-mermaid-diagrams.mjs';
+import remarkPublicAssetBase, {
+  withPublicAssetBase
+} from '../../src/lib/doc-runtime/remark-public-asset-base.mjs';
 
 describe('remark interactive cells', () => {
   it('turns Rust and Python cells with ids into client components', () => {
@@ -187,5 +190,51 @@ describe('remark Mermaid diagrams', () => {
     });
 
     expect(tree.children).toHaveLength(1);
+  });
+});
+
+describe('remark public asset base', () => {
+  it('prefixes public media URLs with the configured base path', () => {
+    const tree = {
+      type: 'root',
+      children: [
+        { type: 'image', url: '/media/examples/sample.png' },
+        { type: 'link', url: '/media/examples/sample.pdf' },
+        { type: 'link', url: '/features/media/' },
+        {
+          type: 'mdxJsxFlowElement',
+          name: 'iframe',
+          attributes: [
+            { type: 'mdxJsxAttribute', name: 'src', value: '/media/examples/sample.pdf' },
+            { type: 'mdxJsxAttribute', name: 'title', value: 'Sample PDF' }
+          ],
+          children: []
+        }
+      ]
+    };
+
+    remarkPublicAssetBase({ base: '/oxiquill' })(tree);
+
+    expect(tree.children[0].url).toBe('/oxiquill/media/examples/sample.png');
+    expect(tree.children[1].url).toBe('/oxiquill/media/examples/sample.pdf');
+    expect(tree.children[2].url).toBe('/features/media/');
+    expect(tree.children[3].attributes[0].value).toBe('/oxiquill/media/examples/sample.pdf');
+  });
+
+  it('leaves URLs unchanged when no base path is configured', () => {
+    const tree = {
+      type: 'root',
+      children: [{ type: 'image', url: '/media/examples/sample.png' }]
+    };
+
+    remarkPublicAssetBase()(tree);
+
+    expect(tree.children[0].url).toBe('/media/examples/sample.png');
+  });
+
+  it('does not double-prefix public media URLs', () => {
+    expect(withPublicAssetBase('/oxiquill/media/examples/sample.png', '/oxiquill')).toBe(
+      '/oxiquill/media/examples/sample.png'
+    );
   });
 });

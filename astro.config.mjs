@@ -6,6 +6,7 @@ import remarkMath from 'remark-math';
 import { fileURLToPath } from 'node:url';
 import remarkInteractiveCells from './src/lib/doc-runtime/remark-interactive-cells.mjs';
 import remarkMermaidDiagrams from './src/lib/doc-runtime/remark-mermaid-diagrams.mjs';
+import remarkPublicAssetBase from './src/lib/doc-runtime/remark-public-asset-base.mjs';
 
 const projectRoot = fileURLToPath(new URL('.', import.meta.url));
 const basePath = process.env.BASE_PATH;
@@ -21,6 +22,7 @@ export default defineConfig({
     },
     remarkPlugins: [
       remarkMath,
+      [remarkPublicAssetBase, { base: basePath }],
       [remarkInteractiveCells, { root: projectRoot }],
       [remarkMermaidDiagrams, { root: projectRoot }]
     ],

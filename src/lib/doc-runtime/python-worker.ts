@@ -21,7 +21,7 @@ type WorkerScope = {
 const worker = self as unknown as WorkerScope;
 let pyodideReady: Promise<PyodideRuntime> | undefined;
 let loadPyodideReady: Promise<LoadPyodide> | undefined;
-const pyodideModuleUrl = '/pyodide/pyodide.mjs';
+const pyodideUrls = resolvePyodideUrls();
 const requestQueue = createSerialRequestQueue(handleRequest);
 
 worker.addEventListener('message', (event) => {
@@ -80,7 +80,7 @@ async function handleRequest(request: RuntimeWorkerRequest): Promise<void> {
 
 function ensurePyodide(): Promise<PyodideRuntime> {
   pyodideReady ??= getLoadPyodide().then(async (loadPyodide) => {
-    const pyodide = await loadPyodide({ indexURL: '/pyodide/' });
+    const pyodide = await loadPyodide({ indexURL: pyodideUrls.indexUrl });
     await pyodide.runPythonAsync(pythonDisplaySupportCode);
     return pyodide;
   });
@@ -93,9 +93,9 @@ function getLoadPyodide(): Promise<LoadPyodide> {
 }
 
 async function importPyodideModule(): Promise<{ loadPyodide: LoadPyodide }> {
-  const response = await fetch(pyodideModuleUrl);
+  const response = await fetch(pyodideUrls.moduleUrl);
   if (!response.ok) {
-    throw new Error(`Failed to load ${pyodideModuleUrl}: ${response.status} ${response.statusText}`);
+    throw new Error(`Failed to load ${pyodideUrls.moduleUrl}: ${response.status} ${response.statusText}`);
   }
 
   const moduleUrl = URL.createObjectURL(
@@ -107,6 +107,19 @@ async function importPyodideModule(): Promise<{ loadPyodide: LoadPyodide }> {
   } finally {
     URL.revokeObjectURL(moduleUrl);
   }
+}
+
+export function resolvePyodideUrls(baseUrl = import.meta.env.BASE_URL): {
+  indexUrl: string;
+  moduleUrl: string;
+} {
+  const base = baseUrl.endsWith('/') ? baseUrl : `${baseUrl}/`;
+  const indexUrl = `${base}pyodide/`;
+
+  return {
+    indexUrl,
+    moduleUrl: `${indexUrl}pyodide.mjs`
+  };
 }
 
 function toSerializable(value: unknown): unknown {
