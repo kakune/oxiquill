@@ -200,6 +200,30 @@ describe('doc runtime service', () => {
       }
     };
     await expect(readHelperManifests({ fileSystem: missing, root: '/repo' })).resolves.toEqual([]);
+
+    const unreadableDirectory = {
+      ...fileSystem,
+      readdir: async () => {
+        const error = new Error('permission denied');
+        error.code = 'EACCES';
+        throw error;
+      }
+    };
+    await expect(readHelperManifests({ fileSystem: unreadableDirectory, root: '/repo' })).rejects.toThrow(
+      'permission denied'
+    );
+
+    const unreadableManifest = {
+      readdir: async () => [{ isDirectory: () => true, name: 'doc-rust' }],
+      readFile: async () => {
+        const error = new Error('broken manifest');
+        error.code = 'EIO';
+        throw error;
+      }
+    };
+    await expect(readHelperManifests({ fileSystem: unreadableManifest, root: '/repo' })).rejects.toThrow(
+      'broken manifest'
+    );
   });
 
   it('lists files recursively and collects interactive cells', async () => {
