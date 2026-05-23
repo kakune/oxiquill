@@ -1,0 +1,394 @@
+import { describe, expect, it } from 'vitest';
+import {
+  postprocessRustWasm,
+  removeUnusedWasmPackState,
+  stripUnusedWasmPackState
+} from '../../scripts/postprocess-rust-wasm.mjs';
+import {
+  buildRustWasm,
+  collectCells,
+  copyFileIfChanged,
+  copyPyodideAssets,
+  createRuntimeVersion,
+  createDocRuntimeContext,
+  createDocRuntimePaths,
+  generateRuntimeVersionModule,
+  hashText,
+  listFiles,
+  listWorkspaceCrates,
+  markRuntimeReady,
+  shouldBuildWasm,
+  stableFingerprint,
+  summarizeCells,
+  syncDocRuntime,
+  writeIfChanged
+} from '../../scripts/doc-runtime-service.mjs';
+
+function createMemoryFileSystem(initialFiles = {}) {
+  const files = new Map();
+  const directories = new Set(['/repo', '/repo/src', '/repo/src/content', '/repo/src/content/docs']);
+  const writes = [];
+  const copies = [];
+
+  function ensureParents(filePath) {
+    const parts = filePath.split('/').filter(Boolean);
+    let current = '';
+    for (const part of parts.slice(0, -1)) {
+      current += `/${part}`;
+      directories.add(current);
+    }
+  }
+
+  for (const [filePath, content] of Object.entries(initialFiles)) {
+    ensureParents(filePath);
+    files.set(filePath, Buffer.isBuffer(content) ? content : Buffer.from(String(content)));
+  }
+
+  return {
+    copies,
+    existsSync: (filePath) => directories.has(filePath) || files.has(filePath),
+    files,
+    mkdir: async (directory) => {
+      directories.add(directory);
+    },
+    readFile: async (filePath, encoding) => {
+      const content = files.get(filePath);
+      if (!content) {
+        const error = new Error(`missing ${filePath}`);
+        error.code = 'ENOENT';
+        throw error;
+      }
+
+      return encoding ? content.toString(encoding) : Buffer.from(content);
+    },
+    readdir: async (directory) => {
+      const childNames = new Set();
+      for (const filePath of files.keys()) {
+        if (filePath.startsWith(`${directory}/`)) {
+          childNames.add(filePath.slice(directory.length + 1).split('/')[0]);
+        }
+      }
+      for (const candidate of directories) {
+        if (candidate.startsWith(`${directory}/`) && candidate !== directory) {
+          childNames.add(candidate.slice(directory.length + 1).split('/')[0]);
+        }
+      }
+
+      return Array.from(childNames).map((name) => {
+        const fullPath = `${directory}/${name}`;
+        return {
+          isDirectory: () => directories.has(fullPath),
+          isFile: () => files.has(fullPath),
+          name
+        };
+      });
+    },
+    writeFile: async (filePath, content) => {
+      ensureParents(filePath);
+      files.set(filePath, Buffer.from(String(content)));
+      writes.push(filePath);
+    },
+    copyFile: async (sourcePath, targetPath) => {
+      ensureParents(targetPath);
+      files.set(targetPath, Buffer.from(files.get(sourcePath)));
+      copies.push([sourcePath, targetPath]);
+    },
+    writes
+  };
+}
+
+const highlighter = {
+  codeToHtml: (source, options) => Promise.resolve(`<pre data-lang="${options.lang}">${source}</pre>`)
+};
+
+const metadata = {
+  packages: [{ name: 'doc-rust', manifest_path: '/repo/crates/doc-rust/Cargo.toml' }]
+};
+
+describe('doc runtime service', () => {
+  it('postprocesses wasm-pack JavaScript without unused cached state', async () => {
+    const generatedSource = [
+      'let wasmModule, wasmInstance, wasm;',
+      'function __wbg_finalize_init(instance, module) {',
+      '    wasmInstance = instance;',
+      '    wasm = instance.exports;',
+      '    wasmModule = module;',
+      '    cachedDataViewMemory0 = null;',
+      '    return wasm;',
+      '}'
+    ].join('\n');
+
+    expect(removeUnusedWasmPackState(generatedSource)).toContain('let wasm;\nfunction __wbg_finalize_init(instance) {');
+    expect(removeUnusedWasmPackState(generatedSource)).not.toContain('wasmModule');
+    expect(removeUnusedWasmPackState(generatedSource)).not.toContain('wasmInstance');
+
+    const writes = [];
+    const removals = [];
+    const files = new Map([['/repo/pkg/doc_rust_cells.js', generatedSource]]);
+    const fileSystem = {
+      readFile: async (filePath) => files.get(filePath),
+      rm: async (filePath, options) => removals.push([filePath, options]),
+      writeFile: async (filePath, content) => {
+        files.set(filePath, content);
+        writes.push([filePath, content]);
+      }
+    };
+
+    await postprocessRustWasm({ fileSystem, rustWasmDir: '/repo/pkg' });
+
+    expect(removals).toEqual([['/repo/pkg/.gitignore', { force: true }]]);
+    expect(writes).toHaveLength(1);
+    expect(files.get('/repo/pkg/doc_rust_cells.js')).not.toContain('wasmInstance');
+
+    writes.length = 0;
+    await stripUnusedWasmPackState('/repo/pkg/doc_rust_cells.js', { fileSystem });
+    expect(writes).toEqual([]);
+  });
+
+  it('creates project paths and context with injected metadata', async () => {
+    expect(createDocRuntimePaths('/repo')).toEqual({
+      docsDir: '/repo/src/content/docs',
+      generatedDir: '/repo/src/generated/doc-runtime',
+      pyodidePublicDir: '/repo/public/pyodide',
+      rustCrateDir: '/repo/src/generated/doc-runtime/rust-cells',
+      runtimeVersionPath: '/repo/src/generated/doc-runtime/runtime-version.ts'
+    });
+
+    const context = await createDocRuntimeContext({
+      highlighter,
+      root: '/repo',
+      runMetadata: async () => metadata
+    });
+
+    expect(Array.from(context.workspaceCrates.keys())).toEqual(['doc-rust']);
+    await expect(
+      createDocRuntimeContext({
+        root: '/repo',
+        runMetadata: async () => metadata
+      })
+    ).resolves.toMatchObject({
+      paths: createDocRuntimePaths('/repo')
+    });
+  });
+
+  it('lists files recursively and collects interactive cells', async () => {
+    const fileSystem = createMemoryFileSystem({
+      '/repo/src/content/docs/index.mdx': 'plain',
+      '/repo/src/content/docs/note.mdx': '```rust\n//| id: a\n//| crates: []\nprintln!("a");\n```',
+      '/repo/src/content/docs/deep/page.md': '```python\n#| id: b\nprint("b")\n```'
+    });
+    const paths = createDocRuntimePaths('/repo');
+
+    await expect(listFiles(paths.docsDir, { fileSystem })).resolves.toEqual([
+      '/repo/src/content/docs/deep/page.md',
+      '/repo/src/content/docs/index.mdx',
+      '/repo/src/content/docs/note.mdx'
+    ]);
+
+    await expect(
+      collectCells({
+        fileSystem,
+        highlighter,
+        paths,
+        root: '/repo',
+        workspaceCrates: new Map()
+      })
+    ).resolves.toMatchObject([{ id: 'deep__page__b' }, { id: 'note__a' }]);
+
+    const oddFileSystem = {
+      readdir: async () => [
+        {
+          isDirectory: () => false,
+          isFile: () => false,
+          name: 'socket'
+        }
+      ]
+    };
+    await expect(listFiles('/repo/src/content/docs', { fileSystem: oddFileSystem })).resolves.toEqual([]);
+  });
+
+  it('writes and copies only when content changes', async () => {
+    const fileSystem = createMemoryFileSystem({
+      '/repo/source.bin': Buffer.from([1, 2, 3]),
+      '/repo/target.bin': Buffer.from([1, 2, 3]),
+      '/repo/text.txt': 'same'
+    });
+
+    await expect(writeIfChanged('/repo/text.txt', 'same', { fileSystem })).resolves.toBe(false);
+    await expect(writeIfChanged('/repo/text.txt', 'next', { fileSystem })).resolves.toBe(true);
+    await expect(writeIfChanged('/repo/missing.txt', 'new', { fileSystem })).resolves.toBe(true);
+
+    await expect(copyFileIfChanged('/repo/source.bin', '/repo/target.bin', { fileSystem })).resolves.toBe(false);
+    fileSystem.files.set('/repo/source.bin', Buffer.from([4, 5, 6]));
+    await expect(copyFileIfChanged('/repo/source.bin', '/repo/target.bin', { fileSystem })).resolves.toBe(true);
+    await expect(copyFileIfChanged('/repo/source.bin', '/repo/new-target.bin', { fileSystem })).resolves.toBe(true);
+
+    const failingText = {
+      ...fileSystem,
+      readFile: async () => {
+        const error = new Error('permission denied');
+        error.code = 'EACCES';
+        throw error;
+      }
+    };
+    await expect(writeIfChanged('/repo/text.txt', 'next', { fileSystem: failingText })).rejects.toThrow(
+      'permission denied'
+    );
+
+    const failingBinary = {
+      ...fileSystem,
+      readFile: async () => {
+        const error = new Error('broken read');
+        error.code = 'EIO';
+        throw error;
+      }
+    };
+    await expect(copyFileIfChanged('/repo/source.bin', '/repo/target.bin', { fileSystem: failingBinary })).rejects.toThrow(
+      'broken read'
+    );
+  });
+
+  it('copies Pyodide assets when present and skips when absent', async () => {
+    const paths = createDocRuntimePaths('/repo');
+    const absent = createMemoryFileSystem();
+    await expect(copyPyodideAssets({ fileSystem: absent, paths, root: '/repo' })).resolves.toBe(false);
+
+    const present = createMemoryFileSystem(
+      Object.fromEntries(
+        [
+          'pyodide.mjs',
+          'pyodide.mjs.map',
+          'pyodide.asm.js',
+          'pyodide.asm.wasm',
+          'python_stdlib.zip',
+          'pyodide-lock.json'
+        ].map((file) => [`/repo/node_modules/pyodide/${file}`, file])
+      )
+    );
+    await expect(copyPyodideAssets({ fileSystem: present, paths, root: '/repo' })).resolves.toBe(true);
+    await expect(copyPyodideAssets({ fileSystem: present, paths, root: '/repo' })).resolves.toBe(false);
+  });
+
+  it('syncs generated runtime files and reports changed surfaces', async () => {
+    const paths = createDocRuntimePaths('/repo');
+    const fileSystem = createMemoryFileSystem({
+      '/repo/src/content/docs/page.mdx': '```rust\n//| id: a\n//| crates: [doc-rust]\nprintln!("a");\n```'
+    });
+    const workspaceCrates = await listWorkspaceCrates({
+      paths,
+      root: '/repo',
+      runMetadata: async () => metadata
+    });
+
+    const first = await syncDocRuntime({
+      fileSystem,
+      highlighter,
+      paths,
+      root: '/repo',
+      workspaceCrates
+    });
+
+    expect(first).toMatchObject({
+      cellCount: 1,
+      cellsChanged: true,
+      pyodideChanged: false,
+      rustCellCount: 1,
+      rustChanged: true
+    });
+    expect(fileSystem.writes.sort()).toEqual([
+      '/repo/src/generated/doc-runtime/cells.ts',
+      '/repo/src/generated/doc-runtime/cells.json',
+      '/repo/src/generated/doc-runtime/rust-cells/Cargo.toml',
+      '/repo/src/generated/doc-runtime/rust-cells/src/lib.rs'
+    ].sort());
+
+    await expect(markRuntimeReady({ fileSystem, paths, summary: first, version: 'ready-1' })).resolves.toBe(true);
+    expect(fileSystem.files.get('/repo/src/generated/doc-runtime/runtime-version.ts').toString()).toContain(
+      'ready-1'
+    );
+    expect(generateRuntimeVersionModule('ready-2')).toContain('ready-2');
+    expect(hashText('runtime')).toHaveLength(64);
+
+    const runtimeVersion = JSON.parse(createRuntimeVersion({
+      manifestFingerprint: 'manifest',
+      rustFingerprint: 'rust'
+    }));
+    expect(runtimeVersion.manifest).toBe(hashText('manifest'));
+    expect(runtimeVersion.rust).toBe(hashText('rust'));
+
+    const emptyRuntimeVersion = JSON.parse(createRuntimeVersion());
+    expect(emptyRuntimeVersion.manifest).toBe(hashText(''));
+    expect(emptyRuntimeVersion.rust).toBe(hashText(''));
+
+    fileSystem.writes.length = 0;
+    await expect(
+      syncDocRuntime({
+        fileSystem,
+        highlighter,
+        paths,
+        root: '/repo',
+        workspaceCrates
+      })
+    ).resolves.toMatchObject({
+      cellsChanged: false,
+      rustChanged: false
+    });
+    expect(fileSystem.writes).toEqual([]);
+  });
+
+  it('summarizes cells, decides when Wasm is needed, and builds with injected commands', async () => {
+    const cells = [
+      { crates: ['doc-rust'], id: 'rust', inputs: [], language: 'rust', source: 'println!("a");' },
+      { crates: [], id: 'py', inputs: [], language: 'python', source: 'print("a")' }
+    ];
+    const previous = summarizeCells(cells);
+    const changed = summarizeCells([{ ...cells[0], source: 'println!("b");' }]);
+
+    expect(stableFingerprint({ b: 2 })).toBe('{"b":2}');
+    expect(previous).toMatchObject({ cellCount: 2, rustCellCount: 1 });
+    expect(shouldBuildWasm({ current: previous, force: true, previous })).toBe(true);
+    expect(shouldBuildWasm({ current: previous })).toBe(true);
+    expect(shouldBuildWasm({ changeKinds: new Set(['crate']), current: previous, previous })).toBe(true);
+    expect(shouldBuildWasm({ current: changed, previous })).toBe(true);
+    expect(shouldBuildWasm({ current: previous, previous })).toBe(false);
+    expect(shouldBuildWasm({ current: { ...previous, rustCellCount: 0 }, force: true })).toBe(false);
+
+    const commands = [];
+    await buildRustWasm({
+      mode: 'build',
+      root: '/repo',
+      runCommand: async (command, args, options) => {
+        commands.push([command, args, options]);
+      }
+    });
+
+    expect(commands).toEqual([
+      [
+        'wasm-pack',
+        [
+          'build',
+          'src/generated/doc-runtime/rust-cells',
+          '--target',
+          'web',
+          '--release',
+          '--out-dir',
+          '../rust-wasm',
+          '--out-name',
+          'doc_rust_cells'
+        ],
+        { cwd: '/repo' }
+      ],
+      [process.execPath, ['scripts/postprocess-rust-wasm.mjs'], { cwd: '/repo' }]
+    ]);
+
+    commands.length = 0;
+    await buildRustWasm({
+      mode: 'dev',
+      root: '/repo',
+      runCommand: async (command, args, options) => {
+        commands.push([command, args, options]);
+      }
+    });
+    expect(commands[0][1]).toContain('--dev');
+  });
+});
