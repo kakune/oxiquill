@@ -1,6 +1,6 @@
 import { isOutputArtifact } from '../../lib/doc-runtime/output-artifacts';
-import type { ChartArtifact, OutputArtifact, PlotSpec, TextArtifact } from '../../lib/doc-runtime/types';
-import PlotOutput from './PlotOutput';
+import type { OutputArtifact, TextArtifact } from '../../lib/doc-runtime/types';
+import ChartOutput from './ChartOutput';
 
 interface OutputRendererProps {
   outputs: readonly unknown[];
@@ -33,7 +33,7 @@ function ArtifactOutput({ output }: { output: unknown }) {
     case 'html':
       return <HtmlOutput output={output} />;
     case 'chart':
-      return <ChartOutput output={output} />;
+      return <ChartOutput spec={output.spec} />;
     case 'table':
     case 'image':
       return <UnknownOutput message={`Unsupported ${output.kind} output artifact.`} />;
@@ -63,32 +63,6 @@ function HtmlOutput({ output }: { output: Extract<OutputArtifact, { kind: 'html'
       title={output.title ?? 'HTML output'}
     />
   );
-}
-
-function ChartOutput({ output }: { output: ChartArtifact }) {
-  const plot = legacyPlotFromChart(output);
-
-  if (!plot) {
-    return <UnknownOutput message="Unsupported chart output artifact." />;
-  }
-
-  return <PlotOutput plot={plot} />;
-}
-
-function legacyPlotFromChart(output: ChartArtifact): PlotSpec | undefined {
-  if (output.spec.kind !== 'line' || output.spec.series.length !== 1) return undefined;
-
-  const points = output.spec.series[0]?.points;
-  if (!points?.every((point) => point.every((value) => typeof value === 'number'))) {
-    return undefined;
-  }
-
-  return {
-    kind: 'line',
-    x_label: output.spec.xLabel ?? '',
-    y_label: output.spec.yLabel ?? '',
-    points: points as readonly [number, number][]
-  };
 }
 
 function UnknownOutput({ message }: { message: string }) {
