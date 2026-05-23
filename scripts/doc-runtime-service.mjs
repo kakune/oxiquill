@@ -1,7 +1,3 @@
-import { spawn } from 'node:child_process';
-import { createHash } from 'node:crypto';
-import { existsSync } from 'node:fs';
-import { copyFile, mkdir, readFile, readdir, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import { createHighlighter } from 'shiki';
 import {
@@ -12,19 +8,63 @@ import {
   generateCellsModule,
   generateRustCargoToml,
   generateRustLib,
-  helperCratesFromManifests,
-  sourceThemes,
-  vendoredPyodidePackageRoots
+  sourceThemes
 } from './doc-runtime-core.mjs';
+import {
+  copyFileIfChanged,
+  defaultFileSystem,
+  listFiles,
+  writeIfChanged
+} from './doc-runtime/file-system.mjs';
+import {
+  listHelperCrates,
+  readHelperManifests
+} from './doc-runtime/helper-crate-service.mjs';
+import {
+  hashBytes,
+  hashText,
+  stableFingerprint
+} from './doc-runtime/hashing.mjs';
+import { normalizePath } from './doc-runtime/path-utils.mjs';
+import {
+  copyPyodideAssets,
+  copyVendoredPyodidePackages,
+  resolveVendoredPyodidePackages
+} from './doc-runtime/pyodide-assets.mjs';
+import {
+  createRuntimeVersion,
+  generateRuntimeVersionModule,
+  shouldBuildWasm,
+  summarizeCells
+} from './doc-runtime/runtime-summary.mjs';
+import { buildRustWasm } from './doc-runtime/wasm-build.mjs';
 
-const defaultFileSystem = {
-  copyFile,
-  existsSync,
-  mkdir,
-  readFile,
-  readdir,
-  writeFile
-};
+export {
+  copyFileIfChanged,
+  listFiles,
+  writeIfChanged
+} from './doc-runtime/file-system.mjs';
+export {
+  listHelperCrates,
+  readHelperManifests
+} from './doc-runtime/helper-crate-service.mjs';
+export {
+  hashBytes,
+  hashText,
+  stableFingerprint
+} from './doc-runtime/hashing.mjs';
+export {
+  copyPyodideAssets,
+  copyVendoredPyodidePackages,
+  resolveVendoredPyodidePackages
+} from './doc-runtime/pyodide-assets.mjs';
+export {
+  createRuntimeVersion,
+  generateRuntimeVersionModule,
+  shouldBuildWasm,
+  summarizeCells
+} from './doc-runtime/runtime-summary.mjs';
+export { buildRustWasm } from './doc-runtime/wasm-build.mjs';
 
 export function createDocRuntimePaths(root) {
   const generatedDir = path.join(root, 'src/generated/doc-runtime');
@@ -109,195 +149,6 @@ export async function collectCells({ fileSystem = defaultFileSystem, helperCrate
   return nestedCells.flat();
 }
 
-export async function listFiles(directory, { fileSystem = defaultFileSystem } = {}) {
-  const entries = await fileSystem.readdir(directory, { withFileTypes: true });
-  const nested = await Promise.all(
-    entries.map(async (entry) => {
-      const fullPath = path.join(directory, entry.name);
-      if (entry.isDirectory()) return listFiles(fullPath, { fileSystem });
-      return entry.isFile() ? [fullPath] : [];
-    })
-  );
-
-  return nested.flat().sort();
-}
-
-export async function listHelperCrates({
-  fileSystem = defaultFileSystem,
-  paths,
-  readManifests = readHelperManifests,
-  root
-}) {
-  return helperCratesFromManifests(await readManifests({ fileSystem, root }), {
-    rustCrateDir: paths.rustCrateDir
-  });
-}
-
-export async function readHelperManifests({ fileSystem = defaultFileSystem, root }) {
-  const cratesDir = path.join(root, 'crates');
-  let entries;
-  try {
-    entries = await fileSystem.readdir(cratesDir, { withFileTypes: true });
-  } catch (error) {
-    if (error && error.code === 'ENOENT') return [];
-    throw error;
-  }
-
-  const manifests = await Promise.all(
-    entries
-      .filter((entry) => entry.isDirectory())
-      .map(async (entry) => {
-        const manifestPath = path.join(cratesDir, entry.name, 'Cargo.toml');
-        try {
-          return {
-            content: await fileSystem.readFile(manifestPath, 'utf8'),
-            manifestPath
-          };
-        } catch (error) {
-          if (error && error.code === 'ENOENT') return undefined;
-          throw error;
-        }
-      })
-  );
-
-  return manifests.filter(Boolean).sort((left, right) => left.manifestPath.localeCompare(right.manifestPath));
-}
-
-export async function writeIfChanged(filePath, content, { fileSystem = defaultFileSystem } = {}) {
-  await fileSystem.mkdir(path.dirname(filePath), { recursive: true });
-
-  if (await hasTextContent(filePath, content, { fileSystem })) return false;
-
-  await fileSystem.writeFile(filePath, content, 'utf8');
-  return true;
-}
-
-export async function copyFileIfChanged(sourcePath, targetPath, { fileSystem = defaultFileSystem } = {}) {
-  await fileSystem.mkdir(path.dirname(targetPath), { recursive: true });
-
-  if (await hasBinaryContent(sourcePath, targetPath, { fileSystem })) return false;
-
-  await fileSystem.copyFile(sourcePath, targetPath);
-  return true;
-}
-
-export async function copyPyodideAssets({ fetchPackage, fileSystem = defaultFileSystem, paths, root }) {
-  const packageDir = path.join(root, 'node_modules/pyodide');
-  if (!fileSystem.existsSync(packageDir)) return false;
-
-  const coreChanged = await Promise.all(
-    [
-      'pyodide.mjs',
-      'pyodide.mjs.map',
-      'pyodide.asm.js',
-      'pyodide.asm.wasm',
-      'python_stdlib.zip',
-      'pyodide-lock.json'
-    ].map((file) =>
-      copyFileIfChanged(path.join(packageDir, file), path.join(paths.pyodidePublicDir, file), {
-        fileSystem
-      })
-    )
-  );
-  const lockFile = JSON.parse(await fileSystem.readFile(path.join(packageDir, 'pyodide-lock.json'), 'utf8'));
-  const packageChanged = await copyVendoredPyodidePackages({
-    fetchPackage,
-    fileSystem,
-    lockFile,
-    paths
-  });
-
-  return coreChanged.some(Boolean) || packageChanged;
-}
-
-export async function copyVendoredPyodidePackages({
-  fetchPackage = fetchPyodidePackage,
-  fileSystem = defaultFileSystem,
-  lockFile,
-  paths,
-  roots = vendoredPyodidePackageRoots
-}) {
-  const packages = resolveVendoredPyodidePackages(lockFile, roots);
-  const changed = await Promise.all(
-    packages.map(async (packageInfo) => {
-      const targetPath = path.join(paths.pyodidePublicDir, packageInfo.file_name);
-      if (await hasPackageContent(targetPath, packageInfo.sha256, { fileSystem })) return false;
-
-      const content = await fetchPackage(packageInfo.file_name);
-      assertPackageSha256(content, packageInfo.sha256, packageInfo.name);
-      await fileSystem.mkdir(path.dirname(targetPath), { recursive: true });
-      await fileSystem.writeFile(targetPath, content);
-      return true;
-    })
-  );
-
-  return changed.some(Boolean);
-}
-
-export function resolveVendoredPyodidePackages(lockFile, roots = vendoredPyodidePackageRoots) {
-  const packages = lockFile?.packages;
-  if (!packages || typeof packages !== 'object') {
-    throw new Error('Pyodide lock file is missing a packages table.');
-  }
-
-  const selected = new Set();
-  function visit(packageName) {
-    if (selected.has(packageName)) return;
-    const packageInfo = packages[packageName];
-    if (!packageInfo) throw new Error(`Pyodide package "${packageName}" is missing from the lock file.`);
-    selected.add(packageName);
-    for (const dependency of packageInfo.depends ?? []) {
-      visit(dependency);
-    }
-  }
-
-  roots.forEach(visit);
-  return Array.from(selected)
-    .sort()
-    .map((name) => ({ name, ...packages[name] }));
-}
-
-export function summarizeCells(cells) {
-  const rustCells = cells.filter((cell) => cell.language === 'rust');
-
-  return {
-    cellCount: cells.length,
-    manifestFingerprint: stableFingerprint(cells),
-    rustCellCount: rustCells.length,
-    rustFingerprint: stableFingerprint(
-      rustCells.map((cell) => ({
-        crates: cell.crates,
-        id: cell.id,
-        inputs: cell.inputs,
-        source: cell.source
-      }))
-    )
-  };
-}
-
-export function shouldBuildWasm({ changeKinds = new Set(), current, force = false, previous }) {
-  if (current.rustCellCount === 0) return false;
-  if (force || !previous) return true;
-  if (changeKinds.has('crate')) return true;
-  return previous.rustFingerprint !== current.rustFingerprint;
-}
-
-export async function buildRustWasm({ mode, root, runCommand = runCommandWithInheritedStdio }) {
-  const modeFlag = mode === 'build' ? '--release' : '--dev';
-  await runCommand('wasm-pack', [
-    'build',
-    'src/generated/doc-runtime/rust-cells',
-    '--target',
-    'web',
-    modeFlag,
-    '--out-dir',
-    '../rust-wasm',
-    '--out-name',
-    'doc_rust_cells'
-  ], { cwd: root });
-  await runCommand(process.execPath, ['scripts/postprocess-rust-wasm.mjs'], { cwd: root });
-}
-
 export async function markRuntimeReady({
   fileSystem = defaultFileSystem,
   paths,
@@ -305,102 +156,4 @@ export async function markRuntimeReady({
   version = createRuntimeVersion(summary)
 }) {
   return writeIfChanged(paths.runtimeVersionPath, generateRuntimeVersionModule(version), { fileSystem });
-}
-
-export function createRuntimeVersion(summary) {
-  return stableFingerprint({
-    readyAt: Date.now(),
-    manifest: hashText(summary?.manifestFingerprint ?? ''),
-    rust: hashText(summary?.rustFingerprint ?? '')
-  });
-}
-
-export function generateRuntimeVersionModule(version) {
-  return `// @generated by scripts/generate-doc-runtime.mjs. Do not edit by hand.\nexport const runtimeVersion = ${JSON.stringify(version)};\n`;
-}
-
-export function stableFingerprint(value) {
-  return JSON.stringify(value);
-}
-
-export function hashText(value) {
-  return createHash('sha256').update(value).digest('hex');
-}
-
-export function hashBytes(value) {
-  return createHash('sha256').update(value).digest('hex');
-}
-
-async function hasTextContent(filePath, content, { fileSystem }) {
-  try {
-    return (await fileSystem.readFile(filePath, 'utf8')) === content;
-  } catch (error) {
-    if (error && error.code === 'ENOENT') return false;
-    throw error;
-  }
-}
-
-async function hasBinaryContent(sourcePath, targetPath, { fileSystem }) {
-  try {
-    const [source, target] = await Promise.all([
-      fileSystem.readFile(sourcePath),
-      fileSystem.readFile(targetPath)
-    ]);
-    return Buffer.compare(source, target) === 0;
-  } catch (error) {
-    if (error && error.code === 'ENOENT') return false;
-    throw error;
-  }
-}
-
-async function hasPackageContent(filePath, sha256, { fileSystem }) {
-  try {
-    return hashBytes(await fileSystem.readFile(filePath)) === sha256;
-  } catch (error) {
-    if (error && error.code === 'ENOENT') return false;
-    throw error;
-  }
-}
-
-function assertPackageSha256(content, expectedSha256, packageName) {
-  const actualSha256 = hashBytes(content);
-  if (actualSha256 !== expectedSha256) {
-    throw new Error(
-      `Downloaded Pyodide package "${packageName}" has sha256 ${actualSha256}; expected ${expectedSha256}.`
-    );
-  }
-}
-
-async function fetchPyodidePackage(fileName) {
-  const url = `https://cdn.jsdelivr.net/pyodide/v0.29.4/full/${fileName}`;
-  const response = await fetch(url);
-  if (!response.ok) {
-    throw new Error(`Failed to download ${url}: ${response.status} ${response.statusText}`);
-  }
-
-  return Buffer.from(await response.arrayBuffer());
-}
-
-/* v8 ignore start -- external process adapter covered through injected runCommand in tests. */
-function runCommandWithInheritedStdio(command, args, options) {
-  return new Promise((resolve, reject) => {
-    const child = spawn(command, args, {
-      cwd: options.cwd,
-      stdio: 'inherit'
-    });
-
-    child.on('error', reject);
-    child.on('exit', (code, signal) => {
-      if (code === 0) {
-        resolve();
-      } else {
-        reject(new Error(`${command} exited with ${signal ?? code}`));
-      }
-    });
-  });
-}
-/* v8 ignore stop */
-
-function normalizePath(value) {
-  return value.split(path.sep).join('/');
 }
