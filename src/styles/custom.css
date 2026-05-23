@@ -201,6 +201,107 @@
   background: var(--sl-color-bg);
 }
 
+.doc-table-output {
+  display: grid;
+  gap: 0.65rem;
+  min-width: 0;
+}
+
+.doc-table-output__caption,
+.doc-table-output__footer p {
+  margin: 0;
+  color: var(--sl-color-gray-2);
+  font-size: 0.85rem;
+}
+
+.doc-table-output__scroller {
+  max-height: 28rem;
+  overflow: auto;
+  border: 1px solid color-mix(in srgb, var(--sl-color-gray-5), transparent 35%);
+  border-radius: 6px;
+  background: var(--sl-color-bg);
+}
+
+.doc-table-output table {
+  width: 100%;
+  min-width: 36rem;
+  border-collapse: collapse;
+  font-size: 0.9rem;
+}
+
+.doc-table-output caption {
+  padding: 0.65rem 0.75rem;
+  text-align: left;
+  font-weight: 650;
+}
+
+.doc-table-output th,
+.doc-table-output td {
+  padding: 0.55rem 0.75rem;
+  border-bottom: 1px solid color-mix(in srgb, var(--sl-color-gray-5), transparent 55%);
+  text-align: left;
+  vertical-align: top;
+}
+
+.doc-table-output th {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  background: var(--sl-color-bg);
+}
+
+.doc-table-output th button {
+  width: 100%;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  font-weight: 650;
+  text-align: inherit;
+  cursor: pointer;
+}
+
+.doc-table-output td[data-type='number'],
+.doc-table-output td[data-type='integer'] {
+  font-variant-numeric: tabular-nums;
+  text-align: right;
+}
+
+.doc-table-output__footer,
+.doc-table-output__controls {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.6rem;
+  flex-wrap: wrap;
+}
+
+.doc-table-output__controls label {
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+}
+
+.doc-table-output__controls button,
+.doc-table-output__controls select {
+  min-height: 2rem;
+  border: 1px solid var(--rn-panel-border);
+  border-radius: 6px;
+  background: var(--sl-color-bg);
+  color: var(--sl-color-text);
+  font: inherit;
+}
+
+.doc-table-output__controls button {
+  padding: 0 0.65rem;
+  cursor: pointer;
+}
+
+.doc-table-output__controls button:disabled {
+  cursor: not-allowed;
+  opacity: 0.62;
+}
+
 .mermaid-diagram {
   display: grid;
   gap: 0.75rem;
