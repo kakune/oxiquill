@@ -1,4 +1,4 @@
-import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/preact';
+import { act, cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/preact';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { CellManifest, InputSpec } from '../../src/lib/doc-runtime/types';
 
@@ -187,6 +187,36 @@ describe('InteractiveCell', () => {
         label: 'next'
       })
     );
+  });
+
+  it('scopes input ids and radio groups per cell', () => {
+    const radioOnly = inputs.filter((input) => input.name === 'style');
+    mocks.getCell.mockImplementation((cellId: string) =>
+      makeCell({ id: cellId, title: cellId, inputs: radioOnly })
+    );
+
+    render(
+      <>
+        <InteractiveCell cellId="cell-one" />
+        <InteractiveCell cellId="cell-two" />
+      </>
+    );
+
+    const first = within(screen.getByTestId('cell-cell-one'));
+    const second = within(screen.getByTestId('cell-cell-two'));
+    const firstCompact = first.getByLabelText('compact') as HTMLInputElement;
+    const firstVerbose = first.getByLabelText('verbose') as HTMLInputElement;
+    const secondCompact = second.getByLabelText('compact') as HTMLInputElement;
+
+    expect(firstCompact.name).toBe('doc-input-cell-one-style');
+    expect(secondCompact.name).toBe('doc-input-cell-two-style');
+    expect(firstCompact).toBeChecked();
+    expect(secondCompact).toBeChecked();
+
+    fireEvent.input(firstVerbose, { target: { value: 'verbose' } });
+
+    expect(firstVerbose).toBeChecked();
+    expect(secondCompact).toBeChecked();
   });
 
   it('shows running and error states', async () => {

@@ -106,6 +106,7 @@ function InteractiveCellPanel({
           {cell.inputs.map((input) => (
             <InputControl
               key={input.name}
+              cellId={cell.id}
               input={input}
               value={values[input.name]}
               onChange={(value) => setValues((current) => ({ ...current, [input.name]: value }))}
@@ -140,15 +141,17 @@ function useRuntimeLabels() {
 }
 
 function InputControl({
+  cellId,
   input,
   value,
   onChange
 }: {
+  cellId: string;
   input: InputSpec;
   onChange: (value: string | number | boolean) => void;
   value: string | number | boolean;
 }) {
-  const id = `doc-input-${input.name}`;
+  const id = inputControlId(cellId, input.name);
 
   if (input.type === 'checkbox') {
     return (
@@ -247,6 +250,10 @@ function InputControl({
       />
     </label>
   );
+}
+
+function inputControlId(cellId: string, inputName: string): string {
+  return `doc-input-${cellId}-${inputName}`;
 }
 
 function CellOutput({
