@@ -17,14 +17,14 @@
     "check": "pnpm wasm:dev && astro check",
     "test": "pnpm test:coverage && pnpm doc:rust && pnpm test:wasm && pnpm build && pnpm test:e2e",
     "test:coverage": "pnpm test:rust:coverage && pnpm test:unit:coverage",
-    "test:rust": "cargo test --workspace",
-    "test:rust:coverage": "cargo llvm-cov --workspace --fail-under-lines 100 --fail-under-functions 100 --fail-under-regions 100 --ignore-filename-regex '(/target/|/src/generated/)'",
+    "test:rust": "node scripts/run-helper-cargo.mjs test",
+    "test:rust:coverage": "node scripts/run-helper-cargo.mjs llvm-cov --fail-under-lines 100 --fail-under-functions 100 --fail-under-regions 100 --ignore-filename-regex '(/target/|/src/generated/)'",
     "test:unit": "vitest run",
     "test:unit:coverage": "vitest run --coverage",
-    "doc:rust": "RUSTDOCFLAGS=\"-D warnings\" cargo doc --workspace --no-deps",
+    "doc:rust": "RUSTDOCFLAGS=\"-D warnings\" node scripts/run-helper-cargo.mjs doc --no-deps",
     "test:wasm": "pnpm wasm:dev && wasm-pack test --node src/generated/doc-runtime/rust-cells",
     "test:e2e": "playwright test",
-    "lint:rust": "cargo clippy --workspace --all-targets -- -D warnings",
+    "lint:rust": "node scripts/run-helper-cargo.mjs clippy --all-targets -- -D warnings",
     "clean": "node scripts/clean.mjs"
   },
   "dependencies": {
