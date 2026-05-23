@@ -10,7 +10,9 @@ Rust、Python、数式、Mermaid 図、画像、PDF を同じ MDX ノートに�
 
 - Rust セルをビルド時に WebAssembly 化してブラウザで実行
 - Python セルを Pyodide worker で実行
-- ECharts による折れ線グラフ出力
+- テキスト、JSON、表、グラフ、画像、sandboxed HTML の共通リッチ出力
+- pandas の表、matplotlib の図、一般的な MIME bundle に対応した Python リッチ表示
+- 表、複数種類のグラフ、JSON、SVG/PNG 画像、sandboxed HTML を出力する Rust macro
 - KaTeX によるインライン数式とブロック数式
 - Mermaid によるフローチャート、シーケンス図、状態遷移図
 - `public/media` から PNG、JPEG、PDF などを配信

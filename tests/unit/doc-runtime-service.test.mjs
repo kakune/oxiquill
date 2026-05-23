@@ -391,17 +391,24 @@ describe('doc runtime service', () => {
     const paths = createDocRuntimePaths('/repo');
     const lockFile = {
       packages: {
-        root: pyodidePackage('root', 'root.whl', 'root bytes', ['dep']),
-        dep: pyodidePackage('dep', 'dep.whl', 'dep bytes')
+        root: pyodidePackage('root', 'root.whl', 'root bytes', ['dep', 'dep', 'leaf']),
+        dep: pyodidePackage('dep', 'dep.whl', 'dep bytes'),
+        leaf: {
+          file_name: 'leaf.whl',
+          name: 'leaf',
+          sha256: hashBytes(Buffer.from('leaf bytes')),
+          version: '1.0.0'
+        }
       }
     };
     const fileSystem = createMemoryFileSystem();
     const fetched = {
       'dep.whl': Buffer.from('dep bytes'),
+      'leaf.whl': Buffer.from('leaf bytes'),
       'root.whl': Buffer.from('root bytes')
     };
 
-    expect(resolveVendoredPyodidePackages(lockFile, ['root']).map((entry) => entry.name)).toEqual(['dep', 'root']);
+    expect(resolveVendoredPyodidePackages(lockFile, ['root']).map((entry) => entry.name)).toEqual(['dep', 'leaf', 'root']);
     await expect(copyVendoredPyodidePackages({
       fetchPackage: async (fileName) => fetched[fileName],
       fileSystem,
@@ -428,6 +435,70 @@ describe('doc runtime service', () => {
       paths,
       roots: ['root']
     })).rejects.toThrow('has sha256');
+
+    const readFailure = createMemoryFileSystem();
+    const originalReadFile = readFailure.readFile;
+    readFailure.readFile = async (filePath) => {
+      if (filePath.endsWith('.whl')) {
+        const error = new Error('permission denied');
+        error.code = 'EACCES';
+        throw error;
+      }
+      return originalReadFile(filePath);
+    };
+    await expect(copyVendoredPyodidePackages({
+      fetchPackage: async (fileName) => fetched[fileName],
+      fileSystem: readFailure,
+      lockFile,
+      paths,
+      roots: ['root']
+    })).rejects.toThrow('permission denied');
+  });
+
+  it('downloads vendored Pyodide packages with the default fetcher', async () => {
+    const paths = createDocRuntimePaths('/repo');
+    const lockFile = {
+      packages: {
+        root: pyodidePackage('root', 'root.whl', 'root bytes')
+      }
+    };
+    const originalFetch = globalThis.fetch;
+    const requestedUrls = [];
+
+    globalThis.fetch = async (url) => {
+      requestedUrls.push(String(url));
+      return {
+        ok: true,
+        arrayBuffer: async () => Buffer.from('root bytes')
+      };
+    };
+    try {
+      await expect(copyVendoredPyodidePackages({
+        fileSystem: createMemoryFileSystem(),
+        lockFile,
+        paths,
+        roots: ['root']
+      })).resolves.toBe(true);
+    } finally {
+      globalThis.fetch = originalFetch;
+    }
+    expect(requestedUrls).toEqual(['https://cdn.jsdelivr.net/pyodide/v0.29.4/full/root.whl']);
+
+    globalThis.fetch = async () => ({
+      ok: false,
+      status: 503,
+      statusText: 'unavailable'
+    });
+    try {
+      await expect(copyVendoredPyodidePackages({
+        fileSystem: createMemoryFileSystem(),
+        lockFile,
+        paths,
+        roots: ['root']
+      })).rejects.toThrow('503 unavailable');
+    } finally {
+      globalThis.fetch = originalFetch;
+    }
   });
 
   it('syncs generated runtime files and reports changed surfaces', async () => {

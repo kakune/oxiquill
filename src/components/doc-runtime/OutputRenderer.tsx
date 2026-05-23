@@ -39,6 +39,7 @@ function ArtifactOutput({ output }: { output: unknown }) {
       return <TableOutput table={output} />;
     case 'image':
       return <ImageOutput output={output} />;
+    /* v8 ignore next -- isOutputArtifact rejects unknown artifact kinds before this switch. */
     default:
       return <UnknownOutput message="Unsupported output artifact." />;
   }
