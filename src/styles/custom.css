@@ -193,6 +193,14 @@
   background: var(--sl-color-bg);
 }
 
+.doc-html-output {
+  width: 100%;
+  min-height: 12rem;
+  border: 1px solid color-mix(in srgb, var(--sl-color-gray-5), transparent 35%);
+  border-radius: 6px;
+  background: var(--sl-color-bg);
+}
+
 .mermaid-diagram {
   display: grid;
   gap: 0.75rem;
