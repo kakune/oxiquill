@@ -13,7 +13,7 @@
 
 - Example Rust should model the same standards as crate code: prefer iterators over `loop` or `for` when clear, prefer `match` for multi-branch decisions, and avoid `unwrap`, `expect`, and panic-driven examples.
 - Keep cell inputs and output stable enough for tests and screenshots.
-- Crate names in `crates: [...]` must match Cargo package names under `crates/`.
+- Crate names in `crates: [...]` must match helper crate Cargo package names under `crates/`. Use `crates: []` when a Rust cell does not need helper crates.
 
 ## Validation
 

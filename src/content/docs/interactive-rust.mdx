@@ -29,7 +29,7 @@ emit_line_plot!(&points, "n", "x");
 
 ## Input UI
 
-Rust cells can use checkboxes, selects, and radio groups with the same metadata format. A cell with `crates: []` does not depend on workspace crates.
+Rust cells can use checkboxes, selects, and radio groups with the same metadata format. A cell with `crates: []` does not depend on helper crates.
 
 ```rust
 //| id: rust-controls
@@ -57,7 +57,7 @@ println!("score = {score}");
 
 ## Multiple Crates
 
-Each cell declares the workspace crates it needs. A cell that uses multiple crates lists all package names.
+Each cell declares the helper crates it needs. A cell that uses multiple helper crates lists all package names.
 
 ```rust
 //| id: rust-multiple-crates

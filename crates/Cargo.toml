@@ -1,5 +1,5 @@
 [workspace]
-members = ["crates/*"]
+members = ["doc-rust", "doc-rust-text"]
 resolver = "3"
 
 [workspace.package]

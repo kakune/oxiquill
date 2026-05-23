@@ -15,7 +15,7 @@ TypeScript のコンポーネント import やレイアウト実装を著者に�
 - Mermaid のフローチャート、シーケンス図、状態遷移図を表示する。
 - PNG、JPEG、PDF などのメディアを `public/media` から簡単に埋め込む。
 - 英語をroot、日本語を `/ja/` とする多言語ドキュメントを作る。
-- Rust の共有ロジックを workspace crate としてテストし、ノートのセルから再利用する。
+- 任意の Rust helper crate をテストし、ノートのセルから再利用する。
 - 生成物を静的 HTML と静的アセットだけにまとめる。
 
 ## 基本構成
@@ -44,7 +44,7 @@ src/content/docs/
       logistic-map.mdx
 ```
 
-共有する Rust ロジックは `crates/` に置きます。MDX 内の Rust セルはビルド時に抽出され、`src/generated/doc-runtime` の Wasm crate と manifest に変換されます。生成物は編集せず、必要になったら `pnpm docgen` または build/test コマンドで作り直します。
+任意の共有 Rust ロジックは `crates/` に置きます。リポジトリ root は Rust workspace ではありません。MDX 内の Rust セルはビルド時に抽出され、`src/generated/doc-runtime` の独立した Wasm crate と manifest に変換されます。`crates: []` のセルは helper crate を必要としません。生成物は編集せず、必要になったら `pnpm docgen` または build/test コマンドで作り直します。
 
 ## 最初に読むページ
 

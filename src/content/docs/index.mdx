@@ -15,7 +15,7 @@ The authoring model stays deliberately simple. Writers add English pages under `
 - Render Mermaid flowcharts, sequence diagrams, and state diagrams.
 - Embed PNG, JPEG, PDF, and similar media from `public/media`.
 - Serve English at the root routes and Japanese under `/ja/`.
-- Test shared Rust logic as workspace crates and reuse it from notes.
+- Test optional Rust helper crates and reuse them from notes.
 - Produce static HTML and static assets for deployment.
 
 ## Project Shape
@@ -44,7 +44,7 @@ src/content/docs/
       logistic-map.mdx
 ```
 
-Shared Rust logic lives in `crates/`. Rust cells in MDX are extracted at build time and converted into a generated Wasm crate and manifest under `src/generated/doc-runtime`. Do not edit generated files directly; regenerate them with `pnpm docgen` or the build/test commands.
+Optional shared Rust logic lives in `crates/`. The repository root is not a Rust workspace. Rust cells in MDX are extracted at build time and converted into an independent generated Wasm crate and manifest under `src/generated/doc-runtime`; cells with `crates: []` need no helper crate. Do not edit generated files directly; regenerate them with `pnpm docgen` or the build/test commands.
 
 ## Start Here
 

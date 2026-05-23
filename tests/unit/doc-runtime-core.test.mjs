@@ -16,6 +16,7 @@ import {
   generateRustInputBinding,
   generateRustLib,
   generateRustReaders,
+  helperCratesFromManifests,
   normalizeCrates,
   normalizeInputType,
   normalizeInputValue,
@@ -28,18 +29,18 @@ import {
   normalizeTimeout,
   parseCell,
   parseLanguage,
+  packageNameFromCargoToml,
   rustFunctionName,
   rustIdentifier,
   rustReaderName,
-  splitCellSource,
-  workspaceCratesFromMetadata
+  splitCellSource
 } from '../../scripts/doc-runtime-core.mjs';
 
 const highlighter = {
   codeToHtml: (source, options) => Promise.resolve(`<pre data-lang="${options.lang}">${source}</pre>`)
 };
 
-const workspaceCrates = new Map([
+const helperCrates = new Map([
   ['doc-rust', { name: 'doc-rust', relativePath: '../../../crates/doc-rust' }],
   ['doc-rust-text', { name: 'doc-rust-text', relativePath: '../../../crates/doc-rust-text' }]
 ]);
@@ -86,7 +87,7 @@ describe('doc runtime core', () => {
       ].join('\n'),
       'rust',
       'page.mdx',
-      { highlighter, workspaceCrates }
+      { helperCrates, highlighter }
     );
 
     expect(cell).toMatchObject({
@@ -123,20 +124,20 @@ describe('doc runtime core', () => {
           '```'
         ].join('\n'),
         'page.mdx',
-        { highlighter, workspaceCrates }
+        { helperCrates, highlighter }
       )
     ).resolves.toHaveLength(2);
   });
 
   it('returns no cell without metadata and rejects invalid cell metadata', async () => {
-    await expect(parseCell('println!("ok");', 'rust', 'page.mdx', { highlighter, workspaceCrates })).resolves.toBeUndefined();
-    await expect(parseCell('//|\nprintln!("ok");', 'rust', 'page.mdx', { highlighter, workspaceCrates })).rejects.toThrow(
+    await expect(parseCell('println!("ok");', 'rust', 'page.mdx', { helperCrates, highlighter })).resolves.toBeUndefined();
+    await expect(parseCell('//|\nprintln!("ok");', 'rust', 'page.mdx', { helperCrates, highlighter })).rejects.toThrow(
       'missing an id option'
     );
-    await expect(parseCell('//| title: missing\nprintln!("ok");', 'rust', 'page.mdx', { highlighter, workspaceCrates })).rejects.toThrow(
+    await expect(parseCell('//| title: missing\nprintln!("ok");', 'rust', 'page.mdx', { helperCrates, highlighter })).rejects.toThrow(
       'missing an id option'
     );
-    await expect(parseCell('//| id: empty', 'rust', 'page.mdx', { highlighter, workspaceCrates })).rejects.toThrow(
+    await expect(parseCell('//| id: empty', 'rust', 'page.mdx', { helperCrates, highlighter })).rejects.toThrow(
       'does not contain code'
     );
   });
@@ -159,14 +160,14 @@ describe('doc runtime core', () => {
     ]);
     expect(() => normalizePackages(['numpy'], 'rust', 'cell', 'page')).toThrow('must use crates');
 
-    expect(normalizeCrates(null, 'rust', 'cell', 'page', workspaceCrates)).toEqual([]);
-    expect(normalizeCrates(['doc-rust-text', 'doc-rust'], 'rust', 'cell', 'page', workspaceCrates)).toEqual([
+    expect(normalizeCrates(null, 'rust', 'cell', 'page', helperCrates)).toEqual([]);
+    expect(normalizeCrates(['doc-rust-text', 'doc-rust'], 'rust', 'cell', 'page', helperCrates)).toEqual([
       'doc-rust',
       'doc-rust-text'
     ]);
-    expect(() => normalizeCrates(['missing'], 'rust', 'cell', 'page', workspaceCrates)).toThrow('Available crates');
+    expect(() => normalizeCrates(['missing'], 'rust', 'cell', 'page', helperCrates)).toThrow('helper crate');
     expect(() => normalizeCrates(['missing'], 'rust', 'cell', 'page', new Map())).toThrow('(none)');
-    expect(() => normalizeCrates(['doc-rust'], 'python', 'cell', 'page', workspaceCrates)).toThrow('cannot specify crates');
+    expect(() => normalizeCrates(['doc-rust'], 'python', 'cell', 'page', helperCrates)).toThrow('cannot specify crates');
   });
 
   it('validates string arrays and normalizes input specifications', () => {
@@ -250,7 +251,7 @@ describe('doc runtime core', () => {
     ]);
   });
 
-  it('validates uniqueness and derives workspace crates from cargo metadata', () => {
+  it('validates uniqueness and derives helper crates from manifests', () => {
     expect(() => assertUniqueCellIds([{ id: 'one__a', pagePath: 'one' }, { id: 'two__a', pagePath: 'two' }])).not.toThrow();
     expect(() => assertUniqueCellIds([{ id: 'page__a', pagePath: 'page' }, { id: 'page__a', pagePath: 'page' }])).toThrow(
       'Duplicate interactive cell id'
@@ -267,19 +268,28 @@ describe('doc runtime core', () => {
       ])
     ).toThrow('both map to Rust binding');
 
-    const crates = workspaceCratesFromMetadata(
-      {
-        packages: [
-          { name: 'b-crate', manifest_path: '/repo/crates/b/Cargo.toml' },
-          { name: 'outside', manifest_path: '/repo/other/Cargo.toml' },
-          { name: 'a-crate', manifest_path: '/repo/crates/a/Cargo.toml' }
-        ]
-      },
-      { cratesDir: '/repo/crates', rustCrateDir: '/repo/src/generated/doc-runtime/rust-cells' }
-    );
+    const crates = helperCratesFromManifests([
+      { content: '[package]\nname = "b-crate"\n', manifestPath: '/repo/crates/b/Cargo.toml' },
+      { content: '[package]\nname = "a-crate"\n', manifestPath: '/repo/crates/a/Cargo.toml' }
+    ], { rustCrateDir: '/repo/src/generated/doc-runtime/rust-cells' });
 
     expect(Array.from(crates.keys())).toEqual(['a-crate', 'b-crate']);
     expect(crates.get('a-crate')).toEqual({ name: 'a-crate', relativePath: '../../../../crates/a' });
+    expect(helperCratesFromManifests([], { rustCrateDir: '/repo/src/generated/doc-runtime/rust-cells' })).toEqual(
+      new Map()
+    );
+    expect(packageNameFromCargoToml('[package]\nname = "doc-rust"\n', '/repo/crates/doc-rust/Cargo.toml')).toBe(
+      'doc-rust'
+    );
+    expect(() => packageNameFromCargoToml('[dependencies]\nserde = "1"\n', '/repo/crates/bad/Cargo.toml')).toThrow(
+      'missing [package] name'
+    );
+    expect(() =>
+      helperCratesFromManifests([
+        { content: '[package]\nname = "same"\n', manifestPath: '/repo/crates/a/Cargo.toml' },
+        { content: '[package]\nname = "same"\n', manifestPath: '/repo/crates/b/Cargo.toml' }
+      ], { rustCrateDir: '/repo/src/generated/doc-runtime/rust-cells' })
+    ).toThrow('Duplicate helper crate');
   });
 
   it('generates manifest files and Rust support code', () => {
@@ -287,13 +297,13 @@ describe('doc runtime core', () => {
     expect(generateCellsModule(cells)).toContain('export const cells');
     expect(generateCellsJson(cells)).toContain('"id": "one"');
 
-    expect(generateRustCargoToml([], workspaceCrates)).not.toContain('doc-rust =');
-    expect(generateRustCargoToml([], workspaceCrates)).toContain('license = "AGPL-3.0-only"');
-    expect(generateRustCargoToml([{ crates: ['doc-rust'] }], workspaceCrates)).toContain(
+    expect(generateRustCargoToml([], helperCrates)).not.toContain('doc-rust =');
+    expect(generateRustCargoToml([], helperCrates)).toContain('license = "AGPL-3.0-only"');
+    expect(generateRustCargoToml([{ crates: ['doc-rust'] }], helperCrates)).toContain(
       'doc-rust = { path = "../../../crates/doc-rust" }'
     );
-    expect(generateRustDependency('doc-rust', workspaceCrates)).toContain('doc-rust');
-    expect(() => generateRustDependency('missing', workspaceCrates)).toThrow('unknown Rust crate');
+    expect(generateRustDependency('doc-rust', helperCrates)).toContain('doc-rust');
+    expect(() => generateRustDependency('missing', helperCrates)).toThrow('unknown Rust crate');
 
     expect(rustIdentifier('1-bad id')).toBe('cell_1_bad_id');
     expect(rustFunctionName('cell-id')).toBe('run_cell_id');
