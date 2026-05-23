@@ -1,6 +1,6 @@
 import { act, cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/preact';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import type { CellManifest, InputSpec } from '../../src/lib/doc-runtime/types';
+import type { CellExecutionResult, CellManifest, InputSpec } from '../../src/lib/doc-runtime/types';
 
 const mocks = vi.hoisted(() => {
   const chart = {
@@ -111,6 +111,17 @@ function makeCell(overrides: Partial<CellManifest> = {}): CellManifest {
     pagePath: 'page.mdx',
     ...overrides
   };
+}
+
+function createDeferredResult() {
+  let resolve!: (value: CellExecutionResult) => void;
+  let reject!: (reason: Error) => void;
+  const promise = new Promise<CellExecutionResult>((resolvePromise, rejectPromise) => {
+    resolve = resolvePromise;
+    reject = rejectPromise;
+  });
+
+  return { promise, reject, resolve };
 }
 
 beforeEach(() => {
@@ -254,6 +265,38 @@ describe('InteractiveCell', () => {
 
     fireEvent.input(screen.getByRole('slider', { name: 'ratio' }), { target: { value: '3' } });
     await waitFor(() => expect(mocks.runInteractiveCell).toHaveBeenCalledTimes(3));
+  });
+
+  it('ignores stale async results from superseded reactive runs', async () => {
+    const pending: Array<ReturnType<typeof createDeferredResult>> = [];
+    mocks.runInteractiveCell.mockImplementation(() => {
+      const deferred = createDeferredResult();
+      pending.push(deferred);
+      return deferred.promise;
+    });
+    mocks.getCell.mockReturnValue(makeCell({
+      run: 'reactive',
+      inputs: [inputs.find((input) => input.name === 'label') as InputSpec]
+    }));
+
+    render(<InteractiveCell cellId="cell-one" />);
+    await waitFor(() => expect(pending).toHaveLength(1));
+
+    fireEvent.input(screen.getByLabelText('label'), { target: { value: 'newer input' } });
+    await waitFor(() => expect(pending).toHaveLength(2));
+
+    await act(async () => {
+      pending[1].resolve({ stdout: 'newer result', stderr: '', value: null, plots: [] });
+      await pending[1].promise;
+    });
+    await waitFor(() => expect(screen.getByTestId('run-output')).toHaveTextContent('newer result'));
+
+    await act(async () => {
+      pending[0].resolve({ stdout: 'older result', stderr: '', value: null, plots: [] });
+      await pending[0].promise;
+    });
+
+    expect(screen.getByTestId('run-output')).toHaveTextContent('newer result');
   });
 
   it('supports cells without inputs and hidden source', () => {

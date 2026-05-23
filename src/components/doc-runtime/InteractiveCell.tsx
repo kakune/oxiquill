@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'preact/hooks';
+import { useEffect, useMemo, useRef, useState } from 'preact/hooks';
 import {
   coerceInputValue,
   formatInputValue,
@@ -51,6 +51,7 @@ function InteractiveCellPanel({
   const [error, setError] = useState<string>();
   const [isRunning, setIsRunning] = useState(false);
   const [isSourceVisible, setIsSourceVisible] = useState(cell.showSource);
+  const latestRunId = useRef(0);
 
   const serializedValues = useMemo(() => JSON.stringify(values), [values]);
 
@@ -65,15 +66,24 @@ function InteractiveCellPanel({
   }, [cell.id, runtimeVersion, serializedValues]);
 
   async function run() {
+    const runId = latestRunId.current + 1;
+    latestRunId.current = runId;
     setIsRunning(true);
     setError(undefined);
 
     try {
-      setResult(await runInteractiveCell(cell, values));
+      const nextResult = await runInteractiveCell(cell, values);
+      if (latestRunId.current === runId) {
+        setResult(nextResult);
+      }
     } catch (caught) {
-      setError(caught instanceof Error ? caught.message : String(caught));
+      if (latestRunId.current === runId) {
+        setError(caught instanceof Error ? caught.message : String(caught));
+      }
     } finally {
-      setIsRunning(false);
+      if (latestRunId.current === runId) {
+        setIsRunning(false);
+      }
     }
   }
 
