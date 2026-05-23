@@ -499,7 +499,7 @@ function generateRustOutputTypes(rustCells) {
     .join('\n');
 
   return `
-${capabilities.chart ? `#[derive(Debug, Serialize)]
+${capabilities.legacyPlot ? `#[derive(Debug, Serialize)]
 #[serde(tag = "kind")]
 enum PlotSpec {
     #[serde(rename = "line")]
@@ -738,32 +738,10 @@ fn normalize_table_column_type(value: &str) -> Option<&'static str> {
 ` : ''}
 ${capabilities.chart ? `#[derive(Debug, Serialize)]
 struct ChartArtifact {
-    spec: ChartSpec,
+    spec: Value,
 }
 
-#[derive(Debug, Serialize)]
-#[serde(tag = "kind")]
-enum ChartSpec {
-    #[serde(rename = "line")]
-    Line(LineChartSpec),
-}
-
-#[derive(Debug, Serialize)]
-#[serde(rename_all = "camelCase")]
-struct LineChartSpec {
-    x_label: String,
-    y_label: String,
-    x_type: &'static str,
-    y_type: &'static str,
-    tooltip: bool,
-    data_zoom: bool,
-    series: Vec<XyChartSeries>,
-}
-
-#[derive(Debug, Serialize)]
-struct XyChartSeries {
-    points: Vec<[f64; 2]>,
-}
+${generateRustChartHelpers(capabilities)}
 ` : ''}
 #[derive(Debug, Serialize)]
 struct CellOutput {
@@ -800,7 +778,18 @@ fn finish_cell_output(
 function rustOutputCapabilities(rustCells) {
   const source = rustCells.map((cell) => cell.source).join('\n');
   return {
-    chart: source.includes('emit_line_plot!'),
+    chart: source.includes('emit_line_plot!')
+      || source.includes('emit_line_chart!')
+      || source.includes('emit_scatter_chart!')
+      || source.includes('emit_bar_chart!')
+      || source.includes('emit_histogram!')
+      || source.includes('emit_heatmap!'),
+    legacyPlot: source.includes('emit_line_plot!'),
+    lineChart: source.includes('emit_line_chart!'),
+    scatterChart: source.includes('emit_scatter_chart!'),
+    barChart: source.includes('emit_bar_chart!'),
+    histogramChart: source.includes('emit_histogram!'),
+    heatmapChart: source.includes('emit_heatmap!'),
     html: source.includes('emit_html!'),
     image: source.includes('emit_image_svg!') || source.includes('emit_image_png!'),
     json: source.includes('emit_json!'),
@@ -808,6 +797,130 @@ function rustOutputCapabilities(rustCells) {
       || source.includes('emit_table_with_columns!')
       || source.includes('emit_records_table!')
   };
+}
+
+function generateRustChartHelpers(capabilities) {
+  return [
+    capabilities.lineChart || capabilities.scatterChart
+      ? `fn xy_chart_spec(
+    kind: &'static str,
+    series: Value,
+    x_label: Option<String>,
+    y_label: Option<String>,
+) -> Result<Value, String> {
+    let series = normalize_xy_series(series)?;
+    let mut spec = serde_json::Map::new();
+    spec.insert("kind".to_owned(), Value::String(kind.to_owned()));
+    spec.insert("series".to_owned(), series);
+    spec.insert("tooltip".to_owned(), Value::Bool(true));
+    spec.insert("dataZoom".to_owned(), Value::Bool(true));
+    spec.insert("xType".to_owned(), Value::String("value".to_owned()));
+    spec.insert("yType".to_owned(), Value::String("value".to_owned()));
+    if let Some(x_label) = x_label {
+        spec.insert("xLabel".to_owned(), Value::String(x_label));
+    }
+    if let Some(y_label) = y_label {
+        spec.insert("yLabel".to_owned(), Value::String(y_label));
+    }
+    Ok(Value::Object(spec))
+}
+
+fn normalize_xy_series(value: Value) -> Result<Value, String> {
+    let Value::Array(items) = value else {
+        return Err("xy chart series must serialize as an array".to_owned());
+    };
+    let Some(first) = items.first() else {
+        return Ok(Value::Array(Vec::new()));
+    };
+    if first.is_array() {
+        return Ok(serde_json::json!([{ "points": items }]));
+    }
+    if first
+        .as_object()
+        .and_then(|object| object.get("points"))
+        .is_some()
+    {
+        return Ok(Value::Array(items));
+    }
+    Err("xy chart series must be points or objects with points".to_owned())
+}
+`
+      : '',
+    capabilities.barChart
+      ? `fn bar_chart_spec(categories: Value, series: Value) -> Result<Value, String> {
+    let categories = normalize_string_array(categories, "bar chart categories")?;
+    let series = normalize_bar_series(series)?;
+    Ok(serde_json::json!({
+        "kind": "bar",
+        "categories": categories,
+        "series": series,
+        "tooltip": true
+    }))
+}
+
+fn normalize_bar_series(value: Value) -> Result<Value, String> {
+    let Value::Array(items) = value else {
+        return Err("bar chart values must serialize as an array".to_owned());
+    };
+    let Some(first) = items.first() else {
+        return Ok(serde_json::json!([{ "values": [] }]));
+    };
+    if first.is_number() || first.is_null() {
+        return Ok(serde_json::json!([{ "values": items }]));
+    }
+    if first
+        .as_object()
+        .and_then(|object| object.get("values"))
+        .is_some()
+    {
+        return Ok(Value::Array(items));
+    }
+    Err("bar chart values must be numbers or objects with values".to_owned())
+}
+
+fn normalize_string_array(value: Value, label: &str) -> Result<Vec<String>, String> {
+    let Value::Array(values) = value else {
+        return Err(format!("{label} must serialize as an array"));
+    };
+    values
+        .into_iter()
+        .map(|value| match value {
+            Value::String(value) => Ok(value),
+            value => Ok(value.to_string()),
+        })
+        .collect()
+}
+`
+      : '',
+    capabilities.histogramChart
+      ? `fn histogram_chart_spec(bins: Value) -> Result<Value, String> {
+    match bins {
+        value @ Value::Array(_) => Ok(serde_json::json!({
+            "kind": "histogram",
+            "bins": value,
+            "tooltip": true
+        })),
+        _ => Err("histogram bins must serialize as an array".to_owned()),
+    }
+}
+`
+      : '',
+    capabilities.heatmapChart
+      ? `fn heatmap_chart_spec(data: Value) -> Result<Value, String> {
+    match data {
+        value @ Value::Array(_) => Ok(serde_json::json!({
+            "kind": "heatmap",
+            "data": value,
+            "tooltip": true
+        })),
+        _ => Err("heatmap data must serialize as an array".to_owned()),
+    }
+}
+`
+      : ''
+  ]
+    .filter(Boolean)
+    .join('\n');
 }
 
 export function generateRustReaders(rustCells) {
@@ -919,6 +1032,11 @@ function generateRustPreludeMacros(source) {
     source.includes('emit_table!') ? generateTableMacro() : '',
     source.includes('emit_table_with_columns!') ? generateTableWithColumnsMacro() : '',
     source.includes('emit_records_table!') ? generateRecordsTableMacro() : '',
+    source.includes('emit_line_chart!') ? generateLineChartMacro() : '',
+    source.includes('emit_scatter_chart!') ? generateScatterChartMacro() : '',
+    source.includes('emit_bar_chart!') ? generateBarChartMacro() : '',
+    source.includes('emit_histogram!') ? generateHistogramMacro() : '',
+    source.includes('emit_heatmap!') ? generateHeatmapMacro() : '',
     source.includes('emit_line_plot!') ? generateLinePlotMacro() : ''
   ]
     .filter(Boolean)
@@ -1042,6 +1160,86 @@ function generateRecordsTableMacro() {
     }`;
 }
 
+function generateLineChartMacro() {
+  return `    macro_rules! emit_line_chart {
+        ($series:expr) => {{
+            let spec = xy_chart_spec(
+                "line",
+                serde_json::to_value(&$series).map_err(|error| error.to_string())?,
+                None,
+                None,
+            )?;
+            __outputs.borrow_mut().push(OutputArtifact::Chart(ChartArtifact { spec }));
+        }};
+        ($series:expr, $x_label:expr, $y_label:expr) => {{
+            let spec = xy_chart_spec(
+                "line",
+                serde_json::to_value(&$series).map_err(|error| error.to_string())?,
+                Some(($x_label).to_string()),
+                Some(($y_label).to_string()),
+            )?;
+            __outputs.borrow_mut().push(OutputArtifact::Chart(ChartArtifact { spec }));
+        }};
+    }`;
+}
+
+function generateScatterChartMacro() {
+  return `    macro_rules! emit_scatter_chart {
+        ($series:expr) => {{
+            let spec = xy_chart_spec(
+                "scatter",
+                serde_json::to_value(&$series).map_err(|error| error.to_string())?,
+                None,
+                None,
+            )?;
+            __outputs.borrow_mut().push(OutputArtifact::Chart(ChartArtifact { spec }));
+        }};
+        ($series:expr, $x_label:expr, $y_label:expr) => {{
+            let spec = xy_chart_spec(
+                "scatter",
+                serde_json::to_value(&$series).map_err(|error| error.to_string())?,
+                Some(($x_label).to_string()),
+                Some(($y_label).to_string()),
+            )?;
+            __outputs.borrow_mut().push(OutputArtifact::Chart(ChartArtifact { spec }));
+        }};
+    }`;
+}
+
+function generateBarChartMacro() {
+  return `    macro_rules! emit_bar_chart {
+        ($categories:expr, $values:expr) => {{
+            let spec = bar_chart_spec(
+                serde_json::to_value(&$categories).map_err(|error| error.to_string())?,
+                serde_json::to_value(&$values).map_err(|error| error.to_string())?,
+            )?;
+            __outputs.borrow_mut().push(OutputArtifact::Chart(ChartArtifact { spec }));
+        }};
+    }`;
+}
+
+function generateHistogramMacro() {
+  return `    macro_rules! emit_histogram {
+        ($bins:expr) => {{
+            let spec = histogram_chart_spec(
+                serde_json::to_value(&$bins).map_err(|error| error.to_string())?,
+            )?;
+            __outputs.borrow_mut().push(OutputArtifact::Chart(ChartArtifact { spec }));
+        }};
+    }`;
+}
+
+function generateHeatmapMacro() {
+  return `    macro_rules! emit_heatmap {
+        ($data:expr) => {{
+            let spec = heatmap_chart_spec(
+                serde_json::to_value(&$data).map_err(|error| error.to_string())?,
+            )?;
+            __outputs.borrow_mut().push(OutputArtifact::Chart(ChartArtifact { spec }));
+        }};
+    }`;
+}
+
 function generateLinePlotMacro() {
   return `    macro_rules! emit_line_plot {
         ($points:expr, $x_label:expr, $y_label:expr) => {{
@@ -1057,14 +1255,15 @@ function generateLinePlotMacro() {
                 points: points.clone(),
             }));
             __outputs.borrow_mut().push(OutputArtifact::Chart(ChartArtifact {
-                spec: ChartSpec::Line(LineChartSpec {
-                    x_label,
-                    y_label,
-                    x_type: "value",
-                    y_type: "value",
-                    tooltip: true,
-                    data_zoom: true,
-                    series: vec![XyChartSeries { points }],
+                spec: serde_json::json!({
+                    "kind": "line",
+                    "xLabel": x_label,
+                    "yLabel": y_label,
+                    "xType": "value",
+                    "yType": "value",
+                    "tooltip": true,
+                    "dataZoom": true,
+                    "series": [{ "points": points }],
                 }),
             }));
         }};

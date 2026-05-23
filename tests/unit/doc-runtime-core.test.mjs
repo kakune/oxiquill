@@ -377,6 +377,17 @@ describe('doc runtime core', () => {
       ].join('\n'),
       inputs: []
     };
+    const chartCell = {
+      id: 'chart-cell',
+      source: [
+        'emit_line_chart!(&points, "n", "x");',
+        'emit_scatter_chart!(&points);',
+        'emit_bar_chart!(&categories, &values);',
+        'emit_histogram!(&bins);',
+        'emit_heatmap!(&heatmap);'
+      ].join('\n'),
+      inputs: []
+    };
     expect(generateRustReaders([rustCell])).toContain('fn read_f64');
     expect(generateRustFunction(rustCell)).toContain('macro_rules! println');
     expect(generateRustFunction(rustCell)).toContain('macro_rules! emit_line_plot');
@@ -386,6 +397,11 @@ describe('doc runtime core', () => {
     expect(generateRustFunction(tableCell)).toContain('macro_rules! emit_table');
     expect(generateRustFunction(tableCell)).toContain('macro_rules! emit_table_with_columns');
     expect(generateRustFunction(tableCell)).toContain('macro_rules! emit_records_table');
+    expect(generateRustFunction(chartCell)).toContain('macro_rules! emit_line_chart');
+    expect(generateRustFunction(chartCell)).toContain('macro_rules! emit_scatter_chart');
+    expect(generateRustFunction(chartCell)).toContain('macro_rules! emit_bar_chart');
+    expect(generateRustFunction(chartCell)).toContain('macro_rules! emit_histogram');
+    expect(generateRustFunction(chartCell)).toContain('macro_rules! emit_heatmap');
     expect(generateRustFunction(rustCell)).toContain('Ok(finish_cell_output');
     expect(generateRustFunction({ id: 'plain', source: 'let value = 1;', inputs: [] })).toContain(
       'let __stdout = std::cell::RefCell::new(String::new());'
@@ -400,6 +416,11 @@ describe('doc runtime core', () => {
     expect(generateRustLib([tableCell])).toContain('Table(TableArtifact)');
     expect(generateRustLib([tableCell])).toContain('fn table_artifact_from_value');
     expect(generateRustLib([tableCell])).toContain('row_count: usize');
+    expect(generateRustLib([chartCell])).toContain('Chart(ChartArtifact)');
+    expect(generateRustLib([chartCell])).toContain('fn xy_chart_spec');
+    expect(generateRustLib([chartCell])).toContain('fn bar_chart_spec');
+    expect(generateRustLib([chartCell])).toContain('fn histogram_chart_spec');
+    expect(generateRustLib([chartCell])).toContain('fn heatmap_chart_spec');
     expect(generateRustLib([rustCell])).toContain('first_generated_cell_runs');
   });
 });
