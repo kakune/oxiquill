@@ -10,6 +10,8 @@ import {
 
 describe('output artifact normalization', () => {
   it('converts legacy cell fields to ordered output artifacts', () => {
+    expect(legacyResultToOutputs({})).toEqual([]);
+
     const outputs = legacyResultToOutputs({
       stdout: 'printed',
       stderr: 'warned',
@@ -60,6 +62,26 @@ describe('output artifact normalization', () => {
       value: { answer: 42 },
       plots: [{ kind: 'line', x_label: 'x', y_label: 'y', points: [[1, 2]] }]
     });
+
+    expect(outputsToLegacyResult([
+      {
+        kind: 'chart',
+        spec: {
+          kind: 'line',
+          series: [{ points: [[1, 'not numeric']] }]
+        }
+      }
+    ])).toMatchObject({ plots: [] });
+
+    expect(outputsToLegacyResult([
+      {
+        kind: 'chart',
+        spec: {
+          kind: 'line',
+          series: [{ points: [[1, 2]] }]
+        }
+      }
+    ])).toMatchObject({ plots: [{ kind: 'line', x_label: '', y_label: '', points: [[1, 2]] }] });
   });
 
   it('normalizes legacy-only and outputs-only worker results', () => {
@@ -78,6 +100,29 @@ describe('output artifact normalization', () => {
       value: ['new'],
       plots: [],
       outputs: [{ kind: 'json', value: ['new'] }]
+    });
+
+    expect(
+      normalizeCellExecutionResult({
+        outputs: [{ kind: 'text', stream: 'stderr', content: 'from outputs' }]
+      })
+    ).toEqual({
+      stdout: '',
+      stderr: 'from outputs',
+      plots: [],
+      outputs: [{ kind: 'text', stream: 'stderr', content: 'from outputs' }]
+    });
+
+    expect(
+      normalizeCellExecutionResult({
+        stderr: 'explicit',
+        outputs: [{ kind: 'text', stream: 'stderr', content: 'from outputs' }]
+      })
+    ).toEqual({
+      stdout: '',
+      stderr: 'explicit',
+      plots: [],
+      outputs: [{ kind: 'text', stream: 'stderr', content: 'from outputs' }]
     });
   });
 

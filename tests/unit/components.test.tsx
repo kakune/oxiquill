@@ -516,6 +516,16 @@ describe('ChartOutput options', () => {
     });
 
     expect(chartSpecToEChartsOptions({
+      kind: 'scatter',
+      legend: false,
+      tooltip: false,
+      series: [{ name: 'hidden', points: [[0, 1]] }]
+    })).toMatchObject({
+      legend: undefined,
+      tooltip: undefined
+    });
+
+    expect(chartSpecToEChartsOptions({
       kind: 'bar',
       categories: ['A', 'B'],
       series: [{ values: [1, null] }]
@@ -555,28 +565,71 @@ describe('ChartOutput options', () => {
       visualMap: expect.objectContaining({ calculable: true }),
       series: [{ type: 'heatmap', data: [['x', 'y', 5]] }]
     });
+
+    expect(chartSpecToEChartsOptions({
+      kind: 'unsupported',
+      series: []
+    } as unknown as Parameters<typeof chartSpecToEChartsOptions>[0])).toMatchObject({
+      series: []
+    });
+
+    expect(chartSpecToEChartsOptions({
+      kind: 'line',
+      legend: true,
+      series: [{ points: [[0, 1]] }]
+    })).toMatchObject({
+      legend: { top: 4 }
+    });
   });
 });
 
 describe('OutputRenderer', () => {
-  it('renders sandboxed HTML, images, and reports unsupported artifacts', () => {
+  it('renders sandboxed HTML, images, tables, and reports unsupported artifacts', () => {
     render(
       <OutputRenderer
         outputs={[
-          { kind: 'html', html: '<strong>safe</strong>', sandboxed: true, title: 'HTML preview' },
+          { id: 'html-preview', kind: 'html', html: '<strong>safe</strong>', sandboxed: true, title: 'HTML preview' },
+          { kind: 'html', html: '<em>default</em>', sandboxed: true },
           { kind: 'image', mime: 'image/png', data: 'abc', alt: 'plot image' },
+          {
+            kind: 'table',
+            columns: [{ key: 'name', label: 'Name', type: 'string' }],
+            rows: [['Ada']]
+          },
           { kind: 'unknown' }
         ]}
       />
     );
 
-    expect(screen.getByTestId('html-output')).toHaveAttribute('sandbox', '');
-    expect(screen.getByTestId('html-output')).toHaveAttribute('srcdoc', '<strong>safe</strong>');
-    expect(screen.getByTestId('html-output')).toHaveAttribute('title', 'HTML preview');
+    const htmlOutputs = screen.getAllByTestId('html-output');
+    expect(htmlOutputs[0]).toHaveAttribute('sandbox', '');
+    expect(htmlOutputs[0]).toHaveAttribute('srcdoc', '<strong>safe</strong>');
+    expect(htmlOutputs[0]).toHaveAttribute('title', 'HTML preview');
+    expect(htmlOutputs[1]).toHaveAttribute('title', 'HTML output');
     expect(screen.getByTestId('image-output')).toHaveAttribute('src', 'data:image/png;base64,abc');
     expect(screen.getByTestId('image-output')).toHaveAttribute('alt', 'plot image');
+    expect(screen.getByTestId('table-output')).toBeVisible();
     expect(screen.getAllByTestId('artifact-error')).toHaveLength(1);
     expect(screen.getByText('Unsupported output artifact.')).toBeVisible();
+  });
+
+  it('renders image fallback text and captions', () => {
+    render(
+      <OutputRenderer
+        outputs={[
+          { kind: 'image', mime: 'image/png', data: 'abc', title: 'Figure one', caption: 'caption' },
+          { kind: 'image', mime: 'image/png', data: 'def', caption: 'caption only' },
+          { kind: 'image', mime: 'image/png', data: 'ghi' }
+        ]}
+      />
+    );
+
+    const images = screen.getAllByTestId('image-output');
+    expect(images[0]).toHaveAttribute('alt', 'Figure one');
+    expect(images[1]).toHaveAttribute('alt', 'Image output');
+    expect(images[2]).toHaveAttribute('alt', 'Image output');
+    expect(screen.getByText('Figure one')).toBeVisible();
+    expect(screen.getByText('caption only')).toBeVisible();
   });
 
   it('builds data URLs for raw SVG and base64 image artifacts', () => {
@@ -615,7 +668,7 @@ describe('TableOutput', () => {
           caption: 'Preview rows',
           columns: [
             { key: 'score', label: 'Score', type: 'integer' },
-            { key: 'label', label: 'Label', type: 'string' },
+            { key: 'label', label: 'Label' },
             { key: 'enabled', label: 'Enabled', type: 'boolean' }
           ],
           rows,
@@ -629,13 +682,22 @@ describe('TableOutput', () => {
     expect(screen.getByText('Scores')).toBeVisible();
     expect(screen.getByText('Preview rows')).toBeVisible();
     expect(screen.getByText('Rows 1-10 of 20 (truncated)')).toBeVisible();
+    expect(screen.getAllByRole('cell')[1]).toHaveAttribute('data-type', 'unknown');
 
+    fireEvent.click(screen.getByRole('button', { name: 'Score' }));
+    expect(screen.getByRole('columnheader', { name: 'Score' })).toHaveAttribute('aria-sort', 'ascending');
+    expect(screen.getAllByRole('cell')[0]).toHaveTextContent('1');
+    fireEvent.click(screen.getByRole('button', { name: 'Score' }));
+    expect(screen.getByRole('columnheader', { name: 'Score' })).toHaveAttribute('aria-sort', 'descending');
+    expect(screen.getAllByRole('cell')[0]).toHaveTextContent('12');
     fireEvent.click(screen.getByRole('button', { name: 'Score' }));
     expect(screen.getByRole('columnheader', { name: 'Score' })).toHaveAttribute('aria-sort', 'ascending');
     expect(screen.getAllByRole('cell')[0]).toHaveTextContent('1');
 
     fireEvent.click(screen.getByTestId('table-next'));
     expect(screen.getByText('Rows 11-12 of 20 (truncated)')).toBeVisible();
+    fireEvent.click(screen.getByTestId('table-prev'));
+    expect(screen.getByText('Rows 1-10 of 20 (truncated)')).toBeVisible();
 
     fireEvent.input(screen.getByTestId('table-page-size'), { target: { value: '25' } });
     expect(screen.getByText('Rows 1-12 of 20 (truncated)')).toBeVisible();
@@ -645,14 +707,33 @@ describe('TableOutput', () => {
     expect(rows[0]).toEqual([12, 'row 1', true]);
   });
 
+  it('renders empty tables with a stable row range', () => {
+    render(
+      <TableOutput
+        table={{
+          kind: 'table',
+          columns: [{ key: 'value', label: 'Value' }],
+          rows: []
+        }}
+      />
+    );
+
+    expect(screen.getByText('Rows 0-0 of 0')).toBeVisible();
+    expect(screen.getByTestId('table-prev')).toBeDisabled();
+    expect(screen.getByTestId('table-next')).toBeDisabled();
+  });
+
   it('sorts and formats table values without mutating rows', () => {
     const rows = [[2, 'b'], [null, 'z'], [1, 'a'], [undefined, 'y']];
 
     expect(sortRows(rows, { columnIndex: 0, direction: 'asc' })).toEqual([[1, 'a'], [2, 'b'], [null, 'z'], [undefined, 'y']]);
     expect(sortRows(rows, { columnIndex: 1, direction: 'desc' })).toEqual([[null, 'z'], [undefined, 'y'], [2, 'b'], [1, 'a']]);
+    expect(sortRows([[1, 'first'], [1, 'second']], { columnIndex: 0, direction: 'desc' })).toEqual([[1, 'first'], [1, 'second']]);
+    expect(sortRows([[true], [false]], { columnIndex: 0, direction: 'asc' })).toEqual([[false], [true]]);
     expect(visibleRows(rows, 1, 2)).toEqual([[1, 'a'], [undefined, 'y']]);
     expect(rows[0]).toEqual([2, 'b']);
     expect(formatTableCell(1234.5678)).toBe('1,234.57');
+    expect(formatTableCell(Number.POSITIVE_INFINITY)).toBe('Infinity');
     expect(formatTableCell(null)).toBe('null');
     expect(formatTableCell(undefined)).toBe('missing');
     expect(formatTableCell({ nested: true })).toBe('{"nested":true}');

@@ -10,7 +10,9 @@ This repository is responsible for producing the static output in `dist/`. Hosti
 
 - Rust cells compiled to WebAssembly at build time and run in the browser
 - Python cells executed in a Pyodide worker
-- Line plot output rendered with ECharts
+- Shared rich output artifacts for text, JSON, tables, charts, images, and sandboxed HTML
+- Python rich display support for pandas tables, matplotlib figures, and common MIME bundles
+- Rust output macros for tables, multiple chart types, JSON, SVG/PNG images, and sandboxed HTML
 - Inline and block math rendered with KaTeX
 - Mermaid flowcharts, sequence diagrams, and state diagrams
 - PNG, JPEG, PDF, and similar files served from `public/media`
