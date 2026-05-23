@@ -288,6 +288,7 @@ describe('doc runtime core', () => {
     expect(generateCellsJson(cells)).toContain('"id": "one"');
 
     expect(generateRustCargoToml([], workspaceCrates)).not.toContain('doc-rust =');
+    expect(generateRustCargoToml([], workspaceCrates)).toContain('license = "AGPL-3.0-only"');
     expect(generateRustCargoToml([{ crates: ['doc-rust'] }], workspaceCrates)).toContain(
       'doc-rust = { path = "../../../crates/doc-rust" }'
     );
@@ -323,6 +324,7 @@ describe('doc runtime core', () => {
     expect(generateRustFunction({ id: 'plain', source: 'let value = 1;', inputs: [] })).toContain(
       'let __stdout = String::new();'
     );
+    expect(generateRustLib([])).toContain('let _: Value = serde_json::from_str(inputs_json)');
     expect(generateRustLib([])).toContain('unknown Rust cell');
     expect(generateRustLib([rustCell])).toContain('first_generated_cell_runs');
   });
