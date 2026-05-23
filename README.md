@@ -4,7 +4,7 @@
 
 Oxiquill is a static documentation workspace for technical notes written in MDX. It publishes an Astro Starlight site where one page can combine prose, Rust/Wasm cells, Python/Pyodide cells, math, Mermaid diagrams, images, PDFs, and rich output artifacts.
 
-The repository is responsible for producing the static output in `dist/`. Hosting, TLS, domains, and reverse proxies are handled outside this project.
+The repository is responsible for producing the static output in `dist/`. A sample build is published with GitHub Pages at <https://kakune.github.io/oxiquill/>. Production hosting, TLS, domains, and reverse proxies are handled outside this project.
 
 English is the root documentation language. Japanese pages are published under `/ja/`, and the Japanese README is included later in this file.
 
@@ -171,7 +171,7 @@ For docs-only prose changes, `pnpm check` is usually enough. For interactive cel
 
 Oxiquill は、MDX で書いた技術ノートを静的サイトとして公開するためのドキュメントワークスペースです。Astro Starlight を土台にし、1つのページに本文、Rust/Wasm セル、Python/Pyodide セル、数式、Mermaid 図、画像、PDF、リッチ出力をまとめられます。
 
-このリポジトリの責務は、公開用の静的成果物 `dist/` を作るところまでです。配信、TLS、ドメイン、リバースプロキシはこのプロジェクトの外側で扱います。
+このリポジトリの責務は、公開用の静的成果物 `dist/` を作るところまでです。サンプルビルドは GitHub Pages で <https://kakune.github.io/oxiquill/> に公開します。本番配信、TLS、ドメイン、リバースプロキシはこのプロジェクトの外側で扱います。
 
 ドキュメントのroot言語は英語です。日本語ページは `/ja/` 配下で公開します。
 

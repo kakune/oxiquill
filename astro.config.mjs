@@ -8,9 +8,11 @@ import remarkInteractiveCells from './src/lib/doc-runtime/remark-interactive-cel
 import remarkMermaidDiagrams from './src/lib/doc-runtime/remark-mermaid-diagrams.mjs';
 
 const projectRoot = fileURLToPath(new URL('.', import.meta.url));
+const basePath = process.env.BASE_PATH;
 
 export default defineConfig({
   site: process.env.SITE ?? 'https://oxiquill.local',
+  ...(basePath ? { base: basePath } : {}),
   output: 'static',
   markdown: {
     syntaxHighlight: {
