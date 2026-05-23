@@ -59,6 +59,13 @@ const { default: MermaidDiagram } = await import('../../src/components/doc-runti
 const { default: OutputRenderer } = await import('../../src/components/doc-runtime/OutputRenderer');
 const { default: PlotOutput } = await import('../../src/components/doc-runtime/PlotOutput');
 const { chartSpecToEChartsOptions } = await import('../../src/components/doc-runtime/ChartOutput');
+const {
+  default: TableOutput,
+  formatTableCell,
+  sortRows,
+  tableToCsv,
+  visibleRows
+} = await import('../../src/components/doc-runtime/TableOutput');
 
 class TestResizeObserver {
   static instances: TestResizeObserver[] = [];
@@ -557,7 +564,7 @@ describe('OutputRenderer', () => {
       <OutputRenderer
         outputs={[
           { kind: 'html', html: '<strong>safe</strong>', sandboxed: true, title: 'HTML preview' },
-          { kind: 'table', columns: [{ key: 'x', label: 'x' }], rows: [[1]] },
+          { kind: 'image', mime: 'image/png', data: 'abc' },
           { kind: 'unknown' }
         ]}
       />
@@ -567,7 +574,84 @@ describe('OutputRenderer', () => {
     expect(screen.getByTestId('html-output')).toHaveAttribute('srcdoc', '<strong>safe</strong>');
     expect(screen.getByTestId('html-output')).toHaveAttribute('title', 'HTML preview');
     expect(screen.getAllByTestId('artifact-error')).toHaveLength(2);
-    expect(screen.getByText('Unsupported table output artifact.')).toBeVisible();
+    expect(screen.getByText('Unsupported image output artifact.')).toBeVisible();
     expect(screen.getByText('Unsupported output artifact.')).toBeVisible();
+  });
+});
+
+describe('TableOutput', () => {
+  it('renders table artifacts with sorting, pagination, and CSV copy', async () => {
+    const writeText = vi.fn();
+    Object.defineProperty(globalThis.navigator, 'clipboard', {
+      configurable: true,
+      value: { writeText }
+    });
+    const rows = Array.from({ length: 12 }, (_, index) => [12 - index, `row ${index + 1}`, index % 2 === 0]);
+
+    render(
+      <TableOutput
+        table={{
+          kind: 'table',
+          title: 'Scores',
+          caption: 'Preview rows',
+          columns: [
+            { key: 'score', label: 'Score', type: 'integer' },
+            { key: 'label', label: 'Label', type: 'string' },
+            { key: 'enabled', label: 'Enabled', type: 'boolean' }
+          ],
+          rows,
+          rowCount: 20,
+          truncated: true
+        }}
+      />
+    );
+
+    expect(screen.getByTestId('table-output')).toBeVisible();
+    expect(screen.getByText('Scores')).toBeVisible();
+    expect(screen.getByText('Preview rows')).toBeVisible();
+    expect(screen.getByText('Rows 1-10 of 20 (truncated)')).toBeVisible();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Score' }));
+    expect(screen.getByRole('columnheader', { name: 'Score' })).toHaveAttribute('aria-sort', 'ascending');
+    expect(screen.getAllByRole('cell')[0]).toHaveTextContent('1');
+
+    fireEvent.click(screen.getByTestId('table-next'));
+    expect(screen.getByText('Rows 11-12 of 20 (truncated)')).toBeVisible();
+
+    fireEvent.input(screen.getByTestId('table-page-size'), { target: { value: '25' } });
+    expect(screen.getByText('Rows 1-12 of 20 (truncated)')).toBeVisible();
+
+    fireEvent.click(screen.getByTestId('table-copy-csv'));
+    await waitFor(() => expect(writeText).toHaveBeenCalledWith(expect.stringContaining('Score,Label,Enabled')));
+    expect(rows[0]).toEqual([12, 'row 1', true]);
+  });
+
+  it('sorts and formats table values without mutating rows', () => {
+    const rows = [[2, 'b'], [null, 'z'], [1, 'a'], [undefined, 'y']];
+
+    expect(sortRows(rows, { columnIndex: 0, direction: 'asc' })).toEqual([[1, 'a'], [2, 'b'], [null, 'z'], [undefined, 'y']]);
+    expect(sortRows(rows, { columnIndex: 1, direction: 'desc' })).toEqual([[null, 'z'], [undefined, 'y'], [2, 'b'], [1, 'a']]);
+    expect(visibleRows(rows, 1, 2)).toEqual([[1, 'a'], [undefined, 'y']]);
+    expect(rows[0]).toEqual([2, 'b']);
+    expect(formatTableCell(1234.5678)).toBe('1,234.57');
+    expect(formatTableCell(null)).toBe('null');
+    expect(formatTableCell(undefined)).toBe('missing');
+    expect(formatTableCell({ nested: true })).toBe('{"nested":true}');
+  });
+
+  it('copies visible table data as escaped CSV', () => {
+    expect(
+      tableToCsv(
+        [
+          { key: 'a', label: 'A' },
+          { key: 'b', label: 'B' }
+        ],
+        [
+          ['comma,value', 'quote "value"'],
+          ['line\nbreak', null],
+          [true, { nested: true }]
+        ]
+      )
+    ).toBe('A,B\n"comma,value","quote ""value"""\n"line\nbreak",\ntrue,"{""nested"":true}"');
   });
 });
