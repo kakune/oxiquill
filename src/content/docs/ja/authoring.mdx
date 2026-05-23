@@ -54,6 +54,52 @@ println!("next = {next:.6}");
 
 `crates` には `crates/*` にある任意の helper crate の package 名を指定します。共有ロジックを使わないセルは `crates: []` と書きます。
 
+## リッチ出力を出す
+
+セルは複数の型付き出力を返せます。通常の `print` や `println!` はそのまま使え、表、グラフ、画像、HTML などは共通の UI コンポーネントで表示されます。
+
+Python セルでは次の display helper を使えます。
+
+- `display(value)` は値から JSON、表、画像、HTML、テキストのいずれかを選びます。
+- `display_json(value)` は JSON を出力します。
+- `display_html(html)` は sandbox された HTML を出力します。
+- `display_table(rows_or_dataframe)` は表を出力します。
+- `display_image(data, mime)` は SVG、PNG、JPEG 画像を出力します。
+
+vendored package を使う Python セルは `packages` に指定します。リッチ出力で使う主な vendored package は `matplotlib` と `pandas` です。
+
+````md
+```python
+#| id: pandas-example
+#| title: Pandas の表
+#| packages: [pandas]
+import pandas as pd
+
+scores = pd.DataFrame({"label": ["alpha", "beta"], "score": [3, 5]})
+display(scores, title="Scores")
+```
+````
+
+Rust セルでは明示的な `emit_*` macro を使います。`emit_text!`, `emit_json!`, `emit_html!`, `emit_svg!`, `emit_png_base64!`, `emit_table!`, `emit_table_with_columns!`, `emit_records_table!`, `emit_line_chart!`, `emit_scatter_chart!`, `emit_bar_chart!`, `emit_histogram!`, `emit_heatmap!` と、互換用の `emit_line_plot!` を使えます。
+
+````md
+```rust
+//| id: rust-output-example
+//| title: Rust のリッチ出力
+//| crates: []
+let rows = vec![
+    serde_json::json!({"label": "alpha", "score": 3}),
+    serde_json::json!({"label": "beta", "score": 5}),
+];
+
+emit_json!(&serde_json::json!({"rows": rows.len()}));
+emit_records_table!(&rows);
+emit_bar_chart!(&["alpha", "beta"], &[3, 5]);
+```
+````
+
+大きな出力は UI thread に渡る前に制限されます。テキストは約 200 KB、JSON と HTML は約 500 KB、画像は約 2 MB、表のプレビューは 1,000 行までです。
+
 ## 入力を追加する
 
 `inputs` を指定すると、ランタイムがフォーム UI を自動生成します。対応している入力は `range`, `number`, `integer`, `text`, `textarea`, `checkbox`, `select`, `radio` です。

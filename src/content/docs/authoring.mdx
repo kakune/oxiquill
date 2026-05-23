@@ -54,6 +54,52 @@ println!("next = {next:.6}");
 
 Use `crates` to list optional helper crate package names under `crates/*`. Cells that do not need shared Rust logic should use `crates: []`.
 
+## Emit Rich Outputs
+
+Cells can return multiple typed output artifacts. Plain `print` and `println!` still work, and richer outputs render with shared UI components.
+
+Python cells include display helpers:
+
+- `display(value)` chooses JSON, table, image, HTML, or text output from the value.
+- `display_json(value)` emits JSON.
+- `display_html(html)` emits sandboxed HTML.
+- `display_table(rows_or_dataframe)` emits a table.
+- `display_image(data, mime)` emits SVG, PNG, or JPEG image data.
+
+Python cells that use vendored packages must list them with `packages`. The current vendored rich-output packages are `matplotlib` and `pandas`.
+
+````md
+```python
+#| id: pandas-example
+#| title: Pandas table
+#| packages: [pandas]
+import pandas as pd
+
+scores = pd.DataFrame({"label": ["alpha", "beta"], "score": [3, 5]})
+display(scores, title="Scores")
+```
+````
+
+Rust cells use explicit `emit_*` macros. Supported macros include `emit_text!`, `emit_json!`, `emit_html!`, `emit_svg!`, `emit_png_base64!`, `emit_table!`, `emit_table_with_columns!`, `emit_records_table!`, `emit_line_chart!`, `emit_scatter_chart!`, `emit_bar_chart!`, `emit_histogram!`, `emit_heatmap!`, and the compatibility `emit_line_plot!`.
+
+````md
+```rust
+//| id: rust-output-example
+//| title: Rust rich output
+//| crates: []
+let rows = vec![
+    serde_json::json!({"label": "alpha", "score": 3}),
+    serde_json::json!({"label": "beta", "score": 5}),
+];
+
+emit_json!(&serde_json::json!({"rows": rows.len()}));
+emit_records_table!(&rows);
+emit_bar_chart!(&["alpha", "beta"], &[3, 5]);
+```
+````
+
+Large outputs are limited before they reach the UI thread. Text is capped at about 200 KB, JSON and HTML at about 500 KB, images at about 2 MB, and table previews at 1,000 rows.
+
 ## Add Inputs
 
 Add `inputs` metadata to let the runtime generate form controls. Supported input types are `range`, `number`, `integer`, `text`, `textarea`, `checkbox`, `select`, and `radio`.
