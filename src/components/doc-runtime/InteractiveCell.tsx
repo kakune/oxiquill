@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'preact/hooks';
+import { useEffect, useMemo, useRef, useState } from 'preact/hooks';
 import {
   coerceInputValue,
   formatInputValue,
@@ -51,6 +51,7 @@ function InteractiveCellPanel({
   const [error, setError] = useState<string>();
   const [isRunning, setIsRunning] = useState(false);
   const [isSourceVisible, setIsSourceVisible] = useState(cell.showSource);
+  const latestRunId = useRef(0);
 
   const serializedValues = useMemo(() => JSON.stringify(values), [values]);
 
@@ -65,15 +66,24 @@ function InteractiveCellPanel({
   }, [cell.id, runtimeVersion, serializedValues]);
 
   async function run() {
+    const runId = latestRunId.current + 1;
+    latestRunId.current = runId;
     setIsRunning(true);
     setError(undefined);
 
     try {
-      setResult(await runInteractiveCell(cell, values));
+      const nextResult = await runInteractiveCell(cell, values);
+      if (latestRunId.current === runId) {
+        setResult(nextResult);
+      }
     } catch (caught) {
-      setError(caught instanceof Error ? caught.message : String(caught));
+      if (latestRunId.current === runId) {
+        setError(caught instanceof Error ? caught.message : String(caught));
+      }
     } finally {
-      setIsRunning(false);
+      if (latestRunId.current === runId) {
+        setIsRunning(false);
+      }
     }
   }
 
@@ -106,6 +116,7 @@ function InteractiveCellPanel({
           {cell.inputs.map((input) => (
             <InputControl
               key={input.name}
+              cellId={cell.id}
               input={input}
               value={values[input.name]}
               onChange={(value) => setValues((current) => ({ ...current, [input.name]: value }))}
@@ -140,15 +151,17 @@ function useRuntimeLabels() {
 }
 
 function InputControl({
+  cellId,
   input,
   value,
   onChange
 }: {
+  cellId: string;
   input: InputSpec;
   onChange: (value: string | number | boolean) => void;
   value: string | number | boolean;
 }) {
-  const id = `doc-input-${input.name}`;
+  const id = inputControlId(cellId, input.name);
 
   if (input.type === 'checkbox') {
     return (
@@ -247,6 +260,10 @@ function InputControl({
       />
     </label>
   );
+}
+
+function inputControlId(cellId: string, inputName: string): string {
+  return `doc-input-${cellId}-${inputName}`;
 }
 
 function CellOutput({

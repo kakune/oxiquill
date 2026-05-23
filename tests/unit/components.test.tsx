@@ -1,6 +1,6 @@
-import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/preact';
+import { act, cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/preact';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import type { CellManifest, InputSpec } from '../../src/lib/doc-runtime/types';
+import type { CellExecutionResult, CellManifest, InputSpec } from '../../src/lib/doc-runtime/types';
 
 const mocks = vi.hoisted(() => {
   const chart = {
@@ -113,6 +113,17 @@ function makeCell(overrides: Partial<CellManifest> = {}): CellManifest {
   };
 }
 
+function createDeferredResult() {
+  let resolve!: (value: CellExecutionResult) => void;
+  let reject!: (reason: Error) => void;
+  const promise = new Promise<CellExecutionResult>((resolvePromise, rejectPromise) => {
+    resolve = resolvePromise;
+    reject = rejectPromise;
+  });
+
+  return { promise, reject, resolve };
+}
+
 beforeEach(() => {
   vi.clearAllMocks();
   mocks.manifestListeners = [];
@@ -189,6 +200,36 @@ describe('InteractiveCell', () => {
     );
   });
 
+  it('scopes input ids and radio groups per cell', () => {
+    const radioOnly = inputs.filter((input) => input.name === 'style');
+    mocks.getCell.mockImplementation((cellId: string) =>
+      makeCell({ id: cellId, title: cellId, inputs: radioOnly })
+    );
+
+    render(
+      <>
+        <InteractiveCell cellId="cell-one" />
+        <InteractiveCell cellId="cell-two" />
+      </>
+    );
+
+    const first = within(screen.getByTestId('cell-cell-one'));
+    const second = within(screen.getByTestId('cell-cell-two'));
+    const firstCompact = first.getByLabelText('compact') as HTMLInputElement;
+    const firstVerbose = first.getByLabelText('verbose') as HTMLInputElement;
+    const secondCompact = second.getByLabelText('compact') as HTMLInputElement;
+
+    expect(firstCompact.name).toBe('doc-input-cell-one-style');
+    expect(secondCompact.name).toBe('doc-input-cell-two-style');
+    expect(firstCompact).toBeChecked();
+    expect(secondCompact).toBeChecked();
+
+    fireEvent.input(firstVerbose, { target: { value: 'verbose' } });
+
+    expect(firstVerbose).toBeChecked();
+    expect(secondCompact).toBeChecked();
+  });
+
   it('shows running and error states', async () => {
     mocks.getCell.mockReturnValue(makeCell());
     mocks.runInteractiveCell.mockRejectedValue(new Error('failed'));
@@ -224,6 +265,71 @@ describe('InteractiveCell', () => {
 
     fireEvent.input(screen.getByRole('slider', { name: 'ratio' }), { target: { value: '3' } });
     await waitFor(() => expect(mocks.runInteractiveCell).toHaveBeenCalledTimes(3));
+  });
+
+  it('ignores stale async results from superseded reactive runs', async () => {
+    const pending: Array<ReturnType<typeof createDeferredResult>> = [];
+    mocks.runInteractiveCell.mockImplementation(() => {
+      const deferred = createDeferredResult();
+      pending.push(deferred);
+      return deferred.promise;
+    });
+    mocks.getCell.mockReturnValue(makeCell({
+      run: 'reactive',
+      inputs: [inputs.find((input) => input.name === 'label') as InputSpec]
+    }));
+
+    render(<InteractiveCell cellId="cell-one" />);
+    await waitFor(() => expect(pending).toHaveLength(1));
+
+    fireEvent.input(screen.getByLabelText('label'), { target: { value: 'newer input' } });
+    await waitFor(() => expect(pending).toHaveLength(2));
+
+    await act(async () => {
+      pending[1].resolve({ stdout: 'newer result', stderr: '', value: null, plots: [] });
+      await pending[1].promise;
+    });
+    await waitFor(() => expect(screen.getByTestId('run-output')).toHaveTextContent('newer result'));
+
+    await act(async () => {
+      pending[0].resolve({ stdout: 'older result', stderr: '', value: null, plots: [] });
+      await pending[0].promise;
+    });
+
+    expect(screen.getByTestId('run-output')).toHaveTextContent('newer result');
+  });
+
+  it('ignores stale async errors from superseded reactive runs', async () => {
+    const pending: Array<ReturnType<typeof createDeferredResult>> = [];
+    mocks.runInteractiveCell.mockImplementation(() => {
+      const deferred = createDeferredResult();
+      pending.push(deferred);
+      return deferred.promise;
+    });
+    mocks.getCell.mockReturnValue(makeCell({
+      run: 'reactive',
+      inputs: [inputs.find((input) => input.name === 'label') as InputSpec]
+    }));
+
+    render(<InteractiveCell cellId="cell-one" />);
+    await waitFor(() => expect(pending).toHaveLength(1));
+
+    fireEvent.input(screen.getByLabelText('label'), { target: { value: 'newer input' } });
+    await waitFor(() => expect(pending).toHaveLength(2));
+
+    await act(async () => {
+      pending[1].resolve({ stdout: 'newer result', stderr: '', value: null, plots: [] });
+      await pending[1].promise;
+    });
+    await waitFor(() => expect(screen.getByTestId('run-output')).toHaveTextContent('newer result'));
+
+    await act(async () => {
+      pending[0].reject(new Error('older failure'));
+      await pending[0].promise.catch(() => undefined);
+    });
+
+    expect(screen.queryByText('older failure')).not.toBeInTheDocument();
+    expect(screen.getByTestId('run-output')).toHaveTextContent('newer result');
   });
 
   it('supports cells without inputs and hidden source', () => {

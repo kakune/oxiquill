@@ -12,10 +12,26 @@ const worker = self as unknown as WorkerScope;
 let pyodideReady: Promise<PyodideRuntime> | undefined;
 let loadPyodideReady: Promise<LoadPyodide> | undefined;
 const pyodideModuleUrl = '/pyodide/pyodide.mjs';
+const requestQueue = createSerialRequestQueue(handleRequest);
 
 worker.addEventListener('message', (event) => {
-  void handleRequest(event.data);
+  requestQueue.enqueue(event.data);
 });
+
+export function createSerialRequestQueue<Request>(
+  handle: (request: Request) => Promise<void>
+): { enqueue: (request: Request) => void } {
+  let tail = Promise.resolve();
+
+  return {
+    enqueue(request) {
+      tail = tail
+        .catch(() => undefined)
+        .then(() => handle(request))
+        .catch(() => undefined);
+    }
+  };
+}
 
 async function handleRequest(request: RuntimeWorkerRequest): Promise<void> {
   try {

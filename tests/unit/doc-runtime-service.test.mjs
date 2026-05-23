@@ -280,6 +280,24 @@ describe('doc runtime service', () => {
     );
   });
 
+  it('fails clearly when an MDX Python cell specifies unsupported packages', async () => {
+    const fileSystem = createMemoryFileSystem({
+      '/repo/src/content/docs/page.mdx': '```python\n#| id: py\n#| packages: [numpy]\nprint("py")\n```'
+    });
+
+    await expect(
+      collectCells({
+        fileSystem,
+        helperCrates: new Map(),
+        highlighter,
+        paths: createDocRuntimePaths('/repo'),
+        root: '/repo'
+      })
+    ).rejects.toThrow(
+      'Python cell "py" in src/content/docs/page.mdx specifies packages: numpy'
+    );
+  });
+
   it('writes and copies only when content changes', async () => {
     const fileSystem = createMemoryFileSystem({
       '/repo/source.bin': Buffer.from([1, 2, 3]),
