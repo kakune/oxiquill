@@ -172,9 +172,8 @@ describe('doc runtime core', () => {
 
     expect(normalizePackages(null, 'python', 'cell', 'page')).toEqual([]);
     expect(normalizePackages([], 'python', 'cell', 'page')).toEqual([]);
-    expect(() => normalizePackages(['numpy', 'numpy', 'pandas'], 'python', 'cell', 'page')).toThrow(
-      'Static Pyodide package assets are not currently distributed'
-    );
+    expect(normalizePackages(['numpy', 'numpy', 'pandas'], 'python', 'cell', 'page')).toEqual(['numpy', 'pandas']);
+    expect(() => normalizePackages(['scipy'], 'python', 'cell', 'page')).toThrow('unsupported packages: scipy');
     expect(() => normalizePackages(['numpy'], 'rust', 'cell', 'page')).toThrow('must use crates');
 
     expect(normalizeCrates(null, 'rust', 'cell', 'page', helperCrates)).toEqual([]);

@@ -17,6 +17,22 @@ const supportedLanguages = new Map([
 ]);
 const runModes = ['button', 'reactive', 'autorun', 'hidden'];
 const inputTypes = ['range', 'number', 'integer', 'text', 'textarea', 'checkbox', 'select', 'radio'];
+export const vendoredPyodidePackageRoots = ['matplotlib', 'pandas'];
+export const supportedPyodidePackages = [
+  'contourpy',
+  'cycler',
+  'fonttools',
+  'kiwisolver',
+  'matplotlib',
+  'numpy',
+  'packaging',
+  'pandas',
+  'pillow',
+  'pyparsing',
+  'python-dateutil',
+  'pytz',
+  'six'
+];
 const rustReservedIdentifiers = new Set([
   'Self',
   'abstract',
@@ -172,10 +188,11 @@ export function normalizePackages(value, language, cellId, pagePath) {
   }
 
   const packages = normalizeStringArray(value, 'packages', cellId, pagePath);
-  if (packages.length > 0) {
+  const unsupportedPackages = packages.filter((packageName) => !supportedPyodidePackages.includes(packageName));
+  if (unsupportedPackages.length > 0) {
     throw new Error(
-      `Python cell "${cellId}" in ${pagePath} specifies packages: ${packages.join(', ')}. ` +
-        'Static Pyodide package assets are not currently distributed; remove packages or add package asset copying first.'
+      `Python cell "${cellId}" in ${pagePath} specifies unsupported packages: ${unsupportedPackages.join(', ')}. ` +
+        `Vendored packages: ${supportedPyodidePackages.join(', ')}.`
     );
   }
 
