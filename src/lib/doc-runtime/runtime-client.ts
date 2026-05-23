@@ -6,6 +6,7 @@ import type {
   RuntimeWorkerRequest,
   RuntimeWorkerResponse
 } from './types';
+import { normalizeCellExecutionResult } from './output-artifacts';
 
 type PendingRequest = {
   reject: (reason: Error) => void;
@@ -74,7 +75,7 @@ export function createInteractiveCellRunner(dependencies: RuntimeClientDependenc
       dependencies.clearTimeout(request.timeout);
 
       if (event.data.ok) {
-        request.resolve(event.data.result);
+        request.resolve(normalizeCellExecutionResult(event.data.result));
       } else {
         request.reject(new Error(event.data.error));
       }

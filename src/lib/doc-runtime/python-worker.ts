@@ -62,7 +62,8 @@ async function handleRequest(request: RuntimeWorkerRequest): Promise<void> {
       stdout: stdout.join('\n').trimEnd(),
       stderr: stderr.join('\n').trimEnd(),
       value,
-      plots: []
+      plots: [],
+      outputs: []
     };
 
     worker.postMessage({ requestId: request.requestId, ok: true, result });
