@@ -368,12 +368,24 @@ describe('doc runtime core', () => {
       ].join('\n'),
       inputs: []
     };
+    const tableCell = {
+      id: 'table-cell',
+      source: [
+        'emit_table!(&rows);',
+        'emit_table_with_columns!(&columns, &rows);',
+        'emit_records_table!(&records);'
+      ].join('\n'),
+      inputs: []
+    };
     expect(generateRustReaders([rustCell])).toContain('fn read_f64');
     expect(generateRustFunction(rustCell)).toContain('macro_rules! println');
     expect(generateRustFunction(rustCell)).toContain('macro_rules! emit_line_plot');
     expect(generateRustFunction(rustCell)).not.toContain('macro_rules! emit_json');
     expect(generateRustFunction(preludeCell)).toContain('macro_rules! emit_json');
     expect(generateRustFunction(preludeCell)).toContain('macro_rules! emit_image_svg');
+    expect(generateRustFunction(tableCell)).toContain('macro_rules! emit_table');
+    expect(generateRustFunction(tableCell)).toContain('macro_rules! emit_table_with_columns');
+    expect(generateRustFunction(tableCell)).toContain('macro_rules! emit_records_table');
     expect(generateRustFunction(rustCell)).toContain('Ok(finish_cell_output');
     expect(generateRustFunction({ id: 'plain', source: 'let value = 1;', inputs: [] })).toContain(
       'let __stdout = std::cell::RefCell::new(String::new());'
@@ -385,6 +397,9 @@ describe('doc runtime core', () => {
     expect(generateRustLib([preludeCell])).toContain('Json(JsonArtifact)');
     expect(generateRustLib([preludeCell])).toContain('Html(HtmlArtifact)');
     expect(generateRustLib([preludeCell])).toContain('Image(ImageArtifact)');
+    expect(generateRustLib([tableCell])).toContain('Table(TableArtifact)');
+    expect(generateRustLib([tableCell])).toContain('fn table_artifact_from_value');
+    expect(generateRustLib([tableCell])).toContain('row_count: usize');
     expect(generateRustLib([rustCell])).toContain('first_generated_cell_runs');
   });
 });
