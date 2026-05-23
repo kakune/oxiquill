@@ -17,23 +17,25 @@
 
 ## Project Shape
 
-- Oxiquill is being migrated from the `../note-test` documentation stack.
-- This repository currently contains a structure-first skeleton only. Do not add implementation code unless the migration task explicitly asks for it.
-- The intended stack is an Astro/Starlight documentation site with Preact runtime components, strict TypeScript, and Rust helper crates for generated interactive cells.
+- Oxiquill is a static Astro/Starlight documentation site with Preact runtime components, strict TypeScript, and Rust helper crates used by generated interactive cells.
 - Use `pnpm` for Node commands. The Rust toolchain is pinned in `rust-toolchain.toml`; do not change it casually.
+- Prefer the existing simple structure over new framework layers. Add abstractions only when they remove real duplication or clarify a shared boundary.
 
 ## Generated Files
 
 - Do not edit generated output directly: `src/generated/doc-runtime/**`, `public/pyodide/**`, `dist/**`, `coverage/**`, `test-results/**`, or `target/**`.
-- Add generation scripts and generated artifacts only when the real runtime implementation is migrated.
+- Regenerate runtime artifacts with the existing scripts: `pnpm docgen`, `pnpm wasm:dev`, `pnpm wasm:build`, or `pnpm build`, depending on the change.
 
 ## Coding Standards
 
-- Keep skeleton changes structural. Placeholder files should remain empty unless a future task migrates real behavior.
-- Preserve strict linting once implementation code is introduced.
-- Avoid broad rewrites while making focused migration changes. Match the established project shape before introducing new layers.
+- Keep code small, explicit, and easy to test. Prefer pure functions and data transformations where they fit the problem.
+- Preserve strict linting. Treat warnings as work to fix, not noise to suppress.
+- Do not silence lints without a narrow reason. Rust lint exceptions should use `#[expect(..., reason = "...")]`.
+- Avoid broad rewrites while making focused changes. Match local style before introducing a new pattern.
 
 ## Validation
 
-- During the skeleton phase, prefer structural checks such as `git status --short` and file layout inspection.
-- Run build, test, and lint commands only after the corresponding source, scripts, and test implementations have been migrated.
+- For frontend/runtime changes, run `pnpm test:unit` and `pnpm check`; use `pnpm test:unit:coverage` for covered logic changes.
+- For Rust changes, run `pnpm test:rust`, `pnpm lint:rust`, and `pnpm doc:rust`; use `pnpm test:rust:coverage` when behavior or coverage changes.
+- For interactive cell generation or Wasm runtime changes, run `pnpm wasm:dev` and `pnpm test:wasm`; add `pnpm test:e2e` for browser-facing behavior.
+- Run `pnpm test` before considering broad changes complete when practical.
