@@ -1,0 +1,94 @@
+---
+title: Rich Output
+description: Emit text, JSON, tables, charts, images, and sandboxed HTML from executable cells.
+---
+
+Interactive cells can return multiple typed output artifacts. Plain `print` and `println!` still work, and richer artifacts render with shared UI components.
+
+## Output Types
+
+Oxiquill renders these output kinds:
+
+- Text from stdout, stderr, or display output.
+- JSON values with structured formatting.
+- Tables with sortable columns.
+- Charts rendered with ECharts.
+- Images from SVG, PNG, or JPEG data.
+- Sandboxed HTML in an iframe.
+
+Large outputs are limited before they reach the UI thread. Text is capped at about 200 KB, JSON and HTML at about 500 KB, images at about 2 MB, and table previews at 1,000 rows.
+
+## Python Display Helpers
+
+Python cells include display helpers:
+
+- `display(value)` chooses JSON, table, image, HTML, or text output from the value.
+- `display_json(value)` emits JSON.
+- `display_html(html)` emits sandboxed HTML.
+- `display_table(rows_or_dataframe)` emits a table.
+- `display_image(data, mime)` emits SVG, PNG, or JPEG image data.
+
+The runtime also understands common rich representations such as pandas DataFrames and Series, matplotlib figures, `_repr_mimebundle_`, `_repr_json_`, `_repr_html_`, `_repr_svg_`, `_repr_png_`, and `_repr_jpeg_`.
+
+```python
+#| id: python-rich-outputs
+#| title: Python table, matplotlib, HTML, and JSON outputs
+#| run: button
+#| packages: [matplotlib, pandas]
+import pandas as pd
+import matplotlib.pyplot as plt
+
+scores = pd.DataFrame({"label": ["alpha", "beta", "gamma"], "score": [3, 5, 4]})
+
+display(scores, title="Pandas table")
+display_json({"status": "ok", "rows": len(scores)}, title="Summary")
+display_html("<p><strong>Sandboxed HTML</strong> emitted from Python.</p>", title="HTML")
+
+plt.bar(scores["label"], scores["score"])
+_ = plt.title("Scores")
+_ = plt.xlabel("label")
+_ = plt.ylabel("score")
+```
+
+## Rust Output Macros
+
+Rust cells use explicit `emit_*` macros. Supported macros include:
+
+- `emit_text!`
+- `emit_json!`
+- `emit_html!`
+- `emit_svg!` and `emit_image_svg!`
+- `emit_png_base64!` and `emit_image_png!`
+- `emit_table!`, `emit_table_with_columns!`, and `emit_records_table!`
+- `emit_line_chart!`, `emit_scatter_chart!`, `emit_bar_chart!`, `emit_histogram!`, and `emit_heatmap!`
+- `emit_line_plot!` for compatibility with the original line-plot helper
+
+```rust
+//| id: rust-rich-outputs
+//| title: Rust table, chart, JSON, SVG, and HTML outputs
+//| run: button
+//| crates: []
+let rows = vec![
+    serde_json::json!({"label": "alpha", "score": 3}),
+    serde_json::json!({"label": "beta", "score": 5}),
+    serde_json::json!({"label": "gamma", "score": 4}),
+];
+let columns = vec![
+    serde_json::json!({"key": "label", "label": "Label", "type": "string"}),
+    serde_json::json!({"key": "score", "label": "Score", "type": "integer"}),
+];
+
+emit_json!(&serde_json::json!({"status": "ok", "rows": rows.len()}));
+emit_records_table!(&rows);
+emit_table_with_columns!(&columns, &rows);
+emit_bar_chart!(&["alpha", "beta", "gamma"], &[3, 5, 4]);
+emit_svg!(
+    r##"<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 160 48"><rect width="160" height="48" fill="#ecfeff"/><circle cx="32" cy="24" r="14" fill="#0f766e"/><rect x="64" y="12" width="72" height="24" rx="4" fill="#2563eb"/></svg>"##,
+    "Simple generated SVG"
+);
+emit_html!(r#"<p><strong>Sandboxed HTML</strong> emitted from Rust.</p>"#);
+```
+
+## When to Use Rich Output
+
+Use stdout for short explanatory text. Use JSON when readers need the exact structured value. Use tables for comparable records, charts for trends or distributions, images for generated visuals, and sandboxed HTML only when the output needs markup that cannot be represented by the other artifact types.

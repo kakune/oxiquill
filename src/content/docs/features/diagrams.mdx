@@ -1,13 +1,13 @@
 ---
-title: Mermaid
-description: Examples of rendering Mermaid diagrams from Markdown/MDX code blocks.
+title: Diagrams
+description: Render Mermaid flowcharts, sequence diagrams, and state diagrams from MDX code blocks.
 ---
 
-Mermaid is a text format for diagrams rendered as SVG. In this template, a `mermaid` code block is enough; the page converts it into a diagram in the browser.
+Mermaid is a text format for diagrams. In Oxiquill, a fenced `mermaid` block is converted into a browser-rendered SVG diagram. No imports or custom components are needed in the page.
 
 ## Build Flow
 
-This flowchart shows how prose, code cells, and static site generation fit together.
+This flowchart shows how prose, executable cells, and static site generation fit together.
 
 ```mermaid
 flowchart LR
@@ -39,7 +39,7 @@ sequenceDiagram
 
 ## Cell States
 
-This state diagram shows the cell UI states.
+This state diagram shows the main cell UI states.
 
 ```mermaid
 stateDiagram-v2
@@ -50,3 +50,5 @@ stateDiagram-v2
   Ready --> Running: Input changed
   Error --> Running: Run again
 ```
+
+Keep Mermaid source in repository-owned MDX and avoid rendering untrusted external input directly.
