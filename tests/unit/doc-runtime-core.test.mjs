@@ -140,18 +140,35 @@ describe('doc runtime core', () => {
     await expect(parseCell('//| id: empty', 'rust', 'page.mdx', { helperCrates, highlighter })).rejects.toThrow(
       'does not contain code'
     );
+    await expect(parseCell('//| id: bad\n//| run: sometimes\nprintln!("ok");', 'rust', 'page.mdx', {
+      helperCrates,
+      highlighter
+    })).rejects.toThrow('Allowed values: button, reactive, autorun, hidden');
+    await expect(parseCell('//| id: bad\n//| timeoutMs: 0\nprintln!("ok");', 'rust', 'page.mdx', {
+      helperCrates,
+      highlighter
+    })).rejects.toThrow('invalid timeoutMs value 0');
+    await expect(parseCell('//| id: bad\n//| inputs:\n//|   mode: { type: knob }\nprintln!("ok");', 'rust', 'page.mdx', {
+      helperCrates,
+      highlighter
+    })).rejects.toThrow('for input "mode". Allowed values');
   });
 
   it('normalizes run modes, timeouts, package lists, and crate lists', () => {
+    expect(normalizeRunMode(undefined)).toBe('button');
+    expect(normalizeRunMode('button')).toBe('button');
     expect(normalizeRunMode('autorun')).toBe('autorun');
     expect(normalizeRunMode('hidden')).toBe('hidden');
     expect(normalizeRunMode('reactive')).toBe('reactive');
-    expect(normalizeRunMode('unknown')).toBe('button');
+    expect(() => normalizeRunMode('unknown', 'cell', 'page')).toThrow(
+      'Allowed values: button, reactive, autorun, hidden'
+    );
 
+    expect(normalizeTimeout(undefined)).toBe(30_000);
     expect(normalizeTimeout(10.8)).toBe(10);
-    expect(normalizeTimeout(0)).toBe(30_000);
-    expect(normalizeTimeout(Number.NaN)).toBe(30_000);
-    expect(normalizeTimeout('bad')).toBe(30_000);
+    expect(() => normalizeTimeout(0, 'cell', 'page')).toThrow('Expected a positive number');
+    expect(() => normalizeTimeout(Number.NaN, 'cell', 'page')).toThrow('Expected a positive number');
+    expect(() => normalizeTimeout('bad', 'cell', 'page')).toThrow('Expected a positive number');
 
     expect(normalizePackages(null, 'python', 'cell', 'page')).toEqual([]);
     expect(normalizePackages([], 'python', 'cell', 'page')).toEqual([]);
@@ -183,7 +200,8 @@ describe('doc runtime core', () => {
     expect(normalizeInputType('checkbox')).toBe('checkbox');
     expect(normalizeInputType('select')).toBe('select');
     expect(normalizeInputType('radio')).toBe('radio');
-    expect(normalizeInputType('unknown')).toBe('text');
+    expect(normalizeInputType(undefined)).toBe('text');
+    expect(() => normalizeInputType('unknown', 'mode', 'cell', 'page')).toThrow('for input "mode"');
 
     expect(normalizeInputValue('checkbox', 1)).toBe(true);
     expect(normalizeInputValue('range', 2)).toBe(2);

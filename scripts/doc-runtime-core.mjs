@@ -15,6 +15,8 @@ const supportedLanguages = new Map([
   ['python', 'python'],
   ['py', 'python']
 ]);
+const runModes = ['button', 'reactive', 'autorun', 'hidden'];
+const inputTypes = ['range', 'number', 'integer', 'text', 'textarea', 'checkbox', 'select', 'radio'];
 const rustReservedIdentifiers = new Set([
   'Self',
   'abstract',
@@ -110,16 +112,16 @@ export async function parseCell(rawSource, language, pagePath, context) {
     id: scopedCellId(pagePath, localId),
     language,
     title: String(metadata.title ?? localId),
-    run: normalizeRunMode(metadata.run),
+    run: normalizeRunMode(metadata.run, localId, pagePath),
     source,
     sourceHtml: await context.highlighter.codeToHtml(source, {
       lang: language,
       themes: sourceThemes
     }),
-    inputs: normalizeInputs(metadata.inputs),
+    inputs: normalizeInputs(metadata.inputs, localId, pagePath),
     packages: normalizePackages(metadata.packages, language, metadata.id, pagePath),
     crates: normalizeCrates(metadata.crates, language, metadata.id, pagePath, context.helperCrates),
-    timeoutMs: normalizeTimeout(metadata.timeoutMs),
+    timeoutMs: normalizeTimeout(metadata.timeoutMs, localId, pagePath),
     showSource: metadata.showSource !== false,
     pagePath
   };
@@ -141,13 +143,25 @@ export function splitCellSource(rawSource) {
   return { metadataLines, sourceLines };
 }
 
-export function normalizeRunMode(value) {
-  if (value === 'reactive' || value === 'autorun' || value === 'hidden') return value;
-  return 'button';
+export function normalizeRunMode(value, cellId = 'cell', pagePath = 'page') {
+  if (value == null) return 'button';
+  if (runModes.includes(value)) return value;
+
+  throw new Error(
+    `Interactive cell "${cellId}" in ${pagePath} has invalid run value ${JSON.stringify(value)}. ` +
+      `Allowed values: ${runModes.join(', ')}.`
+  );
 }
 
-export function normalizeTimeout(value) {
-  if (typeof value !== 'number' || !Number.isFinite(value) || value <= 0) return 30_000;
+export function normalizeTimeout(value, cellId = 'cell', pagePath = 'page') {
+  if (value == null) return 30_000;
+  if (typeof value !== 'number' || !Number.isFinite(value) || value <= 0) {
+    throw new Error(
+      `Interactive cell "${cellId}" in ${pagePath} has invalid timeoutMs value ${JSON.stringify(value)}. ` +
+        'Expected a positive number.'
+    );
+  }
+
   return Math.trunc(value);
 }
 
@@ -206,12 +220,12 @@ export function normalizeStringArray(value, field, cellId, pagePath) {
   return Array.from(values).sort();
 }
 
-export function normalizeInputs(inputs) {
+export function normalizeInputs(inputs, cellId = 'cell', pagePath = 'page') {
   if (!inputs || typeof inputs !== 'object' || Array.isArray(inputs)) return [];
 
   return Object.entries(inputs).map(([name, raw]) => {
     const value = raw && typeof raw === 'object' && !Array.isArray(raw) ? raw : { value: raw };
-    const type = normalizeInputType(value.type);
+    const type = normalizeInputType(value.type, name, cellId, pagePath);
 
     return {
       name,
@@ -227,21 +241,14 @@ export function normalizeInputs(inputs) {
   });
 }
 
-export function normalizeInputType(type) {
-  if (
-    type === 'range' ||
-    type === 'number' ||
-    type === 'integer' ||
-    type === 'text' ||
-    type === 'textarea' ||
-    type === 'checkbox' ||
-    type === 'select' ||
-    type === 'radio'
-  ) {
-    return type;
-  }
+export function normalizeInputType(type, inputName = 'input', cellId = 'cell', pagePath = 'page') {
+  if (type == null) return 'text';
+  if (inputTypes.includes(type)) return type;
 
-  return 'text';
+  throw new Error(
+    `Interactive cell "${cellId}" in ${pagePath} has invalid type ${JSON.stringify(type)} ` +
+      `for input "${inputName}". Allowed values: ${inputTypes.join(', ')}.`
+  );
 }
 
 export function normalizeInputValue(type, value) {
