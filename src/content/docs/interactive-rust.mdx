@@ -27,6 +27,36 @@ for point in points.iter().take(5) {
 emit_line_plot!(&points, "n", "x");
 ```
 
+## Rust Rich Outputs
+
+Rust cells can emit the same artifact types that the Python worker returns. Use explicit macros when the output should be something other than stdout.
+
+```rust
+//| id: rust-rich-outputs
+//| title: Rust table, chart, JSON, SVG, and HTML outputs
+//| run: button
+//| crates: []
+let rows = vec![
+    serde_json::json!({"label": "alpha", "score": 3}),
+    serde_json::json!({"label": "beta", "score": 5}),
+    serde_json::json!({"label": "gamma", "score": 4}),
+];
+let columns = vec![
+    serde_json::json!({"key": "label", "label": "Label", "type": "string"}),
+    serde_json::json!({"key": "score", "label": "Score", "type": "integer"}),
+];
+
+emit_json!(&serde_json::json!({"status": "ok", "rows": rows.len()}));
+emit_records_table!(&rows);
+emit_table_with_columns!(&columns, &rows);
+emit_bar_chart!(&["alpha", "beta", "gamma"], &[3, 5, 4]);
+emit_svg!(
+    r##"<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 160 48"><rect width="160" height="48" fill="#ecfeff"/><circle cx="32" cy="24" r="14" fill="#0f766e"/><rect x="64" y="12" width="72" height="24" rx="4" fill="#2563eb"/></svg>"##,
+    "Simple generated SVG"
+);
+emit_html!(r#"<p><strong>Sandboxed HTML</strong> emitted from Rust.</p>"#);
+```
+
 ## Input UI
 
 Rust cells can use checkboxes, selects, and radio groups with the same metadata format. A cell with `crates: []` does not depend on helper crates.
@@ -100,4 +130,28 @@ else:
 name = label.upper() if enabled else label
 print(f"{name}: {method} = {result}")
 print(f"style = {style}")
+```
+
+## Python Rich Outputs
+
+Python cells can use `display(...)` helpers and common rich-representation methods. Package-backed examples list their Pyodide packages explicitly.
+
+```python
+#| id: python-rich-outputs
+#| title: Python table, matplotlib, HTML, and JSON outputs
+#| run: button
+#| packages: [matplotlib, pandas]
+import pandas as pd
+import matplotlib.pyplot as plt
+
+scores = pd.DataFrame({"label": ["alpha", "beta", "gamma"], "score": [3, 5, 4]})
+
+display(scores, title="Pandas table")
+display_json({"status": "ok", "rows": len(scores)}, title="Summary")
+display_html("<p><strong>Sandboxed HTML</strong> emitted from Python.</p>", title="HTML")
+
+plt.bar(scores["label"], scores["score"])
+_ = plt.title("Scores")
+_ = plt.xlabel("label")
+_ = plt.ylabel("score")
 ```
