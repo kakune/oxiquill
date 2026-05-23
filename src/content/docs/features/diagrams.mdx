@@ -1,0 +1,54 @@
+---
+title: Diagrams
+description: Render Mermaid flowcharts, sequence diagrams, and state diagrams from MDX code blocks.
+---
+
+Mermaid is a text format for diagrams. In Oxiquill, a fenced `mermaid` block is converted into a browser-rendered SVG diagram. No imports or custom components are needed in the page.
+
+## Build Flow
+
+This flowchart shows how prose, executable cells, and static site generation fit together.
+
+```mermaid
+flowchart LR
+  Author[Author] --> MDX[MDX body]
+  MDX --> Extract[Extract cells and diagrams]
+  Extract --> Wasm[Compile Rust cells to Wasm]
+  Extract --> Mermaid[Register Mermaid diagrams]
+  Wasm --> Build[Astro build]
+  Mermaid --> Build
+  Build --> Site[Static site]
+```
+
+## Reader Flow
+
+This sequence diagram shows how a reader opens a page and changes an input-driven cell.
+
+```mermaid
+sequenceDiagram
+  participant Reader as Reader
+  participant Page as Page
+  participant Worker as Worker
+  Reader->>Page: Open the page
+  Page->>Worker: Run the cell with initial inputs
+  Worker-->>Page: Return stdout and plots
+  Reader->>Page: Change a slider
+  Page->>Worker: Run again with new inputs
+  Worker-->>Page: Return updated output
+```
+
+## Cell States
+
+This state diagram shows the main cell UI states.
+
+```mermaid
+stateDiagram-v2
+  [*] --> Waiting
+  Waiting --> Running: Run
+  Running --> Ready: Success
+  Running --> Error: Failure
+  Ready --> Running: Input changed
+  Error --> Running: Run again
+```
+
+Keep Mermaid source in repository-owned MDX and avoid rendering untrusted external input directly.

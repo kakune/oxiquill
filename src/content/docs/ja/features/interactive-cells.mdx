@@ -1,0 +1,137 @@
+---
+title: 実行可能セル
+description: 静的サイト上で動く Rust と Python のセルを設定します。
+---
+
+実行可能セルは、先頭に metadata comment を持つ通常の MDX code block です。Oxiquill は生成時にその block を抽出し、runtime UI に置き換えます。
+
+Rust セルは build 時に WebAssembly に compile されます。Python セルは browser の Pyodide worker で動きます。どちらの言語も同じ input metadata と run mode model を使います。
+
+## セル metadata
+
+共通 field:
+
+- `id`: 必須のページ内 identifier。
+- `title`: cell header に表示する label。
+- `run`: `button`、`reactive`、`autorun`、`hidden`。
+- `inputs`: cell 内の変数になる入力 UI。
+- `timeoutMs`: millisecond の実行 timeout。
+- `showSource`: `false` にすると source を初期状態で隠します。
+
+Rust 専用 field:
+
+- `crates`: `crates/*` 配下の helper crate package name。helper が不要な場合は `crates: []`。
+
+Python 専用 field:
+
+- `packages`: `numpy`、`pandas`、`matplotlib` などの vendored Pyodide package name。
+
+## run mode
+
+- `button`: 読者が明示的に実行します。
+- `reactive`: 初回表示時に実行し、input 変更時に再実行します。
+- `autorun`: run button を表示せず、1回自動実行します。
+- `hidden`: run button を表示しません。意図的に隠す例だけで使います。
+
+## 入力
+
+対応 input type は `range`、`number`、`integer`、`text`、`textarea`、`checkbox`、`select`、`radio` です。
+
+input name は cell 内の変数として使えます。Rust セルでは安全な Rust identifier に変換されます。記号だけが違う name は同じ Rust binding に変換される可能性があるため避けます。
+
+## Rust とグラフ
+
+この Rust セルは helper crate を使い、slider が変わるたびに plot を再描画します。
+
+```rust
+//| id: logistic-rust
+//| title: Calculate the logistic map with Rust
+//| run: reactive
+//| crates: [doc-rust]
+//| inputs:
+//|   r: { type: range, label: r, min: 0, max: 4, step: 0.01, value: 3.2 }
+//|   x0: { type: range, label: x0, min: 0, max: 1, step: 0.01, value: 0.2 }
+//|   steps: { type: integer, label: steps, min: 10, max: 300, step: 10, value: 120 }
+let points = doc_rust::logistic_series(r, x0, steps).map_err(|error| error.to_string())?;
+
+for point in points.iter().take(5) {
+    println!("n={} x={:.6}", point.n, point.x);
+}
+
+emit_line_plot!(&points, "n", "x");
+```
+
+## Rust 入力 UI
+
+`crates: []` のセルは helper crate に依存しません。この例では checkbox、select、radio input を使います。
+
+```rust
+//| id: rust-controls
+//| title: Rust input UI
+//| run: reactive
+//| crates: []
+//| inputs:
+//|   include_bonus: { type: checkbox, label: include bonus, value: true }
+//|   operation: { type: select, label: operation, value: double, options: [identity, double, triple] }
+//|   style: { type: radio, label: style, value: compact, options: [compact, verbose] }
+let base_score = match operation.as_str() {
+    "triple" => 21_u32,
+    "double" => 14_u32,
+    _ => 7_u32,
+};
+let score = if include_bonus {
+    base_score + 5
+} else {
+    base_score
+};
+
+println!("style = {style}");
+println!("score = {score}");
+```
+
+## 複数 Rust helper crate
+
+各 Rust セルは必要な helper crate を宣言します。名前は `crates/*` 配下の Cargo package name と一致させます。
+
+```rust
+//| id: rust-multiple-crates
+//| title: Rust cell with multiple crates
+//| run: reactive
+//| crates: [doc-rust, doc-rust-text]
+//| inputs:
+//|   style: { type: radio, label: style, value: compact, options: [compact, verbose] }
+let points = doc_rust::logistic_series(3.2, 0.2, 8).map_err(|error| error.to_string())?;
+let final_point = points.last().ok_or_else(|| "series is empty".to_owned())?;
+
+println!("{}", doc_rust_text::labeled_value("final step", final_point.n));
+println!("{}", doc_rust_text::labeled_value("final x", format!("{:.6}", final_point.x)));
+println!("{}", doc_rust_text::style_note(style.as_str()));
+```
+
+## Python 入力
+
+Python セルも同じ input metadata を使います。input value は Python 変数として使えます。
+
+```python
+#| id: python-controls
+#| title: Python input UI
+#| run: reactive
+#| inputs:
+#|   scale: { type: number, label: scale, min: 1, max: 10, step: 1, value: 3 }
+#|   label: { type: text, label: label, value: "sample" }
+#|   enabled: { type: checkbox, label: include uppercase, value: true }
+#|   method: { type: select, label: method, value: mean, options: [mean, sum, max] }
+#|   style: { type: radio, label: style, value: compact, options: [compact, verbose] }
+values = [1, 2, 3, 4]
+
+if method == "sum":
+    result = sum(values) * scale
+elif method == "max":
+    result = max(values) * scale
+else:
+    result = sum(values) / len(values) * scale
+
+name = label.upper() if enabled else label
+print(f"{name}: {method} = {result}")
+print(f"style = {style}")
+```

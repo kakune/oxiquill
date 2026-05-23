@@ -1,57 +1,65 @@
 ---
 title: Oxiquill
-description: Rust、Python、数式、Mermaid、画像やPDFを同じ MDX ノートにまとめられる静的ドキュメントワークスペースです。
+description: 実行可能な技術ノートを公開するための静的 MDX ドキュメントワークスペースです。
 ---
 
-このプロジェクトは、技術ノートを静的サイトとして公開するためのワークスペースです。本文は Starlight の Markdown/MDX で書き、必要に応じて Rust、Python、数式、Mermaid 図、画像、PDF を同じページに配置できます。
+Oxiquill は、技術ノートを Astro Starlight の静的サイトとして公開します。1つのノートに、本文、Rust/Wasm セル、Python/Pyodide セル、数式、Mermaid 図、画像、PDF、表、グラフ、JSON、sandboxed HTML 出力をまとめられます。
 
-TypeScript のコンポーネント import やレイアウト実装を著者に要求しないことを重視しています。ノートを書く人は `src/content/docs` に英語ページを、`src/content/docs/ja` に日本語ページを追加し、コードセルや図は通常の fenced code block として記述します。
+執筆モデルは Markdown に近い形にしています。MDX ページを追加し、実行可能セルは先頭 metadata comment で説明し、build が browser runtime を生成します。英語ページは `src/content/docs`、日本語ページは同じ route で `src/content/docs/ja` に置きます。
 
-## できること
+## 想定する用途
 
-- Rust セルをビルド時に WebAssembly 化し、ブラウザ上で実行する。
-- Python セルを Pyodide worker で実行する。
-- KaTeX によるインライン数式とブロック数式を表示する。
-- Mermaid のフローチャート、シーケンス図、状態遷移図を表示する。
-- PNG、JPEG、PDF などのメディアを `public/media` から簡単に埋め込む。
-- 英語をroot、日本語を `/ja/` とする多言語ドキュメントを作る。
-- 任意の Rust helper crate をテストし、ノートのセルから再利用する。
-- 生成物を静的 HTML と静的アセットだけにまとめる。
+Oxiquill は、説明と実行結果を同じページに置きたいドキュメントに向いています。
 
-## 基本構成
+- 短い Rust や Python の実験を含む学習ノート。
+- 数式、パラメータ、表、グラフが必要な数値計算やデータのノート。
+- 静的サイトとして公開しながら interactive example を載せたいプロジェクト文書。
+- 英語と日本語で同じ構成を保ちたい多言語ドキュメント。
+
+## 機能概要
+
+- Rust セルをビルド時に WebAssembly 化し、ブラウザで実行します。
+- Python セルは Pyodide worker で実行し、`numpy`、`pandas`、`matplotlib` などの vendored package を読み込めます。
+- セル metadata から入力 UI、実行方法、timeout、source 表示を生成します。
+- text、JSON、table、chart、image、sandboxed HTML のリッチ出力を表示します。
+- KaTeX でインライン数式とブロック数式を表示します。
+- fenced `mermaid` code block から Mermaid 図を表示します。
+- 静的メディアは `public/media` から配信し、`/media/...` URL で参照します。
+- `crates/*` 配下の任意の Rust helper crate を MDX セルから再利用できます。
+
+## プロジェクト構成
 
 ```text
 src/content/docs/
   index.mdx
-  authoring.mdx
-  templates.mdx
-  interactive-rust.mdx
-  math.mdx
-  mermaid.mdx
-  media.mdx
-  ja/
-    index.mdx
+  guides/
+    getting-started.mdx
     authoring.mdx
     templates.mdx
-    interactive-rust.mdx
+    validation.mdx
+  features/
+    interactive-cells.mdx
+    rich-output.mdx
     math.mdx
-    mermaid.mdx
+    diagrams.mdx
     media.mdx
-  notes/
-    rust-basics/
-      ownership.mdx
-    numerical-computing/
-      logistic-map.mdx
+  samples/
+    rust-ownership.mdx
+    logistic-map.mdx
+  ja/
+    index.mdx
+    guides/
+    features/
+    samples/
 ```
 
-任意の共有 Rust ロジックは `crates/` に置きます。リポジトリ root は Rust workspace ではありません。MDX 内の Rust セルはビルド時に抽出され、`src/generated/doc-runtime` の独立した Wasm crate と manifest に変換されます。`crates: []` のセルは helper crate を必要としません。生成物は編集せず、必要になったら `pnpm docgen` または build/test コマンドで作り直します。
+生成 runtime は `src/generated/doc-runtime`、`public/pyodide`、`dist` に出力されます。生成物を直接編集せず、`pnpm docgen`、`pnpm wasm:dev`、`pnpm wasm:build`、`pnpm check`、`pnpm build` で再生成してください。
 
 ## 最初に読むページ
 
-- [執筆ガイド](./authoring/) は、ノートの追加方法とコードセルの書き方をまとめています。
-- [テンプレート](./templates/) は、新しいページを作るときのひな形です。
-- [実行可能セル](./interactive-rust/) は、Rust と Python の入力付きセルを確認できます。
-- [数式](./math/) は、KaTeX の使い方を確認できます。
-- [Mermaid](./mermaid/) は、図を本文に埋め込む例です。
-- [メディア](./media/) は、画像とPDFを本文に埋め込む例です。
-- [ロジスティック写像](./notes/numerical-computing/logistic-map/) は、数式、Rust/Wasm、グラフを組み合わせたノート例です。
+- [はじめに](./guides/getting-started/) は、install、local preview、build、static preview を説明します。
+- [執筆ガイド](./guides/authoring/) は、ページ構成、多言語化、セル metadata、メディア、図の書き方を説明します。
+- [実行可能セル](./features/interactive-cells/) は、Rust/Python の実行、入力、run mode、helper crate、package、source 表示を説明します。
+- [リッチ出力](./features/rich-output/) は、Rust/Python セルから出せる出力 artifact をまとめます。
+- [テンプレート](./guides/templates/) は、よく使う MDX ノートのひな形です。
+- [サンプルノート](./samples/logistic-map/) は、Oxiquill の機能を文脈のある完成ページとして示します。
