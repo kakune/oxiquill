@@ -1,13 +1,13 @@
 ---
-title: Mermaid
-description: Examples of rendering Mermaid diagrams from Markdown/MDX code blocks.
+title: 図
+description: Mermaid の flowchart、sequence diagram、state diagram を MDX code block から表示します。
 ---
 
-Mermaid is a text format for diagrams rendered as SVG. In this template, a `mermaid` code block is enough; the page converts it into a diagram in the browser.
+Mermaid は text で図を書く形式です。Oxiquill では fenced `mermaid` block が browser-rendered SVG diagram に変換されます。ページ側で import や custom component は不要です。
 
-## Build Flow
+## build flow
 
-This flowchart shows how prose, code cells, and static site generation fit together.
+この flowchart は、本文、実行可能セル、静的サイト生成の関係を示します。
 
 ```mermaid
 flowchart LR
@@ -20,9 +20,9 @@ flowchart LR
   Build --> Site[Static site]
 ```
 
-## Reader Flow
+## reader flow
 
-This sequence diagram shows how a reader opens a page and changes an input-driven cell.
+この sequence diagram は、読者がページを開き、input-driven cell を変更する流れを示します。
 
 ```mermaid
 sequenceDiagram
@@ -37,9 +37,9 @@ sequenceDiagram
   Worker-->>Page: Return updated output
 ```
 
-## Cell States
+## cell state
 
-This state diagram shows the cell UI states.
+この state diagram は、主な cell UI state を示します。
 
 ```mermaid
 stateDiagram-v2
@@ -50,3 +50,5 @@ stateDiagram-v2
   Ready --> Running: Input changed
   Error --> Running: Run again
 ```
+
+Mermaid source は repository-owned MDX に置き、信頼できない外部入力を直接 render しないでください。

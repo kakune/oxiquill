@@ -55,7 +55,10 @@ vi.mock('../../src/lib/doc-runtime/runtime-client', () => ({
 }));
 
 const { default: InteractiveCell } = await import('../../src/components/doc-runtime/InteractiveCell');
-const { default: MermaidDiagram } = await import('../../src/components/doc-runtime/MermaidDiagram');
+const {
+  default: MermaidDiagram,
+  getMermaidColorScheme
+} = await import('../../src/components/doc-runtime/MermaidDiagram');
 const { default: OutputRenderer, imageArtifactSource } = await import('../../src/components/doc-runtime/OutputRenderer');
 const { default: PlotOutput } = await import('../../src/components/doc-runtime/PlotOutput');
 const { chartSpecToEChartsOptions } = await import('../../src/components/doc-runtime/ChartOutput');
@@ -147,6 +150,7 @@ beforeEach(() => {
 
 afterEach(() => {
   cleanup();
+  vi.unstubAllGlobals();
 });
 
 describe('InteractiveCell', () => {
@@ -397,6 +401,12 @@ describe('InteractiveCell', () => {
 });
 
 describe('MermaidDiagram', () => {
+  it('falls back to the light Mermaid palette without a document', () => {
+    vi.stubGlobal('document', undefined);
+
+    expect(getMermaidColorScheme()).toBe('light');
+  });
+
   it('renders Mermaid SVG and initializes Mermaid only once', async () => {
     mocks.mermaidRender.mockResolvedValue({
       svg: '<svg role="img"><text>diagram</text></svg>',
@@ -420,6 +430,21 @@ describe('MermaidDiagram', () => {
     rerender(<MermaidDiagram diagramId="one" source="flowchart LR\nA-->C" />);
     await waitFor(() => expect(mocks.mermaidRender).toHaveBeenCalledTimes(2));
     expect(mocks.mermaidInitialize).toHaveBeenCalledTimes(1);
+  });
+
+  it('renders when theme observation is unavailable', async () => {
+    vi.stubGlobal('MutationObserver', undefined);
+    mocks.mermaidRender.mockResolvedValue({
+      svg: '<svg><text>no observer diagram</text></svg>'
+    });
+
+    render(<MermaidDiagram diagramId="no-observer" source="flowchart LR\nA-->B" />);
+    await act(async () => {
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+
+    expect(screen.getByText('no observer diagram')).toBeVisible();
   });
 
   it('uses a readable dark Mermaid palette when Starlight is in dark mode', async () => {

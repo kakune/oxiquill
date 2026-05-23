@@ -1,57 +1,65 @@
 ---
 title: Oxiquill
-description: A static documentation workspace for Rust, Python, math, Mermaid, images, and PDFs in MDX notes.
+description: A static MDX documentation workspace for executable technical notes.
 ---
 
-This project is a workspace for publishing technical notes as a static site. Pages are written with Starlight Markdown/MDX, and can mix prose, Rust, Python, math, Mermaid diagrams, images, and PDFs in the same document.
+Oxiquill publishes technical notes as a static Astro Starlight site. A note can stay prose-first while still including executable Rust and Python cells, mathematical notation, Mermaid diagrams, images, PDFs, tables, charts, JSON, and sandboxed HTML output.
 
-The authoring model stays deliberately simple. Writers add English pages under `src/content/docs`, Japanese translations under `src/content/docs/ja`, and use ordinary fenced code blocks for executable cells and diagrams.
+The authoring model is intentionally close to Markdown. Writers add MDX pages, describe executable cells with leading metadata comments, and let the build generate the browser runtime. English pages live under `src/content/docs`; Japanese translations use the same route under `src/content/docs/ja`.
 
-## What It Supports
+## Who It Is For
 
-- Build Rust cells into WebAssembly and run them in the browser.
-- Run Python cells in a Pyodide worker.
-- Render inline and block math with KaTeX.
-- Render Mermaid flowcharts, sequence diagrams, and state diagrams.
-- Embed PNG, JPEG, PDF, and similar media from `public/media`.
-- Serve English at the root routes and Japanese under `/ja/`.
-- Test optional Rust helper crates and reuse them from notes.
-- Produce static HTML and static assets for deployment.
+Oxiquill is useful when documentation needs to explain a concept and show a runnable result in the same page:
+
+- Learning notes that combine explanation with short Rust or Python experiments.
+- Numerical or data notes that need formulas, parameters, tables, and charts.
+- Project documentation that should remain static but still offer interactive examples.
+- Bilingual documentation where English and Japanese pages should follow the same structure.
+
+## Feature Overview
+
+- Rust cells are compiled to WebAssembly at build time and executed in the browser.
+- Python cells run in a Pyodide worker and can load vendored packages such as `numpy`, `pandas`, and `matplotlib`.
+- Cell metadata generates input controls, run behavior, timeouts, and source visibility.
+- Rich output artifacts render text, JSON, tables, charts, images, and sandboxed HTML.
+- KaTeX renders inline and block math.
+- Mermaid renders diagrams from fenced `mermaid` code blocks.
+- Static media is served from `public/media` and referenced with `/media/...` URLs.
+- Optional Rust helper crates under `crates/*` can be reused from MDX cells.
 
 ## Project Shape
 
 ```text
 src/content/docs/
   index.mdx
-  authoring.mdx
-  templates.mdx
-  interactive-rust.mdx
-  math.mdx
-  mermaid.mdx
-  media.mdx
-  ja/
-    index.mdx
+  guides/
+    getting-started.mdx
     authoring.mdx
     templates.mdx
-    interactive-rust.mdx
+    validation.mdx
+  features/
+    interactive-cells.mdx
+    rich-output.mdx
     math.mdx
-    mermaid.mdx
+    diagrams.mdx
     media.mdx
-  notes/
-    rust-basics/
-      ownership.mdx
-    numerical-computing/
-      logistic-map.mdx
+  samples/
+    rust-ownership.mdx
+    logistic-map.mdx
+  ja/
+    index.mdx
+    guides/
+    features/
+    samples/
 ```
 
-Optional shared Rust logic lives in `crates/`. The repository root is not a Rust workspace. Rust cells in MDX are extracted at build time and converted into an independent generated Wasm crate and manifest under `src/generated/doc-runtime`; cells with `crates: []` need no helper crate. Do not edit generated files directly; regenerate them with `pnpm docgen` or the build/test commands.
+Generated runtime output is written under `src/generated/doc-runtime`, `public/pyodide`, and `dist`. Do not edit generated files directly; regenerate them with `pnpm docgen`, `pnpm wasm:dev`, `pnpm wasm:build`, `pnpm check`, or `pnpm build`.
 
 ## Start Here
 
-- [Authoring](./authoring/) explains how to add pages and executable cells.
-- [Templates](./templates/) gives starter MDX patterns.
-- [Interactive Cells](./interactive-rust/) shows Rust and Python cells with inputs.
-- [Math](./math/) shows KaTeX examples.
-- [Mermaid](./mermaid/) shows diagrams embedded from fenced code blocks.
-- [Media](./media/) shows PNG, JPEG, and PDF embedding.
-- [Logistic Map](./notes/numerical-computing/logistic-map/) combines math, Rust/Wasm, and a plot.
+- [Getting Started](./guides/getting-started/) covers install, local preview, build, and static preview.
+- [Authoring Guide](./guides/authoring/) explains page structure, localization, cell metadata, media, and diagrams.
+- [Interactive Cells](./features/interactive-cells/) describes Rust and Python execution, inputs, run modes, helper crates, packages, and source display.
+- [Rich Output](./features/rich-output/) lists the output artifacts available from Rust and Python cells.
+- [Templates](./guides/templates/) gives starter MDX patterns for common note shapes.
+- [Sample Notes](./samples/logistic-map/) show complete prose-first pages that use Oxiquill features in context.

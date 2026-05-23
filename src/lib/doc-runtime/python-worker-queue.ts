@@ -6,7 +6,6 @@ export function createSerialRequestQueue<Request>(
   return {
     enqueue(request) {
       tail = tail
-        .catch(() => undefined)
         .then(() => handle(request))
         .catch(() => undefined);
     }

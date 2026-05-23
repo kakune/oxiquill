@@ -1,15 +1,17 @@
 ---
 title: Math
-description: Examples of rendering KaTeX math in Markdown/MDX.
+description: Render inline and block KaTeX math in MDX notes.
 ---
 
-This page demonstrates math rendering. Inline math, block math, matrices, and aligned equations can be written as normal Markdown/MDX.
+Math can be written directly in MDX. Use it near the prose and executable cells that depend on the notation so readers do not have to jump between pages.
 
 ## Inline Math
 
-In the logistic map, the state is $x_n \in [0, 1]$ and the parameter is $r \in [0, 4]$.
+Inline math uses single dollar signs. In the logistic map, the state is $x_n \in [0, 1]$ and the parameter is $r \in [0, 4]$.
 
 ## Block Math
+
+Block math uses double dollar signs:
 
 $$
 x_{n+1} = r x_n (1 - x_n)
@@ -37,7 +39,7 @@ $$
 
 ## With a Code Cell
 
-You can check a function described in math with a Python cell on the same page.
+Use an executable cell when readers should verify or vary a formula.
 
 ```python
 #| id: math-python
