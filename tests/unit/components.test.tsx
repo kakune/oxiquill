@@ -56,7 +56,7 @@ vi.mock('../../src/lib/doc-runtime/runtime-client', () => ({
 
 const { default: InteractiveCell } = await import('../../src/components/doc-runtime/InteractiveCell');
 const { default: MermaidDiagram } = await import('../../src/components/doc-runtime/MermaidDiagram');
-const { default: OutputRenderer } = await import('../../src/components/doc-runtime/OutputRenderer');
+const { default: OutputRenderer, imageArtifactSource } = await import('../../src/components/doc-runtime/OutputRenderer');
 const { default: PlotOutput } = await import('../../src/components/doc-runtime/PlotOutput');
 const { chartSpecToEChartsOptions } = await import('../../src/components/doc-runtime/ChartOutput');
 const {
@@ -559,12 +559,12 @@ describe('ChartOutput options', () => {
 });
 
 describe('OutputRenderer', () => {
-  it('renders sandboxed HTML and reports unsupported artifacts', () => {
+  it('renders sandboxed HTML, images, and reports unsupported artifacts', () => {
     render(
       <OutputRenderer
         outputs={[
           { kind: 'html', html: '<strong>safe</strong>', sandboxed: true, title: 'HTML preview' },
-          { kind: 'image', mime: 'image/png', data: 'abc' },
+          { kind: 'image', mime: 'image/png', data: 'abc', alt: 'plot image' },
           { kind: 'unknown' }
         ]}
       />
@@ -573,9 +573,28 @@ describe('OutputRenderer', () => {
     expect(screen.getByTestId('html-output')).toHaveAttribute('sandbox', '');
     expect(screen.getByTestId('html-output')).toHaveAttribute('srcdoc', '<strong>safe</strong>');
     expect(screen.getByTestId('html-output')).toHaveAttribute('title', 'HTML preview');
-    expect(screen.getAllByTestId('artifact-error')).toHaveLength(2);
-    expect(screen.getByText('Unsupported image output artifact.')).toBeVisible();
+    expect(screen.getByTestId('image-output')).toHaveAttribute('src', 'data:image/png;base64,abc');
+    expect(screen.getByTestId('image-output')).toHaveAttribute('alt', 'plot image');
+    expect(screen.getAllByTestId('artifact-error')).toHaveLength(1);
     expect(screen.getByText('Unsupported output artifact.')).toBeVisible();
+  });
+
+  it('builds data URLs for raw SVG and base64 image artifacts', () => {
+    expect(imageArtifactSource({
+      kind: 'image',
+      mime: 'image/svg+xml',
+      data: '<svg><text>plot</text></svg>'
+    })).toBe('data:image/svg+xml;charset=utf-8,%3Csvg%3E%3Ctext%3Eplot%3C%2Ftext%3E%3C%2Fsvg%3E');
+    expect(imageArtifactSource({
+      kind: 'image',
+      mime: 'image/jpeg',
+      data: 'abc'
+    })).toBe('data:image/jpeg;base64,abc');
+    expect(imageArtifactSource({
+      kind: 'image',
+      mime: 'image/png',
+      data: 'data:image/png;base64,existing'
+    })).toBe('data:image/png;base64,existing');
   });
 });
 
