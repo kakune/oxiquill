@@ -1,0 +1,52 @@
+---
+title: Mermaid
+description: Markdown/MDX のコードブロックから Mermaid 図を表示する例です。
+---
+
+Mermaid は、テキストで書いた図を SVG として表示するための記法です。このテンプレートでは `mermaid` コードブロックを置くだけで、ページ表示時に図へ変換されます。
+
+## ビルドの流れ
+
+ドキュメントの本文、コードセル、静的サイト生成の関係をフローチャートで表した例です。
+
+```mermaid
+flowchart LR
+  Author[著者] --> MDX[MDX本文]
+  MDX --> Extract[セルと図の抽出]
+  Extract --> Wasm[RustセルをWasm化]
+  Extract --> Mermaid[Mermaid図を登録]
+  Wasm --> Build[Astro build]
+  Mermaid --> Build
+  Build --> Site[静的サイト]
+```
+
+## 読者操作の流れ
+
+読者がページを開き、入力付きセルを操作する流れをシーケンス図で表します。
+
+```mermaid
+sequenceDiagram
+  participant Reader as 読者
+  participant Page as ページ
+  participant Worker as Worker
+  Reader->>Page: ページを開く
+  Page->>Worker: 初期入力でセルを実行
+  Worker-->>Page: 標準出力とグラフを返す
+  Reader->>Page: スライダーを変更
+  Page->>Worker: 新しい入力で再実行
+  Worker-->>Page: 更新結果を返す
+```
+
+## セルの状態
+
+セル UI の状態を状態遷移図で表した例です。
+
+```mermaid
+stateDiagram-v2
+  [*] --> Waiting
+  Waiting --> Running: 実行
+  Running --> Ready: 成功
+  Running --> Error: 失敗
+  Ready --> Running: 入力変更
+  Error --> Running: 再実行
+```

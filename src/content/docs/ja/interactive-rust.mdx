@@ -1,0 +1,103 @@
+---
+title: 実行可能セル
+description: Rust と Python のコードセルを MDX に直接書き、静的サイト上で実行する例です。
+---
+
+このページは、MDX のコードブロックだけで実行可能なセルを作る例です。セルの UI はドキュメントランタイムが自動生成します。Rust はビルド時に WebAssembly 化し、Python はブラウザ内の Pyodide worker で実行します。
+
+## Rust とグラフ
+
+Rust セルは MDX から抽出され、ビルド時に専用の Wasm crate へ組み込まれます。次の例では、スライダーの値を変えるたびにロジスティック写像を再計算し、折れ線グラフを更新します。
+
+```rust
+//| id: logistic-rust
+//| title: Rust でロジスティック写像を計算する
+//| run: reactive
+//| crates: [doc-rust]
+//| inputs:
+//|   r: { type: range, label: r, min: 0, max: 4, step: 0.01, value: 3.2 }
+//|   x0: { type: range, label: x0, min: 0, max: 1, step: 0.01, value: 0.2 }
+//|   steps: { type: integer, label: steps, min: 10, max: 300, step: 10, value: 120 }
+let points = doc_rust::logistic_series(r, x0, steps).map_err(|error| error.to_string())?;
+
+for point in points.iter().take(5) {
+    println!("n={} x={:.6}", point.n, point.x);
+}
+
+emit_line_plot!(&points, "n", "x");
+```
+
+## 入力 UI
+
+Rust セルでもチェックボックス、セレクト、ラジオ入力を同じ記法で使えます。`crates: []` のセルは workspace crate に依存しません。
+
+```rust
+//| id: rust-controls
+//| title: Rust の入力 UI
+//| run: reactive
+//| crates: []
+//| inputs:
+//|   include_bonus: { type: checkbox, label: include bonus, value: true }
+//|   operation: { type: select, label: operation, value: double, options: [identity, double, triple] }
+//|   style: { type: radio, label: style, value: compact, options: [compact, verbose] }
+let base_score = match operation.as_str() {
+    "triple" => 21_u32,
+    "double" => 14_u32,
+    _ => 7_u32,
+};
+let score = if include_bonus {
+    base_score + 5
+} else {
+    base_score
+};
+
+println!("style = {style}");
+println!("score = {score}");
+```
+
+## 複数 crate の利用
+
+セルごとに必要な workspace crate を指定できます。複数の crate を使うセルでは、必要な crate 名をすべて列挙します。
+
+```rust
+//| id: rust-multiple-crates
+//| title: 複数 crate を使う Rust セル
+//| run: reactive
+//| crates: [doc-rust, doc-rust-text]
+//| inputs:
+//|   style: { type: radio, label: style, value: compact, options: [compact, verbose] }
+let points = doc_rust::logistic_series(3.2, 0.2, 8).map_err(|error| error.to_string())?;
+let final_point = points.last().ok_or_else(|| "series is empty".to_owned())?;
+
+println!("{}", doc_rust_text::labeled_value("final step", final_point.n));
+println!("{}", doc_rust_text::labeled_value("final x", format!("{:.6}", final_point.x)));
+println!("{}", doc_rust_text::style_note(style.as_str()));
+```
+
+## Python
+
+Python セルは Pyodide worker で実行されます。Rust セルと同じ入力メタデータを使えるため、ページごとに UI 実装を書く必要はありません。
+
+```python
+#| id: python-controls
+#| title: Python の入力 UI
+#| run: reactive
+#| inputs:
+#|   scale: { type: number, label: scale, min: 1, max: 10, step: 1, value: 3 }
+#|   label: { type: text, label: label, value: "sample" }
+#|   enabled: { type: checkbox, label: include uppercase, value: true }
+#|   method: { type: select, label: method, value: mean, options: [mean, sum, max] }
+#|   style: { type: radio, label: style, value: compact, options: [compact, verbose] }
+values = [1, 2, 3, 4]
+
+if method == "sum":
+    result = sum(values) * scale
+elif method == "max":
+    result = max(values) * scale
+else:
+    result = sum(values) / len(values) * scale
+
+name = label.upper() if enabled else label
+print(f"{name}: {method} = {result}")
+print(f"style = {style}")
+```

@@ -1,0 +1,103 @@
+---
+title: Interactive Cells
+description: Examples of Rust and Python code cells written directly in MDX and executed on the static site.
+---
+
+This page shows how ordinary MDX code blocks become executable cells. The documentation runtime generates the UI automatically. Rust cells are compiled to WebAssembly at build time, and Python cells run in a browser Pyodide worker.
+
+## Rust and Plots
+
+Rust cells are extracted from MDX and included in a generated Wasm crate. This example recomputes a logistic map and redraws a line plot whenever the sliders change.
+
+```rust
+//| id: logistic-rust
+//| title: Calculate the logistic map with Rust
+//| run: reactive
+//| crates: [doc-rust]
+//| inputs:
+//|   r: { type: range, label: r, min: 0, max: 4, step: 0.01, value: 3.2 }
+//|   x0: { type: range, label: x0, min: 0, max: 1, step: 0.01, value: 0.2 }
+//|   steps: { type: integer, label: steps, min: 10, max: 300, step: 10, value: 120 }
+let points = doc_rust::logistic_series(r, x0, steps).map_err(|error| error.to_string())?;
+
+for point in points.iter().take(5) {
+    println!("n={} x={:.6}", point.n, point.x);
+}
+
+emit_line_plot!(&points, "n", "x");
+```
+
+## Input UI
+
+Rust cells can use checkboxes, selects, and radio groups with the same metadata format. A cell with `crates: []` does not depend on workspace crates.
+
+```rust
+//| id: rust-controls
+//| title: Rust input UI
+//| run: reactive
+//| crates: []
+//| inputs:
+//|   include_bonus: { type: checkbox, label: include bonus, value: true }
+//|   operation: { type: select, label: operation, value: double, options: [identity, double, triple] }
+//|   style: { type: radio, label: style, value: compact, options: [compact, verbose] }
+let base_score = match operation.as_str() {
+    "triple" => 21_u32,
+    "double" => 14_u32,
+    _ => 7_u32,
+};
+let score = if include_bonus {
+    base_score + 5
+} else {
+    base_score
+};
+
+println!("style = {style}");
+println!("score = {score}");
+```
+
+## Multiple Crates
+
+Each cell declares the workspace crates it needs. A cell that uses multiple crates lists all package names.
+
+```rust
+//| id: rust-multiple-crates
+//| title: Rust cell with multiple crates
+//| run: reactive
+//| crates: [doc-rust, doc-rust-text]
+//| inputs:
+//|   style: { type: radio, label: style, value: compact, options: [compact, verbose] }
+let points = doc_rust::logistic_series(3.2, 0.2, 8).map_err(|error| error.to_string())?;
+let final_point = points.last().ok_or_else(|| "series is empty".to_owned())?;
+
+println!("{}", doc_rust_text::labeled_value("final step", final_point.n));
+println!("{}", doc_rust_text::labeled_value("final x", format!("{:.6}", final_point.x)));
+println!("{}", doc_rust_text::style_note(style.as_str()));
+```
+
+## Python
+
+Python cells run in a Pyodide worker. They use the same input metadata as Rust cells, so pages do not need custom UI code.
+
+```python
+#| id: python-controls
+#| title: Python input UI
+#| run: reactive
+#| inputs:
+#|   scale: { type: number, label: scale, min: 1, max: 10, step: 1, value: 3 }
+#|   label: { type: text, label: label, value: "sample" }
+#|   enabled: { type: checkbox, label: include uppercase, value: true }
+#|   method: { type: select, label: method, value: mean, options: [mean, sum, max] }
+#|   style: { type: radio, label: style, value: compact, options: [compact, verbose] }
+values = [1, 2, 3, 4]
+
+if method == "sum":
+    result = sum(values) * scale
+elif method == "max":
+    result = max(values) * scale
+else:
+    result = sum(values) / len(values) * scale
+
+name = label.upper() if enabled else label
+print(f"{name}: {method} = {result}")
+print(f"style = {style}")
+```
