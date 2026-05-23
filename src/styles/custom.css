@@ -201,6 +201,27 @@
   background: var(--sl-color-bg);
 }
 
+.doc-image-output {
+  display: grid;
+  gap: 0.45rem;
+  min-width: 0;
+  margin: 0;
+}
+
+.doc-image-output img {
+  display: block;
+  max-width: 100%;
+  height: auto;
+  border: 1px solid color-mix(in srgb, var(--sl-color-gray-5), transparent 35%);
+  border-radius: 6px;
+  background: var(--sl-color-bg);
+}
+
+.doc-image-output figcaption {
+  color: var(--sl-color-gray-2);
+  font-size: 0.85rem;
+}
+
 .doc-table-output {
   display: grid;
   gap: 0.65rem;

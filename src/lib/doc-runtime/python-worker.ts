@@ -21,9 +21,11 @@ const requestQueue = createSerialRequestQueue(handleRequest);
 export const pythonDisplaySupportCode = String.raw`
 import base64
 import builtins
+import io
 import json
 
 __oxiquill_outputs = []
+__oxiquill_displayed_figures = set()
 __oxiquill_table_limit = 1000
 
 def __oxiquill_meta(artifact, title=None, caption=None):
@@ -52,9 +54,77 @@ def __oxiquill_image_data(data):
         return base64.b64encode(data).decode("ascii")
     return str(data)
 
+def __oxiquill_configure_matplotlib():
+    try:
+        import matplotlib
+    except Exception:
+        return False
+    try:
+        matplotlib.use("Agg", force=True)
+    except Exception:
+        pass
+    return True
+
+def __oxiquill_is_matplotlib_figure(value):
+    module = getattr(value.__class__, "__module__", "")
+    return module.startswith("matplotlib.") and callable(getattr(value, "savefig", None))
+
+def __oxiquill_figure_to_image(fig, *, preferred="svg", title=None, caption=None, mark_displayed=False):
+    if mark_displayed:
+        __oxiquill_displayed_figures.add(id(fig))
+    if preferred == "svg":
+        buffer = io.StringIO()
+        fig.savefig(buffer, format="svg", bbox_inches="tight")
+        return __oxiquill_meta(
+            {
+                "kind": "image",
+                "mime": "image/svg+xml",
+                "data": buffer.getvalue(),
+                "alt": "matplotlib figure",
+            },
+            title,
+            caption,
+        )
+    buffer = io.BytesIO()
+    fig.savefig(buffer, format="png", bbox_inches="tight")
+    return __oxiquill_meta(
+        {
+            "kind": "image",
+            "mime": "image/png",
+            "data": base64.b64encode(buffer.getvalue()).decode("ascii"),
+            "alt": "matplotlib figure",
+        },
+        title,
+        caption,
+    )
+
+def __oxiquill_collect_matplotlib_outputs(preferred="svg", close_figures=True):
+    try:
+        import matplotlib.pyplot as plt
+    except Exception:
+        return []
+    outputs = []
+    for number in list(plt.get_fignums()):
+        fig = plt.figure(number)
+        if id(fig) in __oxiquill_displayed_figures:
+            continue
+        try:
+            outputs.append(__oxiquill_figure_to_image(fig, preferred=preferred))
+        except Exception as error:
+            outputs.append({
+                "kind": "text",
+                "stream": "stderr",
+                "content": f"Failed to render matplotlib figure {number}: {error}",
+            })
+    if close_figures:
+        plt.close("all")
+    return outputs
+
 def __oxiquill_artifact(value, title=None, caption=None):
     if value is None or isinstance(value, (str, int, float, bool, list, tuple, dict)):
         return __oxiquill_json_artifact(value, title, caption)
+    if __oxiquill_is_matplotlib_figure(value):
+        return __oxiquill_figure_to_image(value, title=title, caption=caption, mark_displayed=True)
     for method_name, mime in (
         ("_repr_svg_", "image/svg+xml"),
         ("_repr_png_", "image/png"),
@@ -116,6 +186,11 @@ def display_table(value, *, title=None, caption=None):
 
 def __oxiquill_reset_outputs():
     __oxiquill_outputs.clear()
+    __oxiquill_displayed_figures.clear()
+
+def __oxiquill_prepare_cell():
+    __oxiquill_reset_outputs()
+    __oxiquill_configure_matplotlib()
 
 def __oxiquill_take_outputs():
     outputs = list(__oxiquill_outputs)
@@ -156,7 +231,6 @@ async function handleRequest(request: RuntimeWorkerRequest): Promise<void> {
 
     pyodide.setStdout({ batched: (output) => stdout.push(output) });
     pyodide.setStderr({ batched: (output) => stderr.push(output) });
-    pyodide.runPython('__oxiquill_reset_outputs()');
 
     if (request.packages && request.packages.length > 0) {
       await pyodide.loadPackage(Array.from(request.packages));
@@ -164,6 +238,7 @@ async function handleRequest(request: RuntimeWorkerRequest): Promise<void> {
     if (request.source) {
       await pyodide.loadPackagesFromImports(request.source);
     }
+    pyodide.runPython('__oxiquill_prepare_cell()');
 
     const globals = pyodide.toPy(request.inputs);
     let value: unknown = null;
@@ -176,13 +251,16 @@ async function handleRequest(request: RuntimeWorkerRequest): Promise<void> {
     const displayOutputs = toOutputArtifacts(
       toSerializable(pyodide.runPython('__oxiquill_take_outputs()'))
     );
+    const matplotlibOutputs = toOutputArtifacts(
+      toSerializable(pyodide.runPython('__oxiquill_collect_matplotlib_outputs()'))
+    );
 
     const result = createPythonCellResult({
       stdout: stdout.join('\n').trimEnd(),
       stderr: stderr.join('\n').trimEnd(),
       value,
       plots: [],
-      displayOutputs
+      displayOutputs: [...displayOutputs, ...matplotlibOutputs]
     });
 
     worker.postMessage({ requestId: request.requestId, ok: true, result });

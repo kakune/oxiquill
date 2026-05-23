@@ -86,6 +86,14 @@ describe('python rich display support', () => {
     expect(pythonDisplaySupportCode).toContain('_repr_png_');
   });
 
+  it('configures matplotlib and captures figures as image artifacts', () => {
+    expect(pythonDisplaySupportCode).toContain('def __oxiquill_collect_matplotlib_outputs');
+    expect(pythonDisplaySupportCode).toContain('matplotlib.use("Agg", force=True)');
+    expect(pythonDisplaySupportCode).toContain('fig.savefig(buffer, format="svg"');
+    expect(pythonDisplaySupportCode).toContain('plt.close("all")');
+    expect(pythonDisplaySupportCode).toContain('__oxiquill_displayed_figures.add(id(fig))');
+  });
+
   it('combines stream output, rich display artifacts, and final values deterministically', () => {
     expect(createPythonCellResult({
       stdout: 'printed',
@@ -94,6 +102,7 @@ describe('python rich display support', () => {
       plots: [],
       displayOutputs: [
         { kind: 'html', html: '<strong>display</strong>', sandboxed: true },
+        { kind: 'image', mime: 'image/svg+xml', data: '<svg />', alt: 'plot' },
         { kind: 'text', stream: 'display', content: 'fallback' }
       ]
     })).toEqual({
@@ -105,6 +114,7 @@ describe('python rich display support', () => {
         { kind: 'text', stream: 'stdout', content: 'printed' },
         { kind: 'text', stream: 'stderr', content: 'warned' },
         { kind: 'html', html: '<strong>display</strong>', sandboxed: true },
+        { kind: 'image', mime: 'image/svg+xml', data: '<svg />', alt: 'plot' },
         { kind: 'text', stream: 'display', content: 'fallback' },
         { kind: 'json', value: { ok: true } }
       ]
