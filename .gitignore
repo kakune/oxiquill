@@ -8,6 +8,9 @@ node_modules/
 dist/
 src/generated/
 public/pyodide/
+!public/pyodide/
+public/pyodide/*
+!public/pyodide/*.whl
 
 # Test and coverage output
 coverage/

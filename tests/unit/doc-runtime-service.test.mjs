@@ -9,15 +9,18 @@ import {
   collectCells,
   copyFileIfChanged,
   copyPyodideAssets,
+  copyVendoredPyodidePackages,
   createRuntimeVersion,
   createDocRuntimeContext,
   createDocRuntimePaths,
   generateRuntimeVersionModule,
+  hashBytes,
   hashText,
   listFiles,
   listHelperCrates,
   markRuntimeReady,
   readHelperManifests,
+  resolveVendoredPyodidePackages,
   shouldBuildWasm,
   stableFingerprint,
   summarizeCells,
@@ -86,7 +89,7 @@ function createMemoryFileSystem(initialFiles = {}) {
     },
     writeFile: async (filePath, content) => {
       ensureParents(filePath);
-      files.set(filePath, Buffer.from(String(content)));
+      files.set(filePath, Buffer.isBuffer(content) ? Buffer.from(content) : Buffer.from(String(content)));
       writes.push(filePath);
     },
     copyFile: async (sourcePath, targetPath) => {
@@ -101,6 +104,16 @@ function createMemoryFileSystem(initialFiles = {}) {
 const highlighter = {
   codeToHtml: (source, options) => Promise.resolve(`<pre data-lang="${options.lang}">${source}</pre>`)
 };
+
+function pyodidePackage(name, fileName, content, depends = []) {
+  return {
+    depends,
+    file_name: fileName,
+    name,
+    sha256: hashBytes(Buffer.from(content)),
+    version: '1.0.0'
+  };
+}
 
 describe('doc runtime service', () => {
   it('postprocesses wasm-pack JavaScript without unused cached state', async () => {
@@ -282,7 +295,7 @@ describe('doc runtime service', () => {
 
   it('fails clearly when an MDX Python cell specifies unsupported packages', async () => {
     const fileSystem = createMemoryFileSystem({
-      '/repo/src/content/docs/page.mdx': '```python\n#| id: py\n#| packages: [numpy]\nprint("py")\n```'
+      '/repo/src/content/docs/page.mdx': '```python\n#| id: py\n#| packages: [scipy]\nprint("py")\n```'
     });
 
     await expect(
@@ -294,7 +307,7 @@ describe('doc runtime service', () => {
         root: '/repo'
       })
     ).rejects.toThrow(
-      'Python cell "py" in src/content/docs/page.mdx specifies packages: numpy'
+      'Python cell "py" in src/content/docs/page.mdx specifies unsupported packages: scipy'
     );
   });
 
@@ -344,6 +357,12 @@ describe('doc runtime service', () => {
     const absent = createMemoryFileSystem();
     await expect(copyPyodideAssets({ fileSystem: absent, paths, root: '/repo' })).resolves.toBe(false);
 
+    const lockFile = {
+      packages: {
+        matplotlib: pyodidePackage('matplotlib', 'matplotlib.whl', 'matplotlib bytes'),
+        pandas: pyodidePackage('pandas', 'pandas.whl', 'pandas bytes')
+      }
+    };
     const present = createMemoryFileSystem(
       Object.fromEntries(
         [
@@ -352,12 +371,63 @@ describe('doc runtime service', () => {
           'pyodide.asm.js',
           'pyodide.asm.wasm',
           'python_stdlib.zip',
-          'pyodide-lock.json'
-        ].map((file) => [`/repo/node_modules/pyodide/${file}`, file])
+          ['pyodide-lock.json', JSON.stringify(lockFile)]
+        ].map((file) => Array.isArray(file) ? [`/repo/node_modules/pyodide/${file[0]}`, file[1]] : [`/repo/node_modules/pyodide/${file}`, file])
       )
     );
-    await expect(copyPyodideAssets({ fileSystem: present, paths, root: '/repo' })).resolves.toBe(true);
-    await expect(copyPyodideAssets({ fileSystem: present, paths, root: '/repo' })).resolves.toBe(false);
+    const fetched = {
+      'matplotlib.whl': Buffer.from('matplotlib bytes'),
+      'pandas.whl': Buffer.from('pandas bytes')
+    };
+    const fetchPackage = async (fileName) => fetched[fileName];
+
+    await expect(copyPyodideAssets({ fetchPackage, fileSystem: present, paths, root: '/repo' })).resolves.toBe(true);
+    expect(present.files.get('/repo/public/pyodide/matplotlib.whl')).toEqual(Buffer.from('matplotlib bytes'));
+    expect(present.files.get('/repo/public/pyodide/pandas.whl')).toEqual(Buffer.from('pandas bytes'));
+    await expect(copyPyodideAssets({ fetchPackage, fileSystem: present, paths, root: '/repo' })).resolves.toBe(false);
+  });
+
+  it('resolves and verifies vendored Pyodide packages recursively', async () => {
+    const paths = createDocRuntimePaths('/repo');
+    const lockFile = {
+      packages: {
+        root: pyodidePackage('root', 'root.whl', 'root bytes', ['dep']),
+        dep: pyodidePackage('dep', 'dep.whl', 'dep bytes')
+      }
+    };
+    const fileSystem = createMemoryFileSystem();
+    const fetched = {
+      'dep.whl': Buffer.from('dep bytes'),
+      'root.whl': Buffer.from('root bytes')
+    };
+
+    expect(resolveVendoredPyodidePackages(lockFile, ['root']).map((entry) => entry.name)).toEqual(['dep', 'root']);
+    await expect(copyVendoredPyodidePackages({
+      fetchPackage: async (fileName) => fetched[fileName],
+      fileSystem,
+      lockFile,
+      paths,
+      roots: ['root']
+    })).resolves.toBe(true);
+    await expect(copyVendoredPyodidePackages({
+      fetchPackage: async (fileName) => fetched[fileName],
+      fileSystem,
+      lockFile,
+      paths,
+      roots: ['root']
+    })).resolves.toBe(false);
+
+    expect(() => resolveVendoredPyodidePackages({}, ['root'])).toThrow('missing a packages table');
+    expect(() => resolveVendoredPyodidePackages({ packages: {} }, ['missing'])).toThrow(
+      'Pyodide package "missing" is missing'
+    );
+    await expect(copyVendoredPyodidePackages({
+      fetchPackage: async () => Buffer.from('changed'),
+      fileSystem: createMemoryFileSystem(),
+      lockFile,
+      paths,
+      roots: ['root']
+    })).rejects.toThrow('has sha256');
   });
 
   it('syncs generated runtime files and reports changed surfaces', async () => {

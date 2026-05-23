@@ -13,7 +13,8 @@ import {
   generateRustCargoToml,
   generateRustLib,
   helperCratesFromManifests,
-  sourceThemes
+  sourceThemes,
+  vendoredPyodidePackageRoots
 } from './doc-runtime-core.mjs';
 
 const defaultFileSystem = {
@@ -180,11 +181,11 @@ export async function copyFileIfChanged(sourcePath, targetPath, { fileSystem = d
   return true;
 }
 
-export async function copyPyodideAssets({ fileSystem = defaultFileSystem, paths, root }) {
+export async function copyPyodideAssets({ fetchPackage, fileSystem = defaultFileSystem, paths, root }) {
   const packageDir = path.join(root, 'node_modules/pyodide');
   if (!fileSystem.existsSync(packageDir)) return false;
 
-  const changed = await Promise.all(
+  const coreChanged = await Promise.all(
     [
       'pyodide.mjs',
       'pyodide.mjs.map',
@@ -198,8 +199,62 @@ export async function copyPyodideAssets({ fileSystem = defaultFileSystem, paths,
       })
     )
   );
+  const lockFile = JSON.parse(await fileSystem.readFile(path.join(packageDir, 'pyodide-lock.json'), 'utf8'));
+  const packageChanged = await copyVendoredPyodidePackages({
+    fetchPackage,
+    fileSystem,
+    lockFile,
+    paths
+  });
+
+  return coreChanged.some(Boolean) || packageChanged;
+}
+
+export async function copyVendoredPyodidePackages({
+  fetchPackage = fetchPyodidePackage,
+  fileSystem = defaultFileSystem,
+  lockFile,
+  paths,
+  roots = vendoredPyodidePackageRoots
+}) {
+  const packages = resolveVendoredPyodidePackages(lockFile, roots);
+  const changed = await Promise.all(
+    packages.map(async (packageInfo) => {
+      const targetPath = path.join(paths.pyodidePublicDir, packageInfo.file_name);
+      if (await hasPackageContent(targetPath, packageInfo.sha256, { fileSystem })) return false;
+
+      const content = await fetchPackage(packageInfo.file_name);
+      assertPackageSha256(content, packageInfo.sha256, packageInfo.name);
+      await fileSystem.mkdir(path.dirname(targetPath), { recursive: true });
+      await fileSystem.writeFile(targetPath, content);
+      return true;
+    })
+  );
 
   return changed.some(Boolean);
+}
+
+export function resolveVendoredPyodidePackages(lockFile, roots = vendoredPyodidePackageRoots) {
+  const packages = lockFile?.packages;
+  if (!packages || typeof packages !== 'object') {
+    throw new Error('Pyodide lock file is missing a packages table.');
+  }
+
+  const selected = new Set();
+  function visit(packageName) {
+    if (selected.has(packageName)) return;
+    const packageInfo = packages[packageName];
+    if (!packageInfo) throw new Error(`Pyodide package "${packageName}" is missing from the lock file.`);
+    selected.add(packageName);
+    for (const dependency of packageInfo.depends ?? []) {
+      visit(dependency);
+    }
+  }
+
+  roots.forEach(visit);
+  return Array.from(selected)
+    .sort()
+    .map((name) => ({ name, ...packages[name] }));
 }
 
 export function summarizeCells(cells) {
@@ -272,6 +327,10 @@ export function hashText(value) {
   return createHash('sha256').update(value).digest('hex');
 }
 
+export function hashBytes(value) {
+  return createHash('sha256').update(value).digest('hex');
+}
+
 async function hasTextContent(filePath, content, { fileSystem }) {
   try {
     return (await fileSystem.readFile(filePath, 'utf8')) === content;
@@ -292,6 +351,34 @@ async function hasBinaryContent(sourcePath, targetPath, { fileSystem }) {
     if (error && error.code === 'ENOENT') return false;
     throw error;
   }
+}
+
+async function hasPackageContent(filePath, sha256, { fileSystem }) {
+  try {
+    return hashBytes(await fileSystem.readFile(filePath)) === sha256;
+  } catch (error) {
+    if (error && error.code === 'ENOENT') return false;
+    throw error;
+  }
+}
+
+function assertPackageSha256(content, expectedSha256, packageName) {
+  const actualSha256 = hashBytes(content);
+  if (actualSha256 !== expectedSha256) {
+    throw new Error(
+      `Downloaded Pyodide package "${packageName}" has sha256 ${actualSha256}; expected ${expectedSha256}.`
+    );
+  }
+}
+
+async function fetchPyodidePackage(fileName) {
+  const url = `https://cdn.jsdelivr.net/pyodide/v0.29.4/full/${fileName}`;
+  const response = await fetch(url);
+  if (!response.ok) {
+    throw new Error(`Failed to download ${url}: ${response.status} ${response.statusText}`);
+  }
+
+  return Buffer.from(await response.arrayBuffer());
 }
 
 /* v8 ignore start -- external process adapter covered through injected runCommand in tests. */
