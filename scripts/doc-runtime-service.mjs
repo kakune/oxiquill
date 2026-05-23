@@ -1,9 +1,8 @@
-import { execFile as execFileCallback, spawn } from 'node:child_process';
+import { spawn } from 'node:child_process';
 import { createHash } from 'node:crypto';
 import { existsSync } from 'node:fs';
 import { copyFile, mkdir, readFile, readdir, writeFile } from 'node:fs/promises';
 import path from 'node:path';
-import { promisify } from 'node:util';
 import { createHighlighter } from 'shiki';
 import {
   assertUniqueCellIds,
@@ -13,11 +12,9 @@ import {
   generateCellsModule,
   generateRustCargoToml,
   generateRustLib,
-  sourceThemes,
-  workspaceCratesFromMetadata
+  helperCratesFromManifests,
+  sourceThemes
 } from './doc-runtime-core.mjs';
-
-const execFile = promisify(execFileCallback);
 
 const defaultFileSystem = {
   copyFile,
@@ -40,7 +37,12 @@ export function createDocRuntimePaths(root) {
   };
 }
 
-export async function createDocRuntimeContext({ root, highlighter, runMetadata } = {}) {
+export async function createDocRuntimeContext({
+  fileSystem = defaultFileSystem,
+  highlighter,
+  readManifests,
+  root
+} = {}) {
   const paths = createDocRuntimePaths(root);
   return {
     highlighter:
@@ -50,23 +52,23 @@ export async function createDocRuntimeContext({ root, highlighter, runMetadata }
         themes: Object.values(sourceThemes)
       })),
     paths,
-    workspaceCrates: await listWorkspaceCrates({ root, paths, runMetadata })
+    helperCrates: await listHelperCrates({ fileSystem, paths, readManifests, root })
   };
 }
 
 export async function syncDocRuntime({
   fileSystem = defaultFileSystem,
   highlighter,
+  helperCrates,
   paths,
-  root,
-  workspaceCrates
+  root
 }) {
   const cells = await collectCells({
     fileSystem,
+    helperCrates,
     highlighter,
     paths,
-    root,
-    workspaceCrates
+    root
   });
   const rustCells = cells.filter((cell) => cell.language === 'rust');
 
@@ -76,7 +78,7 @@ export async function syncDocRuntime({
   const writes = await Promise.all([
     writeIfChanged(path.join(paths.generatedDir, 'cells.ts'), generateCellsModule(cells), { fileSystem }),
     writeIfChanged(path.join(paths.generatedDir, 'cells.json'), generateCellsJson(cells), { fileSystem }),
-    writeIfChanged(path.join(paths.rustCrateDir, 'Cargo.toml'), generateRustCargoToml(rustCells, workspaceCrates), {
+    writeIfChanged(path.join(paths.rustCrateDir, 'Cargo.toml'), generateRustCargoToml(rustCells, helperCrates), {
       fileSystem
     }),
     writeIfChanged(path.join(paths.rustCrateDir, 'src/lib.rs'), generateRustLib(rustCells), { fileSystem })
@@ -92,14 +94,14 @@ export async function syncDocRuntime({
   };
 }
 
-export async function collectCells({ fileSystem = defaultFileSystem, highlighter, paths, root, workspaceCrates }) {
+export async function collectCells({ fileSystem = defaultFileSystem, helperCrates, highlighter, paths, root }) {
   const files = await listFiles(paths.docsDir, { fileSystem });
   const markdownFiles = files.filter((filePath) => filePath.endsWith('.mdx') || filePath.endsWith('.md'));
   const nestedCells = await Promise.all(
     markdownFiles.map(async (filePath) => {
       const pagePath = normalizePath(path.relative(root, filePath));
       const source = await fileSystem.readFile(filePath, 'utf8');
-      return extractCellsFromMarkdown(source, pagePath, { highlighter, workspaceCrates });
+      return extractCellsFromMarkdown(source, pagePath, { helperCrates, highlighter });
     })
   );
 
@@ -119,23 +121,46 @@ export async function listFiles(directory, { fileSystem = defaultFileSystem } = 
   return nested.flat().sort();
 }
 
-export async function listWorkspaceCrates({ root, paths, runMetadata = cargoMetadata }) {
-  const metadata = await runMetadata(root);
-  return workspaceCratesFromMetadata(metadata, {
-    cratesDir: path.join(root, 'crates'),
+export async function listHelperCrates({
+  fileSystem = defaultFileSystem,
+  paths,
+  readManifests = readHelperManifests,
+  root
+}) {
+  return helperCratesFromManifests(await readManifests({ fileSystem, root }), {
     rustCrateDir: paths.rustCrateDir
   });
 }
 
-/* v8 ignore start -- external cargo adapter covered through injected runMetadata in tests. */
-export async function cargoMetadata(root) {
-  const { stdout } = await execFile('cargo', ['metadata', '--format-version', '1', '--no-deps'], {
-    cwd: root
-  });
+export async function readHelperManifests({ fileSystem = defaultFileSystem, root }) {
+  const cratesDir = path.join(root, 'crates');
+  let entries;
+  try {
+    entries = await fileSystem.readdir(cratesDir, { withFileTypes: true });
+  } catch (error) {
+    if (error && error.code === 'ENOENT') return [];
+    throw error;
+  }
 
-  return JSON.parse(stdout);
+  const manifests = await Promise.all(
+    entries
+      .filter((entry) => entry.isDirectory())
+      .map(async (entry) => {
+        const manifestPath = path.join(cratesDir, entry.name, 'Cargo.toml');
+        try {
+          return {
+            content: await fileSystem.readFile(manifestPath, 'utf8'),
+            manifestPath
+          };
+        } catch (error) {
+          if (error && error.code === 'ENOENT') return undefined;
+          throw error;
+        }
+      })
+  );
+
+  return manifests.filter(Boolean).sort((left, right) => left.manifestPath.localeCompare(right.manifestPath));
 }
-/* v8 ignore stop */
 
 export async function writeIfChanged(filePath, content, { fileSystem = defaultFileSystem } = {}) {
   await fileSystem.mkdir(path.dirname(filePath), { recursive: true });
