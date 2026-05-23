@@ -1,0 +1,5 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" role="img" aria-label="Rust Notes">
+  <rect width="64" height="64" rx="12" fill="#111827"/>
+  <path d="M18 44V18h16c6 0 10 4 10 9 0 4-2 7-6 8l8 9h-9l-7-8h-5v8h-7Zm7-14h8c3 0 5-1 5-4s-2-4-5-4h-8v8Z" fill="#f9fafb"/>
+  <circle cx="48" cy="48" r="7" fill="#0f766e"/>
+</svg>

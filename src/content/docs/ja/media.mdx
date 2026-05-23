@@ -1,0 +1,40 @@
+---
+title: メディア
+description: PNG、JPEG、PDFなどのファイルをMDXノートに埋め込む例です。
+---
+
+このプロジェクトでは、画像やPDFなどの静的ファイルを `public/media` に置き、MDXから `/media/...` のURLで参照します。import は不要です。
+
+## PNG
+
+Markdown の画像記法が最も短い書き方です。
+
+```md
+![カラーバンドのPNGサンプル](/media/examples/sample.png)
+```
+
+![カラーバンドのPNGサンプル](/media/examples/sample.png)
+
+## JPEG
+
+JPEG も同じように参照できます。
+
+```md
+![グリッドとグラデーションのJPEGサンプル](/media/examples/sample.jpg)
+```
+
+![グリッドとグラデーションのJPEGサンプル](/media/examples/sample.jpg)
+
+## PDF
+
+PDFは埋め込み表示と通常リンクを併記します。
+
+```md
+<iframe class="media-frame" src="/media/examples/sample.pdf" title="サンプルPDF"></iframe>
+
+[PDFを別タブで開く](/media/examples/sample.pdf)
+```
+
+<iframe class="media-frame" src="/media/examples/sample.pdf" title="サンプルPDF"></iframe>
+
+[PDFを別タブで開く](/media/examples/sample.pdf)

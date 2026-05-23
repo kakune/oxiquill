@@ -1,0 +1,57 @@
+---
+title: Oxiquill
+description: A static documentation workspace for Rust, Python, math, Mermaid, images, and PDFs in MDX notes.
+---
+
+This project is a workspace for publishing technical notes as a static site. Pages are written with Starlight Markdown/MDX, and can mix prose, Rust, Python, math, Mermaid diagrams, images, and PDFs in the same document.
+
+The authoring model stays deliberately simple. Writers add English pages under `src/content/docs`, Japanese translations under `src/content/docs/ja`, and use ordinary fenced code blocks for executable cells and diagrams.
+
+## What It Supports
+
+- Build Rust cells into WebAssembly and run them in the browser.
+- Run Python cells in a Pyodide worker.
+- Render inline and block math with KaTeX.
+- Render Mermaid flowcharts, sequence diagrams, and state diagrams.
+- Embed PNG, JPEG, PDF, and similar media from `public/media`.
+- Serve English at the root routes and Japanese under `/ja/`.
+- Test shared Rust logic as workspace crates and reuse it from notes.
+- Produce static HTML and static assets for deployment.
+
+## Project Shape
+
+```text
+src/content/docs/
+  index.mdx
+  authoring.mdx
+  templates.mdx
+  interactive-rust.mdx
+  math.mdx
+  mermaid.mdx
+  media.mdx
+  ja/
+    index.mdx
+    authoring.mdx
+    templates.mdx
+    interactive-rust.mdx
+    math.mdx
+    mermaid.mdx
+    media.mdx
+  notes/
+    rust-basics/
+      ownership.mdx
+    numerical-computing/
+      logistic-map.mdx
+```
+
+Shared Rust logic lives in `crates/`. Rust cells in MDX are extracted at build time and converted into a generated Wasm crate and manifest under `src/generated/doc-runtime`. Do not edit generated files directly; regenerate them with `pnpm docgen` or the build/test commands.
+
+## Start Here
+
+- [Authoring](./authoring/) explains how to add pages and executable cells.
+- [Templates](./templates/) gives starter MDX patterns.
+- [Interactive Cells](./interactive-rust/) shows Rust and Python cells with inputs.
+- [Math](./math/) shows KaTeX examples.
+- [Mermaid](./mermaid/) shows diagrams embedded from fenced code blocks.
+- [Media](./media/) shows PNG, JPEG, and PDF embedding.
+- [Logistic Map](./notes/numerical-computing/logistic-map/) combines math, Rust/Wasm, and a plot.
