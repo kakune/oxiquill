@@ -102,7 +102,15 @@ export function normalizePackages(value, language, cellId, pagePath) {
     throw new Error(`Rust cell "${cellId}" in ${pagePath} must use crates instead of packages.`);
   }
 
-  return normalizeStringArray(value, 'packages', cellId, pagePath);
+  const packages = normalizeStringArray(value, 'packages', cellId, pagePath);
+  if (packages.length > 0) {
+    throw new Error(
+      `Python cell "${cellId}" in ${pagePath} specifies packages: ${packages.join(', ')}. ` +
+        'Static Pyodide package assets are not currently distributed; remove packages or add package asset copying first.'
+    );
+  }
+
+  return packages;
 }
 
 export function normalizeCrates(value, language, cellId, pagePath, helperCrates) {
