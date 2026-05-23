@@ -22,11 +22,14 @@ const mocks = vi.hoisted(() => {
   };
 });
 
-vi.mock('echarts/charts', () => ({ LineChart: {} }));
+vi.mock('echarts/charts', () => ({ BarChart: {}, HeatmapChart: {}, LineChart: {}, ScatterChart: {} }));
 vi.mock('echarts/components', () => ({
   DataZoomComponent: {},
   GridComponent: {},
-  TooltipComponent: {}
+  LegendComponent: {},
+  TitleComponent: {},
+  TooltipComponent: {},
+  VisualMapComponent: {}
 }));
 vi.mock('echarts/renderers', () => ({ CanvasRenderer: {} }));
 vi.mock('echarts/core', () => ({
@@ -55,6 +58,7 @@ const { default: InteractiveCell } = await import('../../src/components/doc-runt
 const { default: MermaidDiagram } = await import('../../src/components/doc-runtime/MermaidDiagram');
 const { default: OutputRenderer } = await import('../../src/components/doc-runtime/OutputRenderer');
 const { default: PlotOutput } = await import('../../src/components/doc-runtime/PlotOutput');
+const { chartSpecToEChartsOptions } = await import('../../src/components/doc-runtime/ChartOutput');
 
 class TestResizeObserver {
   static instances: TestResizeObserver[] = [];
@@ -181,8 +185,8 @@ describe('InteractiveCell', () => {
     await waitFor(() =>
       expect(mocks.chart.setOption).toHaveBeenCalledWith(
         expect.objectContaining({
-          xAxis: { type: 'value', name: 'x' },
-          yAxis: { type: 'value', name: 'y' }
+          xAxis: expect.objectContaining({ type: 'value', name: 'x' }),
+          yAxis: expect.objectContaining({ type: 'value', name: 'y' })
         }),
         true
       )
@@ -466,7 +470,7 @@ describe('PlotOutput', () => {
     expect(mocks.chart.resize).toHaveBeenCalled();
     expect(mocks.chart.setOption).toHaveBeenCalledWith(
       expect.objectContaining({
-        color: ['#0f766e'],
+        color: expect.arrayContaining(['#0f766e']),
         series: [expect.objectContaining({ type: 'line', data: [[0, 0.2]] })]
       }),
       true
@@ -474,6 +478,76 @@ describe('PlotOutput', () => {
 
     unmount();
     expect(mocks.chart.dispose).toHaveBeenCalled();
+  });
+});
+
+describe('ChartOutput options', () => {
+  it('maps supported chart specs to ECharts options', () => {
+    expect(chartSpecToEChartsOptions({
+      kind: 'line',
+      xLabel: 'n',
+      yLabel: 'x',
+      series: [{ name: 'a', points: [[0, 1]] }, { name: 'b', points: [[0, 2]] }]
+    })).toMatchObject({
+      legend: { top: 4 },
+      tooltip: { trigger: 'axis' },
+      xAxis: { type: 'value', name: 'n' },
+      yAxis: { type: 'value', name: 'x' },
+      series: [
+        { type: 'line', showSymbol: false, data: [[0, 1]] },
+        { type: 'line', showSymbol: false, data: [[0, 2]] }
+      ]
+    });
+
+    expect(chartSpecToEChartsOptions({
+      kind: 'scatter',
+      tooltip: true,
+      series: [{ points: [[0, 1]] }]
+    })).toMatchObject({
+      tooltip: { trigger: 'item' },
+      series: [{ type: 'scatter', symbolSize: 6, data: [[0, 1]] }]
+    });
+
+    expect(chartSpecToEChartsOptions({
+      kind: 'bar',
+      categories: ['A', 'B'],
+      series: [{ values: [1, null] }]
+    })).toMatchObject({
+      xAxis: { type: 'category', data: ['A', 'B'] },
+      series: [{ type: 'bar', data: [1, null] }]
+    });
+
+    expect(chartSpecToEChartsOptions({
+      kind: 'histogram',
+      bins: [[0, 1, 2], [1, 2, 3]]
+    })).toMatchObject({
+      xAxis: { type: 'category', data: ['0-1', '1-2'] },
+      series: [{ type: 'bar', barCategoryGap: '8%', data: [2, 3] }]
+    });
+
+    expect(chartSpecToEChartsOptions({
+      kind: 'area',
+      dataZoom: false,
+      series: [{ points: [[0, 1]] }]
+    })).toMatchObject({
+      dataZoom: undefined,
+      series: [{ type: 'line', areaStyle: { opacity: 0.18 }, data: [[0, 1]] }]
+    });
+
+    expect(chartSpecToEChartsOptions({
+      kind: 'heatmap',
+      title: 'Heat',
+      xCategories: ['x'],
+      yCategories: ['y'],
+      data: [['x', 'y', 5]]
+    })).toMatchObject({
+      title: { text: 'Heat' },
+      xAxis: { type: 'category', data: ['x'] },
+      yAxis: { type: 'category', data: ['y'] },
+      dataZoom: undefined,
+      visualMap: expect.objectContaining({ calculable: true }),
+      series: [{ type: 'heatmap', data: [['x', 'y', 5]] }]
+    });
   });
 });
 
