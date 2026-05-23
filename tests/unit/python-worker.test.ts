@@ -2,7 +2,8 @@ import { describe, expect, it } from 'vitest';
 import {
   createPythonCellResult,
   createSerialRequestQueue,
-  pythonDisplaySupportCode
+  pythonDisplaySupportCode,
+  resolvePyodideUrls
 } from '../../src/lib/doc-runtime/python-worker';
 import { toOutputArtifacts } from '../../src/lib/doc-runtime/python-cell-result';
 
@@ -76,6 +77,23 @@ describe('python worker request queue', () => {
     await flushMicrotasks();
 
     expect(events).toEqual(['start:first', 'start:second', 'finish:second']);
+  });
+});
+
+describe('python worker asset URLs', () => {
+  it('resolves Pyodide files under the configured site base', () => {
+    expect(resolvePyodideUrls('/')).toEqual({
+      indexUrl: '/pyodide/',
+      moduleUrl: '/pyodide/pyodide.mjs'
+    });
+    expect(resolvePyodideUrls('/oxiquill/')).toEqual({
+      indexUrl: '/oxiquill/pyodide/',
+      moduleUrl: '/oxiquill/pyodide/pyodide.mjs'
+    });
+    expect(resolvePyodideUrls('/oxiquill')).toEqual({
+      indexUrl: '/oxiquill/pyodide/',
+      moduleUrl: '/oxiquill/pyodide/pyodide.mjs'
+    });
   });
 });
 
