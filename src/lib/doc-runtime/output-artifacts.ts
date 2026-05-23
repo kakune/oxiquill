@@ -2,12 +2,10 @@ import type {
   ChartArtifact,
   ChartSpec,
   CellExecutionResult,
-  ImageArtifact,
   OutputArtifact,
   OutputLimits,
   PlotSpec,
   RawCellExecutionResult,
-  TableArtifact,
   TableColumn,
   TextArtifact
 } from './types';
@@ -93,6 +91,7 @@ export function isOutputArtifact(value: unknown): value is OutputArtifact {
       return isImageArtifact(value);
     case 'html':
       return typeof value.html === 'string' && value.sandboxed === true;
+    /* v8 ignore next -- artifactKinds rejects unknown artifact kinds before this switch. */
     default:
       return false;
   }
@@ -155,9 +154,7 @@ function hasValidBaseArtifact(value: Record<string, unknown>): boolean {
   );
 }
 
-function isTableArtifact(value: unknown): value is TableArtifact {
-  if (!isRecord(value)) return false;
-
+function isTableArtifact(value: Record<string, unknown>): boolean {
   return (
     Array.isArray(value.columns) &&
     value.columns.every(isTableColumn) &&
@@ -180,9 +177,7 @@ function isChartSpec(value: unknown): value is ChartSpec {
   return isRecord(value) && chartKinds.has(value.kind as string);
 }
 
-function isImageArtifact(value: unknown): value is ImageArtifact {
-  if (!isRecord(value)) return false;
-
+function isImageArtifact(value: Record<string, unknown>): boolean {
   return (
     imageMimes.has(value.mime as string) &&
     typeof value.data === 'string' &&
