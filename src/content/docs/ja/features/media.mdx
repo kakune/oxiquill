@@ -1,0 +1,45 @@
+---
+title: メディア
+description: PNG、JPEG、PDF などの静的 file を MDX ノートに埋め込みます。
+---
+
+そのまま配信したい静的 file は `public/media` に置きます。MDX ページからは `/media/...` URL で参照できるため、一般的な画像や PDF に import は不要です。
+
+## 画像 file
+
+Markdown image syntax が最も短い書き方です。画像内容を説明する具体的な alt text を使います。
+
+```md
+![PNG sample with color bands](/media/examples/sample.png)
+```
+
+![PNG sample with color bands](/media/examples/sample.png)
+
+JPEG file も同じ URL pattern を使います。
+
+```md
+![JPEG sample with a grid and gradient](/media/examples/sample.jpg)
+```
+
+![JPEG sample with a grid and gradient](/media/examples/sample.jpg)
+
+## PDF
+
+PDF には embedded frame と通常 link の両方を置きます。frame でページ内 preview ができ、link で直接開けます。
+
+```md
+<iframe class="media-frame" src="/media/examples/sample.pdf" title="Sample PDF"></iframe>
+
+[Open the PDF in a new tab](/media/examples/sample.pdf)
+```
+
+<iframe class="media-frame" src="/media/examples/sample.pdf" title="Sample PDF"></iframe>
+
+[Open the PDF in a new tab](/media/examples/sample.pdf)
+
+## 配置 rule
+
+- public file は `public/media` に置きます。
+- `/media/...` の absolute URL で参照します。
+- file 自体が source asset でない限り、生成 media を docs tree に置かないでください。
+- test や screenshot が安定するよう、sample file は stable にします。

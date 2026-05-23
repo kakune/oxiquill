@@ -1,0 +1,62 @@
+---
+title: Rust Ownership
+description: A prose-first sample note that explains ownership, moves, and borrowing.
+---
+
+This sample shows a plain explanatory note without executable cells. Use this shape when a topic needs concepts, short code snippets, and takeaways more than runtime controls.
+
+## What This Demonstrates
+
+- A focused concept page with no runtime dependency.
+- Short code blocks placed next to the explanation they support.
+- A final summary that gives readers the key model to remember.
+
+## Owners and Scope
+
+In Rust, every value has an owner. When the owner goes out of scope, the value is dropped. This rule lets Rust manage memory without a garbage collector.
+
+```rust
+fn main() {
+    let name = String::from("Rust");
+    println!("{name}");
+}
+```
+
+`name` owns the `String` inside the scope of `main`. When `main` ends, the `String` is dropped.
+
+## Moves
+
+Assigning a non-copy value to another variable moves ownership. The original variable cannot be used after the move.
+
+```rust
+fn main() {
+    let name = String::from("Rust");
+    let moved = name;
+
+    println!("{moved}");
+}
+```
+
+`String` owns heap data, so Rust does not create an implicit deep copy. After `let moved = name;`, `moved` is the owner.
+
+## Borrowing
+
+Pass a reference when a function should read a value without taking ownership.
+
+```rust
+fn len(value: &str) -> usize {
+    value.len()
+}
+
+fn main() {
+    let name = String::from("Rust");
+    println!("{}", len(&name));
+    println!("{name}");
+}
+```
+
+With a reference, the function reads the value but does not own it. The caller can still use the value after the function call.
+
+## Summary
+
+Ownership, moves, and borrowing are core rules behind Rust's safety model. Prose-first pages work well when they move from concept, to short example, to takeaway.

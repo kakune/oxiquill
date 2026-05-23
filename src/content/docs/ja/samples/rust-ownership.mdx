@@ -1,0 +1,62 @@
+---
+title: Rust の所有権
+description: 所有権、move、borrow を説明する prose-first のサンプルノートです。
+---
+
+この sample は、実行可能セルを使わない説明ノートの例です。概念、短い code snippet、takeaway が中心で、runtime control が不要な topic に向いています。
+
+## このページが示すこと
+
+- runtime に依存しない focused concept page。
+- 説明のすぐ近くに置く短い code block。
+- 読者が覚えるべき model をまとめる final summary。
+
+## 所有者とスコープ
+
+Rust ではすべての値に owner があります。owner が scope を抜けると、その値は drop されます。この rule により、Rust は garbage collector なしで memory を管理できます。
+
+```rust
+fn main() {
+    let name = String::from("Rust");
+    println!("{name}");
+}
+```
+
+`name` は `main` の scope 内で `String` を所有します。`main` が終わると `String` は drop されます。
+
+## move
+
+Copy ではない値を別の変数に代入すると、ownership が move します。move 後は元の変数を使えません。
+
+```rust
+fn main() {
+    let name = String::from("Rust");
+    let moved = name;
+
+    println!("{moved}");
+}
+```
+
+`String` は heap data を所有するため、Rust は暗黙の deep copy を作りません。`let moved = name;` の後は `moved` が owner です。
+
+## borrow
+
+関数が値を所有せずに読みたい場合は reference を渡します。
+
+```rust
+fn len(value: &str) -> usize {
+    value.len()
+}
+
+fn main() {
+    let name = String::from("Rust");
+    println!("{}", len(&name));
+    println!("{name}");
+}
+```
+
+reference を使うと、関数は値を読みますが所有しません。呼び出し元は関数呼び出しの後もその値を使えます。
+
+## まとめ
+
+ownership、move、borrow は Rust の safety model の中心です。prose-first page は、概念、短い例、takeaway の順に進める topic に向いています。

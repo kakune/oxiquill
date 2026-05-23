@@ -1,0 +1,137 @@
+---
+title: Interactive Cells
+description: Configure Rust and Python cells that execute on the static site.
+---
+
+Interactive cells are ordinary MDX code blocks with metadata comments at the top. Oxiquill extracts those blocks during generation and replaces them with a runtime UI.
+
+Rust cells are compiled to WebAssembly at build time. Python cells run in a browser Pyodide worker. Both languages use the same input metadata and run-mode model.
+
+## Cell Metadata
+
+Common fields:
+
+- `id`: required page-local identifier.
+- `title`: label shown in the cell header.
+- `run`: `button`, `reactive`, `autorun`, or `hidden`.
+- `inputs`: input controls whose values become variables in the cell.
+- `timeoutMs`: execution timeout in milliseconds.
+- `showSource`: `false` hides source by default while keeping the toggle available.
+
+Rust-only field:
+
+- `crates`: helper crate package names under `crates/*`; use `crates: []` when no helper is needed.
+
+Python-only field:
+
+- `packages`: vendored Pyodide package names such as `numpy`, `pandas`, or `matplotlib`.
+
+## Run Modes
+
+- `button`: the reader starts execution explicitly.
+- `reactive`: the cell runs initially and reruns when inputs change.
+- `autorun`: the cell runs automatically once without showing a run button.
+- `hidden`: the cell has no run button; use this only for intentionally hidden examples.
+
+## Inputs
+
+Supported input types are `range`, `number`, `integer`, `text`, `textarea`, `checkbox`, `select`, and `radio`.
+
+Input names are available as variables inside the cell. In Rust cells, names are converted into safe Rust identifiers. Avoid names that differ only by punctuation, because they may map to the same Rust binding.
+
+## Rust and Plots
+
+This Rust cell uses a helper crate and redraws a plot whenever the sliders change.
+
+```rust
+//| id: logistic-rust
+//| title: Calculate the logistic map with Rust
+//| run: reactive
+//| crates: [doc-rust]
+//| inputs:
+//|   r: { type: range, label: r, min: 0, max: 4, step: 0.01, value: 3.2 }
+//|   x0: { type: range, label: x0, min: 0, max: 1, step: 0.01, value: 0.2 }
+//|   steps: { type: integer, label: steps, min: 10, max: 300, step: 10, value: 120 }
+let points = doc_rust::logistic_series(r, x0, steps).map_err(|error| error.to_string())?;
+
+for point in points.iter().take(5) {
+    println!("n={} x={:.6}", point.n, point.x);
+}
+
+emit_line_plot!(&points, "n", "x");
+```
+
+## Rust Input UI
+
+A cell with `crates: []` does not depend on helper crates. This example shows checkbox, select, and radio inputs.
+
+```rust
+//| id: rust-controls
+//| title: Rust input UI
+//| run: reactive
+//| crates: []
+//| inputs:
+//|   include_bonus: { type: checkbox, label: include bonus, value: true }
+//|   operation: { type: select, label: operation, value: double, options: [identity, double, triple] }
+//|   style: { type: radio, label: style, value: compact, options: [compact, verbose] }
+let base_score = match operation.as_str() {
+    "triple" => 21_u32,
+    "double" => 14_u32,
+    _ => 7_u32,
+};
+let score = if include_bonus {
+    base_score + 5
+} else {
+    base_score
+};
+
+println!("style = {style}");
+println!("score = {score}");
+```
+
+## Multiple Rust Helper Crates
+
+Each Rust cell declares the helper crates it needs. The names must match Cargo package names under `crates/*`.
+
+```rust
+//| id: rust-multiple-crates
+//| title: Rust cell with multiple crates
+//| run: reactive
+//| crates: [doc-rust, doc-rust-text]
+//| inputs:
+//|   style: { type: radio, label: style, value: compact, options: [compact, verbose] }
+let points = doc_rust::logistic_series(3.2, 0.2, 8).map_err(|error| error.to_string())?;
+let final_point = points.last().ok_or_else(|| "series is empty".to_owned())?;
+
+println!("{}", doc_rust_text::labeled_value("final step", final_point.n));
+println!("{}", doc_rust_text::labeled_value("final x", format!("{:.6}", final_point.x)));
+println!("{}", doc_rust_text::style_note(style.as_str()));
+```
+
+## Python Inputs
+
+Python cells use the same input metadata. Input values are available as Python variables.
+
+```python
+#| id: python-controls
+#| title: Python input UI
+#| run: reactive
+#| inputs:
+#|   scale: { type: number, label: scale, min: 1, max: 10, step: 1, value: 3 }
+#|   label: { type: text, label: label, value: "sample" }
+#|   enabled: { type: checkbox, label: include uppercase, value: true }
+#|   method: { type: select, label: method, value: mean, options: [mean, sum, max] }
+#|   style: { type: radio, label: style, value: compact, options: [compact, verbose] }
+values = [1, 2, 3, 4]
+
+if method == "sum":
+    result = sum(values) * scale
+elif method == "max":
+    result = max(values) * scale
+else:
+    result = sum(values) / len(values) * scale
+
+name = label.upper() if enabled else label
+print(f"{name}: {method} = {result}")
+print(f"style = {style}")
+```

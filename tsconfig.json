@@ -1,0 +1,21 @@
+{
+    "extends": "./node_modules/astro/tsconfigs/strict.json",
+    "compilerOptions": {
+        "jsx": "react-jsx",
+        "jsxImportSource": "preact",
+        "types": [
+            "vite/client"
+        ]
+    },
+    "include": [
+        ".astro/types.d.ts",
+        "src/**/*",
+        "tests/**/*",
+        "playwright.config.ts"
+    ],
+    "exclude": [
+        "dist",
+        "node_modules",
+        "target"
+    ]
+}

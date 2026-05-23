@@ -1,0 +1,10 @@
+#!/bin/sh
+set -eu
+
+repo_root=$(git rev-parse --show-toplevel)
+cd "$repo_root"
+
+pnpm check
+pnpm test:unit
+pnpm test:rust
+pnpm lint:rust
