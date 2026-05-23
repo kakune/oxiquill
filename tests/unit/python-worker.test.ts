@@ -94,6 +94,16 @@ describe('python rich display support', () => {
     expect(pythonDisplaySupportCode).toContain('__oxiquill_displayed_figures.add(id(fig))');
   });
 
+  it('converts pandas dataframes and series to table artifacts', () => {
+    expect(pythonDisplaySupportCode).toContain('def __oxiquill_is_pandas_dataframe');
+    expect(pythonDisplaySupportCode).toContain('def __oxiquill_is_pandas_series');
+    expect(pythonDisplaySupportCode).toContain('def __oxiquill_pandas_dataframe_artifact');
+    expect(pythonDisplaySupportCode).toContain('def __oxiquill_pandas_series_artifact');
+    expect(pythonDisplaySupportCode).toContain('"rowCount": row_count');
+    expect(pythonDisplaySupportCode).toContain('"truncated": truncated_rows or truncated_columns');
+    expect(pythonDisplaySupportCode).toContain('Failed to convert dataframe output');
+  });
+
   it('combines stream output, rich display artifacts, and final values deterministically', () => {
     expect(createPythonCellResult({
       stdout: 'printed',

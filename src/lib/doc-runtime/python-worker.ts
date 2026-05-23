@@ -27,6 +27,7 @@ import json
 __oxiquill_outputs = []
 __oxiquill_displayed_figures = set()
 __oxiquill_table_limit = 1000
+__oxiquill_table_column_limit = 100
 
 def __oxiquill_meta(artifact, title=None, caption=None):
     if title is not None:
@@ -48,6 +49,178 @@ def __oxiquill_json_artifact(value, title=None, caption=None):
     json_value = __oxiquill_jsonable(value)
     json.dumps(json_value)
     return __oxiquill_meta({"kind": "json", "value": json_value}, title, caption)
+
+def __oxiquill_scalar_value(value):
+    try:
+        import pandas as pd
+        is_missing = pd.isna(value)
+        try:
+            if bool(is_missing):
+                return None
+        except Exception:
+            pass
+    except Exception:
+        pass
+    item = getattr(value, "item", None)
+    if callable(item):
+        try:
+            value = item()
+        except Exception:
+            pass
+    isoformat = getattr(value, "isoformat", None)
+    if callable(isoformat):
+        try:
+            return isoformat()
+        except Exception:
+            pass
+    return __oxiquill_jsonable(value)
+
+def __oxiquill_column_key(label, used_keys):
+    base = str(label) or "column"
+    key = base
+    counter = 2
+    while key in used_keys:
+        key = f"{base}_{counter}"
+        counter += 1
+    used_keys.add(key)
+    return key
+
+def __oxiquill_dtype_name(dtype):
+    name = str(dtype)
+    lower = name.lower()
+    if lower in ("bool", "boolean"):
+        return "boolean"
+    if lower.startswith("int") or lower.startswith("uint") or lower in ("int64", "int32", "int16", "int8"):
+        return "integer"
+    if lower.startswith("float") or lower in ("float64", "float32"):
+        return "number"
+    if "datetime" in lower or "timestamp" in lower:
+        return "datetime"
+    if lower in ("string", "str"):
+        return "string"
+    if lower == "object":
+        return "unknown"
+    return "unknown"
+
+def __oxiquill_is_default_range_index(index):
+    return (
+        index.__class__.__name__ == "RangeIndex"
+        and getattr(index, "name", None) is None
+        and getattr(index, "start", None) == 0
+        and getattr(index, "step", None) == 1
+    )
+
+def __oxiquill_should_include_index(index, include_index=None):
+    if include_index is not None:
+        return bool(include_index)
+    return not __oxiquill_is_default_range_index(index)
+
+def __oxiquill_is_pandas_dataframe(value):
+    cls = value.__class__
+    return cls.__name__ == "DataFrame" and getattr(cls, "__module__", "").startswith("pandas.")
+
+def __oxiquill_is_pandas_series(value):
+    cls = value.__class__
+    return cls.__name__ == "Series" and getattr(cls, "__module__", "").startswith("pandas.")
+
+def __oxiquill_pandas_dataframe_artifact(
+    dataframe,
+    *,
+    title=None,
+    caption=None,
+    max_rows=__oxiquill_table_limit,
+    max_columns=__oxiquill_table_column_limit,
+    include_index=None,
+):
+    row_count = int(len(dataframe))
+    column_labels = list(dataframe.columns)
+    truncated_rows = row_count > max_rows
+    truncated_columns = len(column_labels) > max_columns
+    preview = dataframe.iloc[:max_rows, :max_columns]
+    used_keys = set()
+    columns = []
+    if __oxiquill_should_include_index(dataframe.index, include_index):
+        columns.append({
+            "key": __oxiquill_column_key("__index__", used_keys),
+            "label": str(getattr(dataframe.index, "name", None) or "index"),
+            "type": __oxiquill_dtype_name(getattr(dataframe.index, "dtype", "unknown")),
+        })
+    for label in list(preview.columns):
+        columns.append({
+            "key": __oxiquill_column_key(label, used_keys),
+            "label": str(label),
+            "type": __oxiquill_dtype_name(getattr(preview[label], "dtype", "unknown")),
+        })
+    rows = []
+    include_index_column = len(columns) > len(list(preview.columns))
+    for row_index, values in enumerate(preview.itertuples(index=False, name=None)):
+        row = []
+        if include_index_column:
+            row.append(__oxiquill_scalar_value(preview.index[row_index]))
+        row.extend(__oxiquill_scalar_value(value) for value in values)
+        rows.append(row)
+    return __oxiquill_meta({
+        "kind": "table",
+        "columns": columns,
+        "rows": rows,
+        "rowCount": row_count,
+        "truncated": truncated_rows or truncated_columns,
+    }, title, caption)
+
+def __oxiquill_pandas_series_artifact(
+    series,
+    *,
+    title=None,
+    caption=None,
+    max_rows=__oxiquill_table_limit,
+    include_index=None,
+):
+    row_count = int(len(series))
+    preview = series.iloc[:max_rows]
+    truncated = row_count > max_rows
+    include_index_column = __oxiquill_should_include_index(series.index, include_index)
+    used_keys = set()
+    columns = []
+    if include_index_column:
+        columns.append({
+            "key": __oxiquill_column_key("__index__", used_keys),
+            "label": str(getattr(series.index, "name", None) or "index"),
+            "type": __oxiquill_dtype_name(getattr(series.index, "dtype", "unknown")),
+        })
+    value_label = str(series.name) if series.name is not None else "value"
+    columns.append({
+        "key": __oxiquill_column_key(value_label, used_keys),
+        "label": value_label,
+        "type": __oxiquill_dtype_name(getattr(series, "dtype", "unknown")),
+    })
+    rows = []
+    for row_index, value in enumerate(preview):
+        row = []
+        if include_index_column:
+            row.append(__oxiquill_scalar_value(preview.index[row_index]))
+        row.append(__oxiquill_scalar_value(value))
+        rows.append(row)
+    return __oxiquill_meta({
+        "kind": "table",
+        "columns": columns,
+        "rows": rows,
+        "rowCount": row_count,
+        "truncated": truncated,
+    }, title, caption)
+
+def __oxiquill_dataframe_artifact(value, *, title=None, caption=None):
+    try:
+        if __oxiquill_is_pandas_dataframe(value):
+            return __oxiquill_pandas_dataframe_artifact(value, title=title, caption=caption)
+        if __oxiquill_is_pandas_series(value):
+            return __oxiquill_pandas_series_artifact(value, title=title, caption=caption)
+    except Exception as error:
+        return __oxiquill_meta({
+            "kind": "text",
+            "stream": "stderr",
+            "content": f"Failed to convert dataframe output: {error}",
+        }, title, caption)
+    return None
 
 def __oxiquill_image_data(data):
     if isinstance(data, bytes):
@@ -123,6 +296,9 @@ def __oxiquill_collect_matplotlib_outputs(preferred="svg", close_figures=True):
 def __oxiquill_artifact(value, title=None, caption=None):
     if value is None or isinstance(value, (str, int, float, bool, list, tuple, dict)):
         return __oxiquill_json_artifact(value, title, caption)
+    dataframe_artifact = __oxiquill_dataframe_artifact(value, title=title, caption=caption)
+    if dataframe_artifact is not None:
+        return dataframe_artifact
     if __oxiquill_is_matplotlib_figure(value):
         return __oxiquill_figure_to_image(value, title=title, caption=caption, mark_displayed=True)
     for method_name, mime in (
@@ -162,6 +338,10 @@ def display_image(data, mime, *, alt=None, title=None):
     __oxiquill_outputs.append(__oxiquill_meta(artifact, title))
 
 def display_table(value, *, title=None, caption=None):
+    dataframe_artifact = __oxiquill_dataframe_artifact(value, title=title, caption=caption)
+    if dataframe_artifact is not None:
+        __oxiquill_outputs.append(dataframe_artifact)
+        return
     rows = list(value)
     truncated = len(rows) > __oxiquill_table_limit
     preview = rows[:__oxiquill_table_limit]
