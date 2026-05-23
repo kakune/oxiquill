@@ -141,6 +141,7 @@ beforeEach(() => {
   mocks.manifestListeners = [];
   TestResizeObserver.instances = [];
   document.documentElement.lang = 'en';
+  document.documentElement.removeAttribute('data-theme');
   globalThis.ResizeObserver = TestResizeObserver as unknown as typeof ResizeObserver;
 });
 
@@ -407,10 +408,68 @@ describe('MermaidDiagram', () => {
     await waitFor(() => expect(screen.getByTestId('mermaid-diagram')).toHaveAttribute('data-state', 'ready'));
     expect(screen.getByText('diagram')).toBeVisible();
     expect(mocks.mermaidInitialize).toHaveBeenCalledTimes(1);
+    expect(mocks.mermaidInitialize).toHaveBeenCalledWith(
+      expect.objectContaining({
+        themeVariables: expect.objectContaining({
+          lineColor: '#0f766e',
+          primaryTextColor: '#111827'
+        })
+      })
+    );
 
     rerender(<MermaidDiagram diagramId="one" source="flowchart LR\nA-->C" />);
     await waitFor(() => expect(mocks.mermaidRender).toHaveBeenCalledTimes(2));
     expect(mocks.mermaidInitialize).toHaveBeenCalledTimes(1);
+  });
+
+  it('uses a readable dark Mermaid palette when Starlight is in dark mode', async () => {
+    document.documentElement.dataset.theme = 'dark';
+    mocks.mermaidRender.mockResolvedValue({
+      svg: '<svg><text>dark diagram</text></svg>'
+    });
+
+    render(<MermaidDiagram diagramId="dark" source="flowchart LR\nA-->B" />);
+
+    await waitFor(() => expect(screen.getByText('dark diagram')).toBeVisible());
+    expect(mocks.mermaidInitialize).toHaveBeenCalledWith(
+      expect.objectContaining({
+        themeVariables: expect.objectContaining({
+          background: '#0f172a',
+          lineColor: '#67e8f9',
+          primaryTextColor: '#f8fafc'
+        })
+      })
+    );
+  });
+
+  it('rerenders Mermaid SVG when Starlight theme changes', async () => {
+    mocks.mermaidRender.mockResolvedValue({
+      svg: '<svg><text>theme diagram</text></svg>'
+    });
+
+    render(<MermaidDiagram diagramId="theme" source="flowchart LR\nA-->B" />);
+
+    await waitFor(() => expect(mocks.mermaidRender).toHaveBeenCalledTimes(1));
+    expect(mocks.mermaidInitialize).toHaveBeenCalledWith(
+      expect.objectContaining({
+        themeVariables: expect.objectContaining({
+          primaryTextColor: '#111827'
+        })
+      })
+    );
+
+    act(() => {
+      document.documentElement.dataset.theme = 'dark';
+    });
+
+    await waitFor(() => expect(mocks.mermaidRender).toHaveBeenCalledTimes(2));
+    expect(mocks.mermaidInitialize).toHaveBeenCalledWith(
+      expect.objectContaining({
+        themeVariables: expect.objectContaining({
+          primaryTextColor: '#f8fafc'
+        })
+      })
+    );
   });
 
   it('renders Mermaid SVG when no bind function is returned', async () => {
