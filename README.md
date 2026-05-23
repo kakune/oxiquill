@@ -1,7 +1,5 @@
 # Oxiquill
 
-Oxiquill is the destination project for migrating the structure of `../note-test`.
-
 This repository is currently a project skeleton. It preserves the intended documentation-site layout and tooling boundaries, but it does not include the source runtime, scripts, tests, sample notes, or helper implementation code yet.
 
 ## Intended Shape
