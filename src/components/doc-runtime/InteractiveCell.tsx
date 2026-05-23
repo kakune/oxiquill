@@ -8,6 +8,7 @@ import {
   shouldShowRunButton
 } from '../../lib/doc-runtime/interactive-cell-model';
 import { getCell, getManifestSnapshot, subscribeManifest } from '../../lib/doc-runtime/manifest';
+import { normalizeCellExecutionResult } from '../../lib/doc-runtime/output-artifacts';
 import { runInteractiveCell } from '../../lib/doc-runtime/runtime-client';
 import type {
   CellExecutionResult,
@@ -15,7 +16,7 @@ import type {
   InputSpec,
   InputValues
 } from '../../lib/doc-runtime/types';
-import PlotOutput from './PlotOutput';
+import OutputRenderer from './OutputRenderer';
 
 interface InteractiveCellProps {
   cellId: string;
@@ -289,22 +290,11 @@ function CellOutput({
     );
   }
 
+  const normalizedResult = normalizeCellExecutionResult(result);
+
   return (
     <div class="doc-cell__outputs">
-      {result.stdout ? (
-        <pre class="run-output" data-testid="run-output">
-          <code>{result.stdout}</code>
-        </pre>
-      ) : null}
-      {result.stderr ? <pre class="error-output">{result.stderr}</pre> : null}
-      {result.value != null && result.value !== '' ? (
-        <pre class="run-output" data-testid="value-output">
-          <code>{JSON.stringify(result.value, null, 2)}</code>
-        </pre>
-      ) : null}
-      {result.plots.map((plot, index) => (
-        <PlotOutput key={index} plot={plot} />
-      ))}
+      <OutputRenderer outputs={normalizedResult.outputs} />
     </div>
   );
 }
