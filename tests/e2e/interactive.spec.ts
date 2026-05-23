@@ -130,6 +130,14 @@ test('theme note and Mermaid examples are available without author-side TSX impo
   await expect(diagrams.first().locator('svg')).toBeVisible();
   await expect(diagrams.nth(1).locator('svg')).toBeVisible();
   await expect(diagrams.nth(2).locator('svg')).toBeVisible();
+
+  await page.evaluate(() => {
+    document.documentElement.dataset.theme = 'dark';
+  });
+
+  await expect(diagrams.first().locator('svg')).toBeVisible();
+  await expect(diagrams.nth(1).locator('svg')).toBeVisible();
+  await expect(diagrams.nth(2).locator('svg')).toBeVisible();
 });
 
 test('localized pages and media examples are available', async ({ page }) => {
