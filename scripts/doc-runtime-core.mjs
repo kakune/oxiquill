@@ -443,31 +443,7 @@ ${matchArms}
   const functions = rustCells.map(generateRustFunction).join('\n\n');
   const firstCellTest = rustCells[0] ? generateRustTest(rustCells[0]) : '';
   const readers = generateRustReaders(rustCells);
-  const outputTypes =
-    rustCells.length === 0
-      ? ''
-      : `
-#[derive(Debug, Serialize)]
-#[serde(tag = "kind")]
-enum PlotSpec {
-    #[serde(rename = "line")]
-    Line(LinePlotSpec),
-}
-
-#[derive(Debug, Serialize)]
-struct LinePlotSpec {
-    x_label: String,
-    y_label: String,
-    points: Vec<[f64; 2]>,
-}
-
-#[derive(Debug, Serialize)]
-struct CellOutput {
-    stdout: String,
-    plots: Vec<PlotSpec>,
-    value: Value,
-}
-`;
+  const outputTypes = generateRustOutputTypes(rustCells);
   const serdeImport = rustCells.length === 0 ? '' : 'use serde::Serialize;\n';
 
   return `${generatedBanner()}${serdeImport}use serde_json::Value;
@@ -491,6 +467,150 @@ ${functions}
 ${firstCellTest}`;
 }
 
+function generateRustOutputTypes(rustCells) {
+  if (rustCells.length === 0) return '';
+
+  const capabilities = rustOutputCapabilities(rustCells);
+  const outputVariants = [
+    `    #[serde(rename = "text")]
+    Text(TextArtifact),`,
+    capabilities.json
+      ? `    #[serde(rename = "json")]
+    Json(JsonArtifact),`
+      : '',
+    capabilities.html
+      ? `    #[serde(rename = "html")]
+    Html(HtmlArtifact),`
+      : '',
+    capabilities.image
+      ? `    #[serde(rename = "image")]
+    Image(ImageArtifact),`
+      : '',
+    capabilities.chart
+      ? `    #[serde(rename = "chart")]
+    Chart(ChartArtifact),`
+      : ''
+  ]
+    .filter(Boolean)
+    .join('\n');
+
+  return `
+#[derive(Debug, Serialize)]
+#[serde(tag = "kind")]
+enum PlotSpec {
+    #[serde(rename = "line")]
+    Line(LinePlotSpec),
+}
+
+#[derive(Debug, Serialize)]
+struct LinePlotSpec {
+    x_label: String,
+    y_label: String,
+    points: Vec<[f64; 2]>,
+}
+
+#[derive(Debug, Serialize)]
+#[serde(tag = "kind")]
+enum OutputArtifact {
+${outputVariants}
+}
+
+#[derive(Debug, Serialize)]
+struct TextArtifact {
+    stream: &'static str,
+    content: String,
+}
+
+${capabilities.json ? `#[derive(Debug, Serialize)]
+struct JsonArtifact {
+    value: Value,
+}
+` : ''}
+${capabilities.html ? `#[derive(Debug, Serialize)]
+struct HtmlArtifact {
+    html: String,
+    sandboxed: bool,
+}
+` : ''}
+${capabilities.image ? `#[derive(Debug, Serialize)]
+struct ImageArtifact {
+    mime: &'static str,
+    data: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    alt: Option<String>,
+}
+` : ''}
+${capabilities.chart ? `#[derive(Debug, Serialize)]
+struct ChartArtifact {
+    spec: ChartSpec,
+}
+
+#[derive(Debug, Serialize)]
+#[serde(tag = "kind")]
+enum ChartSpec {
+    #[serde(rename = "line")]
+    Line(LineChartSpec),
+}
+
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+struct LineChartSpec {
+    x_label: String,
+    y_label: String,
+    x_type: &'static str,
+    y_type: &'static str,
+    tooltip: bool,
+    data_zoom: bool,
+    series: Vec<XyChartSeries>,
+}
+
+#[derive(Debug, Serialize)]
+struct XyChartSeries {
+    points: Vec<[f64; 2]>,
+}
+` : ''}
+#[derive(Debug, Serialize)]
+struct CellOutput {
+    stdout: String,
+    plots: Vec<PlotSpec>,
+    value: Value,
+    outputs: Vec<OutputArtifact>,
+}
+
+fn finish_cell_output(
+    stdout: String,
+    plots: Vec<PlotSpec>,
+    mut outputs: Vec<OutputArtifact>,
+) -> CellOutput {
+    if !stdout.is_empty() {
+        outputs.insert(
+            0,
+            OutputArtifact::Text(TextArtifact {
+                stream: "stdout",
+                content: stdout.clone(),
+            }),
+        );
+    }
+    CellOutput {
+        stdout,
+        plots,
+        value: Value::Null,
+        outputs,
+    }
+}
+`;
+}
+
+function rustOutputCapabilities(rustCells) {
+  const source = rustCells.map((cell) => cell.source).join('\n');
+  return {
+    chart: source.includes('emit_line_plot!'),
+    html: source.includes('emit_html!'),
+    image: source.includes('emit_image_svg!') || source.includes('emit_image_png!'),
+    json: source.includes('emit_json!')
+  };
+}
+
 export function generateRustReaders(rustCells) {
   const readers = new Set(
     rustCells.flatMap((cell) => cell.inputs.map((input) => rustReaderName(input)))
@@ -509,29 +629,21 @@ export function generateRustReaders(rustCells) {
 export function generateRustFunction(cell) {
   const inputBindings = cell.inputs.map((input) => `    ${generateRustInputBinding(input)}`).join('\n');
   const escapedSource = indentRustSource(cell.source);
-  const capturesStdout = cell.source.includes('println!');
-  const emitsPlots = cell.source.includes('emit_line_plot!');
-  const stdoutBinding = `let ${capturesStdout ? 'mut ' : ''}__stdout = String::new();`;
-  const plotsBinding = `let ${emitsPlots ? 'mut ' : ''}__plots = Vec::new();`;
-  const macros = [
-    capturesStdout ? generatePrintlnMacro() : '',
-    emitsPlots ? generateLinePlotMacro() : ''
-  ]
-    .filter(Boolean)
-    .join('\n\n');
+  const macros = generateRustPreludeMacros(cell.source);
 
   return `fn ${rustFunctionName(cell.id)}(inputs: &Value) -> Result<CellOutput, String> {
-${inputBindings ? `${inputBindings}\n` : ''}    ${stdoutBinding}
-    ${plotsBinding}
+${inputBindings ? `${inputBindings}\n` : ''}    let __stdout = std::cell::RefCell::new(String::new());
+    let __plots = std::cell::RefCell::new(Vec::new());
+    let __outputs = std::cell::RefCell::new(Vec::new());
 ${macros ? `\n${macros}\n` : ''}
 
 ${escapedSource}
 
-    Ok(CellOutput {
-        stdout: __stdout,
-        plots: __plots,
-        value: Value::Null,
-    })
+    Ok(finish_cell_output(
+        __stdout.into_inner(),
+        __plots.into_inner(),
+        __outputs.into_inner(),
+    ))
 }`;
 }
 
@@ -596,14 +708,99 @@ function rustReadString() {
 }`;
 }
 
+function generateRustPreludeMacros(source) {
+  return [
+    source.includes('println!') ? generatePrintlnMacro() : '',
+    source.includes('emit_text!') ? generateTextMacro() : '',
+    source.includes('emit_json!') ? generateJsonMacro() : '',
+    source.includes('emit_html!') ? generateHtmlMacro() : '',
+    source.includes('emit_image_svg!') ? generateImageSvgMacro() : '',
+    source.includes('emit_image_png!') ? generateImagePngMacro() : '',
+    source.includes('emit_line_plot!') ? generateLinePlotMacro() : ''
+  ]
+    .filter(Boolean)
+    .join('\n\n');
+}
+
 function generatePrintlnMacro() {
   return `    macro_rules! println {
         () => {
-            __stdout.push('\\n');
+            __stdout.borrow_mut().push('\\n');
         };
         ($($arg:tt)*) => {{
             use std::fmt::Write as _;
-            writeln!(&mut __stdout, $($arg)*).map_err(|error| error.to_string())?;
+            let mut stdout = __stdout.borrow_mut();
+            writeln!(&mut *stdout, $($arg)*).map_err(|error| error.to_string())?;
+        }};
+    }`;
+}
+
+function generateTextMacro() {
+  return `    macro_rules! emit_text {
+        ($content:expr) => {{
+            __outputs.borrow_mut().push(OutputArtifact::Text(TextArtifact {
+                stream: "display",
+                content: ($content).to_string(),
+            }));
+        }};
+    }`;
+}
+
+function generateJsonMacro() {
+  return `    macro_rules! emit_json {
+        ($value:expr) => {{
+            __outputs.borrow_mut().push(OutputArtifact::Json(JsonArtifact {
+                value: serde_json::to_value(&$value).map_err(|error| error.to_string())?,
+            }));
+        }};
+    }`;
+}
+
+function generateHtmlMacro() {
+  return `    macro_rules! emit_html {
+        ($html:expr) => {{
+            __outputs.borrow_mut().push(OutputArtifact::Html(HtmlArtifact {
+                html: ($html).to_string(),
+                sandboxed: true,
+            }));
+        }};
+    }`;
+}
+
+function generateImageSvgMacro() {
+  return `    macro_rules! emit_image_svg {
+        ($svg:expr) => {{
+            __outputs.borrow_mut().push(OutputArtifact::Image(ImageArtifact {
+                mime: "image/svg+xml",
+                data: ($svg).to_string(),
+                alt: None,
+            }));
+        }};
+        ($svg:expr, $alt:expr) => {{
+            __outputs.borrow_mut().push(OutputArtifact::Image(ImageArtifact {
+                mime: "image/svg+xml",
+                data: ($svg).to_string(),
+                alt: Some(($alt).to_string()),
+            }));
+        }};
+    }`;
+}
+
+function generateImagePngMacro() {
+  return `    macro_rules! emit_image_png {
+        ($base64:expr) => {{
+            __outputs.borrow_mut().push(OutputArtifact::Image(ImageArtifact {
+                mime: "image/png",
+                data: ($base64).to_string(),
+                alt: None,
+            }));
+        }};
+        ($base64:expr, $alt:expr) => {{
+            __outputs.borrow_mut().push(OutputArtifact::Image(ImageArtifact {
+                mime: "image/png",
+                data: ($base64).to_string(),
+                alt: Some(($alt).to_string()),
+            }));
         }};
     }`;
 }
@@ -611,13 +808,27 @@ function generatePrintlnMacro() {
 function generateLinePlotMacro() {
   return `    macro_rules! emit_line_plot {
         ($points:expr, $x_label:expr, $y_label:expr) => {{
-            __plots.push(PlotSpec::Line(LinePlotSpec {
-                x_label: ($x_label).to_owned(),
-                y_label: ($y_label).to_owned(),
-                points: ($points)
-                    .iter()
-                    .map(|point| [f64::from(point.n), point.x])
-                    .collect(),
+            let x_label = ($x_label).to_owned();
+            let y_label = ($y_label).to_owned();
+            let points: Vec<[f64; 2]> = ($points)
+                .iter()
+                .map(|point| [f64::from(point.n), point.x])
+                .collect();
+            __plots.borrow_mut().push(PlotSpec::Line(LinePlotSpec {
+                x_label: x_label.clone(),
+                y_label: y_label.clone(),
+                points: points.clone(),
+            }));
+            __outputs.borrow_mut().push(OutputArtifact::Chart(ChartArtifact {
+                spec: ChartSpec::Line(LineChartSpec {
+                    x_label,
+                    y_label,
+                    x_type: "value",
+                    y_type: "value",
+                    tooltip: true,
+                    data_zoom: true,
+                    series: vec![XyChartSeries { points }],
+                }),
             }));
         }};
     }`;

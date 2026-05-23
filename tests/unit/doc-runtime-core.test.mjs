@@ -357,13 +357,34 @@ describe('doc runtime core', () => {
         { name: 'label', type: 'text' }
       ]
     };
+    const preludeCell = {
+      id: 'prelude-cell',
+      source: [
+        'emit_text!("hello");',
+        'emit_json!(&serde_json::json!({"ok": true}));',
+        'emit_html!("<strong>hello</strong>");',
+        'emit_image_svg!("<svg />");',
+        'emit_image_png!("abc");'
+      ].join('\n'),
+      inputs: []
+    };
     expect(generateRustReaders([rustCell])).toContain('fn read_f64');
     expect(generateRustFunction(rustCell)).toContain('macro_rules! println');
+    expect(generateRustFunction(rustCell)).toContain('macro_rules! emit_line_plot');
+    expect(generateRustFunction(rustCell)).not.toContain('macro_rules! emit_json');
+    expect(generateRustFunction(preludeCell)).toContain('macro_rules! emit_json');
+    expect(generateRustFunction(preludeCell)).toContain('macro_rules! emit_image_svg');
+    expect(generateRustFunction(rustCell)).toContain('Ok(finish_cell_output');
     expect(generateRustFunction({ id: 'plain', source: 'let value = 1;', inputs: [] })).toContain(
-      'let __stdout = String::new();'
+      'let __stdout = std::cell::RefCell::new(String::new());'
     );
     expect(generateRustLib([])).toContain('let _: Value = serde_json::from_str(inputs_json)');
     expect(generateRustLib([])).toContain('unknown Rust cell');
+    expect(generateRustLib([rustCell])).toContain('enum OutputArtifact');
+    expect(generateRustLib([rustCell])).toContain('outputs: Vec<OutputArtifact>');
+    expect(generateRustLib([preludeCell])).toContain('Json(JsonArtifact)');
+    expect(generateRustLib([preludeCell])).toContain('Html(HtmlArtifact)');
+    expect(generateRustLib([preludeCell])).toContain('Image(ImageArtifact)');
     expect(generateRustLib([rustCell])).toContain('first_generated_cell_runs');
   });
 });
