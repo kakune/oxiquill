@@ -49,6 +49,9 @@ export default defineConfig({
         }
       },
       customCss: ['katex/dist/katex.min.css', './src/styles/custom.css'],
+      components: {
+        PageFrame: './src/components/starlight/PageFrame.astro'
+      },
       sidebar: [
         {
           label: 'Overview',
