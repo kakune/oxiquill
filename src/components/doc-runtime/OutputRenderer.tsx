@@ -1,5 +1,5 @@
 import { isOutputArtifact } from '../../lib/doc-runtime/output-artifacts';
-import type { OutputArtifact, TextArtifact } from '../../lib/doc-runtime/types';
+import type { ImageArtifact, OutputArtifact, TextArtifact } from '../../lib/doc-runtime/types';
 import ChartOutput from './ChartOutput';
 import TableOutput from './TableOutput';
 
@@ -38,7 +38,7 @@ function ArtifactOutput({ output }: { output: unknown }) {
     case 'table':
       return <TableOutput table={output} />;
     case 'image':
-      return <UnknownOutput message={`Unsupported ${output.kind} output artifact.`} />;
+      return <ImageOutput output={output} />;
     default:
       return <UnknownOutput message="Unsupported output artifact." />;
   }
@@ -52,6 +52,25 @@ function TextOutput({ output }: { output: TextArtifact }) {
     <pre class={className} data-testid={isError ? undefined : 'run-output'}>
       <code>{output.content}</code>
     </pre>
+  );
+}
+
+function ImageOutput({ output }: { output: ImageArtifact }) {
+  return (
+    <figure class="doc-image-output">
+      <img
+        alt={output.alt ?? output.title ?? 'Image output'}
+        data-testid="image-output"
+        src={imageArtifactSource(output)}
+      />
+      {output.title || output.caption ? (
+        <figcaption>
+          {output.title ? <strong>{output.title}</strong> : null}
+          {output.title && output.caption ? ' ' : null}
+          {output.caption}
+        </figcaption>
+      ) : null}
+    </figure>
   );
 }
 
@@ -73,6 +92,14 @@ function UnknownOutput({ message }: { message: string }) {
       {message}
     </p>
   );
+}
+
+export function imageArtifactSource(output: ImageArtifact): string {
+  if (output.data.startsWith('data:')) return output.data;
+  if (output.mime === 'image/svg+xml') {
+    return `data:${output.mime};charset=utf-8,${encodeURIComponent(output.data)}`;
+  }
+  return `data:${output.mime};base64,${output.data}`;
 }
 
 function artifactKey(output: unknown, index: number): string {
