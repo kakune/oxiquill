@@ -15,6 +15,61 @@ const supportedLanguages = new Map([
   ['python', 'python'],
   ['py', 'python']
 ]);
+const rustReservedIdentifiers = new Set([
+  'Self',
+  'abstract',
+  'as',
+  'async',
+  'await',
+  'become',
+  'box',
+  'break',
+  'const',
+  'continue',
+  'crate',
+  'do',
+  'dyn',
+  'else',
+  'enum',
+  'extern',
+  'false',
+  'final',
+  'fn',
+  'for',
+  'gen',
+  'if',
+  'impl',
+  'in',
+  'let',
+  'loop',
+  'macro',
+  'match',
+  'mod',
+  'move',
+  'mut',
+  'override',
+  'priv',
+  'pub',
+  'ref',
+  'return',
+  'self',
+  'static',
+  'struct',
+  'super',
+  'trait',
+  'true',
+  'try',
+  'type',
+  'typeof',
+  'union',
+  'unsafe',
+  'unsized',
+  'use',
+  'virtual',
+  'where',
+  'while',
+  'yield'
+]);
 
 export async function extractCellsFromMarkdown(source, pagePath, context) {
   const cells = [];
@@ -475,7 +530,8 @@ export function rustFunctionName(id) {
 
 export function rustIdentifier(value) {
   const identifier = value.replace(/[^a-zA-Z0-9_]/gu, '_').replace(/_+/gu, '_');
-  return /^[a-zA-Z_]/u.test(identifier) ? identifier : `cell_${identifier}`;
+  if (!/^[a-zA-Z_]/u.test(identifier)) return `cell_${identifier}`;
+  return rustReservedIdentifiers.has(identifier) ? `cell_${identifier}` : identifier;
 }
 
 function rustReadF64() {

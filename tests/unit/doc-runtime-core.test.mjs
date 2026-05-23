@@ -267,6 +267,11 @@ describe('doc runtime core', () => {
         { id: 'bad', pagePath: 'page', inputs: [{ name: 'value-a' }, { name: 'value_a' }] }
       ])
     ).toThrow('both map to Rust binding');
+    expect(() =>
+      assertUniqueRustInputBindings([
+        { id: 'keyword', pagePath: 'page', inputs: [{ name: 'type' }, { name: 'cell-type' }] }
+      ])
+    ).toThrow('both map to Rust binding "cell_type"');
 
     const crates = helperCratesFromManifests([
       { content: '[package]\nname = "b-crate"\n', manifestPath: '/repo/crates/b/Cargo.toml' },
@@ -306,6 +311,9 @@ describe('doc runtime core', () => {
     expect(() => generateRustDependency('missing', helperCrates)).toThrow('unknown Rust crate');
 
     expect(rustIdentifier('1-bad id')).toBe('cell_1_bad_id');
+    expect(rustIdentifier('type')).toBe('cell_type');
+    expect(rustIdentifier('match')).toBe('cell_match');
+    expect(rustIdentifier('crate')).toBe('cell_crate');
     expect(rustFunctionName('cell-id')).toBe('run_cell_id');
     expect(rustFunctionName('page__cell')).toBe('run_page_cell');
     expect(rustReaderName({ type: 'checkbox' })).toBe('read_bool');
@@ -317,6 +325,9 @@ describe('doc runtime core', () => {
 
     expect(generateRustInputBinding({ name: 'value-name', type: 'number' })).toBe(
       'let value_name = read_f64(inputs, "value-name")?;'
+    );
+    expect(generateRustInputBinding({ name: 'type', type: 'text' })).toBe(
+      'let cell_type = read_string(inputs, "type")?;'
     );
 
     const rustCell = {
