@@ -104,6 +104,17 @@ describe('python rich display support', () => {
     expect(pythonDisplaySupportCode).toContain('Failed to convert dataframe output');
   });
 
+  it('supports standard Python rich MIME repr methods', () => {
+    expect(pythonDisplaySupportCode).toContain('def __oxiquill_mimebundle_artifact');
+    expect(pythonDisplaySupportCode).toContain('_repr_mimebundle_');
+    expect(pythonDisplaySupportCode).toContain('_repr_json_');
+    expect(pythonDisplaySupportCode).toContain('_repr_markdown_');
+    expect(pythonDisplaySupportCode).toContain('text/html');
+    expect(pythonDisplaySupportCode).toContain('sandboxed": True');
+    expect(pythonDisplaySupportCode).toContain('application/vnd.vegalite.');
+    expect(pythonDisplaySupportCode).toContain('Unsupported MIME bundle');
+  });
+
   it('combines stream output, rich display artifacts, and final values deterministically', () => {
     expect(createPythonCellResult({
       stdout: 'printed',
