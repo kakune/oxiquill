@@ -4,6 +4,17 @@
 
 - This file applies to the whole repository. More specific `AGENTS.md` files in subdirectories add guidance for their subtree.
 
+## Branch Strategy
+
+- Do development work on topic branches such as `feat/...`, `fix/...`, `chore/...`, or `docs/...`.
+- Submit topic branch changes to `develop` by pull request. Do not push directly to `develop` or `main`.
+- Keep commits small and separated by logical meaning.
+- Pull requests to `main` must come only from release branches, for example `release/v0.1.1`.
+- After a release branch is merged into `main`, merge that same release branch into `develop` so `develop` stays in sync.
+- Use squash merge when merging into `develop`.
+- Use merge commits when merging into `main`.
+- Branch rules prohibit all other merge methods.
+
 ## Project Shape
 
 - Oxiquill is being migrated from the `../note-test` documentation stack.
