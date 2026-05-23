@@ -140,24 +140,41 @@ describe('doc runtime core', () => {
     await expect(parseCell('//| id: empty', 'rust', 'page.mdx', { helperCrates, highlighter })).rejects.toThrow(
       'does not contain code'
     );
+    await expect(parseCell('//| id: bad\n//| run: sometimes\nprintln!("ok");', 'rust', 'page.mdx', {
+      helperCrates,
+      highlighter
+    })).rejects.toThrow('Allowed values: button, reactive, autorun, hidden');
+    await expect(parseCell('//| id: bad\n//| timeoutMs: 0\nprintln!("ok");', 'rust', 'page.mdx', {
+      helperCrates,
+      highlighter
+    })).rejects.toThrow('invalid timeoutMs value 0');
+    await expect(parseCell('//| id: bad\n//| inputs:\n//|   mode: { type: knob }\nprintln!("ok");', 'rust', 'page.mdx', {
+      helperCrates,
+      highlighter
+    })).rejects.toThrow('for input "mode". Allowed values');
   });
 
   it('normalizes run modes, timeouts, package lists, and crate lists', () => {
+    expect(normalizeRunMode(undefined)).toBe('button');
+    expect(normalizeRunMode('button')).toBe('button');
     expect(normalizeRunMode('autorun')).toBe('autorun');
     expect(normalizeRunMode('hidden')).toBe('hidden');
     expect(normalizeRunMode('reactive')).toBe('reactive');
-    expect(normalizeRunMode('unknown')).toBe('button');
+    expect(() => normalizeRunMode('unknown', 'cell', 'page')).toThrow(
+      'Allowed values: button, reactive, autorun, hidden'
+    );
 
+    expect(normalizeTimeout(undefined)).toBe(30_000);
     expect(normalizeTimeout(10.8)).toBe(10);
-    expect(normalizeTimeout(0)).toBe(30_000);
-    expect(normalizeTimeout(Number.NaN)).toBe(30_000);
-    expect(normalizeTimeout('bad')).toBe(30_000);
+    expect(() => normalizeTimeout(0, 'cell', 'page')).toThrow('Expected a positive number');
+    expect(() => normalizeTimeout(Number.NaN, 'cell', 'page')).toThrow('Expected a positive number');
+    expect(() => normalizeTimeout('bad', 'cell', 'page')).toThrow('Expected a positive number');
 
     expect(normalizePackages(null, 'python', 'cell', 'page')).toEqual([]);
-    expect(normalizePackages(['numpy', 'numpy', 'pandas'], 'python', 'cell', 'page')).toEqual([
-      'numpy',
-      'pandas'
-    ]);
+    expect(normalizePackages([], 'python', 'cell', 'page')).toEqual([]);
+    expect(() => normalizePackages(['numpy', 'numpy', 'pandas'], 'python', 'cell', 'page')).toThrow(
+      'Static Pyodide package assets are not currently distributed'
+    );
     expect(() => normalizePackages(['numpy'], 'rust', 'cell', 'page')).toThrow('must use crates');
 
     expect(normalizeCrates(null, 'rust', 'cell', 'page', helperCrates)).toEqual([]);
@@ -183,7 +200,8 @@ describe('doc runtime core', () => {
     expect(normalizeInputType('checkbox')).toBe('checkbox');
     expect(normalizeInputType('select')).toBe('select');
     expect(normalizeInputType('radio')).toBe('radio');
-    expect(normalizeInputType('unknown')).toBe('text');
+    expect(normalizeInputType(undefined)).toBe('text');
+    expect(() => normalizeInputType('unknown', 'mode', 'cell', 'page')).toThrow('for input "mode"');
 
     expect(normalizeInputValue('checkbox', 1)).toBe(true);
     expect(normalizeInputValue('range', 2)).toBe(2);
@@ -267,6 +285,11 @@ describe('doc runtime core', () => {
         { id: 'bad', pagePath: 'page', inputs: [{ name: 'value-a' }, { name: 'value_a' }] }
       ])
     ).toThrow('both map to Rust binding');
+    expect(() =>
+      assertUniqueRustInputBindings([
+        { id: 'keyword', pagePath: 'page', inputs: [{ name: 'type' }, { name: 'cell-type' }] }
+      ])
+    ).toThrow('both map to Rust binding "cell_type"');
 
     const crates = helperCratesFromManifests([
       { content: '[package]\nname = "b-crate"\n', manifestPath: '/repo/crates/b/Cargo.toml' },
@@ -306,6 +329,9 @@ describe('doc runtime core', () => {
     expect(() => generateRustDependency('missing', helperCrates)).toThrow('unknown Rust crate');
 
     expect(rustIdentifier('1-bad id')).toBe('cell_1_bad_id');
+    expect(rustIdentifier('type')).toBe('cell_type');
+    expect(rustIdentifier('match')).toBe('cell_match');
+    expect(rustIdentifier('crate')).toBe('cell_crate');
     expect(rustFunctionName('cell-id')).toBe('run_cell_id');
     expect(rustFunctionName('page__cell')).toBe('run_page_cell');
     expect(rustReaderName({ type: 'checkbox' })).toBe('read_bool');
@@ -317,6 +343,9 @@ describe('doc runtime core', () => {
 
     expect(generateRustInputBinding({ name: 'value-name', type: 'number' })).toBe(
       'let value_name = read_f64(inputs, "value-name")?;'
+    );
+    expect(generateRustInputBinding({ name: 'type', type: 'text' })).toBe(
+      'let cell_type = read_string(inputs, "type")?;'
     );
 
     const rustCell = {
