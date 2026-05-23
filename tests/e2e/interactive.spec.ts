@@ -81,6 +81,38 @@ test('Python cells and math rendering are available', async ({ page }) => {
   expect(await page.locator('.katex').count()).toBeGreaterThan(3);
 });
 
+test('rich output examples render browser-visible artifacts', async ({ page }) => {
+  test.setTimeout(120_000);
+  await page.goto('/interactive-rust/');
+
+  const rust = page.getByTestId('cell-interactive-rust__rust-rich-outputs');
+  await rust.getByRole('button', { name: 'Run' }).click();
+
+  await expect(rust.getByTestId('value-output').filter({ hasText: '"status": "ok"' })).toBeVisible();
+  await expect(rust.getByTestId('table-output')).toHaveCount(2);
+
+  const explicitTable = rust.getByTestId('table-output').nth(1);
+  await explicitTable.getByRole('button', { name: 'Score' }).click();
+  await expect(explicitTable.getByRole('columnheader', { name: 'Score' })).toHaveAttribute('aria-sort', 'ascending');
+
+  const rustChart = rust.getByTestId('doc-plot');
+  await expect(rustChart.locator('canvas')).toHaveCount(1);
+  expect((await canvasStats(rustChart.locator('canvas'))).inkPixels).toBeGreaterThan(1_000);
+  await expect(rust.getByTestId('image-output')).toHaveAttribute('src', /data:image\/svg\+xml/);
+  await expect(rust.getByTestId('html-output')).toHaveAttribute('sandbox', '');
+  await expect(rust.getByTestId('html-output')).toHaveAttribute('srcdoc', /Sandboxed HTML/);
+
+  const python = page.getByTestId('cell-interactive-rust__python-rich-outputs');
+  await python.getByRole('button', { name: 'Run' }).click();
+
+  await expect(python.getByTestId('table-output')).toBeVisible({ timeout: 90_000 });
+  await expect(python.getByTestId('table-output').locator('caption')).toHaveText('Pandas table');
+  await expect(python.getByTestId('value-output').filter({ hasText: '"status": "ok"' })).toBeVisible();
+  await expect(python.getByTestId('html-output')).toHaveAttribute('sandbox', '');
+  await expect(python.getByTestId('html-output')).toHaveAttribute('srcdoc', /Sandboxed HTML/);
+  await expect(python.getByTestId('image-output')).toHaveAttribute('src', /data:image\/svg\+xml/);
+});
+
 test('theme note and Mermaid examples are available without author-side TSX imports', async ({ page }) => {
   await page.goto('/notes/rust-basics/ownership/');
   await expect(page.getByRole('heading', { name: 'Ownership' })).toBeVisible();
