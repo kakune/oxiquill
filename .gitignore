@@ -1,13 +1,43 @@
+# Dependencies
 node_modules/
-dist/
+
+# Astro, Vite, and generated site output
 .astro/
 .cache/
-coverage/
+.vite/
+dist/
 src/generated/
 public/pyodide/
-target/
-**/pkg/
+
+# Test and coverage output
+coverage/
 playwright-report/
 test-results/
-.DS_Store
+blob-report/
+
+# Rust and wasm-pack output
+target/
+**/pkg/
+
+# Local editor and assistant state
+.codex/
+.serena/
+.agents/
+.vscode/
+.idea/
+
+# Environment files
+.env
+.env.*
+!.env.example
+
+# Logs and package-manager diagnostics
 *.log
+npm-debug.log*
+pnpm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# OS metadata
+.DS_Store
+Thumbs.db
