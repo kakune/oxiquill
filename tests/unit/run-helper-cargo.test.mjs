@@ -1,3 +1,4 @@
+import path from 'node:path';
 import { describe, expect, it } from 'vitest';
 import {
   cargoArgsForHelperWorkspace,
@@ -5,8 +6,12 @@ import {
   runHelperCargo
 } from '../../scripts/run-helper-cargo.mjs';
 
+function memoryPath(filePath) {
+  return String(filePath).replaceAll('\\', '/');
+}
+
 function createMemoryFileSystem(initialFiles = {}) {
-  const files = new Set(Object.keys(initialFiles));
+  const files = new Set(Object.keys(initialFiles).map(memoryPath));
   const directories = new Set(['/repo']);
 
   for (const filePath of files) {
@@ -20,13 +25,15 @@ function createMemoryFileSystem(initialFiles = {}) {
 
   return {
     readFile: async (filePath) => {
-      if (files.has(filePath)) return initialFiles[filePath];
+      const normalizedPath = memoryPath(filePath);
+      if (files.has(normalizedPath)) return initialFiles[normalizedPath];
       const error = new Error(`missing ${filePath}`);
       error.code = 'ENOENT';
       throw error;
     },
     readdir: async (directory) => {
-      if (!directories.has(directory)) {
+      const normalizedDirectory = memoryPath(directory);
+      if (!directories.has(normalizedDirectory)) {
         const error = new Error(`missing ${directory}`);
         error.code = 'ENOENT';
         throw error;
@@ -34,18 +41,18 @@ function createMemoryFileSystem(initialFiles = {}) {
 
       const childNames = new Set();
       for (const filePath of files) {
-        if (filePath.startsWith(`${directory}/`)) {
-          childNames.add(filePath.slice(directory.length + 1).split('/')[0]);
+        if (filePath.startsWith(`${normalizedDirectory}/`)) {
+          childNames.add(filePath.slice(normalizedDirectory.length + 1).split('/')[0]);
         }
       }
       for (const candidate of directories) {
-        if (candidate.startsWith(`${directory}/`) && candidate !== directory) {
-          childNames.add(candidate.slice(directory.length + 1).split('/')[0]);
+        if (candidate.startsWith(`${normalizedDirectory}/`) && candidate !== normalizedDirectory) {
+          childNames.add(candidate.slice(normalizedDirectory.length + 1).split('/')[0]);
         }
       }
 
       return Array.from(childNames).map((name) => {
-        const fullPath = `${directory}/${name}`;
+        const fullPath = `${normalizedDirectory}/${name}`;
         return {
           isDirectory: () => directories.has(fullPath),
           name
@@ -57,17 +64,19 @@ function createMemoryFileSystem(initialFiles = {}) {
 
 describe('helper cargo runner', () => {
   it('inserts helper workspace arguments before cargo pass-through arguments', () => {
-    expect(cargoArgsForHelperWorkspace(['test'], 'crates/Cargo.toml')).toEqual([
+    const manifestPath = path.join('crates', 'Cargo.toml');
+
+    expect(cargoArgsForHelperWorkspace(['test'], manifestPath)).toEqual([
       'test',
       '--manifest-path',
-      'crates/Cargo.toml',
+      manifestPath,
       '--workspace'
     ]);
-    expect(cargoArgsForHelperWorkspace(['clippy', '--all-targets', '--', '-D', 'warnings'], 'crates/Cargo.toml')).toEqual([
+    expect(cargoArgsForHelperWorkspace(['clippy', '--all-targets', '--', '-D', 'warnings'], manifestPath)).toEqual([
       'clippy',
       '--all-targets',
       '--manifest-path',
-      'crates/Cargo.toml',
+      manifestPath,
       '--workspace',
       '--',
       '-D',
@@ -82,7 +91,7 @@ describe('helper cargo runner', () => {
     })).resolves.toEqual({
       hasHelperCrates: false,
       hasWorkspaceManifest: false,
-      workspaceManifestPath: 'crates/Cargo.toml'
+      workspaceManifestPath: path.join('crates', 'Cargo.toml')
     });
 
     const logs = [];
@@ -116,7 +125,7 @@ describe('helper cargo runner', () => {
     expect(commands).toEqual([
       [
         'cargo',
-        ['doc', '--no-deps', '--manifest-path', 'crates/Cargo.toml', '--workspace'],
+        ['doc', '--no-deps', '--manifest-path', path.join('crates', 'Cargo.toml'), '--workspace'],
         { cwd: '/repo' }
       ]
     ]);
@@ -135,7 +144,7 @@ describe('helper cargo runner', () => {
         '/repo/crates/doc-rust/Cargo.toml': '[package]\nname = "doc-rust"\n'
       }),
       root: '/repo'
-    })).rejects.toThrow('crates/Cargo.toml does not exist');
+    })).rejects.toThrow(/crates[\\/]Cargo\.toml does not exist/);
 
     const brokenReaddir = {
       readFile: async () => '',
