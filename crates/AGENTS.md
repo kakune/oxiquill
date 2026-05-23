@@ -2,8 +2,8 @@
 
 ## Rust Crates
 
-- Crates under this directory are reusable helpers for generated documentation cells. Keep them pure Rust and independent of Astro, Preact, browser workers, and generated Wasm glue.
-- Each crate should use workspace edition, MSRV, license, dependencies, and lints from the root `Cargo.toml`.
+- Crates under this directory are optional reusable helpers for generated documentation cells. Keep them pure Rust and independent of Astro, Preact, browser workers, and generated Wasm glue.
+- Each crate should use workspace edition, MSRV, license, dependencies, and lints from `crates/Cargo.toml`. The repository root is not a Rust workspace.
 - Workspace lint policy is intentionally strict: no unsafe, no `unwrap`, `expect`, `panic`, `todo`, `dbg`, direct stdout/stderr printing, indexing/slicing, unchecked casts, or unjustified lint suppression.
 
 ## Rust Style

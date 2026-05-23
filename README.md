@@ -38,7 +38,7 @@ Start the development server:
 pnpm dev
 ```
 
-`pnpm dev` generates the executable-cell runtime on startup, then watches MDX and Rust sources. Prose, normal code, math, Mermaid, and media changes use Astro HMR. Python cell changes update the manifest. Rust cells and `crates/*` changes rebuild Wasm.
+`pnpm dev` generates the executable-cell runtime on startup, then watches MDX and optional Rust helper sources. Prose, normal code, math, Mermaid, and media changes use Astro HMR. Python cell changes update the manifest. Rust cells and `crates/*` changes rebuild Wasm.
 
 To run the runtime watcher and Astro separately:
 
@@ -61,7 +61,7 @@ pnpm preview
 
 ## Authoring
 
-Add English pages under `src/content/docs/**/*.mdx`. Add Japanese translations with the same slug under `src/content/docs/ja/**/*.mdx`. Shared Rust logic belongs in `crates/*` and can be referenced from cells with `crates: [doc-rust]`.
+Add English pages under `src/content/docs/**/*.mdx`. Add Japanese translations with the same slug under `src/content/docs/ja/**/*.mdx`. The repository root is not a Rust workspace. Optional reusable Rust helper crates belong in `crates/*` and can be referenced from cells with `crates: [doc-rust]`. Rust cells that do not need helpers should use `crates: []`.
 
 Rust cell example:
 
@@ -130,11 +130,11 @@ pnpm lint:rust
 pnpm check
 ```
 
-`test:rust:coverage` requires 100% line/function/region coverage for the Rust workspace through `cargo-llvm-cov`. `test:unit:coverage` uses Vitest V8 coverage for handwritten TypeScript, Preact, and Node runtime code, excluding generated output.
+`test:rust:coverage` requires 100% line/function/region coverage for the optional helper-crate workspace under `crates/` through `cargo-llvm-cov`. If no helper crates exist, Rust helper commands skip cleanly. `test:unit:coverage` uses Vitest V8 coverage for handwritten TypeScript, Preact, and Node runtime code, excluding generated output.
 
 ## Troubleshooting
 
-- If a Rust cell crate cannot be found, match the cell `crates` value to the `package.name` in `crates/*/Cargo.toml`.
+- If a Rust cell helper crate cannot be found, match the cell `crates` value to the `package.name` in `crates/*/Cargo.toml`.
 - If a Python cell does not start, confirm that `public/pyodide` exists and run `pnpm wasm:dev` or `pnpm build`.
 - If a Mermaid diagram does not render, run `pnpm build` to catch MDX syntax errors and confirm the code block language is `mermaid`.
 - If a media file does not load, confirm that it is under `public/media` and referenced with a `/media/...` URL.

@@ -16,7 +16,8 @@ describe('doc runtime watch core', () => {
     expect(classifyChangedPath('src/content/docs/page.md')).toBe('docs');
     expect(classifyChangedPath('crates/doc-rust/src/lib.rs')).toBe('crate');
     expect(classifyChangedPath('crates/doc-rust/Cargo.toml')).toBe('crate');
-    expect(classifyChangedPath('Cargo.toml')).toBe('crate');
+    expect(classifyChangedPath('crates/Cargo.toml')).toBe('crate');
+    expect(classifyChangedPath('Cargo.toml')).toBe('other');
     expect(classifyChangedPath('src/styles/custom.css')).toBe('other');
   });
 
@@ -37,12 +38,7 @@ describe('doc runtime watch core', () => {
   });
 
   it('uses non-glob watch roots and normalizes chokidar event paths', () => {
-    expect(createRuntimeWatchPaths()).toEqual([
-      'src/content/docs',
-      'crates',
-      'Cargo.toml',
-      'Cargo.lock'
-    ]);
+    expect(createRuntimeWatchPaths()).toEqual(['src/content/docs', 'crates']);
     expect(toWatchEventRelativePath('/repo', 'src/content/docs/index.mdx')).toBe(
       'src/content/docs/index.mdx'
     );

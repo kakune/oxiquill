@@ -63,7 +63,7 @@ export async function parseCell(rawSource, language, pagePath, context) {
     }),
     inputs: normalizeInputs(metadata.inputs),
     packages: normalizePackages(metadata.packages, language, metadata.id, pagePath),
-    crates: normalizeCrates(metadata.crates, language, metadata.id, pagePath, context.workspaceCrates),
+    crates: normalizeCrates(metadata.crates, language, metadata.id, pagePath, context.helperCrates),
     timeoutMs: normalizeTimeout(metadata.timeoutMs),
     showSource: metadata.showSource !== false,
     pagePath
@@ -105,7 +105,7 @@ export function normalizePackages(value, language, cellId, pagePath) {
   return normalizeStringArray(value, 'packages', cellId, pagePath);
 }
 
-export function normalizeCrates(value, language, cellId, pagePath, workspaceCrates) {
+export function normalizeCrates(value, language, cellId, pagePath, helperCrates) {
   if (value == null) return [];
   if (language !== 'rust') {
     throw new Error(`Non-Rust cell "${cellId}" in ${pagePath} cannot specify crates.`);
@@ -113,11 +113,11 @@ export function normalizeCrates(value, language, cellId, pagePath, workspaceCrat
 
   const crates = normalizeStringArray(value, 'crates', cellId, pagePath);
   for (const crateName of crates) {
-    if (!workspaceCrates.has(crateName)) {
-      const validCrates = Array.from(workspaceCrates.keys()).join(', ') || '(none)';
+    if (!helperCrates.has(crateName)) {
+      const validCrates = Array.from(helperCrates.keys()).join(', ') || '(none)';
       throw new Error(
         `Rust cell "${cellId}" in ${pagePath} references unknown crate "${crateName}". ` +
-          `Expected a workspace crate under crates/. Available crates: ${validCrates}.`
+          `Expected a helper crate under crates/. Available crates: ${validCrates}.`
       );
     }
   }
@@ -234,23 +234,38 @@ export function assertUniqueRustInputBindings(rustCells) {
   }
 }
 
-export function workspaceCratesFromMetadata(metadata, { cratesDir, rustCrateDir }) {
-  return new Map(
-    metadata.packages
-      .map((pkg) => ({
-        manifestDir: path.dirname(pkg.manifest_path),
-        name: pkg.name
-      }))
-      .filter(({ manifestDir }) => isInsideDirectory(cratesDir, manifestDir))
-      .map(({ manifestDir, name }) => [
+export function helperCratesFromManifests(manifests, { rustCrateDir }) {
+  const helperCrates = manifests
+    .map((manifest) => ({
+      manifestDir: path.dirname(manifest.manifestPath),
+      name: packageNameFromCargoToml(manifest.content, manifest.manifestPath)
+    }))
+    .map(({ manifestDir, name }) => [
+      name,
+      {
         name,
-        {
-          name,
-          relativePath: normalizePath(path.relative(rustCrateDir, manifestDir))
-        }
-      ])
-      .sort(([left], [right]) => left.localeCompare(right))
-  );
+        relativePath: normalizePath(path.relative(rustCrateDir, manifestDir))
+      }
+    ])
+    .sort(([left], [right]) => left.localeCompare(right));
+
+  const duplicateName = findDuplicate(helperCrates.map(([name]) => name));
+  if (duplicateName) {
+    throw new Error(`Duplicate helper crate package name "${duplicateName}" under crates/.`);
+  }
+
+  return new Map(helperCrates);
+}
+
+export function packageNameFromCargoToml(content, manifestPath) {
+  const packageTable = content.match(/(?:^|\n)\[package\]\s*(?:\n|$)([\s\S]*?)(?=\n\[|$)/u);
+  const nameLine = packageTable?.[1].match(/(?:^|\n)\s*name\s*=\s*"([^"]+)"\s*(?:\n|$)/u);
+  const name = nameLine?.[1]?.trim();
+  if (!name) {
+    throw new Error(`Helper crate manifest ${manifestPath} is missing [package] name.`);
+  }
+
+  return name;
 }
 
 export function generateCellsModule(cells) {
@@ -261,12 +276,12 @@ export function generateCellsJson(cells) {
   return `${JSON.stringify(cells, null, 2)}\n`;
 }
 
-export function generateRustCargoToml(rustCells, workspaceCrates) {
+export function generateRustCargoToml(rustCells, helperCrates) {
   const dependencyLines = rustCells
     .flatMap((cell) => cell.crates)
     .filter((crateName, index, crates) => crates.indexOf(crateName) === index)
     .sort()
-    .map((crateName) => generateRustDependency(crateName, workspaceCrates));
+    .map((crateName) => generateRustDependency(crateName, helperCrates));
   const localDependencies =
     dependencyLines.length > 0 ? `${dependencyLines.join('\n')}\n` : '';
 
@@ -295,13 +310,23 @@ wasm-bindgen-test = "0.3"
 `;
 }
 
-export function generateRustDependency(crateName, workspaceCrates) {
-  const crateInfo = workspaceCrates.get(crateName);
+export function generateRustDependency(crateName, helperCrates) {
+  const crateInfo = helperCrates.get(crateName);
   if (!crateInfo) {
     throw new Error(`Cannot generate dependency for unknown Rust crate "${crateName}".`);
   }
 
   return `${crateName} = { path = ${JSON.stringify(crateInfo.relativePath)} }`;
+}
+
+function findDuplicate(values) {
+  const seen = new Set();
+  for (const value of values) {
+    if (seen.has(value)) return value;
+    seen.add(value);
+  }
+
+  return undefined;
 }
 
 export function generateRustLib(rustCells) {
@@ -544,11 +569,6 @@ function generatedBanner() {
 
 function generatedTomlBanner() {
   return '# @generated by scripts/generate-doc-runtime.mjs. Do not edit by hand.\n';
-}
-
-function isInsideDirectory(parent, child) {
-  const relative = path.relative(parent, child);
-  return relative !== '' && !relative.startsWith('..') && !path.isAbsolute(relative);
 }
 
 function normalizePath(value) {

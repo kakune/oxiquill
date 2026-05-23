@@ -5,13 +5,12 @@ export function classifyChangedPath(filePath) {
 
   if (/^src\/content\/docs\/.+\.mdx?$/u.test(normalized)) return 'docs';
   if (/^crates\/.+\.(rs|toml)$/u.test(normalized)) return 'crate';
-  if (/^Cargo\.(toml|lock)$/u.test(normalized)) return 'crate';
 
   return 'other';
 }
 
 export function createRuntimeWatchPaths() {
-  return ['src/content/docs', 'crates', 'Cargo.toml', 'Cargo.lock'];
+  return ['src/content/docs', 'crates'];
 }
 
 export function shouldSyncRuntime(changeKinds) {

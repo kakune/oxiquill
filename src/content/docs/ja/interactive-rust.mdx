@@ -29,7 +29,7 @@ emit_line_plot!(&points, "n", "x");
 
 ## 入力 UI
 
-Rust セルでもチェックボックス、セレクト、ラジオ入力を同じ記法で使えます。`crates: []` のセルは workspace crate に依存しません。
+Rust セルでもチェックボックス、セレクト、ラジオ入力を同じ記法で使えます。`crates: []` のセルは helper crate に依存しません。
 
 ```rust
 //| id: rust-controls
@@ -57,7 +57,7 @@ println!("score = {score}");
 
 ## 複数 crate の利用
 
-セルごとに必要な workspace crate を指定できます。複数の crate を使うセルでは、必要な crate 名をすべて列挙します。
+セルごとに必要な helper crate を指定できます。複数の crate を使うセルでは、必要な crate 名をすべて列挙します。
 
 ```rust
 //| id: rust-multiple-crates

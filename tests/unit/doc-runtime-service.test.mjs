@@ -15,8 +15,9 @@ import {
   generateRuntimeVersionModule,
   hashText,
   listFiles,
-  listWorkspaceCrates,
+  listHelperCrates,
   markRuntimeReady,
+  readHelperManifests,
   shouldBuildWasm,
   stableFingerprint,
   summarizeCells,
@@ -101,10 +102,6 @@ const highlighter = {
   codeToHtml: (source, options) => Promise.resolve(`<pre data-lang="${options.lang}">${source}</pre>`)
 };
 
-const metadata = {
-  packages: [{ name: 'doc-rust', manifest_path: '/repo/crates/doc-rust/Cargo.toml' }]
-};
-
 describe('doc runtime service', () => {
   it('postprocesses wasm-pack JavaScript without unused cached state', async () => {
     const generatedSource = [
@@ -145,7 +142,7 @@ describe('doc runtime service', () => {
     expect(writes).toEqual([]);
   });
 
-  it('creates project paths and context with injected metadata', async () => {
+  it('creates project paths and context with discovered helper crates', async () => {
     expect(createDocRuntimePaths('/repo')).toEqual({
       docsDir: '/repo/src/content/docs',
       generatedDir: '/repo/src/generated/doc-runtime',
@@ -154,21 +151,79 @@ describe('doc runtime service', () => {
       runtimeVersionPath: '/repo/src/generated/doc-runtime/runtime-version.ts'
     });
 
+    const fileSystem = createMemoryFileSystem({
+      '/repo/crates/doc-rust/Cargo.toml': '[package]\nname = "doc-rust"\n',
+      '/repo/crates/not-a-crate/README.md': 'ignored'
+    });
     const context = await createDocRuntimeContext({
+      fileSystem,
       highlighter,
-      root: '/repo',
-      runMetadata: async () => metadata
+      root: '/repo'
     });
 
-    expect(Array.from(context.workspaceCrates.keys())).toEqual(['doc-rust']);
+    expect(Array.from(context.helperCrates.keys())).toEqual(['doc-rust']);
     await expect(
       createDocRuntimeContext({
-        root: '/repo',
-        runMetadata: async () => metadata
+        fileSystem,
+        root: '/repo'
       })
     ).resolves.toMatchObject({
       paths: createDocRuntimePaths('/repo')
     });
+  });
+
+  it('lists helper manifests and skips missing helper crates', async () => {
+    const paths = createDocRuntimePaths('/repo');
+    const fileSystem = createMemoryFileSystem({
+      '/repo/crates/b/Cargo.toml': '[package]\nname = "b-crate"\n',
+      '/repo/crates/a/Cargo.toml': '[package]\nname = "a-crate"\n',
+      '/repo/crates/readme.txt': 'ignored'
+    });
+
+    await expect(readHelperManifests({ fileSystem, root: '/repo' })).resolves.toEqual([
+      { content: '[package]\nname = "a-crate"\n', manifestPath: '/repo/crates/a/Cargo.toml' },
+      { content: '[package]\nname = "b-crate"\n', manifestPath: '/repo/crates/b/Cargo.toml' }
+    ]);
+    const helperCrates = await listHelperCrates({ fileSystem, paths, root: '/repo' });
+    expect(Array.from(helperCrates.keys())).toEqual(['a-crate', 'b-crate']);
+    expect(helperCrates.get('a-crate')).toMatchObject({ name: 'a-crate' });
+    await expect(listHelperCrates({ paths, root: '/repo', readManifests: async () => [] })).resolves.toEqual(
+      new Map()
+    );
+
+    const missing = {
+      ...fileSystem,
+      readdir: async () => {
+        const error = new Error('missing crates');
+        error.code = 'ENOENT';
+        throw error;
+      }
+    };
+    await expect(readHelperManifests({ fileSystem: missing, root: '/repo' })).resolves.toEqual([]);
+
+    const unreadableDirectory = {
+      ...fileSystem,
+      readdir: async () => {
+        const error = new Error('permission denied');
+        error.code = 'EACCES';
+        throw error;
+      }
+    };
+    await expect(readHelperManifests({ fileSystem: unreadableDirectory, root: '/repo' })).rejects.toThrow(
+      'permission denied'
+    );
+
+    const unreadableManifest = {
+      readdir: async () => [{ isDirectory: () => true, name: 'doc-rust' }],
+      readFile: async () => {
+        const error = new Error('broken manifest');
+        error.code = 'EIO';
+        throw error;
+      }
+    };
+    await expect(readHelperManifests({ fileSystem: unreadableManifest, root: '/repo' })).rejects.toThrow(
+      'broken manifest'
+    );
   });
 
   it('lists files recursively and collects interactive cells', async () => {
@@ -191,7 +246,7 @@ describe('doc runtime service', () => {
         highlighter,
         paths,
         root: '/repo',
-        workspaceCrates: new Map()
+        helperCrates: new Map()
       })
     ).resolves.toMatchObject([{ id: 'deep__page__b' }, { id: 'note__a' }]);
 
@@ -205,6 +260,24 @@ describe('doc runtime service', () => {
       ]
     };
     await expect(listFiles('/repo/src/content/docs', { fileSystem: oddFileSystem })).resolves.toEqual([]);
+  });
+
+  it('fails clearly when an MDX Rust cell references an unknown helper crate', async () => {
+    const fileSystem = createMemoryFileSystem({
+      '/repo/src/content/docs/page.mdx': '```rust\n//| id: a\n//| crates: [missing-helper]\nprintln!("a");\n```'
+    });
+
+    await expect(
+      collectCells({
+        fileSystem,
+        helperCrates: new Map(),
+        highlighter,
+        paths: createDocRuntimePaths('/repo'),
+        root: '/repo'
+      })
+    ).rejects.toThrow(
+      'Rust cell "a" in src/content/docs/page.mdx references unknown crate "missing-helper"'
+    );
   });
 
   it('writes and copies only when content changes', async () => {
@@ -274,18 +347,20 @@ describe('doc runtime service', () => {
     const fileSystem = createMemoryFileSystem({
       '/repo/src/content/docs/page.mdx': '```rust\n//| id: a\n//| crates: [doc-rust]\nprintln!("a");\n```'
     });
-    const workspaceCrates = await listWorkspaceCrates({
+    const helperCrates = await listHelperCrates({
+      fileSystem: createMemoryFileSystem({
+        '/repo/crates/doc-rust/Cargo.toml': '[package]\nname = "doc-rust"\n'
+      }),
       paths,
-      root: '/repo',
-      runMetadata: async () => metadata
+      root: '/repo'
     });
 
     const first = await syncDocRuntime({
       fileSystem,
+      helperCrates,
       highlighter,
       paths,
-      root: '/repo',
-      workspaceCrates
+      root: '/repo'
     });
 
     expect(first).toMatchObject({
@@ -324,10 +399,10 @@ describe('doc runtime service', () => {
     await expect(
       syncDocRuntime({
         fileSystem,
+        helperCrates,
         highlighter,
         paths,
-        root: '/repo',
-        workspaceCrates
+        root: '/repo'
       })
     ).resolves.toMatchObject({
       cellsChanged: false,

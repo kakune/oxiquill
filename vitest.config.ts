@@ -13,6 +13,7 @@ export default defineConfig({
         'scripts/doc-runtime-core.mjs',
         'scripts/doc-runtime-service.mjs',
         'scripts/doc-runtime-watch-core.mjs',
+        'scripts/run-helper-cargo.mjs',
         'src/components/doc-runtime/**/*.tsx',
         'src/lib/doc-runtime/**/*.ts',
         'src/lib/doc-runtime/**/*.mjs'
