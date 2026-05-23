@@ -299,6 +299,39 @@ describe('InteractiveCell', () => {
     expect(screen.getByTestId('run-output')).toHaveTextContent('newer result');
   });
 
+  it('ignores stale async errors from superseded reactive runs', async () => {
+    const pending: Array<ReturnType<typeof createDeferredResult>> = [];
+    mocks.runInteractiveCell.mockImplementation(() => {
+      const deferred = createDeferredResult();
+      pending.push(deferred);
+      return deferred.promise;
+    });
+    mocks.getCell.mockReturnValue(makeCell({
+      run: 'reactive',
+      inputs: [inputs.find((input) => input.name === 'label') as InputSpec]
+    }));
+
+    render(<InteractiveCell cellId="cell-one" />);
+    await waitFor(() => expect(pending).toHaveLength(1));
+
+    fireEvent.input(screen.getByLabelText('label'), { target: { value: 'newer input' } });
+    await waitFor(() => expect(pending).toHaveLength(2));
+
+    await act(async () => {
+      pending[1].resolve({ stdout: 'newer result', stderr: '', value: null, plots: [] });
+      await pending[1].promise;
+    });
+    await waitFor(() => expect(screen.getByTestId('run-output')).toHaveTextContent('newer result'));
+
+    await act(async () => {
+      pending[0].reject(new Error('older failure'));
+      await pending[0].promise.catch(() => undefined);
+    });
+
+    expect(screen.queryByText('older failure')).not.toBeInTheDocument();
+    expect(screen.getByTestId('run-output')).toHaveTextContent('newer result');
+  });
+
   it('supports cells without inputs and hidden source', () => {
     mocks.getCell.mockReturnValue(makeCell({ inputs: [], showSource: false, run: 'hidden' }));
 
