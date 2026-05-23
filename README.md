@@ -1,24 +1,141 @@
 # Oxiquill
 
-This repository is currently a project skeleton. It preserves the intended documentation-site layout and tooling boundaries, but it does not include the source runtime, scripts, tests, sample notes, or helper implementation code yet.
+A static documentation workspace for MDX notes that combine Rust, Python, math, Mermaid diagrams, and media files. It is built on Astro Starlight with Preact runtime components for executable cells.
 
-## Intended Shape
+English is the root documentation language. Japanese translations live under `/ja/`; see [README.ja.md](./README.ja.md).
 
-- Static Astro/Starlight documentation site
-- Preact runtime component area for interactive documentation cells
-- TypeScript runtime library area for generated-cell loading and browser workers
-- Rust workspace for helper crates used by documentation examples
-- Unit and end-to-end test directories prepared for later migration
+This repository is responsible for producing the static output in `dist/`. Hosting, TLS, domains, and reverse proxies are handled outside this project.
 
-## Skeleton Policy
+## Features
 
-The current repository tracks structure and configuration only. Generated output and local build artifacts are ignored:
+- Rust cells compiled to WebAssembly at build time and run in the browser
+- Python cells executed in a Pyodide worker
+- Line plot output rendered with ECharts
+- Inline and block math rendered with KaTeX
+- Mermaid flowcharts, sequence diagrams, and state diagrams
+- PNG, JPEG, PDF, and similar files served from `public/media`
+- English root docs with Japanese translations under `src/content/docs/ja`
+- Rust, TypeScript, Preact, and generated-runtime tests with strict coverage gates
 
-- `src/generated`
+## Requirements
+
+- Node.js and `pnpm`
+- Rust toolchain `1.95.0`
+- `wasm-pack`
+- `cargo-llvm-cov`
+
+The Rust toolchain and Wasm target are pinned by `rust-toolchain.toml`.
+
+## Setup
+
+```sh
+pnpm install
+```
+
+Start the development server:
+
+```sh
+pnpm dev
+```
+
+`pnpm dev` generates the executable-cell runtime on startup, then watches MDX and Rust sources. Prose, normal code, math, Mermaid, and media changes use Astro HMR. Python cell changes update the manifest. Rust cells and `crates/*` changes rebuild Wasm.
+
+To run the runtime watcher and Astro separately:
+
+```sh
+pnpm dev:runtime
+pnpm dev:astro
+```
+
+Build the static site:
+
+```sh
+pnpm build
+```
+
+Preview the built site:
+
+```sh
+pnpm preview
+```
+
+## Authoring
+
+Add English pages under `src/content/docs/**/*.mdx`. Add Japanese translations with the same slug under `src/content/docs/ja/**/*.mdx`. Shared Rust logic belongs in `crates/*` and can be referenced from cells with `crates: [doc-rust]`.
+
+Rust cell example:
+
+````md
+```rust
+//| id: sample-rust
+//| title: Rust calculation
+//| run: button
+//| crates: [doc-rust]
+let next = doc_rust::logistic_step(3.2, 0.2);
+println!("next = {next:.6}");
+```
+````
+
+Python cell example:
+
+````md
+```python
+#| id: sample-python
+#| title: Python calculation
+#| run: reactive
+#| inputs:
+#|   scale: { type: number, label: scale, min: 1, max: 10, step: 1, value: 2 }
+print(scale * 10)
+```
+````
+
+Media example:
+
+```md
+![PNG sample](/media/examples/sample.png)
+
+<iframe class="media-frame" src="/media/examples/sample.pdf" title="Sample PDF"></iframe>
+```
+
+Put public media files in `public/media`. They are served as-is and can be referenced from MDX with `/media/...` URLs.
+
+## Generated Files
+
+`pnpm build` and `pnpm test` run `scripts/generate-doc-runtime.mjs`. This extracts Rust/Python cells from MDX and writes:
+
+- `src/generated/doc-runtime`
 - `public/pyodide`
 - `dist`
-- `coverage`
-- `test-results`
-- `target`
 
-Build, test, lint, and runtime commands should be treated as pending until the real implementation is migrated.
+These paths are generated output. Do not edit them directly.
+
+## Tests and Coverage
+
+Run the full validation suite:
+
+```sh
+pnpm test
+```
+
+Useful focused commands:
+
+```sh
+pnpm test:rust
+pnpm test:rust:coverage
+pnpm test:unit
+pnpm test:unit:coverage
+pnpm test:wasm
+pnpm test:e2e
+pnpm lint:rust
+pnpm check
+```
+
+`test:rust:coverage` requires 100% line/function/region coverage for the Rust workspace through `cargo-llvm-cov`. `test:unit:coverage` uses Vitest V8 coverage for handwritten TypeScript, Preact, and Node runtime code, excluding generated output.
+
+## Troubleshooting
+
+- If a Rust cell crate cannot be found, match the cell `crates` value to the `package.name` in `crates/*/Cargo.toml`.
+- If a Python cell does not start, confirm that `public/pyodide` exists and run `pnpm wasm:dev` or `pnpm build`.
+- If a Mermaid diagram does not render, run `pnpm build` to catch MDX syntax errors and confirm the code block language is `mermaid`.
+- If a media file does not load, confirm that it is under `public/media` and referenced with a `/media/...` URL.
+- If coverage fails, add focused tests for the uncovered handwritten source rather than editing generated files.
