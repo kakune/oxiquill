@@ -17,7 +17,7 @@
 
 ## Project Shape
 
-- Oxiquill is a static Astro/Starlight documentation site with Preact runtime components, strict TypeScript, and Rust helper crates used by generated interactive cells.
+- Oxiquill is a static Astro/Starlight documentation site with Preact runtime components and strict TypeScript. The repository root is not a Rust workspace; optional reusable Rust helper crates live under `crates/` when needed.
 - Use `pnpm` for Node commands. The Rust toolchain is pinned in `rust-toolchain.toml`; do not change it casually.
 - Prefer the existing simple structure over new framework layers. Add abstractions only when they remove real duplication or clarify a shared boundary.
 

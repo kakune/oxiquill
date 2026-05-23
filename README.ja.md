@@ -38,7 +38,7 @@ pnpm install
 pnpm dev
 ```
 
-`pnpm dev` は初回に実行可能セルのランタイムを生成し、その後は MDX と Rust ソースを監視します。本文、通常コード、数式、Mermaid、メディアだけの変更は Astro の HMR だけで反映し、Python セルは manifest 更新だけ、Rust セルや `crates/*` の変更だけ Wasm rebuild を実行します。
+`pnpm dev` は初回に実行可能セルのランタイムを生成し、その後は MDX と任意の Rust helper ソースを監視します。本文、通常コード、数式、Mermaid、メディアだけの変更は Astro の HMR だけで反映し、Python セルは manifest 更新だけ、Rust セルや `crates/*` の変更だけ Wasm rebuild を実行します。
 
 ランタイム監視と Astro を分けて起動したい場合は、次のコマンドを別々のターミナルで実行します。
 
@@ -61,7 +61,7 @@ pnpm preview
 
 ## 執筆
 
-英語ページは `src/content/docs/**/*.mdx` に追加します。日本語ページは同じslugで `src/content/docs/ja/**/*.mdx` に追加します。共有する Rust ロジックは `crates/*` に置き、セルから `crates: [doc-rust]` のように参照します。
+英語ページは `src/content/docs/**/*.mdx` に追加します。日本語ページは同じslugで `src/content/docs/ja/**/*.mdx` に追加します。リポジトリ root は Rust workspace ではありません。任意の再利用可能な Rust helper crate は `crates/*` に置き、セルから `crates: [doc-rust]` のように参照します。helper が不要な Rust セルは `crates: []` を使います。
 
 Rust セルの例:
 
@@ -130,11 +130,11 @@ pnpm lint:rust
 pnpm check
 ```
 
-`test:rust:coverage` は `cargo-llvm-cov` で Rust workspace の line/function/region 100% を要求します。`test:unit:coverage` は Vitest の V8 coverage で、生成物を除いた手書きの TypeScript/Preact/Node コアに 100% を要求します。
+`test:rust:coverage` は `cargo-llvm-cov` で `crates/` 配下の任意の helper-crate workspace に line/function/region 100% を要求します。helper crate がない場合、Rust helper 用コマンドは正常終了で skip します。`test:unit:coverage` は Vitest の V8 coverage で、生成物を除いた手書きの TypeScript/Preact/Node コアに 100% を要求します。
 
 ## トラブルシュート
 
-- Rust セルの crate が見つからない場合は、`crates/*/Cargo.toml` の `package.name` とセルの `crates` 指定を一致させます。
+- Rust セルの helper crate が見つからない場合は、`crates/*/Cargo.toml` の `package.name` とセルの `crates` 指定を一致させます。
 - Python セルが起動しない場合は、`public/pyodide` が生成されているか確認し、`pnpm wasm:dev` または `pnpm build` を実行します。
 - Mermaid 図が表示されない場合は、`pnpm build` で MDX の構文エラーを確認し、図のコードブロック言語が `mermaid` になっているか確認します。
 - メディアが表示されない場合は、ファイルが `public/media` 配下にあり、`/media/...` のURLで参照しているか確認します。
