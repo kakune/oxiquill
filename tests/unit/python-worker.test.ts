@@ -1,5 +1,9 @@
 import { describe, expect, it } from 'vitest';
-import { createSerialRequestQueue } from '../../src/lib/doc-runtime/python-worker';
+import {
+  createPythonCellResult,
+  createSerialRequestQueue,
+  pythonDisplaySupportCode
+} from '../../src/lib/doc-runtime/python-worker';
 
 function createDeferred() {
   let reject!: (reason: Error) => void;
@@ -71,5 +75,39 @@ describe('python worker request queue', () => {
     await flushMicrotasks();
 
     expect(events).toEqual(['start:first', 'start:second', 'finish:second']);
+  });
+});
+
+describe('python rich display support', () => {
+  it('exposes display helpers in the injected support module', () => {
+    expect(pythonDisplaySupportCode).toContain('builtins.display = display');
+    expect(pythonDisplaySupportCode).toContain('def display_table');
+    expect(pythonDisplaySupportCode).toContain('_repr_html_');
+    expect(pythonDisplaySupportCode).toContain('_repr_png_');
+  });
+
+  it('combines stream output, rich display artifacts, and final values deterministically', () => {
+    expect(createPythonCellResult({
+      stdout: 'printed',
+      stderr: 'warned',
+      value: { ok: true },
+      plots: [],
+      displayOutputs: [
+        { kind: 'html', html: '<strong>display</strong>', sandboxed: true },
+        { kind: 'text', stream: 'display', content: 'fallback' }
+      ]
+    })).toEqual({
+      stdout: 'printed',
+      stderr: 'warned',
+      value: { ok: true },
+      plots: [],
+      outputs: [
+        { kind: 'text', stream: 'stdout', content: 'printed' },
+        { kind: 'text', stream: 'stderr', content: 'warned' },
+        { kind: 'html', html: '<strong>display</strong>', sandboxed: true },
+        { kind: 'text', stream: 'display', content: 'fallback' },
+        { kind: 'json', value: { ok: true } }
+      ]
+    });
   });
 });
