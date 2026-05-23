@@ -2,18 +2,20 @@
 
 ## Rust Crates
 
-- Crates under this directory are reserved for reusable helpers used by generated documentation cells.
-- This skeleton intentionally tracks crate manifests and directory structure only. Do not add Rust implementation files unless the migration task explicitly asks for crate code.
+- Crates under this directory are reusable helpers for generated documentation cells. Keep them pure Rust and independent of Astro, Preact, browser workers, and generated Wasm glue.
 - Each crate should use workspace edition, MSRV, license, dependencies, and lints from the root `Cargo.toml`.
-- Keep crates independent of Astro, Preact, browser workers, and generated Wasm glue.
+- Workspace lint policy is intentionally strict: no unsafe, no `unwrap`, `expect`, `panic`, `todo`, `dbg`, direct stdout/stderr printing, indexing/slicing, unchecked casts, or unjustified lint suppression.
 
 ## Rust Style
 
-- Once code is migrated, preserve the strict workspace lint policy.
-- Public APIs should be documented, debug-friendly, and stable enough for MDX cell examples.
-- Use narrow, justified lint exceptions only when the implementation needs them.
+- Prefer iterator combinators and standard iterator constructors over `loop` or `for` when they keep the code clear.
+- Prefer `match` for enum, state, and multi-branch decisions instead of chained `if`/`else` logic.
+- Return `Result` with small error types for fallible helpers. Do not use partial operations or implicit panics.
+- Keep public APIs documented, debug-friendly, and stable enough for MDX cell examples.
+- Use `#[expect(..., reason = "...")]` for narrow, reviewed lint exceptions such as numerical examples that require floating-point arithmetic.
 
 ## Tests
 
-- Add focused Rust tests only alongside real crate implementation.
-- Validate Rust implementation changes with the Rust commands documented in the root project guidance.
+- Add focused unit tests for normal paths, boundary values, and errors.
+- Rust assertions must include useful failure messages.
+- Validate Rust changes with `pnpm test:rust`, `pnpm lint:rust`, and `pnpm doc:rust`; run `pnpm test:rust:coverage` when behavior changes.
