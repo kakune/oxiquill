@@ -276,7 +276,7 @@ version = "0.1.0"
 description = "Generated Rust cells for the documentation runtime."
 edition = "2024"
 rust-version = "1.95"
-license-file = "../../../../LICENSE"
+license = "AGPL-3.0-only"
 publish = false
 
 [workspace]
@@ -305,22 +305,36 @@ export function generateRustDependency(crateName, workspaceCrates) {
 }
 
 export function generateRustLib(rustCells) {
-  const matchArms =
+  const matchArms = rustCells
+    .map((cell) => `        ${JSON.stringify(cell.id)} => ${rustFunctionName(cell.id)}(&inputs),`)
+    .concat('        _ => Err(format!("unknown Rust cell: {cell_id}")),')
+    .join('\n');
+  const runFunction =
     rustCells.length === 0
-      ? '        _ => Err(format!("unknown Rust cell: {cell_id}")),\n'
-      : rustCells
-          .map((cell) => `        ${JSON.stringify(cell.id)} => ${rustFunctionName(cell.id)}(&inputs),`)
-          .concat('        _ => Err(format!("unknown Rust cell: {cell_id}")),')
-          .join('\n');
+      ? `#[wasm_bindgen]
+pub fn run_rust_cell(cell_id: &str, inputs_json: &str) -> Result<String, JsValue> {
+    let _: Value = serde_json::from_str(inputs_json).map_err(to_js_error)?;
+
+    Err(JsValue::from_str(&format!("unknown Rust cell: {cell_id}")))
+}`
+      : `#[wasm_bindgen]
+pub fn run_rust_cell(cell_id: &str, inputs_json: &str) -> Result<String, JsValue> {
+    let inputs: Value = serde_json::from_str(inputs_json).map_err(to_js_error)?;
+    let output = match cell_id {
+${matchArms}
+    }
+    .map_err(|error| JsValue::from_str(&error))?;
+
+    serde_json::to_string(&output).map_err(to_js_error)
+}`;
 
   const functions = rustCells.map(generateRustFunction).join('\n\n');
   const firstCellTest = rustCells[0] ? generateRustTest(rustCells[0]) : '';
   const readers = generateRustReaders(rustCells);
-
-  return `${generatedBanner()}use serde::Serialize;
-use serde_json::Value;
-use wasm_bindgen::prelude::*;
-
+  const outputTypes =
+    rustCells.length === 0
+      ? ''
+      : `
 #[derive(Debug, Serialize)]
 #[serde(tag = "kind")]
 enum PlotSpec {
@@ -341,22 +355,19 @@ struct CellOutput {
     plots: Vec<PlotSpec>,
     value: Value,
 }
+`;
+  const serdeImport = rustCells.length === 0 ? '' : 'use serde::Serialize;\n';
+
+  return `${generatedBanner()}${serdeImport}use serde_json::Value;
+use wasm_bindgen::prelude::*;
+${outputTypes}
 
 #[wasm_bindgen(start)]
 pub fn start() {
     console_error_panic_hook::set_once();
 }
 
-#[wasm_bindgen]
-pub fn run_rust_cell(cell_id: &str, inputs_json: &str) -> Result<String, JsValue> {
-    let inputs: Value = serde_json::from_str(inputs_json).map_err(to_js_error)?;
-    let output = match cell_id {
-${matchArms}
-    }
-    .map_err(|error| JsValue::from_str(&error))?;
-
-    serde_json::to_string(&output).map_err(to_js_error)
-}
+${runFunction}
 
 fn to_js_error(error: impl std::fmt::Display) -> JsValue {
     JsValue::from_str(&error.to_string())
