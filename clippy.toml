@@ -1,0 +1,43 @@
+msrv = "1.95"
+too-many-arguments-threshold = 4
+type-complexity-threshold = 120
+cognitive-complexity-threshold = 15
+too-many-lines-threshold = 80
+allow-unwrap-in-tests = false
+allow-expect-in-tests = false
+allow-indexing-slicing-in-tests = false
+allow-dbg-in-tests = false
+allow-print-in-tests = false
+accept-comment-above-statement = false
+accept-comment-above-attributes = false
+disallowed-names = [
+  "..",
+  "foo",
+  "bar",
+  "baz",
+  "quux",
+  "tmp",
+  "temp",
+  "data",
+  "obj",
+  "val",
+]
+allowed-scripts = ["Latin"]
+disallowed-types = [
+  { path = "std::sync::Mutex", reason = "Choose the synchronization primitive explicitly for the execution model." },
+  { path = "std::sync::RwLock", reason = "Choose the synchronization primitive explicitly for the execution model." },
+  { path = "std::collections::HashMap", reason = "Prefer an explicitly chosen map type when determinism, hashing, or ordering matters." },
+  { path = "std::collections::HashSet", reason = "Prefer an explicitly chosen set type when determinism, hashing, or ordering matters." },
+]
+disallowed-methods = [
+  { path = "std::process::exit", reason = "Return Result from main or propagate the error to the caller." },
+  { path = "std::mem::forget", reason = "Intentional leaks must be reviewed and expressed with a dedicated abstraction." },
+  { path = "std::boxed::Box::leak", reason = "Intentional leaks must be reviewed and expressed with a dedicated abstraction." },
+  { path = "std::vec::Vec::leak", reason = "Intentional leaks must be reviewed and expressed with a dedicated abstraction." },
+]
+disallowed-macros = [
+  { path = "std::println", reason = "Use tracing or log instead." },
+  { path = "std::print", reason = "Use tracing or log instead." },
+  { path = "std::eprintln", reason = "Use tracing or log instead." },
+  { path = "std::eprint", reason = "Use tracing or log instead." },
+]

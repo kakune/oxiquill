@@ -1,0 +1,42 @@
+{
+  "name": "oxiquill",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "packageManager": "pnpm@10.28.1",
+  "license": "AGPL-3.0-only",
+  "scripts": {
+    "dev": "astro dev",
+    "build": "astro check && astro build",
+    "preview": "astro preview",
+    "check": "astro check",
+    "test:unit": "vitest run",
+    "test:e2e": "playwright test"
+  },
+  "dependencies": {
+    "@astrojs/preact": "latest",
+    "@astrojs/starlight": "latest",
+    "astro": "latest",
+    "echarts": "latest",
+    "katex": "^0.17.0",
+    "mermaid": "^11.15.0",
+    "preact": "latest",
+    "pyodide": "^0.29.4",
+    "rehype-katex": "^7.0.1",
+    "remark-math": "^6.0.0",
+    "shiki": "^4.1.0",
+    "yaml": "^2.9.0"
+  },
+  "devDependencies": {
+    "@astrojs/check": "latest",
+    "@playwright/test": "latest",
+    "@testing-library/jest-dom": "^6.9.1",
+    "@testing-library/preact": "^3.2.4",
+    "@vitest/coverage-v8": "^4.1.7",
+    "chokidar": "^5.0.0",
+    "jsdom": "^29.1.1",
+    "typescript": "latest",
+    "vite": "7.3.3",
+    "vitest": "^4.1.7"
+  }
+}
