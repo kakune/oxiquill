@@ -47,7 +47,8 @@ class FakeWorker {
 
 const result: CellExecutionResult = {
   stdout: 'ok',
-  plots: []
+  plots: [],
+  outputs: [{ kind: 'text', stream: 'stdout', content: 'ok' }]
 };
 
 type DefaultFakeWorker = FakeWorker & {
@@ -138,6 +139,39 @@ describe('runtime client', () => {
     workers[0].emitMessage({ requestId: 1, ok: true, result });
 
     await expect(promise).resolves.toEqual(result);
+  });
+
+  it('normalizes legacy worker responses before resolving', async () => {
+    const { runner, workers } = makeRunner();
+    const promise = runner.runInteractiveCell(makeCell('python'), {});
+
+    workers[0].emitMessage({
+      requestId: 1,
+      ok: true,
+      result: {
+        stdout: 'legacy stdout',
+        value: { answer: 42 },
+        plots: [{ kind: 'line', x_label: 'x', y_label: 'y', points: [[0, 1]] }]
+      }
+    });
+
+    await expect(promise).resolves.toMatchObject({
+      stdout: 'legacy stdout',
+      value: { answer: 42 },
+      plots: [{ kind: 'line', x_label: 'x', y_label: 'y', points: [[0, 1]] }],
+      outputs: [
+        { kind: 'text', stream: 'stdout', content: 'legacy stdout' },
+        { kind: 'json', value: { answer: 42 } },
+        {
+          kind: 'chart',
+          spec: expect.objectContaining({
+            kind: 'line',
+            xLabel: 'x',
+            yLabel: 'y'
+          })
+        }
+      ]
+    });
   });
 
   it('sends Rust requests without Python-only fields and reuses workers', async () => {
