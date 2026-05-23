@@ -1,6 +1,74 @@
 import { expect, test } from '@playwright/test';
 import type { Locator } from '@playwright/test';
 
+test('desktop sidebar toggle collapses, expands, and persists across navigation', async ({ page }) => {
+  await page.setViewportSize({ width: 1280, height: 900 });
+  await page.goto('/features/math/');
+
+  const sidebar = page.locator('#starlight__sidebar');
+  const mainFrame = page.locator('.main-frame');
+  const contentContainer = page.locator('.content-panel .sl-container').first();
+  const toggle = page.locator('starlight-sidebar-toggle button');
+
+  await expect(toggle).toBeVisible();
+  await expect(toggle).toHaveAttribute('aria-label', 'Collapse sidebar');
+  await expect(sidebar).toBeVisible();
+  const expandedContentWidth = await elementWidth(contentContainer);
+  expect(await sidebarPadding(mainFrame)).toBeGreaterThan(100);
+
+  await toggle.click();
+
+  await expect(page.locator('html')).toHaveAttribute('data-sidebar-collapsed', '');
+  await expect(toggle).toHaveAttribute('aria-expanded', 'false');
+  await expect(toggle).toHaveAttribute('aria-label', 'Expand sidebar');
+  await expect(sidebar).toHaveAttribute('aria-hidden', 'true');
+  await expect(sidebar).toHaveAttribute('inert', '');
+  await expect(sidebar).not.toBeVisible();
+  await expect.poll(() => sidebarPadding(mainFrame)).toBeLessThan(1);
+  await expect.poll(() => elementWidth(contentContainer)).toBeGreaterThan(expandedContentWidth + 100);
+  expect(await page.evaluate(() => sessionStorage.getItem('oxiquill-sidebar-collapsed'))).toBe('true');
+
+  await page.goto('/features/diagrams/');
+
+  const persistedToggle = page.locator('starlight-sidebar-toggle button');
+  await expect(page.locator('html')).toHaveAttribute('data-sidebar-collapsed', '');
+  await expect(persistedToggle).toBeVisible();
+  await expect(persistedToggle).toHaveAttribute('aria-label', 'Expand sidebar');
+  await expect(page.locator('#starlight__sidebar')).not.toBeVisible();
+
+  await persistedToggle.click();
+
+  await expect(page.locator('html')).not.toHaveAttribute('data-sidebar-collapsed', '');
+  await expect(persistedToggle).toHaveAttribute('aria-expanded', 'true');
+  await expect(persistedToggle).toHaveAttribute('aria-label', 'Collapse sidebar');
+  await expect(page.locator('#starlight__sidebar')).toBeVisible();
+  expect(await page.evaluate(() => sessionStorage.getItem('oxiquill-sidebar-collapsed'))).toBeNull();
+});
+
+test('desktop sidebar preference does not affect the mobile menu', async ({ page }) => {
+  await page.setViewportSize({ width: 390, height: 800 });
+  await page.goto('/features/math/');
+  await page.evaluate(() => sessionStorage.setItem('oxiquill-sidebar-collapsed', 'true'));
+  await page.reload();
+
+  const sidebar = page.locator('#starlight__sidebar');
+  const mobileMenu = page.getByRole('button', { name: 'Menu' });
+
+  await expect(page.locator('html')).not.toHaveAttribute('data-sidebar-collapsed', '');
+  await expect(page.getByRole('button', { name: /sidebar/i })).toHaveCount(0);
+  await expect(mobileMenu).toBeVisible();
+  await expect(sidebar).not.toBeVisible();
+
+  await mobileMenu.click();
+  await expect(sidebar).toBeVisible();
+  await expect(page.locator('body')).toHaveAttribute('data-mobile-menu-expanded', '');
+
+  await mobileMenu.click();
+  await expect(sidebar).not.toBeVisible();
+  await expect(page.locator('body')).not.toHaveAttribute('data-mobile-menu-expanded', '');
+  expect(await page.evaluate(() => sessionStorage.getItem('oxiquill-sidebar-collapsed'))).toBe('true');
+});
+
 test('Rust cells run from MDX code fences and redraw plots', async ({ page }) => {
   await page.goto('/samples/logistic-map/');
 
@@ -163,6 +231,14 @@ test('localized pages and media examples are available', async ({ page }) => {
     page.getByTestId('cell-ja__features__interactive-cells__rust-controls').getByRole('button', { name: 'コードを隠す' })
   ).toBeVisible();
 });
+
+async function sidebarPadding(mainFrame: Locator): Promise<number> {
+  return mainFrame.evaluate((element) => parseFloat(getComputedStyle(element).paddingInlineStart));
+}
+
+async function elementWidth(locator: Locator): Promise<number> {
+  return locator.evaluate((element) => element.getBoundingClientRect().width);
+}
 
 async function canvasStats(canvas: Locator): Promise<{
   height: number;
