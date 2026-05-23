@@ -4,6 +4,7 @@ import {
   createSerialRequestQueue,
   pythonDisplaySupportCode
 } from '../../src/lib/doc-runtime/python-worker';
+import { toOutputArtifacts } from '../../src/lib/doc-runtime/python-cell-result';
 
 function createDeferred() {
   let reject!: (reason: Error) => void;
@@ -140,5 +141,12 @@ describe('python rich display support', () => {
         { kind: 'json', value: { ok: true } }
       ]
     });
+  });
+
+  it('filters Python display values to valid output artifacts', () => {
+    const artifact = { kind: 'text' as const, stream: 'display' as const, content: 'ok' };
+
+    expect(toOutputArtifacts([artifact, { kind: 'unknown' }, null])).toEqual([artifact]);
+    expect(toOutputArtifacts({ kind: 'text', stream: 'display', content: 'ok' })).toEqual([]);
   });
 });

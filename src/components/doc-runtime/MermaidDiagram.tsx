@@ -81,7 +81,7 @@ export default function MermaidDiagram({ diagramId, source }: MermaidDiagramProp
   );
 }
 
-function getMermaidColorScheme(): MermaidColorScheme {
+export function getMermaidColorScheme(): MermaidColorScheme {
   if (typeof document === 'undefined') return 'light';
 
   return document.documentElement.dataset.theme === 'dark' ? 'dark' : 'light';
