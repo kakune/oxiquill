@@ -1,0 +1,45 @@
+---
+title: ロジスティック写像
+description: 数式、Rust/Wasm の計算、入力、chart 出力を組み合わせたサンプルノートです。
+---
+
+この sample は計算ノートの例です。model を紹介し、式を示し、読者が parameter を変更できるようにし、Rust/Wasm セルから結果を描画します。
+
+## このページが示すこと
+
+- 実装する code の近くに置く数式。
+- model parameter を動かす reactive Rust input。
+- `crates: [doc-rust]` で参照する helper crate。
+- 1つの cell から出す text と chart output。
+
+## モデル
+
+ロジスティック写像は、単純な recurrence relation から複雑な振る舞いが現れる離散 dynamical system です。
+
+$$
+x_{n+1} = r x_n (1 - x_n)
+$$
+
+ここで $x_n$ は step $n$ の state、`r` は growth rate です。`r` や `x0` を変えると Rust/Wasm で series が再計算され、plot が更新されます。
+
+```rust
+//| id: logistic-map-note
+//| title: Explore logistic map parameters
+//| run: reactive
+//| crates: [doc-rust]
+//| inputs:
+//|   r: { type: range, label: r, min: 0, max: 4, step: 0.01, value: 3.2 }
+//|   x0: { type: range, label: x0, min: 0, max: 1, step: 0.01, value: 0.2 }
+//|   steps: { type: integer, label: steps, min: 10, max: 300, step: 10, value: 120 }
+let points = doc_rust::logistic_series(r, x0, steps).map_err(|error| error.to_string())?;
+let final_point = points.last().ok_or_else(|| "series is empty".to_owned())?;
+
+println!("x_{} = {:.6}", final_point.n, final_point.x);
+emit_line_plot!(&points, "n", "x");
+```
+
+## 読み方
+
+`r` が小さいと series は安定した値に近づきます。`r` が大きくなると周期的な振る舞いが現れます。さらに大きい値では、出力が初期値に敏感になります。
+
+このページ形は計算ノートに向いています。数式で model を説明し、実行可能セルで読者が parameter を変え、結果を plot として確認できます。

@@ -1,0 +1,67 @@
+---
+title: Validation
+description: Choose the right checks for documentation, runtime, Rust helper, and browser-facing changes.
+---
+
+Validation should match the risk of the change. Prose-only edits need lighter checks than changes to executable cells, helper crates, or browser-visible runtime behavior.
+
+## Common Checks
+
+Run `pnpm check` for normal documentation changes:
+
+```sh
+pnpm check
+```
+
+This regenerates the development runtime and runs Astro checks. It catches most MDX, frontmatter, route, import, and TypeScript issues.
+
+Run the full suite before broad changes are considered complete when practical:
+
+```sh
+pnpm test
+```
+
+## Runtime and Browser Checks
+
+Use these commands when changing executable cells, cell metadata, rich output examples, Mermaid examples, media examples, or browser-visible behavior:
+
+```sh
+pnpm wasm:dev
+pnpm test:wasm
+pnpm test:e2e
+```
+
+`pnpm wasm:dev` regenerates the runtime for local development. `pnpm test:wasm` verifies generated Rust cell behavior. `pnpm test:e2e` verifies the built site in a browser.
+
+## Unit and Coverage Checks
+
+Use unit tests for handwritten TypeScript, Preact, and Node runtime code:
+
+```sh
+pnpm test:unit
+pnpm test:unit:coverage
+```
+
+Coverage requires 85% statement, branch, function, and line coverage, and excludes generated runtime output. Add focused tests for uncovered handwritten code instead of editing generated files.
+
+## Rust Helper Checks
+
+Optional reusable Rust helper crates live under `crates/*`. Validate them with:
+
+```sh
+pnpm test:rust
+pnpm test:rust:coverage
+pnpm lint:rust
+pnpm doc:rust
+```
+
+`test:rust:coverage` uses `cargo-llvm-cov` and requires 85% line/function/region coverage for helper crates. If no helper crates exist, helper commands skip cleanly.
+
+## Troubleshooting Failed Checks
+
+- Unknown Rust crate: match the cell `crates` value to the `package.name` in `crates/*/Cargo.toml`.
+- Unsupported Python package: use a vendored Pyodide package or add package support before documenting it.
+- Missing Python runtime: confirm `public/pyodide` exists and run `pnpm wasm:dev` or `pnpm build`.
+- Mermaid failure: confirm the code block language is `mermaid` and run `pnpm build` for MDX errors.
+- Missing media: confirm the file is under `public/media` and the MDX URL starts with `/media/`.
+- Coverage failure: add focused tests for handwritten source rather than modifying generated output.

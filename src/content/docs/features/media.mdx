@@ -1,0 +1,45 @@
+---
+title: Media
+description: Embed PNG, JPEG, PDF, and similar static files in MDX notes.
+---
+
+Use `public/media` for static files that should be served as-is. MDX pages can reference those files with `/media/...` URLs, so authors do not need imports for common images or PDFs.
+
+## Image Files
+
+Markdown image syntax is the shortest option. Use specific alt text that describes the image content.
+
+```md
+![PNG sample with color bands](/media/examples/sample.png)
+```
+
+![PNG sample with color bands](/media/examples/sample.png)
+
+JPEG files use the same URL pattern.
+
+```md
+![JPEG sample with a grid and gradient](/media/examples/sample.jpg)
+```
+
+![JPEG sample with a grid and gradient](/media/examples/sample.jpg)
+
+## PDFs
+
+For PDFs, include both an embedded frame and a normal link. The frame lets readers preview the document in place, and the link gives them a direct way to open or download it.
+
+```md
+<iframe class="media-frame" src="/media/examples/sample.pdf" title="Sample PDF"></iframe>
+
+[Open the PDF in a new tab](/media/examples/sample.pdf)
+```
+
+<iframe class="media-frame" src="/media/examples/sample.pdf" title="Sample PDF"></iframe>
+
+[Open the PDF in a new tab](/media/examples/sample.pdf)
+
+## Placement Rules
+
+- Put public files under `public/media`.
+- Reference them with absolute `/media/...` URLs.
+- Keep generated media out of the docs tree unless the file itself is the intended source asset.
+- Use stable sample files so tests and screenshots remain deterministic.
