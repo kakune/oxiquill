@@ -1,3 +1,4 @@
+import path from 'node:path';
 import { describe, expect, it } from 'vitest';
 import {
   postprocessRustWasm,
@@ -28,6 +29,14 @@ import {
   writeIfChanged
 } from '../../scripts/doc-runtime-service.mjs';
 
+function memoryPath(filePath) {
+  return String(filePath).replaceAll('\\', '/');
+}
+
+function repoPath(...segments) {
+  return path.join('/repo', ...segments);
+}
+
 function createMemoryFileSystem(initialFiles = {}) {
   const files = new Map();
   const directories = new Set(['/repo', '/repo/src', '/repo/src/content', '/repo/src/content/docs']);
@@ -35,7 +44,7 @@ function createMemoryFileSystem(initialFiles = {}) {
   const copies = [];
 
   function ensureParents(filePath) {
-    const parts = filePath.split('/').filter(Boolean);
+    const parts = memoryPath(filePath).split('/').filter(Boolean);
     let current = '';
     for (const part of parts.slice(0, -1)) {
       current += `/${part}`;
@@ -44,19 +53,20 @@ function createMemoryFileSystem(initialFiles = {}) {
   }
 
   for (const [filePath, content] of Object.entries(initialFiles)) {
-    ensureParents(filePath);
-    files.set(filePath, Buffer.isBuffer(content) ? content : Buffer.from(String(content)));
+    const normalizedPath = memoryPath(filePath);
+    ensureParents(normalizedPath);
+    files.set(normalizedPath, Buffer.isBuffer(content) ? content : Buffer.from(String(content)));
   }
 
   return {
     copies,
-    existsSync: (filePath) => directories.has(filePath) || files.has(filePath),
+    existsSync: (filePath) => directories.has(memoryPath(filePath)) || files.has(memoryPath(filePath)),
     files,
     mkdir: async (directory) => {
-      directories.add(directory);
+      directories.add(memoryPath(directory));
     },
     readFile: async (filePath, encoding) => {
-      const content = files.get(filePath);
+      const content = files.get(memoryPath(filePath));
       if (!content) {
         const error = new Error(`missing ${filePath}`);
         error.code = 'ENOENT';
@@ -66,20 +76,21 @@ function createMemoryFileSystem(initialFiles = {}) {
       return encoding ? content.toString(encoding) : Buffer.from(content);
     },
     readdir: async (directory) => {
+      const normalizedDirectory = memoryPath(directory);
       const childNames = new Set();
       for (const filePath of files.keys()) {
-        if (filePath.startsWith(`${directory}/`)) {
-          childNames.add(filePath.slice(directory.length + 1).split('/')[0]);
+        if (filePath.startsWith(`${normalizedDirectory}/`)) {
+          childNames.add(filePath.slice(normalizedDirectory.length + 1).split('/')[0]);
         }
       }
       for (const candidate of directories) {
-        if (candidate.startsWith(`${directory}/`) && candidate !== directory) {
-          childNames.add(candidate.slice(directory.length + 1).split('/')[0]);
+        if (candidate.startsWith(`${normalizedDirectory}/`) && candidate !== normalizedDirectory) {
+          childNames.add(candidate.slice(normalizedDirectory.length + 1).split('/')[0]);
         }
       }
 
       return Array.from(childNames).map((name) => {
-        const fullPath = `${directory}/${name}`;
+        const fullPath = `${normalizedDirectory}/${name}`;
         return {
           isDirectory: () => directories.has(fullPath),
           isFile: () => files.has(fullPath),
@@ -88,14 +99,17 @@ function createMemoryFileSystem(initialFiles = {}) {
       });
     },
     writeFile: async (filePath, content) => {
-      ensureParents(filePath);
-      files.set(filePath, Buffer.isBuffer(content) ? Buffer.from(content) : Buffer.from(String(content)));
-      writes.push(filePath);
+      const normalizedPath = memoryPath(filePath);
+      ensureParents(normalizedPath);
+      files.set(normalizedPath, Buffer.isBuffer(content) ? Buffer.from(content) : Buffer.from(String(content)));
+      writes.push(normalizedPath);
     },
     copyFile: async (sourcePath, targetPath) => {
-      ensureParents(targetPath);
-      files.set(targetPath, Buffer.from(files.get(sourcePath)));
-      copies.push([sourcePath, targetPath]);
+      const normalizedSourcePath = memoryPath(sourcePath);
+      const normalizedTargetPath = memoryPath(targetPath);
+      ensureParents(normalizedTargetPath);
+      files.set(normalizedTargetPath, Buffer.from(files.get(normalizedSourcePath)));
+      copies.push([normalizedSourcePath, normalizedTargetPath]);
     },
     writes
   };
@@ -136,11 +150,12 @@ describe('doc runtime service', () => {
     const removals = [];
     const files = new Map([['/repo/pkg/doc_rust_cells.js', generatedSource]]);
     const fileSystem = {
-      readFile: async (filePath) => files.get(filePath),
-      rm: async (filePath, options) => removals.push([filePath, options]),
+      readFile: async (filePath) => files.get(memoryPath(filePath)),
+      rm: async (filePath, options) => removals.push([memoryPath(filePath), options]),
       writeFile: async (filePath, content) => {
-        files.set(filePath, content);
-        writes.push([filePath, content]);
+        const normalizedPath = memoryPath(filePath);
+        files.set(normalizedPath, content);
+        writes.push([normalizedPath, content]);
       }
     };
 
@@ -157,11 +172,11 @@ describe('doc runtime service', () => {
 
   it('creates project paths and context with discovered helper crates', async () => {
     expect(createDocRuntimePaths('/repo')).toEqual({
-      docsDir: '/repo/src/content/docs',
-      generatedDir: '/repo/src/generated/doc-runtime',
-      pyodidePublicDir: '/repo/public/pyodide',
-      rustCrateDir: '/repo/src/generated/doc-runtime/rust-cells',
-      runtimeVersionPath: '/repo/src/generated/doc-runtime/runtime-version.ts'
+      docsDir: repoPath('src/content/docs'),
+      generatedDir: repoPath('src/generated/doc-runtime'),
+      pyodidePublicDir: repoPath('public/pyodide'),
+      rustCrateDir: repoPath('src/generated/doc-runtime/rust-cells'),
+      runtimeVersionPath: repoPath('src/generated/doc-runtime/runtime-version.ts')
     });
 
     const fileSystem = createMemoryFileSystem({
@@ -194,8 +209,8 @@ describe('doc runtime service', () => {
     });
 
     await expect(readHelperManifests({ fileSystem, root: '/repo' })).resolves.toEqual([
-      { content: '[package]\nname = "a-crate"\n', manifestPath: '/repo/crates/a/Cargo.toml' },
-      { content: '[package]\nname = "b-crate"\n', manifestPath: '/repo/crates/b/Cargo.toml' }
+      { content: '[package]\nname = "a-crate"\n', manifestPath: repoPath('crates/a/Cargo.toml') },
+      { content: '[package]\nname = "b-crate"\n', manifestPath: repoPath('crates/b/Cargo.toml') }
     ]);
     const helperCrates = await listHelperCrates({ fileSystem, paths, root: '/repo' });
     expect(Array.from(helperCrates.keys())).toEqual(['a-crate', 'b-crate']);
@@ -248,9 +263,9 @@ describe('doc runtime service', () => {
     const paths = createDocRuntimePaths('/repo');
 
     await expect(listFiles(paths.docsDir, { fileSystem })).resolves.toEqual([
-      '/repo/src/content/docs/deep/page.md',
-      '/repo/src/content/docs/index.mdx',
-      '/repo/src/content/docs/note.mdx'
+      repoPath('src/content/docs/deep/page.md'),
+      repoPath('src/content/docs/index.mdx'),
+      repoPath('src/content/docs/note.mdx')
     ]);
 
     await expect(
