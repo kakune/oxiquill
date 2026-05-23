@@ -156,7 +156,7 @@ pnpm doc:rust
 
 For docs-only prose changes, `pnpm check` is usually enough. For interactive cell metadata, generated Rust/Wasm behavior, or browser-visible examples, also run `pnpm wasm:dev`, `pnpm test:wasm`, and `pnpm test:e2e` as appropriate.
 
-`test:rust:coverage` requires 100% line/function/region coverage for optional helper crates under `crates/` through `cargo-llvm-cov`. If no helper crates exist, Rust helper commands skip cleanly. `test:unit:coverage` uses Vitest V8 coverage for handwritten TypeScript, Preact, and Node runtime code, excluding generated output.
+`test:rust:coverage` requires 85% line/function/region coverage for optional helper crates under `crates/` through `cargo-llvm-cov`. If no helper crates exist, Rust helper commands skip cleanly. `test:unit:coverage` uses Vitest V8 coverage for handwritten TypeScript, Preact, and Node runtime code, excluding generated output.
 
 ### Troubleshooting
 
@@ -323,7 +323,7 @@ pnpm doc:rust
 
 docs-only の本文変更では、通常 `pnpm check` で十分です。実行可能セルの metadata、生成 Rust/Wasm の動作、ブラウザ上の表示例を変更した場合は、必要に応じて `pnpm wasm:dev`、`pnpm test:wasm`、`pnpm test:e2e` も実行します。
 
-`test:rust:coverage` は `cargo-llvm-cov` で `crates/` 配下の任意の helper crate に line/function/region 100% を要求します。helper crate がない場合、Rust helper 用 command は正常終了で skip します。`test:unit:coverage` は Vitest の V8 coverage を使い、生成物を除いた手書きの TypeScript、Preact、Node runtime code を対象にします。
+`test:rust:coverage` は `cargo-llvm-cov` で `crates/` 配下の任意の helper crate に line/function/region 85% を要求します。helper crate がない場合、Rust helper 用 command は正常終了で skip します。`test:unit:coverage` は Vitest の V8 coverage を使い、生成物を除いた手書きの TypeScript、Preact、Node runtime code を対象にします。
 
 ### トラブルシュート
 
