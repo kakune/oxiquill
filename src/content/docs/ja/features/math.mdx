@@ -1,0 +1,52 @@
+---
+title: 数式
+description: MDX ノートで KaTeX の inline math と block math を表示します。
+---
+
+数式は MDX に直接書けます。記法が必要な本文や実行可能セルの近くに置くと、読者がページを移動せずに読み進められます。
+
+## インライン数式
+
+inline math は dollar sign 1つで囲みます。ロジスティック写像では、状態は $x_n \in [0, 1]$、parameter は $r \in [0, 4]$ です。
+
+## ブロック数式
+
+block math は dollar sign 2つで囲みます。
+
+$$
+x_{n+1} = r x_n (1 - x_n)
+$$
+
+## 行列
+
+$$
+A =
+\begin{bmatrix}
+1 & 2 & 3 \\
+4 & 5 & 6 \\
+7 & 8 & 9
+\end{bmatrix}
+$$
+
+## 整列式
+
+$$
+\begin{aligned}
+f(x) &= x^2 + 2x + 1 \\
+     &= (x + 1)^2
+\end{aligned}
+$$
+
+## コードセルとの併用
+
+読者が式を確認したり値を変えたりする場合は、実行可能セルを使います。
+
+```python
+#| id: math-python
+#| title: Calculate a quadratic with Python
+#| run: button
+#| inputs:
+#|   x: { type: number, label: x, min: -10, max: 10, step: 1, value: 2 }
+y = x**2 + 2*x + 1
+print(f"f({x}) = {y}")
+```
