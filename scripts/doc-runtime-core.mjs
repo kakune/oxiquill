@@ -486,6 +486,10 @@ function generateRustOutputTypes(rustCells) {
       ? `    #[serde(rename = "image")]
     Image(ImageArtifact),`
       : '',
+    capabilities.table
+      ? `    #[serde(rename = "table")]
+    Table(TableArtifact),`
+      : '',
     capabilities.chart
       ? `    #[serde(rename = "chart")]
     Chart(ChartArtifact),`
@@ -495,7 +499,7 @@ function generateRustOutputTypes(rustCells) {
     .join('\n');
 
   return `
-#[derive(Debug, Serialize)]
+${capabilities.chart ? `#[derive(Debug, Serialize)]
 #[serde(tag = "kind")]
 enum PlotSpec {
     #[serde(rename = "line")]
@@ -508,7 +512,8 @@ struct LinePlotSpec {
     y_label: String,
     points: Vec<[f64; 2]>,
 }
-
+` : `type PlotSpec = Value;
+`}
 #[derive(Debug, Serialize)]
 #[serde(tag = "kind")]
 enum OutputArtifact {
@@ -538,6 +543,197 @@ struct ImageArtifact {
     data: String,
     #[serde(skip_serializing_if = "Option::is_none")]
     alt: Option<String>,
+}
+` : ''}
+${capabilities.table ? `#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+struct TableArtifact {
+    columns: Vec<TableColumn>,
+    rows: Vec<Vec<Value>>,
+    row_count: usize,
+    truncated: bool,
+}
+
+#[derive(Debug, Serialize)]
+struct TableColumn {
+    key: String,
+    label: String,
+    #[serde(rename = "type")]
+    column_type: &'static str,
+}
+
+fn table_artifact_from_value(value: Value) -> Result<TableArtifact, String> {
+    let rows = match value {
+        Value::Array(rows) => rows,
+        _ => return Err("emit_table! expects a serializable array".to_owned()),
+    };
+    let row_count = rows.len();
+    let truncated = row_count > 1_000;
+    let preview: Vec<Value> = rows.into_iter().take(1_000).collect();
+    let columns = infer_table_columns(&preview);
+    let table_rows = table_rows_for_columns(preview, &columns);
+    Ok(TableArtifact {
+        columns,
+        rows: table_rows,
+        row_count,
+        truncated,
+    })
+}
+
+fn table_artifact_with_columns(columns: Value, rows: Value) -> Result<TableArtifact, String> {
+    let columns = parse_table_columns(columns)?;
+    let rows = match rows {
+        Value::Array(rows) => rows,
+        _ => return Err("emit_table_with_columns! expects rows to serialize as an array".to_owned()),
+    };
+    let row_count = rows.len();
+    let truncated = row_count > 1_000;
+    let preview: Vec<Value> = rows.into_iter().take(1_000).collect();
+    let table_rows = table_rows_for_columns(preview, &columns);
+    Ok(TableArtifact {
+        columns,
+        rows: table_rows,
+        row_count,
+        truncated,
+    })
+}
+
+fn infer_table_columns(rows: &[Value]) -> Vec<TableColumn> {
+    let Some(first) = rows.first() else {
+        return Vec::new();
+    };
+    match first {
+        Value::Object(object) => object
+            .iter()
+            .map(|(key, value)| TableColumn {
+                key: key.clone(),
+                label: key.clone(),
+                column_type: table_value_type(value),
+            })
+            .collect(),
+        Value::Array(values) => values
+            .iter()
+            .enumerate()
+            .map(|(index, value)| TableColumn {
+                key: index.to_string(),
+                label: (index + 1).to_string(),
+                column_type: table_value_type(value),
+            })
+            .collect(),
+        value => vec![TableColumn {
+            key: "value".to_owned(),
+            label: "Value".to_owned(),
+            column_type: table_value_type(value),
+        }],
+    }
+}
+
+fn parse_table_columns(value: Value) -> Result<Vec<TableColumn>, String> {
+    let Value::Array(columns) = value else {
+        return Err("table columns must serialize as an array".to_owned());
+    };
+    columns
+        .into_iter()
+        .enumerate()
+        .map(|(index, column)| parse_table_column(index, column))
+        .collect()
+}
+
+fn parse_table_column(index: usize, value: Value) -> Result<TableColumn, String> {
+    match value {
+        Value::String(label) => Ok(TableColumn {
+            key: index.to_string(),
+            label,
+            column_type: "unknown",
+        }),
+        Value::Array(values) if values.len() >= 2 => {
+            let key = values[0]
+                .as_str()
+                .ok_or_else(|| "table column tuple key must be a string".to_owned())?
+                .to_owned();
+            let label = values[1]
+                .as_str()
+                .ok_or_else(|| "table column tuple label must be a string".to_owned())?
+                .to_owned();
+            Ok(TableColumn {
+                key,
+                label,
+                column_type: "unknown",
+            })
+        }
+        Value::Object(object) => {
+            let key = object
+                .get("key")
+                .and_then(Value::as_str)
+                .ok_or_else(|| "table column object requires a string key".to_owned())?
+                .to_owned();
+            let label = object
+                .get("label")
+                .and_then(Value::as_str)
+                .unwrap_or(&key)
+                .to_owned();
+            let column_type = object
+                .get("type")
+                .and_then(Value::as_str)
+                .and_then(normalize_table_column_type)
+                .unwrap_or("unknown");
+            Ok(TableColumn {
+                key,
+                label,
+                column_type,
+            })
+        }
+        _ => Err("table column must be a string, tuple, or object".to_owned()),
+    }
+}
+
+fn table_rows_for_columns(rows: Vec<Value>, columns: &[TableColumn]) -> Vec<Vec<Value>> {
+    rows.into_iter()
+        .map(|row| match row {
+            Value::Object(object) => columns
+                .iter()
+                .map(|column| object.get(&column.key).cloned().unwrap_or(Value::Null))
+                .collect(),
+            Value::Array(values) => columns
+                .iter()
+                .enumerate()
+                .map(|(index, column)| {
+                    let value_index = column.key.parse::<usize>().unwrap_or(index);
+                    values.get(value_index).cloned().unwrap_or(Value::Null)
+                })
+                .collect(),
+            value => columns
+                .iter()
+                .enumerate()
+                .map(|(index, _)| if index == 0 { value.clone() } else { Value::Null })
+                .collect(),
+        })
+        .collect()
+}
+
+fn table_value_type(value: &Value) -> &'static str {
+    match value {
+        Value::Null => "null",
+        Value::Bool(_) => "boolean",
+        Value::Number(number) if number.is_i64() || number.is_u64() => "integer",
+        Value::Number(_) => "number",
+        Value::String(_) => "string",
+        Value::Array(_) | Value::Object(_) => "unknown",
+    }
+}
+
+fn normalize_table_column_type(value: &str) -> Option<&'static str> {
+    match value {
+        "string" => Some("string"),
+        "number" => Some("number"),
+        "integer" => Some("integer"),
+        "boolean" => Some("boolean"),
+        "date" => Some("date"),
+        "datetime" => Some("datetime"),
+        "null" => Some("null"),
+        "unknown" => Some("unknown"),
+        _ => None,
+    }
 }
 ` : ''}
 ${capabilities.chart ? `#[derive(Debug, Serialize)]
@@ -607,7 +803,10 @@ function rustOutputCapabilities(rustCells) {
     chart: source.includes('emit_line_plot!'),
     html: source.includes('emit_html!'),
     image: source.includes('emit_image_svg!') || source.includes('emit_image_png!'),
-    json: source.includes('emit_json!')
+    json: source.includes('emit_json!'),
+    table: source.includes('emit_table!')
+      || source.includes('emit_table_with_columns!')
+      || source.includes('emit_records_table!')
   };
 }
 
@@ -630,8 +829,9 @@ export function generateRustFunction(cell) {
   const inputBindings = cell.inputs.map((input) => `    ${generateRustInputBinding(input)}`).join('\n');
   const escapedSource = indentRustSource(cell.source);
   const macros = generateRustPreludeMacros(cell.source);
+  const inputsParameter = cell.inputs.length > 0 ? 'inputs' : '_inputs';
 
-  return `fn ${rustFunctionName(cell.id)}(inputs: &Value) -> Result<CellOutput, String> {
+  return `fn ${rustFunctionName(cell.id)}(${inputsParameter}: &Value) -> Result<CellOutput, String> {
 ${inputBindings ? `${inputBindings}\n` : ''}    let __stdout = std::cell::RefCell::new(String::new());
     let __plots = std::cell::RefCell::new(Vec::new());
     let __outputs = std::cell::RefCell::new(Vec::new());
@@ -716,6 +916,9 @@ function generateRustPreludeMacros(source) {
     source.includes('emit_html!') ? generateHtmlMacro() : '',
     source.includes('emit_image_svg!') ? generateImageSvgMacro() : '',
     source.includes('emit_image_png!') ? generateImagePngMacro() : '',
+    source.includes('emit_table!') ? generateTableMacro() : '',
+    source.includes('emit_table_with_columns!') ? generateTableWithColumnsMacro() : '',
+    source.includes('emit_records_table!') ? generateRecordsTableMacro() : '',
     source.includes('emit_line_plot!') ? generateLinePlotMacro() : ''
   ]
     .filter(Boolean)
@@ -801,6 +1004,40 @@ function generateImagePngMacro() {
                 data: ($base64).to_string(),
                 alt: Some(($alt).to_string()),
             }));
+        }};
+    }`;
+}
+
+function generateTableMacro() {
+  return `    macro_rules! emit_table {
+        ($rows:expr) => {{
+            let artifact = table_artifact_from_value(
+                serde_json::to_value(&$rows).map_err(|error| error.to_string())?,
+            )?;
+            __outputs.borrow_mut().push(OutputArtifact::Table(artifact));
+        }};
+    }`;
+}
+
+function generateTableWithColumnsMacro() {
+  return `    macro_rules! emit_table_with_columns {
+        ($columns:expr, $rows:expr) => {{
+            let artifact = table_artifact_with_columns(
+                serde_json::to_value(&$columns).map_err(|error| error.to_string())?,
+                serde_json::to_value(&$rows).map_err(|error| error.to_string())?,
+            )?;
+            __outputs.borrow_mut().push(OutputArtifact::Table(artifact));
+        }};
+    }`;
+}
+
+function generateRecordsTableMacro() {
+  return `    macro_rules! emit_records_table {
+        ($records:expr) => {{
+            let artifact = table_artifact_from_value(
+                serde_json::to_value(&$records).map_err(|error| error.to_string())?,
+            )?;
+            __outputs.borrow_mut().push(OutputArtifact::Table(artifact));
         }};
     }`;
 }
