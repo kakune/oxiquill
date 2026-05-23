@@ -227,6 +227,96 @@ def __oxiquill_image_data(data):
         return base64.b64encode(data).decode("ascii")
     return str(data)
 
+def __oxiquill_extract_repr_payload(value):
+    if isinstance(value, tuple) and len(value) > 0:
+        return value[0]
+    return value
+
+def __oxiquill_text_artifact(content, *, title=None, caption=None):
+    return __oxiquill_meta(
+        {"kind": "text", "stream": "display", "content": str(content)},
+        title,
+        caption,
+    )
+
+def __oxiquill_mimebundle_artifact(value, *, title=None, caption=None):
+    method = getattr(value, "_repr_mimebundle_", None)
+    if not callable(method):
+        return None
+    try:
+        bundle = __oxiquill_extract_repr_payload(method(include=None, exclude=None))
+    except TypeError:
+        bundle = __oxiquill_extract_repr_payload(method())
+    except Exception as error:
+        return __oxiquill_text_artifact(f"Failed to render MIME bundle: {error}", title=title, caption=caption)
+    if not isinstance(bundle, dict):
+        return __oxiquill_text_artifact(bundle, title=title, caption=caption)
+    return __oxiquill_artifact_from_mimebundle(bundle, title=title, caption=caption)
+
+def __oxiquill_artifact_from_mimebundle(bundle, *, title=None, caption=None):
+    html = bundle.get("text/html")
+    if html:
+        return __oxiquill_meta({"kind": "html", "html": str(html), "sandboxed": True}, title, caption)
+    svg = bundle.get("image/svg+xml")
+    if svg:
+        return __oxiquill_meta(
+            {"kind": "image", "mime": "image/svg+xml", "data": __oxiquill_image_data(svg)},
+            title,
+            caption,
+        )
+    png = bundle.get("image/png")
+    if png:
+        return __oxiquill_meta(
+            {"kind": "image", "mime": "image/png", "data": __oxiquill_image_data(png)},
+            title,
+            caption,
+        )
+    jpeg = bundle.get("image/jpeg")
+    if jpeg:
+        return __oxiquill_meta(
+            {"kind": "image", "mime": "image/jpeg", "data": __oxiquill_image_data(jpeg)},
+            title,
+            caption,
+        )
+    for mime, payload in bundle.items():
+        if mime.startswith("application/vnd.vegalite.") and mime.endswith("+json"):
+            artifact = {"kind": "json", "value": __oxiquill_jsonable(payload)}
+            if title is None:
+                artifact["title"] = "Vega-Lite specification"
+            return __oxiquill_meta(artifact, title, caption)
+    json_payload = bundle.get("application/json")
+    if json_payload is not None:
+        return __oxiquill_json_artifact(json_payload, title, caption)
+    markdown = bundle.get("text/markdown")
+    if markdown:
+        return __oxiquill_text_artifact(markdown, title=title, caption=caption)
+    plain = bundle.get("text/plain")
+    if plain:
+        return __oxiquill_text_artifact(plain, title=title, caption=caption)
+    return __oxiquill_text_artifact(
+        f"Unsupported MIME bundle: {', '.join(sorted(str(mime) for mime in bundle.keys()))}",
+        title=title,
+        caption=caption,
+    )
+
+def __oxiquill_json_repr_artifact(value, *, title=None, caption=None):
+    method = getattr(value, "_repr_json_", None)
+    if not callable(method):
+        return None
+    try:
+        return __oxiquill_json_artifact(__oxiquill_extract_repr_payload(method()), title, caption)
+    except Exception as error:
+        return __oxiquill_text_artifact(f"Failed to render JSON repr: {error}", title=title, caption=caption)
+
+def __oxiquill_markdown_repr_artifact(value, *, title=None, caption=None):
+    method = getattr(value, "_repr_markdown_", None)
+    if not callable(method):
+        return None
+    markdown = method()
+    if not markdown:
+        return None
+    return __oxiquill_text_artifact(markdown, title=title, caption=caption)
+
 def __oxiquill_configure_matplotlib():
     try:
         import matplotlib
@@ -301,6 +391,12 @@ def __oxiquill_artifact(value, title=None, caption=None):
         return dataframe_artifact
     if __oxiquill_is_matplotlib_figure(value):
         return __oxiquill_figure_to_image(value, title=title, caption=caption, mark_displayed=True)
+    mimebundle_artifact = __oxiquill_mimebundle_artifact(value, title=title, caption=caption)
+    if mimebundle_artifact is not None:
+        return mimebundle_artifact
+    json_repr_artifact = __oxiquill_json_repr_artifact(value, title=title, caption=caption)
+    if json_repr_artifact is not None:
+        return json_repr_artifact
     for method_name, mime in (
         ("_repr_svg_", "image/svg+xml"),
         ("_repr_png_", "image/png"),
@@ -320,7 +416,10 @@ def __oxiquill_artifact(value, title=None, caption=None):
         html = html_repr()
         if html:
             return __oxiquill_meta({"kind": "html", "html": str(html), "sandboxed": True}, title, caption)
-    return __oxiquill_meta({"kind": "text", "stream": "display", "content": str(value)}, title, caption)
+    markdown_repr_artifact = __oxiquill_markdown_repr_artifact(value, title=title, caption=caption)
+    if markdown_repr_artifact is not None:
+        return markdown_repr_artifact
+    return __oxiquill_text_artifact(value, title=title, caption=caption)
 
 def display(value, *, title=None, caption=None):
     __oxiquill_outputs.append(__oxiquill_artifact(value, title, caption))
