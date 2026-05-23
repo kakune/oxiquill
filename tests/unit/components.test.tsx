@@ -286,13 +286,13 @@ describe('InteractiveCell', () => {
     await waitFor(() => expect(pending).toHaveLength(2));
 
     await act(async () => {
-      pending[1].resolve({ stdout: 'newer result', stderr: '', value: null, plots: [] });
+      pending[1].resolve({ stdout: 'newer result', stderr: '', value: null, plots: [], outputs: [] });
       await pending[1].promise;
     });
     await waitFor(() => expect(screen.getByTestId('run-output')).toHaveTextContent('newer result'));
 
     await act(async () => {
-      pending[0].resolve({ stdout: 'older result', stderr: '', value: null, plots: [] });
+      pending[0].resolve({ stdout: 'older result', stderr: '', value: null, plots: [], outputs: [] });
       await pending[0].promise;
     });
 
@@ -318,7 +318,7 @@ describe('InteractiveCell', () => {
     await waitFor(() => expect(pending).toHaveLength(2));
 
     await act(async () => {
-      pending[1].resolve({ stdout: 'newer result', stderr: '', value: null, plots: [] });
+      pending[1].resolve({ stdout: 'newer result', stderr: '', value: null, plots: [], outputs: [] });
       await pending[1].promise;
     });
     await waitFor(() => expect(screen.getByTestId('run-output')).toHaveTextContent('newer result'));

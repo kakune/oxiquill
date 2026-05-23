@@ -53,11 +53,160 @@ export interface LinePlotSpec {
 
 export type PlotSpec = LinePlotSpec;
 
+export type ArtifactStream = 'stdout' | 'stderr' | 'display';
+export type TableColumnType =
+  | 'string'
+  | 'number'
+  | 'integer'
+  | 'boolean'
+  | 'date'
+  | 'datetime'
+  | 'null'
+  | 'unknown';
+export type ChartAxisType = 'value' | 'category' | 'time' | 'log';
+export type ChartSpec =
+  | LineChartSpec
+  | ScatterChartSpec
+  | BarChartSpec
+  | HistogramChartSpec
+  | AreaChartSpec
+  | HeatmapChartSpec;
+export type OutputArtifact =
+  | TextArtifact
+  | JsonArtifact
+  | TableArtifact
+  | ChartArtifact
+  | ImageArtifact
+  | HtmlArtifact;
+
+export interface BaseArtifact {
+  id?: string;
+  title?: string;
+  caption?: string;
+}
+
+export interface TextArtifact extends BaseArtifact {
+  kind: 'text';
+  stream: ArtifactStream;
+  content: string;
+  truncated?: boolean;
+}
+
+export interface JsonArtifact extends BaseArtifact {
+  kind: 'json';
+  value: unknown;
+  truncated?: boolean;
+}
+
+export interface TableArtifact extends BaseArtifact {
+  kind: 'table';
+  columns: readonly TableColumn[];
+  rows: readonly unknown[][];
+  rowCount?: number;
+  truncated?: boolean;
+}
+
+export interface TableColumn {
+  key: string;
+  label: string;
+  type?: TableColumnType;
+}
+
+export interface ChartArtifact extends BaseArtifact {
+  kind: 'chart';
+  spec: ChartSpec;
+}
+
+export interface ImageArtifact extends BaseArtifact {
+  kind: 'image';
+  mime: 'image/png' | 'image/jpeg' | 'image/svg+xml';
+  data: string;
+  alt?: string;
+}
+
+export interface HtmlArtifact extends BaseArtifact {
+  kind: 'html';
+  html: string;
+  sandboxed: true;
+}
+
+export interface BaseChartSpec {
+  title?: string;
+  xLabel?: string;
+  yLabel?: string;
+  xType?: ChartAxisType;
+  yType?: ChartAxisType;
+  legend?: boolean;
+  tooltip?: boolean;
+  dataZoom?: boolean;
+}
+
+export interface XyChartSeries {
+  name?: string;
+  points: readonly (readonly [number | string, number | string])[];
+}
+
+export interface LineChartSpec extends BaseChartSpec {
+  kind: 'line';
+  series: readonly XyChartSeries[];
+}
+
+export interface ScatterChartSpec extends BaseChartSpec {
+  kind: 'scatter';
+  series: readonly XyChartSeries[];
+}
+
+export interface BarChartSeries {
+  name?: string;
+  values: readonly (number | null)[];
+}
+
+export interface BarChartSpec extends BaseChartSpec {
+  kind: 'bar';
+  categories: readonly string[];
+  series: readonly BarChartSeries[];
+}
+
+export interface HistogramChartSpec extends BaseChartSpec {
+  kind: 'histogram';
+  bins: readonly (readonly [number, number, number])[];
+}
+
+export interface AreaChartSpec extends BaseChartSpec {
+  kind: 'area';
+  series: readonly XyChartSeries[];
+}
+
+export interface HeatmapChartSpec extends BaseChartSpec {
+  kind: 'heatmap';
+  xCategories?: readonly string[];
+  yCategories?: readonly string[];
+  data: readonly (readonly [number | string, number | string, number])[];
+}
+
+export interface OutputLimits {
+  maxTextBytes: number;
+  maxJsonBytes: number;
+  maxJsonDepth: number;
+  maxTableRows: number;
+  maxImageBytes: number;
+  maxHtmlBytes: number;
+}
+
+export interface RawCellExecutionResult {
+  stdout?: string;
+  stderr?: string;
+  value?: unknown;
+  plots?: readonly PlotSpec[];
+  outputs?: readonly OutputArtifact[];
+}
+
 export interface CellExecutionResult {
   stdout: string;
   stderr?: string;
   value?: unknown;
   plots: readonly PlotSpec[];
+  outputs: readonly OutputArtifact[];
 }
 
 export interface RuntimeWorkerRequest {
@@ -72,7 +221,7 @@ export type RuntimeWorkerResponse =
   | {
       requestId: number;
       ok: true;
-      result: CellExecutionResult;
+      result: RawCellExecutionResult;
     }
   | {
       requestId: number;
