@@ -1,3 +1,5 @@
+export declare const collections: Record<string, unknown>;
+
 export declare function createOxiquillCollections(dependencies: {
   defineCollection: (...args: any[]) => any;
   docsLoader: (...args: any[]) => any;

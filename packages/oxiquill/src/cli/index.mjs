@@ -14,16 +14,6 @@ import { cleanOxiquillWorkspace } from '../generator/clean.mjs';
 import { runHelperCargo } from '../generator/run-helper-cargo.mjs';
 import { main as watchDocRuntime } from '../generator/watch-doc-runtime.mjs';
 
-const command = process.argv[2] ?? 'help';
-const args = process.argv.slice(3);
-
-try {
-  await runCli(command, args);
-} catch (error) {
-  console.error(error);
-  process.exitCode = 1;
-}
-
 export async function runCli(command, args = [], { cwd = process.cwd(), runCommand = runCommandWithInheritedStdio } = {}) {
   const paths = createOxiquillPaths({ workspaceRoot: cwd });
 
@@ -149,7 +139,7 @@ async function runAstro(paths, args, { runCommand }) {
 async function runOxiquillCheck(paths, args, { runCommand }) {
   await runAstro(paths, ['sync'], { runCommand });
 
-  const { check, parseArgsAsCheckConfig } = await importFromWorkspace(paths, '@astrojs/check');
+  const { check, parseArgsAsCheckConfig } = await importFromFramework(paths, '@astrojs/check');
   const config = parseArgsAsCheckConfig(['node', 'oxiquill-check', ...args]);
   config.root = pathFromUrl(paths.workspaceRoot);
 
@@ -159,8 +149,8 @@ async function runOxiquillCheck(paths, args, { runCommand }) {
   }
 }
 
-async function importFromWorkspace(paths, specifier) {
-  const require = createRequire(pathInUrl(paths.workspaceRoot, 'package.json'));
+async function importFromFramework(paths, specifier) {
+  const require = createRequire(pathInUrl(paths.frameworkRoot, 'package.json'));
   return import(pathToFileURL(require.resolve(specifier)).href);
 }
 
@@ -199,4 +189,16 @@ function runCommandWithInheritedStdio(command, args, options) {
       }
     });
   });
+}
+
+if (import.meta.url === pathToFileURL(process.argv[1] ?? '').href) {
+  const command = process.argv[2] ?? 'help';
+  const args = process.argv.slice(3);
+
+  try {
+    await runCli(command, args);
+  } catch (error) {
+    console.error(error);
+    process.exitCode = 1;
+  }
 }
