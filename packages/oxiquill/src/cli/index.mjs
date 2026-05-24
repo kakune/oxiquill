@@ -1,7 +1,8 @@
 #!/usr/bin/env node
 import { spawn } from 'node:child_process';
-import { existsSync } from 'node:fs';
+import { existsSync, realpathSync } from 'node:fs';
 import { createRequire } from 'node:module';
+import path from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import { createOxiquillPaths, pathFromUrl, pathInUrl } from '../config/paths.mjs';
 import {
@@ -107,6 +108,7 @@ async function runDevServer({ paths }) {
     }),
     spawn(frameworkBin(paths, 'astro'), ['dev'], {
       cwd: pathFromUrl(paths.workspaceRoot),
+      env: frameworkEnv(paths),
       stdio: 'inherit'
     })
   ];
@@ -133,7 +135,10 @@ async function runDevServer({ paths }) {
 }
 
 async function runAstro(paths, args, { runCommand }) {
-  await runCommand(frameworkBin(paths, 'astro'), args, { cwd: pathFromUrl(paths.workspaceRoot) });
+  await runCommand(frameworkBin(paths, 'astro'), args, {
+    cwd: pathFromUrl(paths.workspaceRoot),
+    env: frameworkEnv(paths)
+  });
 }
 
 async function runOxiquillCheck(paths, args, { runCommand }) {
@@ -159,6 +164,16 @@ function frameworkBin(paths, name) {
   return existsSync(workspaceBin) ? workspaceBin : pathInUrl(paths.frameworkRoot, `node_modules/.bin/${name}`);
 }
 
+function frameworkEnv(paths) {
+  const frameworkNodePath = pathInUrl(paths.frameworkRoot, 'node_modules');
+  const currentNodePath = process.env.NODE_PATH;
+
+  return {
+    ...process.env,
+    NODE_PATH: currentNodePath ? `${frameworkNodePath}${path.delimiter}${currentNodePath}` : frameworkNodePath
+  };
+}
+
 function parseWasmMode(args) {
   const wasmIndex = args.indexOf('--wasm');
   if (wasmIndex === -1) return undefined;
@@ -177,6 +192,7 @@ function runCommandWithInheritedStdio(command, args, options) {
   return new Promise((resolve, reject) => {
     const child = spawn(command, args, {
       cwd: options.cwd,
+      env: options.env,
       stdio: 'inherit'
     });
 
@@ -191,7 +207,21 @@ function runCommandWithInheritedStdio(command, args, options) {
   });
 }
 
-if (import.meta.url === pathToFileURL(process.argv[1] ?? '').href) {
+export function isCliEntrypoint(argvPath = process.argv[1], moduleUrl = import.meta.url) {
+  if (!argvPath) return false;
+
+  return realpathSafe(argvPath) === realpathSafe(fileURLToPath(moduleUrl));
+}
+
+function realpathSafe(filePath) {
+  try {
+    return realpathSync(filePath);
+  } catch {
+    return filePath;
+  }
+}
+
+if (isCliEntrypoint()) {
   const command = process.argv[2] ?? 'help';
   const args = process.argv.slice(3);
 

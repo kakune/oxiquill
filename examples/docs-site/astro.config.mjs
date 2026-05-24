@@ -1,5 +1,3 @@
-import preact from '@astrojs/preact';
-import starlight from '@astrojs/starlight';
 import { defineOxiquillConfig } from 'oxiquill/astro';
 
 const basePath = process.env.BASE_PATH;
@@ -7,7 +5,6 @@ const basePath = process.env.BASE_PATH;
 export default defineOxiquillConfig({
   site: process.env.SITE ?? 'https://oxiquill.local',
   ...(basePath ? { base: basePath } : {}),
-  framework: { preact, starlight },
   starlight: {
     title: 'Oxiquill',
     description: 'A static documentation workspace for Rust, Python, math, diagrams, and media-rich MDX notes.',

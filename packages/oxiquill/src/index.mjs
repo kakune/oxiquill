@@ -1,1 +1,1 @@
-export { defineOxiquillConfig, oxiquillIntegration } from './astro/index.mjs';
+export { defineOxiquillConfig, oxiquillIntegration } from './astro/index.ts';

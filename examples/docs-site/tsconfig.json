@@ -1,5 +1,5 @@
 {
-  "extends": "astro/tsconfigs/strict",
+  "extends": "oxiquill/tsconfigs/strict",
   "include": [".astro/types.d.ts", "**/*"],
   "exclude": [".oxiquill", "crates/target", "dist", "public/oxiquill"]
 }

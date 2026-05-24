@@ -30,6 +30,7 @@ function runCommandWithInheritedStdio(command, args, options) {
   return new Promise((resolve, reject) => {
     const child = spawn(command, args, {
       cwd: options.cwd,
+      env: wasmPackEnv(),
       stdio: 'inherit'
     });
 
@@ -42,5 +43,10 @@ function runCommandWithInheritedStdio(command, args, options) {
       }
     });
   });
+}
+
+function wasmPackEnv() {
+  const { NODE_PATH, ...env } = process.env;
+  return env;
 }
 /* v8 ignore stop */

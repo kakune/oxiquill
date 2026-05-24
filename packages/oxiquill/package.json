@@ -11,8 +11,8 @@
     ".": "./src/index.mjs",
     "./astro": {
       "types": "./src/astro/index.d.ts",
-      "import": "./src/astro/index.mjs",
-      "default": "./src/astro/index.mjs"
+      "import": "./src/astro/index.ts",
+      "default": "./src/astro/index.ts"
     },
     "./content": {
       "types": "./src/content/index.d.ts",
@@ -25,10 +25,12 @@
     "./components/starlight/PageFrame": "./src/components/starlight/PageFrame.astro",
     "./styles/katex.css": "./src/styles/katex.css",
     "./styles/custom.css": "./src/styles/custom.css",
+    "./tsconfigs/strict": "./tsconfigs/strict.json",
     "./env": "./src/env.d.ts"
   },
   "files": [
-    "src"
+    "src",
+    "tsconfigs"
   ],
   "keywords": [
     "astro",

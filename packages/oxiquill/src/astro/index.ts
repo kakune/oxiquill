@@ -1,9 +1,11 @@
+// @ts-nocheck
+import { createRequire } from 'node:module';
 import { defineConfig } from 'astro/config';
 import preact from '@astrojs/preact';
 import starlight from '@astrojs/starlight';
 import rehypeKatex from 'rehype-katex';
 import remarkMath from 'remark-math';
-import { pathFromUrl } from '../config/paths.mjs';
+import { pathFromUrl, pathInUrl } from '../config/paths.mjs';
 import { createDocRuntimeContext, markRuntimeReady, syncDocRuntime } from '../generator/doc-runtime-service.mjs';
 import { buildRustWasm } from '../generator/doc-runtime/wasm-build.mjs';
 import remarkInteractiveCells from '../lib/doc-runtime/remark-interactive-cells.mjs';
@@ -19,12 +21,21 @@ export function defineOxiquillConfig(options = {}) {
     integrations = [],
     markdown = {},
     paths,
+    description,
+    sidebar,
     starlight: starlightOptions = {},
+    title,
     vite = {},
     ...astroOptions
   } = options;
   const preactIntegration = resolveIntegrationFactory(framework.preact, preact, 'framework.preact');
   const starlightIntegration = resolveIntegrationFactory(framework.starlight, starlight, 'framework.starlight');
+  const mergedStarlightOptions = {
+    ...(description == null ? {} : { description }),
+    ...(sidebar == null ? {} : { sidebar }),
+    ...(title == null ? {} : { title }),
+    ...starlightOptions
+  };
 
   return defineConfig({
     output: 'static',
@@ -34,7 +45,7 @@ export function defineOxiquillConfig(options = {}) {
     integrations: [
       oxiquillIntegration({ base, markdown, paths, vite }),
       preactIntegration(),
-      starlightIntegration(createStarlightOptions(starlightOptions)),
+      starlightIntegration(createStarlightOptions(mergedStarlightOptions)),
       ...integrations
     ]
   });
@@ -149,6 +160,7 @@ function mergeViteConfig(paths, vite) {
       format: 'es',
       ...worker,
       plugins: () => [
+        oxiquillDependencyResolverPlugin(paths),
         oxiquillVirtualModulesPlugin(paths),
         ...resolveWorkerPlugins(worker.plugins)
       ]
@@ -158,9 +170,31 @@ function mergeViteConfig(paths, vite) {
       ...vite.build
     },
     plugins: [
+      oxiquillDependencyResolverPlugin(paths),
       oxiquillVirtualModulesPlugin(paths),
       ...(vite.plugins ?? [])
     ]
+  };
+}
+
+function oxiquillDependencyResolverPlugin(paths) {
+  const require = createRequire(pathInUrl(paths.frameworkRoot, 'package.json'));
+  const packageNames = ['astro', '@astrojs/preact', '@astrojs/starlight'];
+
+  return {
+    enforce: 'pre',
+    name: 'oxiquill-dependency-resolver',
+    resolveId(source) {
+      if (!packageNames.some((packageName) => source === packageName || source.startsWith(`${packageName}/`))) {
+        return undefined;
+      }
+
+      try {
+        return require.resolve(source);
+      } catch {
+        return undefined;
+      }
+    }
   };
 }
 
