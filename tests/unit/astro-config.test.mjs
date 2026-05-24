@@ -1,5 +1,6 @@
 // @vitest-environment node
 
+import { realpathSync } from 'node:fs';
 import { describe, expect, it, vi } from 'vitest';
 
 vi.mock('astro/config', () => ({
@@ -18,6 +19,21 @@ const { defineOxiquillConfig } = await import('../../packages/oxiquill/src/astro
 
 function integrationNames(config) {
   return config.integrations.flat().map((integration) => integration.name);
+}
+
+function runConfigSetup(config, root = new URL('file:///tmp/')) {
+  const integration = config.integrations.flat().find((entry) => entry.name === 'oxiquill');
+  let update;
+
+  integration.hooks['astro:config:setup']({
+    addWatchFile: vi.fn(),
+    config: { root },
+    updateConfig: (value) => {
+      update = value;
+    }
+  });
+
+  return update;
 }
 
 describe('defineOxiquillConfig', () => {
@@ -65,5 +81,29 @@ describe('defineOxiquillConfig', () => {
 
     expect(integrationNames(config)).toEqual(['oxiquill', 'custom-preact', 'custom-starlight']);
     expect(starlight).toHaveBeenCalledWith(expect.objectContaining({ title: 'Docs' }));
+  });
+
+  it('allows linked package sources and package-managed dependencies in Vite dev server', () => {
+    const config = defineOxiquillConfig({
+      sidebar: [],
+      title: 'Docs',
+      vite: {
+        server: {
+          fs: {
+            allow: ['/already-allowed']
+          }
+        }
+      }
+    });
+
+    const update = runConfigSetup(config);
+    const allow = update.vite.server.fs.allow;
+
+    expect(allow).toContain('/already-allowed');
+    expect(allow).toContain('/tmp');
+    expect(allow).toContain(realpathSync('packages/oxiquill'));
+    expect(allow).toContain(realpathSync('node_modules'));
+    expect(allow.some((entry) => entry.includes('node_modules/.pnpm/katex'))).toBe(true);
+    expect(allow.some((entry) => entry.includes('node_modules/.pnpm/@astrojs+preact'))).toBe(true);
   });
 });

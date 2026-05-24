@@ -1,4 +1,6 @@
+import { existsSync, realpathSync } from 'node:fs';
 import { createRequire } from 'node:module';
+import path from 'node:path';
 import { defineConfig } from 'astro/config';
 import preact from '@astrojs/preact';
 import starlight from '@astrojs/starlight';
@@ -46,6 +48,16 @@ type AstroMarkdownConfig = NonNullable<BaseAstroUserConfig['markdown']>;
 type SyntaxHighlightObject = Extract<AstroMarkdownConfig['syntaxHighlight'], object>;
 type ViteWorkerPlugins = PluginOption[] | (() => PluginOption[]);
 type DocRuntimeContext = Awaited<ReturnType<typeof createDocRuntimeContext>>;
+
+const frameworkPackageNames = ['astro', '@astrojs/preact', '@astrojs/starlight'];
+const viteServedPackageNames = [
+  ...frameworkPackageNames,
+  'echarts',
+  'katex',
+  'mermaid',
+  'preact',
+  'pyodide'
+];
 
 export interface OxiquillFrameworkOptions {
   preact?: PreactIntegrationFactory;
@@ -251,9 +263,18 @@ function syntaxHighlightConfig(value: AstroMarkdownConfig['syntaxHighlight']): P
 
 function mergeViteConfig(paths: OxiquillPaths, vite: ViteUserConfig): ViteUserConfig {
   const worker = vite.worker ?? {};
+  const server = vite.server ?? {};
+  const serverFs = server.fs ?? {};
 
   return {
     ...vite,
+    server: {
+      ...server,
+      fs: {
+        ...serverFs,
+        allow: mergeServerFsAllow(serverFs.allow, oxiquillServeAllow(paths))
+      }
+    },
     worker: {
       format: 'es',
       ...worker,
@@ -277,13 +298,12 @@ function mergeViteConfig(paths: OxiquillPaths, vite: ViteUserConfig): ViteUserCo
 
 function oxiquillDependencyResolverPlugin(paths: OxiquillPaths): PluginOption {
   const require = createRequire(pathInUrl(paths.frameworkRoot, 'package.json'));
-  const packageNames = ['astro', '@astrojs/preact', '@astrojs/starlight'];
 
   return {
     enforce: 'pre',
     name: 'oxiquill-dependency-resolver',
     resolveId(source: string) {
-      if (!packageNames.some((packageName) => source === packageName || source.startsWith(`${packageName}/`))) {
+      if (!frameworkPackageNames.some((packageName) => source === packageName || source.startsWith(`${packageName}/`))) {
         return undefined;
       }
 
@@ -294,6 +314,66 @@ function oxiquillDependencyResolverPlugin(paths: OxiquillPaths): PluginOption {
       }
     }
   };
+}
+
+function oxiquillServeAllow(paths: OxiquillPaths): string[] {
+  const require = createRequire(pathInUrl(paths.frameworkRoot, 'package.json'));
+  const allowPaths = [
+    pathFromUrl(paths.workspaceRoot),
+    pathFromUrl(paths.frameworkRoot),
+    pathInUrl(paths.frameworkRoot, 'node_modules')
+  ];
+
+  for (const packageName of viteServedPackageNames) {
+    const packageJsonPath = resolvePackageJson(require, packageName);
+    if (!packageJsonPath) continue;
+
+    allowPaths.push(path.dirname(packageJsonPath));
+    allowPaths.push(...nodeModulesAncestors(packageJsonPath));
+  }
+
+  return existingRealPaths(allowPaths);
+}
+
+function resolvePackageJson(require: NodeRequire, packageName: string): string | undefined {
+  try {
+    return require.resolve(`${packageName}/package.json`);
+  } catch {
+    return undefined;
+  }
+}
+
+function nodeModulesAncestors(filePath: string): string[] {
+  const ancestors: string[] = [];
+  let current = path.dirname(filePath);
+
+  while (current !== path.dirname(current)) {
+    if (path.basename(current) === 'node_modules') ancestors.push(current);
+    current = path.dirname(current);
+  }
+
+  return ancestors;
+}
+
+function existingRealPaths(paths: string[]): string[] {
+  const seen = new Set<string>();
+  const realPaths: string[] = [];
+
+  for (const candidate of paths) {
+    if (!existsSync(candidate)) continue;
+
+    const realPath = realpathSync(candidate);
+    if (seen.has(realPath)) continue;
+
+    seen.add(realPath);
+    realPaths.push(realPath);
+  }
+
+  return realPaths;
+}
+
+function mergeServerFsAllow(allow: string[] | undefined, additions: string[]): string[] {
+  return [...new Set([...(allow ?? []), ...additions])];
 }
 
 function resolveWorkerPlugins(plugins: ViteWorkerPlugins | undefined): PluginOption[] {
