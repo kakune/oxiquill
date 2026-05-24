@@ -4,7 +4,7 @@ import {
   postprocessRustWasm,
   removeUnusedWasmPackState,
   stripUnusedWasmPackState
-} from '../../scripts/postprocess-rust-wasm.mjs';
+} from '../../packages/oxiquill/src/generator/postprocess-rust-wasm.mjs';
 import {
   buildRustWasm,
   collectCells,
@@ -27,27 +27,49 @@ import {
   summarizeCells,
   syncDocRuntime,
   writeIfChanged
-} from '../../scripts/doc-runtime-service.mjs';
+} from '../../packages/oxiquill/src/generator/doc-runtime-service.mjs';
+import { pathFromUrl } from '../../packages/oxiquill/src/config/paths.mjs';
+
+const repoRoot = path.resolve('/repo');
+const repoRootMemoryPath = String(repoRoot).replaceAll('\\', '/');
 
 function memoryPath(filePath) {
-  return String(filePath).replaceAll('\\', '/');
+  const normalizedPath = String(filePath).replaceAll('\\', '/');
+  return normalizedPath === repoRootMemoryPath || normalizedPath.startsWith(`${repoRootMemoryPath}/`)
+    ? normalizedPath.replace(repoRootMemoryPath, '/repo')
+    : normalizedPath;
 }
 
 function repoPath(...segments) {
-  return path.join('/repo', ...segments);
+  return path.join(repoRoot, ...segments);
 }
 
 function createMemoryFileSystem(initialFiles = {}) {
   const files = new Map();
-  const directories = new Set(['/repo', '/repo/src', '/repo/src/content', '/repo/src/content/docs']);
+  const directories = new Set([
+    memoryPath(repoRoot),
+    memoryPath(repoPath('src')),
+    memoryPath(repoPath('src/content')),
+    memoryPath(repoPath('content/docs'))
+  ]);
   const writes = [];
   const copies = [];
 
   function ensureParents(filePath) {
-    const parts = memoryPath(filePath).split('/').filter(Boolean);
-    let current = '';
+    const normalizedPath = memoryPath(filePath);
+    const hasDriveRoot = /^[A-Za-z]:\//u.test(normalizedPath);
+    const root = hasDriveRoot ? normalizedPath.slice(0, 2) : normalizedPath.startsWith('/') ? '/' : '';
+    const relativePath = root === '/'
+      ? normalizedPath.slice(1)
+      : hasDriveRoot
+        ? normalizedPath.slice(3)
+        : normalizedPath;
+    const parts = relativePath.split('/').filter(Boolean);
+    let current = root;
+    if (current && current !== '/') directories.add(current);
+
     for (const part of parts.slice(0, -1)) {
-      current += `/${part}`;
+      current = current === '/' ? `/${part}` : current ? `${current}/${part}` : part;
       directories.add(current);
     }
   }
@@ -171,12 +193,19 @@ describe('doc runtime service', () => {
   });
 
   it('creates project paths and context with discovered helper crates', async () => {
-    expect(createDocRuntimePaths('/repo')).toEqual({
-      docsDir: repoPath('src/content/docs'),
-      generatedDir: repoPath('src/generated/doc-runtime'),
-      pyodidePublicDir: repoPath('public/pyodide'),
-      rustCrateDir: repoPath('src/generated/doc-runtime/rust-cells'),
-      runtimeVersionPath: repoPath('src/generated/doc-runtime/runtime-version.ts')
+    const paths = createDocRuntimePaths('/repo');
+    expect({
+      docsDir: pathFromUrl(paths.docsDir),
+      generatedDir: pathFromUrl(paths.generatedDir),
+      pyodidePublicDir: pathFromUrl(paths.pyodidePublicDir),
+      rustCellsDir: pathFromUrl(paths.rustCellsDir),
+      runtimeVersionPath: pathFromUrl(paths.runtimeVersionPath)
+    }).toEqual({
+      docsDir: repoPath('content/docs'),
+      generatedDir: repoPath('.oxiquill/generated'),
+      pyodidePublicDir: repoPath('public/oxiquill/pyodide'),
+      rustCellsDir: repoPath('.oxiquill/rust-cells'),
+      runtimeVersionPath: repoPath('.oxiquill/generated/runtime-version.ts')
     });
 
     const fileSystem = createMemoryFileSystem({
@@ -208,14 +237,14 @@ describe('doc runtime service', () => {
       '/repo/crates/readme.txt': 'ignored'
     });
 
-    await expect(readHelperManifests({ fileSystem, root: '/repo' })).resolves.toEqual([
+    await expect(readHelperManifests({ fileSystem, paths })).resolves.toEqual([
       { content: '[package]\nname = "a-crate"\n', manifestPath: repoPath('crates/a/Cargo.toml') },
       { content: '[package]\nname = "b-crate"\n', manifestPath: repoPath('crates/b/Cargo.toml') }
     ]);
-    const helperCrates = await listHelperCrates({ fileSystem, paths, root: '/repo' });
+    const helperCrates = await listHelperCrates({ fileSystem, paths });
     expect(Array.from(helperCrates.keys())).toEqual(['a-crate', 'b-crate']);
     expect(helperCrates.get('a-crate')).toMatchObject({ name: 'a-crate' });
-    await expect(listHelperCrates({ paths, root: '/repo', readManifests: async () => [] })).resolves.toEqual(
+    await expect(listHelperCrates({ paths, readManifests: async () => [] })).resolves.toEqual(
       new Map()
     );
 
@@ -227,7 +256,7 @@ describe('doc runtime service', () => {
         throw error;
       }
     };
-    await expect(readHelperManifests({ fileSystem: missing, root: '/repo' })).resolves.toEqual([]);
+    await expect(readHelperManifests({ fileSystem: missing, paths })).resolves.toEqual([]);
 
     const unreadableDirectory = {
       ...fileSystem,
@@ -237,7 +266,7 @@ describe('doc runtime service', () => {
         throw error;
       }
     };
-    await expect(readHelperManifests({ fileSystem: unreadableDirectory, root: '/repo' })).rejects.toThrow(
+    await expect(readHelperManifests({ fileSystem: unreadableDirectory, paths })).rejects.toThrow(
       'permission denied'
     );
 
@@ -249,23 +278,23 @@ describe('doc runtime service', () => {
         throw error;
       }
     };
-    await expect(readHelperManifests({ fileSystem: unreadableManifest, root: '/repo' })).rejects.toThrow(
+    await expect(readHelperManifests({ fileSystem: unreadableManifest, paths })).rejects.toThrow(
       'broken manifest'
     );
   });
 
   it('lists files recursively and collects interactive cells', async () => {
     const fileSystem = createMemoryFileSystem({
-      '/repo/src/content/docs/index.mdx': 'plain',
-      '/repo/src/content/docs/note.mdx': '```rust\n//| id: a\n//| crates: []\nprintln!("a");\n```',
-      '/repo/src/content/docs/deep/page.md': '```python\n#| id: b\nprint("b")\n```'
+      '/repo/content/docs/index.mdx': 'plain',
+      '/repo/content/docs/note.mdx': '```rust\n//| id: a\n//| crates: []\nprintln!("a");\n```',
+      '/repo/content/docs/deep/page.md': '```python\n#| id: b\nprint("b")\n```'
     });
     const paths = createDocRuntimePaths('/repo');
 
     await expect(listFiles(paths.docsDir, { fileSystem })).resolves.toEqual([
-      repoPath('src/content/docs/deep/page.md'),
-      repoPath('src/content/docs/index.mdx'),
-      repoPath('src/content/docs/note.mdx')
+      repoPath('content/docs/deep/page.md'),
+      repoPath('content/docs/index.mdx'),
+      repoPath('content/docs/note.mdx')
     ]);
 
     await expect(
@@ -287,12 +316,12 @@ describe('doc runtime service', () => {
         }
       ]
     };
-    await expect(listFiles('/repo/src/content/docs', { fileSystem: oddFileSystem })).resolves.toEqual([]);
+    await expect(listFiles('/repo/content/docs', { fileSystem: oddFileSystem })).resolves.toEqual([]);
   });
 
   it('fails clearly when an MDX Rust cell references an unknown helper crate', async () => {
     const fileSystem = createMemoryFileSystem({
-      '/repo/src/content/docs/page.mdx': '```rust\n//| id: a\n//| crates: [missing-helper]\nprintln!("a");\n```'
+      '/repo/content/docs/page.mdx': '```rust\n//| id: a\n//| crates: [missing-helper]\nprintln!("a");\n```'
     });
 
     await expect(
@@ -304,13 +333,13 @@ describe('doc runtime service', () => {
         root: '/repo'
       })
     ).rejects.toThrow(
-      'Rust cell "a" in src/content/docs/page.mdx references unknown crate "missing-helper"'
+      'Rust cell "a" in content/docs/page.mdx references unknown crate "missing-helper"'
     );
   });
 
   it('fails clearly when an MDX Python cell specifies unsupported packages', async () => {
     const fileSystem = createMemoryFileSystem({
-      '/repo/src/content/docs/page.mdx': '```python\n#| id: py\n#| packages: [scipy]\nprint("py")\n```'
+      '/repo/content/docs/page.mdx': '```python\n#| id: py\n#| packages: [scipy]\nprint("py")\n```'
     });
 
     await expect(
@@ -322,7 +351,7 @@ describe('doc runtime service', () => {
         root: '/repo'
       })
     ).rejects.toThrow(
-      'Python cell "py" in src/content/docs/page.mdx specifies unsupported packages: scipy'
+      'Python cell "py" in content/docs/page.mdx specifies unsupported packages: scipy'
     );
   });
 
@@ -397,8 +426,8 @@ describe('doc runtime service', () => {
     const fetchPackage = async (fileName) => fetched[fileName];
 
     await expect(copyPyodideAssets({ fetchPackage, fileSystem: present, paths, root: '/repo' })).resolves.toBe(true);
-    expect(present.files.get('/repo/public/pyodide/matplotlib.whl')).toEqual(Buffer.from('matplotlib bytes'));
-    expect(present.files.get('/repo/public/pyodide/pandas.whl')).toEqual(Buffer.from('pandas bytes'));
+    expect(present.files.get('/repo/public/oxiquill/pyodide/matplotlib.whl')).toEqual(Buffer.from('matplotlib bytes'));
+    expect(present.files.get('/repo/public/oxiquill/pyodide/pandas.whl')).toEqual(Buffer.from('pandas bytes'));
     await expect(copyPyodideAssets({ fetchPackage, fileSystem: present, paths, root: '/repo' })).resolves.toBe(false);
   });
 
@@ -519,7 +548,7 @@ describe('doc runtime service', () => {
   it('syncs generated runtime files and reports changed surfaces', async () => {
     const paths = createDocRuntimePaths('/repo');
     const fileSystem = createMemoryFileSystem({
-      '/repo/src/content/docs/page.mdx': '```rust\n//| id: a\n//| crates: [doc-rust]\nprintln!("a");\n```'
+      '/repo/content/docs/page.mdx': '```rust\n//| id: a\n//| crates: [doc-rust]\nprintln!("a");\n```'
     });
     const helperCrates = await listHelperCrates({
       fileSystem: createMemoryFileSystem({
@@ -545,14 +574,14 @@ describe('doc runtime service', () => {
       rustChanged: true
     });
     expect(fileSystem.writes.sort()).toEqual([
-      '/repo/src/generated/doc-runtime/cells.ts',
-      '/repo/src/generated/doc-runtime/cells.json',
-      '/repo/src/generated/doc-runtime/rust-cells/Cargo.toml',
-      '/repo/src/generated/doc-runtime/rust-cells/src/lib.rs'
+      '/repo/.oxiquill/generated/cells.ts',
+      '/repo/.oxiquill/generated/cells.json',
+      '/repo/.oxiquill/rust-cells/Cargo.toml',
+      '/repo/.oxiquill/rust-cells/src/lib.rs'
     ].sort());
 
     await expect(markRuntimeReady({ fileSystem, paths, summary: first, version: 'ready-1' })).resolves.toBe(true);
-    expect(fileSystem.files.get('/repo/src/generated/doc-runtime/runtime-version.ts').toString()).toContain(
+    expect(fileSystem.files.get('/repo/.oxiquill/generated/runtime-version.ts').toString()).toContain(
       'ready-1'
     );
     expect(generateRuntimeVersionModule('ready-2')).toContain('ready-2');
@@ -605,6 +634,9 @@ describe('doc runtime service', () => {
     const commands = [];
     await buildRustWasm({
       mode: 'build',
+      postprocess: async (options) => {
+        commands.push(['postprocess', [], options]);
+      },
       root: '/repo',
       runCommand: async (command, args, options) => {
         commands.push([command, args, options]);
@@ -616,23 +648,24 @@ describe('doc runtime service', () => {
         'wasm-pack',
         [
           'build',
-          'src/generated/doc-runtime/rust-cells',
+          repoPath('.oxiquill/rust-cells'),
           '--target',
           'web',
           '--release',
           '--out-dir',
-          '../rust-wasm',
+          repoPath('public/oxiquill/rust-wasm'),
           '--out-name',
           'doc_rust_cells'
         ],
-        { cwd: '/repo' }
+        { cwd: repoRoot }
       ],
-      [process.execPath, ['scripts/postprocess-rust-wasm.mjs'], { cwd: '/repo' }]
+      ['postprocess', [], { rustWasmDir: repoPath('public/oxiquill/rust-wasm') }]
     ]);
 
     commands.length = 0;
     await buildRustWasm({
       mode: 'dev',
+      postprocess: async () => undefined,
       root: '/repo',
       runCommand: async (command, args, options) => {
         commands.push([command, args, options]);

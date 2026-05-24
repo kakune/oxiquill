@@ -1,0 +1,104 @@
+---
+title: Getting Started
+description: Install dependencies, run the local site, build static output, and preview the result.
+---
+
+Use this guide when you want to run the documentation site locally or verify that a docs change builds.
+
+## Requirements
+
+Install these tools before running the project:
+
+- Node.js with `pnpm`
+- Rust toolchain `1.95.0`
+- `wasm-pack`
+- `cargo-llvm-cov`
+
+The Rust toolchain and Wasm target are pinned by `rust-toolchain.toml`. Do not change the pinned toolchain as part of normal documentation work.
+
+## Install Dependencies
+
+```sh
+pnpm install
+```
+
+Dependencies include Astro, Starlight, Preact, Pyodide, Mermaid, KaTeX, Vitest, Playwright, and the `oxiquill` CLI that generates executable-cell runtime artifacts.
+
+## Create a Consumer Repository
+
+For a separate documentation repository, add only `oxiquill` and route scripts through its CLI:
+
+```json
+{
+  "dependencies": {
+    "oxiquill": "0.2.0"
+  },
+  "scripts": {
+    "dev": "oxiquill dev",
+    "build": "oxiquill build",
+    "check": "oxiquill check"
+  }
+}
+```
+
+Use the same setup for `link:`, workspace, Git dependency, or submodule-style installs; only the dependency specifier changes. The consumer config is:
+
+```js
+import { defineOxiquillConfig } from 'oxiquill/astro';
+
+export default defineOxiquillConfig({
+  title: 'My Docs',
+  sidebar: [{ label: 'Overview', items: [{ label: 'Home', slug: 'index' }] }]
+});
+```
+
+```ts
+export { collections } from 'oxiquill/content';
+```
+
+## Run the Development Server
+
+```sh
+pnpm dev
+```
+
+The dev command starts with runtime generation, then watches the docs and helper sources:
+
+- Prose, normal code blocks, math, Mermaid, and media changes update through Astro HMR.
+- Python cell changes update the generated cell manifest.
+- Rust cell changes and `crates/*` changes rebuild the generated Wasm runtime.
+
+If you need to inspect runtime generation separately from Astro, run the watcher and dev server in separate terminals:
+
+```sh
+pnpm dev:runtime
+pnpm dev:astro
+```
+
+## Build Static Output
+
+```sh
+pnpm build
+```
+
+The build runs the Wasm runtime build, checks the Astro project, and writes the static site to `dist/`.
+
+## Preview the Build
+
+```sh
+pnpm preview
+```
+
+Use preview after `pnpm build` when you want to inspect the production output rather than the development server.
+
+## Generated Output
+
+The runtime generation scripts write generated files under:
+
+- `.oxiquill/generated`
+- `.oxiquill/rust-cells`
+- `public/oxiquill/pyodide`
+- `public/oxiquill/rust-wasm`
+- `dist`
+
+Do not edit those paths directly. Change MDX, helper crates, scripts, or handwritten runtime code, then regenerate with the existing commands.

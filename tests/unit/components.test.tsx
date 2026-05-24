@@ -1,74 +1,62 @@
 import { act, cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/preact';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import type { CellExecutionResult, CellManifest, InputSpec } from '../../src/lib/doc-runtime/types';
+import type { CellExecutionResult, CellManifest, InputSpec } from '../../packages/oxiquill/src/lib/doc-runtime/types';
+import {
+  chart,
+  echartsInit,
+  echartsUse,
+  mermaidInitialize,
+  mermaidRender
+} from './mocks/external-runtime';
 
-const mocks = vi.hoisted(() => {
-  const chart = {
-    dispose: vi.fn(),
-    resize: vi.fn(),
-    setOption: vi.fn()
-  };
+type ManifestSnapshot = {
+  cells: readonly CellManifest[];
+  version: string;
+};
 
-  return {
-    chart,
-    echartsInit: vi.fn(() => chart),
-    echartsUse: vi.fn(),
-    getCell: vi.fn(),
-    getManifestSnapshot: vi.fn(() => ({ cells: [], version: 'v1' })),
-    manifestListeners: [] as Array<() => void>,
-    mermaidInitialize: vi.fn(),
-    mermaidRender: vi.fn(),
-    runInteractiveCell: vi.fn()
-  };
-});
+const runtimeMocks = vi.hoisted(() => ({
+  getCell: vi.fn(),
+  getManifestSnapshot: vi.fn<() => ManifestSnapshot>(() => ({ cells: [], version: 'v1' })),
+  manifestListeners: [] as Array<() => void>,
+  runInteractiveCell: vi.fn()
+}));
 
-vi.mock('echarts/charts', () => ({ BarChart: {}, HeatmapChart: {}, LineChart: {}, ScatterChart: {} }));
-vi.mock('echarts/components', () => ({
-  DataZoomComponent: {},
-  GridComponent: {},
-  LegendComponent: {},
-  TitleComponent: {},
-  TooltipComponent: {},
-  VisualMapComponent: {}
-}));
-vi.mock('echarts/renderers', () => ({ CanvasRenderer: {} }));
-vi.mock('echarts/core', () => ({
-  init: mocks.echartsInit,
-  use: mocks.echartsUse
-}));
-vi.mock('mermaid', () => ({
-  default: {
-    initialize: mocks.mermaidInitialize,
-    render: mocks.mermaidRender
-  }
-}));
-vi.mock('../../src/lib/doc-runtime/manifest', () => ({
-  getCell: mocks.getCell,
-  getManifestSnapshot: mocks.getManifestSnapshot,
+const mocks = {
+  ...runtimeMocks,
+  chart,
+  echartsInit,
+  echartsUse,
+  mermaidInitialize,
+  mermaidRender
+};
+
+vi.mock('../../packages/oxiquill/src/lib/doc-runtime/manifest', () => ({
+  getCell: runtimeMocks.getCell,
+  getManifestSnapshot: runtimeMocks.getManifestSnapshot,
+  refreshGeneratedManifest: vi.fn(() => Promise.resolve()),
   subscribeManifest: vi.fn((listener: () => void) => {
-    mocks.manifestListeners.push(listener);
+    runtimeMocks.manifestListeners.push(listener);
     return vi.fn();
   })
 }));
-vi.mock('../../src/lib/doc-runtime/runtime-client', () => ({
-  runInteractiveCell: mocks.runInteractiveCell
+vi.mock('../../packages/oxiquill/src/lib/doc-runtime/runtime-client', () => ({
+  runInteractiveCell: runtimeMocks.runInteractiveCell
 }));
 
-const { default: InteractiveCell } = await import('../../src/components/doc-runtime/InteractiveCell');
+const { default: InteractiveCell } = await import('../../packages/oxiquill/src/components/doc-runtime/InteractiveCell');
 const {
   default: MermaidDiagram,
   getMermaidColorScheme
-} = await import('../../src/components/doc-runtime/MermaidDiagram');
-const { default: OutputRenderer, imageArtifactSource } = await import('../../src/components/doc-runtime/OutputRenderer');
-const { default: PlotOutput } = await import('../../src/components/doc-runtime/PlotOutput');
-const { chartSpecToEChartsOptions } = await import('../../src/components/doc-runtime/ChartOutput');
+} = await import('../../packages/oxiquill/src/components/doc-runtime/MermaidDiagram');
+const { default: OutputRenderer, imageArtifactSource } = await import('../../packages/oxiquill/src/components/doc-runtime/OutputRenderer');
+const { chartSpecToEChartsOptions } = await import('../../packages/oxiquill/src/components/doc-runtime/ChartOutput');
 const {
   default: TableOutput,
   formatTableCell,
   sortRows,
   tableToCsv,
   visibleRows
-} = await import('../../src/components/doc-runtime/TableOutput');
+} = await import('../../packages/oxiquill/src/components/doc-runtime/TableOutput');
 
 class TestResizeObserver {
   static instances: TestResizeObserver[] = [];
@@ -128,6 +116,13 @@ function makeCell(overrides: Partial<CellManifest> = {}): CellManifest {
   };
 }
 
+let manifestSnapshot: ManifestSnapshot = { cells: [], version: 'v1' };
+
+function setManifestCells(cells: readonly CellManifest[], version = 'v1') {
+  manifestSnapshot = { cells, version };
+  mocks.getManifestSnapshot.mockImplementation(() => manifestSnapshot);
+}
+
 function createDeferredResult() {
   let resolve!: (value: CellExecutionResult) => void;
   let reject!: (reason: Error) => void;
@@ -141,7 +136,9 @@ function createDeferredResult() {
 
 beforeEach(() => {
   vi.clearAllMocks();
-  mocks.manifestListeners = [];
+  setManifestCells([]);
+  runtimeMocks.manifestListeners = [];
+  mocks.manifestListeners = runtimeMocks.manifestListeners;
   TestResizeObserver.instances = [];
   document.documentElement.lang = 'en';
   document.documentElement.removeAttribute('data-theme');
@@ -155,7 +152,7 @@ afterEach(() => {
 
 describe('InteractiveCell', () => {
   it('renders an error for unknown cells', () => {
-    mocks.getCell.mockReturnValue(undefined);
+    setManifestCells([]);
 
     render(<InteractiveCell cellId="missing" />);
 
@@ -163,7 +160,7 @@ describe('InteractiveCell', () => {
   });
 
   it('renders controls, toggles source, runs button cells, and displays all output types', async () => {
-    mocks.getCell.mockReturnValue(makeCell());
+    setManifestCells([makeCell()]);
     mocks.runInteractiveCell.mockResolvedValue({
       stdout: 'stdout',
       stderr: 'stderr',
@@ -219,9 +216,10 @@ describe('InteractiveCell', () => {
 
   it('scopes input ids and radio groups per cell', () => {
     const radioOnly = inputs.filter((input) => input.name === 'style');
-    mocks.getCell.mockImplementation((cellId: string) =>
-      makeCell({ id: cellId, title: cellId, inputs: radioOnly })
-    );
+    setManifestCells([
+      makeCell({ id: 'cell-one', title: 'cell-one', inputs: radioOnly }),
+      makeCell({ id: 'cell-two', title: 'cell-two', inputs: radioOnly })
+    ]);
 
     render(
       <>
@@ -248,7 +246,7 @@ describe('InteractiveCell', () => {
   });
 
   it('shows running and error states', async () => {
-    mocks.getCell.mockReturnValue(makeCell());
+    setManifestCells([makeCell()]);
     mocks.runInteractiveCell.mockRejectedValue(new Error('failed'));
 
     render(<InteractiveCell cellId="cell-one" />);
@@ -259,7 +257,7 @@ describe('InteractiveCell', () => {
   });
 
   it('coerces non-Error failures to strings', async () => {
-    mocks.getCell.mockReturnValue(makeCell());
+    setManifestCells([makeCell()]);
     mocks.runInteractiveCell.mockRejectedValue('string failure');
 
     render(<InteractiveCell cellId="cell-one" />);
@@ -270,13 +268,16 @@ describe('InteractiveCell', () => {
 
   it('runs autorun and reactive cells automatically', async () => {
     mocks.runInteractiveCell.mockResolvedValue({ stdout: 'auto', plots: [] });
-    mocks.getCell.mockReturnValue(makeCell({ run: 'autorun' }));
+    setManifestCells([makeCell({ run: 'autorun' })]);
 
     const { rerender } = render(<InteractiveCell cellId="cell-one" />);
     await waitFor(() => expect(mocks.runInteractiveCell).toHaveBeenCalledTimes(1));
     expect(screen.getByRole('button', { name: 'Run' })).toBeVisible();
 
-    mocks.getCell.mockReturnValue(makeCell({ id: 'cell-two', run: 'reactive' }));
+    act(() => {
+      setManifestCells([makeCell({ id: 'cell-two', run: 'reactive' })]);
+      mocks.manifestListeners[0]();
+    });
     rerender(<InteractiveCell cellId="cell-two" />);
     await waitFor(() => expect(mocks.runInteractiveCell).toHaveBeenCalledTimes(2));
 
@@ -291,10 +292,10 @@ describe('InteractiveCell', () => {
       pending.push(deferred);
       return deferred.promise;
     });
-    mocks.getCell.mockReturnValue(makeCell({
+    setManifestCells([makeCell({
       run: 'reactive',
       inputs: [inputs.find((input) => input.name === 'label') as InputSpec]
-    }));
+    })]);
 
     render(<InteractiveCell cellId="cell-one" />);
     await waitFor(() => expect(pending).toHaveLength(1));
@@ -323,10 +324,10 @@ describe('InteractiveCell', () => {
       pending.push(deferred);
       return deferred.promise;
     });
-    mocks.getCell.mockReturnValue(makeCell({
+    setManifestCells([makeCell({
       run: 'reactive',
       inputs: [inputs.find((input) => input.name === 'label') as InputSpec]
-    }));
+    })]);
 
     render(<InteractiveCell cellId="cell-one" />);
     await waitFor(() => expect(pending).toHaveLength(1));
@@ -350,7 +351,7 @@ describe('InteractiveCell', () => {
   });
 
   it('supports cells without inputs and hidden source', () => {
-    mocks.getCell.mockReturnValue(makeCell({ inputs: [], showSource: false, run: 'hidden' }));
+    setManifestCells([makeCell({ inputs: [], showSource: false, run: 'hidden' })]);
 
     render(<InteractiveCell cellId="cell-one" />);
 
@@ -360,7 +361,7 @@ describe('InteractiveCell', () => {
 
   it('uses Japanese runtime labels when the document language is Japanese', () => {
     document.documentElement.lang = 'ja';
-    mocks.getCell.mockReturnValue(makeCell());
+    setManifestCells([makeCell()]);
 
     render(<InteractiveCell cellId="cell-one" />);
 
@@ -369,7 +370,7 @@ describe('InteractiveCell', () => {
   });
 
   it('renders Python labeling and empty successful results', async () => {
-    mocks.getCell.mockReturnValue(makeCell({ language: 'python', inputs: [] }));
+    setManifestCells([makeCell({ language: 'python', inputs: [] })]);
     mocks.runInteractiveCell.mockResolvedValue({ stdout: '', stderr: '', value: '', plots: [] });
 
     render(<InteractiveCell cellId="cell-one" />);
@@ -381,18 +382,14 @@ describe('InteractiveCell', () => {
     expect(screen.queryByTestId('value-output')).not.toBeInTheDocument();
   });
 
-  it('refreshes rendered cell data when the generated manifest version changes', async () => {
-    mocks.getCell
-      .mockReturnValueOnce(makeCell({ sourceHtml: '<pre class="shiki"><code>println!("old");</code></pre>' }))
-      .mockReturnValue(makeCell({ sourceHtml: '<pre class="shiki"><code>println!("new");</code></pre>' }));
-    mocks.getManifestSnapshot
-      .mockReturnValueOnce({ cells: [], version: 'v1' })
-      .mockReturnValue({ cells: [], version: 'v2' });
+  it('refreshes rendered cell data when the generated manifest changes without a runtime rebuild', async () => {
+    setManifestCells([makeCell({ sourceHtml: '<pre class="shiki"><code>println!("old");</code></pre>' })]);
 
     render(<InteractiveCell cellId="cell-one" />);
     expect(screen.getByText('println!("old");')).toBeVisible();
 
     act(() => {
+      setManifestCells([makeCell({ sourceHtml: '<pre class="shiki"><code>println!("new");</code></pre>' })]);
       mocks.manifestListeners[0]();
     });
 
@@ -544,31 +541,6 @@ describe('MermaidDiagram', () => {
 
     expect(screen.queryByText('late')).not.toBeInTheDocument();
     expect(screen.queryByText('late error')).not.toBeInTheDocument();
-  });
-});
-
-describe('PlotOutput', () => {
-  it('initializes, updates, and disposes an ECharts line plot', () => {
-    const { unmount } = render(
-      <PlotOutput plot={{ kind: 'line', x_label: 'n', y_label: 'x', points: [[0, 0.2]] }} />
-    );
-
-    expect(mocks.echartsInit).toHaveBeenCalled();
-    TestResizeObserver.instances[0].callback(
-      [],
-      TestResizeObserver.instances[0] as unknown as ResizeObserver
-    );
-    expect(mocks.chart.resize).toHaveBeenCalled();
-    expect(mocks.chart.setOption).toHaveBeenCalledWith(
-      expect.objectContaining({
-        color: expect.arrayContaining(['#0f766e']),
-        series: [expect.objectContaining({ type: 'line', data: [[0, 0.2]] })]
-      }),
-      true
-    );
-
-    unmount();
-    expect(mocks.chart.dispose).toHaveBeenCalled();
   });
 });
 
