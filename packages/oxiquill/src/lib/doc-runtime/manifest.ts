@@ -40,6 +40,7 @@ if (import.meta.hot) {
   import.meta.hot.accept('virtual:oxiquill/cells', (module) => {
     if (module) {
       cellsSnapshot = (module as unknown as GeneratedCellsModule).cells;
+      notifyManifestListeners();
     }
   });
 

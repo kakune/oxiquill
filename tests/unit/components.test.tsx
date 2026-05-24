@@ -365,13 +365,13 @@ describe('InteractiveCell', () => {
     expect(screen.queryByTestId('value-output')).not.toBeInTheDocument();
   });
 
-  it('refreshes rendered cell data when the generated manifest version changes', async () => {
+  it('refreshes rendered cell data when the generated manifest changes without a runtime rebuild', async () => {
     mocks.getCell
       .mockReturnValueOnce(makeCell({ sourceHtml: '<pre class="shiki"><code>println!("old");</code></pre>' }))
       .mockReturnValue(makeCell({ sourceHtml: '<pre class="shiki"><code>println!("new");</code></pre>' }));
     mocks.getManifestSnapshot
       .mockReturnValueOnce({ cells: [], version: 'v1' })
-      .mockReturnValue({ cells: [], version: 'v2' });
+      .mockReturnValue({ cells: [], version: 'v1' });
 
     render(<InteractiveCell cellId="cell-one" />);
     expect(screen.getByText('println!("old");')).toBeVisible();
