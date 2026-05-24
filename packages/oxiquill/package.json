@@ -1,0 +1,59 @@
+{
+  "name": "oxiquill",
+  "version": "0.2.0",
+  "private": false,
+  "type": "module",
+  "license": "AGPL-3.0-only",
+  "bin": {
+    "oxiquill": "./src/cli/index.mjs"
+  },
+  "exports": {
+    ".": "./src/index.mjs",
+    "./astro": {
+      "types": "./src/astro/index.d.ts",
+      "import": "./src/astro/index.ts",
+      "default": "./src/astro/index.ts"
+    },
+    "./content": {
+      "types": "./src/content/index.d.ts",
+      "import": "./src/content/index.mjs",
+      "default": "./src/content/index.mjs"
+    },
+    "./runtime/InteractiveCell": "./src/components/doc-runtime/InteractiveCell.tsx",
+    "./runtime/MermaidDiagram": "./src/components/doc-runtime/MermaidDiagram.tsx",
+    "./runtime/types": "./src/lib/doc-runtime/types.ts",
+    "./components/starlight/PageFrame": "./src/components/starlight/PageFrame.astro",
+    "./styles/katex.css": "./src/styles/katex.css",
+    "./styles/custom.css": "./src/styles/custom.css",
+    "./tsconfigs/strict": "./tsconfigs/strict.json",
+    "./env": "./src/env.d.ts"
+  },
+  "files": [
+    "src",
+    "tsconfigs"
+  ],
+  "keywords": [
+    "astro",
+    "astro-integration",
+    "documentation",
+    "starlight"
+  ],
+  "dependencies": {
+    "@astrojs/check": "0.9.9",
+    "@astrojs/preact": "5.1.3",
+    "@astrojs/starlight": "0.39.2",
+    "astro": "6.3.7",
+    "chokidar": "5.0.0",
+    "echarts": "6.1.0",
+    "katex": "0.16.47",
+    "mermaid": "11.15.0",
+    "preact": "10.29.2",
+    "pyodide": "0.29.4",
+    "rehype-katex": "7.0.1",
+    "remark-math": "6.0.0",
+    "shiki": "4.1.0",
+    "typescript": "6.0.3",
+    "vite": "7.3.3",
+    "yaml": "2.9.0"
+  }
+}

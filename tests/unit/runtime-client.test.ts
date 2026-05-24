@@ -3,14 +3,14 @@ import {
   createInteractiveCellRunner,
   resetInteractiveRuntime,
   runInteractiveCell
-} from '../../src/lib/doc-runtime/runtime-client';
+} from '../../packages/oxiquill/src/lib/doc-runtime/runtime-client';
 import type {
   CellExecutionResult,
   CellLanguage,
   CellManifest,
   RuntimeWorkerRequest,
   RuntimeWorkerResponse
-} from '../../src/lib/doc-runtime/types';
+} from '../../packages/oxiquill/src/lib/doc-runtime/types';
 
 class FakeWorker {
   messages: RuntimeWorkerRequest[] = [];

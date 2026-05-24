@@ -1,0 +1,104 @@
+---
+title: はじめに
+description: 依存関係を入れ、ローカルサイトを起動し、静的出力をビルドして確認します。
+---
+
+この guide は、ドキュメントサイトをローカルで動かすとき、または docs 変更が build できるか確認するときに使います。
+
+## 前提
+
+作業前に次の tool を用意します。
+
+- Node.js と `pnpm`
+- Rust toolchain `1.95.0`
+- `wasm-pack`
+- `cargo-llvm-cov`
+
+Rust toolchain と Wasm target は `rust-toolchain.toml` で固定されています。通常のドキュメント作業で toolchain を変更しないでください。
+
+## 依存関係を入れる
+
+```sh
+pnpm install
+```
+
+依存関係には Astro、Starlight、Preact、Pyodide、Mermaid、KaTeX、Vitest、Playwright、実行可能セル runtime を生成する `oxiquill` CLI が含まれます。
+
+## Consumer repository を作る
+
+別の documentation repository では、`oxiquill` だけを追加し、script は CLI に委譲します。
+
+```json
+{
+  "dependencies": {
+    "oxiquill": "0.2.0"
+  },
+  "scripts": {
+    "dev": "oxiquill dev",
+    "build": "oxiquill build",
+    "check": "oxiquill check"
+  }
+}
+```
+
+`link:`、workspace、Git dependency、submodule 形式でも同じ setup を使い、dependency specifier だけを変えます。consumer config は次の形です。
+
+```js
+import { defineOxiquillConfig } from 'oxiquill/astro';
+
+export default defineOxiquillConfig({
+  title: 'My Docs',
+  sidebar: [{ label: 'Overview', items: [{ label: 'Home', slug: 'index' }] }]
+});
+```
+
+```ts
+export { collections } from 'oxiquill/content';
+```
+
+## 開発サーバーを起動する
+
+```sh
+pnpm dev
+```
+
+dev command は runtime 生成から始まり、その後 docs と helper source を監視します。
+
+- 本文、通常 code block、数式、Mermaid、メディアの変更は Astro HMR で更新されます。
+- Python セルの変更は生成 cell manifest を更新します。
+- Rust セルや `crates/*` の変更は生成 Wasm runtime を再ビルドします。
+
+runtime 生成を Astro と分けて確認したい場合は、次の command を別々の terminal で実行します。
+
+```sh
+pnpm dev:runtime
+pnpm dev:astro
+```
+
+## 静的出力をビルドする
+
+```sh
+pnpm build
+```
+
+build は Wasm runtime build、Astro check、静的サイトの `dist/` 出力を実行します。
+
+## build 結果を確認する
+
+```sh
+pnpm preview
+```
+
+development server ではなく production output を確認したいときは、`pnpm build` の後に preview を使います。
+
+## 生成物
+
+runtime generation は次の path に生成物を書きます。
+
+- `.oxiquill/generated`
+- `.oxiquill/rust-cells`
+- `public/oxiquill/pyodide`
+- `public/oxiquill/rust-wasm`
+- `dist`
+
+これらの path を直接編集しないでください。MDX、helper crate、script、手書き runtime code を変更してから既存 command で再生成します。
