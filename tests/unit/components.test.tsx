@@ -9,11 +9,16 @@ import {
   mermaidRender
 } from './mocks/external-runtime';
 
+type ManifestSnapshot = {
+  cells: readonly CellManifest[];
+  version: string;
+};
+
 const runtimeMocks = vi.hoisted(() => ({
-    getCell: vi.fn(),
-    getManifestSnapshot: vi.fn(() => ({ cells: [], version: 'v1' })),
-    manifestListeners: [] as Array<() => void>,
-    runInteractiveCell: vi.fn()
+  getCell: vi.fn(),
+  getManifestSnapshot: vi.fn<() => ManifestSnapshot>(() => ({ cells: [], version: 'v1' })),
+  manifestListeners: [] as Array<() => void>,
+  runInteractiveCell: vi.fn()
 }));
 
 const mocks = {
@@ -111,7 +116,7 @@ function makeCell(overrides: Partial<CellManifest> = {}): CellManifest {
   };
 }
 
-let manifestSnapshot: { cells: readonly CellManifest[]; version: string } = { cells: [], version: 'v1' };
+let manifestSnapshot: ManifestSnapshot = { cells: [], version: 'v1' };
 
 function setManifestCells(cells: readonly CellManifest[], version = 'v1') {
   manifestSnapshot = { cells, version };
