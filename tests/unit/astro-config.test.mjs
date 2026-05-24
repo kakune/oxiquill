@@ -130,14 +130,15 @@ describe('defineOxiquillConfig', () => {
 
     const update = runConfigSetup(config);
     const allow = update.vite.server.fs.allow;
+    const normalizedAllow = allow.map((entry) => entry.replaceAll('\\', '/'));
 
     expect(allow).toContain('/already-allowed');
     expect(allow).toContain(realpathSync(fileURLToPath(tempRoot)));
     expect(allow).toContain(realpathSync('packages/oxiquill'));
     expect(allow).toContain(realpathSync('node_modules'));
-    expect(allow.some((entry) => entry.includes('node_modules/.pnpm/katex'))).toBe(true);
-    expect(allow.some((entry) => entry.includes('node_modules/.pnpm/@astrojs+preact'))).toBe(true);
-    expect(allow.some((entry) => entry.includes('node_modules/.pnpm/aria-query'))).toBe(true);
+    expect(normalizedAllow.some((entry) => entry.includes('node_modules/.pnpm/katex'))).toBe(true);
+    expect(normalizedAllow.some((entry) => entry.includes('node_modules/.pnpm/@astrojs+preact'))).toBe(true);
+    expect(normalizedAllow.some((entry) => entry.includes('node_modules/.pnpm/aria-query'))).toBe(true);
   });
 
   it('resolves package-managed dependencies through Vite from linked consumers', async () => {

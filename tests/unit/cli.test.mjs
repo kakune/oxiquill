@@ -8,7 +8,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 
 const cliPath = fileURLToPath(new URL('../../packages/oxiquill/src/cli/index.mjs', import.meta.url));
 const repoRoot = path.resolve('/repo');
-const { isCliEntrypoint, runCli } = await import(pathToFileURL(cliPath).href);
+const { isCliEntrypoint, runCli } = await import('../../packages/oxiquill/src/cli/commands.mjs');
 
 afterEach(() => {
   vi.restoreAllMocks();
