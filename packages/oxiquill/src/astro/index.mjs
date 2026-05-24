@@ -1,4 +1,6 @@
 import { defineConfig } from 'astro/config';
+import preact from '@astrojs/preact';
+import starlight from '@astrojs/starlight';
 import rehypeKatex from 'rehype-katex';
 import remarkMath from 'remark-math';
 import { pathFromUrl } from '../config/paths.mjs';
@@ -21,8 +23,8 @@ export function defineOxiquillConfig(options = {}) {
     vite = {},
     ...astroOptions
   } = options;
-  const preactIntegration = requireIntegrationFactory(framework.preact, '@astrojs/preact');
-  const starlightIntegration = requireIntegrationFactory(framework.starlight, '@astrojs/starlight');
+  const preactIntegration = resolveIntegrationFactory(framework.preact, preact, 'framework.preact');
+  const starlightIntegration = resolveIntegrationFactory(framework.starlight, starlight, 'framework.starlight');
 
   return defineConfig({
     output: 'static',
@@ -38,13 +40,11 @@ export function defineOxiquillConfig(options = {}) {
   });
 }
 
-function requireIntegrationFactory(factory, packageName) {
+function resolveIntegrationFactory(factory, fallback, optionName) {
+  if (factory == null) return fallback;
   if (typeof factory === 'function') return factory;
 
-  throw new Error(
-    `defineOxiquillConfig requires framework.${packageName.endsWith('/preact') ? 'preact' : 'starlight'}. ` +
-      `Import it from "${packageName}" in your Astro config and pass it through the framework option.`
-  );
+  throw new TypeError(`defineOxiquillConfig expected ${optionName} to be an Astro integration factory.`);
 }
 
 export function oxiquillIntegration({ base, markdown = {}, paths: pathOptions, vite = {} } = {}) {
