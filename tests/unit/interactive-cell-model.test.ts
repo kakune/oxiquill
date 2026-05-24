@@ -7,8 +7,8 @@ import {
   labelsForLanguage,
   localeFromLanguage,
   shouldShowRunButton
-} from '../../src/lib/doc-runtime/interactive-cell-model';
-import type { InputSpec } from '../../src/lib/doc-runtime/types';
+} from '../../packages/oxiquill/src/lib/doc-runtime/interactive-cell-model';
+import type { InputSpec } from '../../packages/oxiquill/src/lib/doc-runtime/types';
 
 const textInput: InputSpec = {
   name: 'label',

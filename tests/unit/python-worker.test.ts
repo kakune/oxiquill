@@ -4,8 +4,8 @@ import {
   createSerialRequestQueue,
   pythonDisplaySupportCode,
   resolvePyodideUrls
-} from '../../src/lib/doc-runtime/python-worker';
-import { toOutputArtifacts } from '../../src/lib/doc-runtime/python-cell-result';
+} from '../../packages/oxiquill/src/lib/doc-runtime/python-worker';
+import { toOutputArtifacts } from '../../packages/oxiquill/src/lib/doc-runtime/python-cell-result';
 
 function createDeferred() {
   let reject!: (reason: Error) => void;
@@ -83,16 +83,16 @@ describe('python worker request queue', () => {
 describe('python worker asset URLs', () => {
   it('resolves Pyodide files under the configured site base', () => {
     expect(resolvePyodideUrls('/')).toEqual({
-      indexUrl: '/pyodide/',
-      moduleUrl: '/pyodide/pyodide.mjs'
+      indexUrl: '/oxiquill/pyodide/',
+      moduleUrl: '/oxiquill/pyodide/pyodide.mjs'
     });
     expect(resolvePyodideUrls('/oxiquill/')).toEqual({
-      indexUrl: '/oxiquill/pyodide/',
-      moduleUrl: '/oxiquill/pyodide/pyodide.mjs'
+      indexUrl: '/oxiquill/oxiquill/pyodide/',
+      moduleUrl: '/oxiquill/oxiquill/pyodide/pyodide.mjs'
     });
     expect(resolvePyodideUrls('/oxiquill')).toEqual({
-      indexUrl: '/oxiquill/pyodide/',
-      moduleUrl: '/oxiquill/pyodide/pyodide.mjs'
+      indexUrl: '/oxiquill/oxiquill/pyodide/',
+      moduleUrl: '/oxiquill/oxiquill/pyodide/pyodide.mjs'
     });
   });
 });

@@ -3,7 +3,9 @@ import {
   pageIdFromPath,
   relativePagePath,
   scopedCellId
-} from '../../src/lib/doc-runtime/authoring-ids.mjs';
+} from '../../packages/oxiquill/src/lib/doc-runtime/authoring-ids.mjs';
+import { rustSourceCapabilities } from '../../packages/oxiquill/src/generator/doc-runtime/rust-codegen/capabilities.mjs';
+import { generateRustPreludeMacros } from '../../packages/oxiquill/src/generator/doc-runtime/rust-codegen/macros.mjs';
 import {
   assertUniqueCellIds,
   assertUniqueRustInputBindings,
@@ -34,23 +36,23 @@ import {
   rustIdentifier,
   rustReaderName,
   splitCellSource
-} from '../../scripts/doc-runtime-core.mjs';
+} from '../../packages/oxiquill/src/generator/doc-runtime-core.mjs';
 
 const highlighter = {
   codeToHtml: (source, options) => Promise.resolve(`<pre data-lang="${options.lang}">${source}</pre>`)
 };
 
 const helperCrates = new Map([
-  ['doc-rust', { name: 'doc-rust', relativePath: '../../../crates/doc-rust' }],
-  ['doc-rust-text', { name: 'doc-rust-text', relativePath: '../../../crates/doc-rust-text' }]
+  ['doc-rust', { name: 'doc-rust', relativePath: '../../crates/doc-rust' }],
+  ['doc-rust-text', { name: 'doc-rust-text', relativePath: '../../crates/doc-rust-text' }]
 ]);
 
 describe('doc runtime core', () => {
   it('creates stable page-scoped authoring ids', () => {
-    expect(pageIdFromPath('src/content/docs/ja/notes/example.mdx')).toBe('ja__notes__example');
-    expect(relativePagePath('/repo', '/repo/src/content/docs/page.mdx')).toBe('src/content/docs/page.mdx');
-    expect(relativePagePath('', '/repo/src/content/docs/page.mdx')).toBeUndefined();
-    expect(scopedCellId('src/content/docs/page.mdx', 'cell id')).toBe('page__cell-id');
+    expect(pageIdFromPath('content/docs/ja/notes/example.mdx')).toBe('ja__notes__example');
+    expect(relativePagePath('/repo', '/repo/content/docs/page.mdx')).toBe('content/docs/page.mdx');
+    expect(relativePagePath('', '/repo/content/docs/page.mdx')).toBeUndefined();
+    expect(scopedCellId('content/docs/page.mdx', 'cell id')).toBe('page__cell-id');
     expect(scopedCellId('', '---')).toBe('cell');
   });
 
@@ -293,11 +295,11 @@ describe('doc runtime core', () => {
     const crates = helperCratesFromManifests([
       { content: '[package]\nname = "b-crate"\n', manifestPath: '/repo/crates/b/Cargo.toml' },
       { content: '[package]\nname = "a-crate"\n', manifestPath: '/repo/crates/a/Cargo.toml' }
-    ], { rustCrateDir: '/repo/src/generated/doc-runtime/rust-cells' });
+    ], { rustCellsDir: '/repo/.oxiquill/rust-cells' });
 
     expect(Array.from(crates.keys())).toEqual(['a-crate', 'b-crate']);
-    expect(crates.get('a-crate')).toEqual({ name: 'a-crate', relativePath: '../../../../crates/a' });
-    expect(helperCratesFromManifests([], { rustCrateDir: '/repo/src/generated/doc-runtime/rust-cells' })).toEqual(
+    expect(crates.get('a-crate')).toEqual({ name: 'a-crate', relativePath: '../../crates/a' });
+    expect(helperCratesFromManifests([], { rustCellsDir: '/repo/.oxiquill/rust-cells' })).toEqual(
       new Map()
     );
     expect(packageNameFromCargoToml('[package]\nname = "doc-rust"\n', '/repo/crates/doc-rust/Cargo.toml')).toBe(
@@ -310,7 +312,7 @@ describe('doc runtime core', () => {
       helperCratesFromManifests([
         { content: '[package]\nname = "same"\n', manifestPath: '/repo/crates/a/Cargo.toml' },
         { content: '[package]\nname = "same"\n', manifestPath: '/repo/crates/b/Cargo.toml' }
-      ], { rustCrateDir: '/repo/src/generated/doc-runtime/rust-cells' })
+      ], { rustCellsDir: '/repo/.oxiquill/rust-cells' })
     ).toThrow('Duplicate helper crate');
   });
 
@@ -322,7 +324,7 @@ describe('doc runtime core', () => {
     expect(generateRustCargoToml([], helperCrates)).not.toContain('doc-rust =');
     expect(generateRustCargoToml([], helperCrates)).toContain('license = "AGPL-3.0-only"');
     expect(generateRustCargoToml([{ crates: ['doc-rust'] }], helperCrates)).toContain(
-      'doc-rust = { path = "../../../crates/doc-rust" }'
+      'doc-rust = { path = "../../crates/doc-rust" }'
     );
     expect(generateRustDependency('doc-rust', helperCrates)).toContain('doc-rust');
     expect(() => generateRustDependency('missing', helperCrates)).toThrow('unknown Rust crate');
@@ -430,5 +432,30 @@ describe('doc runtime core', () => {
     expect(generateRustLib([chartCell])).toContain('fn histogram_chart_spec');
     expect(generateRustLib([chartCell])).toContain('fn heatmap_chart_spec');
     expect(generateRustLib([rustCell])).toContain('first_generated_cell_runs');
+  });
+
+  it('detects Rust output capabilities from source tokens', () => {
+    expect(rustSourceCapabilities('emit_json!(&value);\nemit_table!(&rows);')).toMatchObject({
+      chart: false,
+      image: false,
+      json: true,
+      table: true
+    });
+
+    expect(rustSourceCapabilities('emit_svg!("<svg />");\nemit_heatmap!(&data);')).toMatchObject({
+      chart: true,
+      heatmapChart: true,
+      image: true
+    });
+  });
+
+  it('selects only required generated Rust macros', () => {
+    const macros = generateRustPreludeMacros('emit_svg!("<svg />");\nemit_table_with_columns!(&columns, &rows);');
+
+    expect(macros).toContain('macro_rules! emit_image_svg');
+    expect(macros).toContain('macro_rules! emit_svg');
+    expect(macros).toContain('macro_rules! emit_table_with_columns');
+    expect(macros).not.toContain('macro_rules! emit_json');
+    expect(macros).not.toContain('macro_rules! emit_line_chart');
   });
 });
