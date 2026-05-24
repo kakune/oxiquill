@@ -4,21 +4,32 @@ import {
   cargoArgsForHelperWorkspace,
   helperWorkspaceState,
   runHelperCargo
-} from '../../scripts/run-helper-cargo.mjs';
+} from '../../packages/oxiquill/src/generator/run-helper-cargo.mjs';
 
 function memoryPath(filePath) {
-  return String(filePath).replaceAll('\\', '/');
+  const normalizedPath = String(filePath).replaceAll('\\', '/');
+  return normalizedPath === repoRootMemoryPath || normalizedPath.startsWith(`${repoRootMemoryPath}/`)
+    ? normalizedPath.replace(repoRootMemoryPath, '/repo')
+    : normalizedPath;
 }
+
+const repoRoot = path.resolve('/repo');
+const repoRootMemoryPath = String(repoRoot).replaceAll('\\', '/');
 
 function createMemoryFileSystem(initialFiles = {}) {
   const files = new Set(Object.keys(initialFiles).map(memoryPath));
-  const directories = new Set(['/repo']);
+  const directories = new Set([memoryPath(repoRoot)]);
 
   for (const filePath of files) {
-    const parts = filePath.split('/').filter(Boolean);
-    let current = '';
+    const hasDriveRoot = /^[A-Za-z]:\//u.test(filePath);
+    const root = hasDriveRoot ? filePath.slice(0, 2) : filePath.startsWith('/') ? '/' : '';
+    const relativePath = root === '/' ? filePath.slice(1) : hasDriveRoot ? filePath.slice(3) : filePath;
+    const parts = relativePath.split('/').filter(Boolean);
+    let current = root;
+    if (current && current !== '/') directories.add(current);
+
     for (const part of parts.slice(0, -1)) {
-      current += `/${part}`;
+      current = current === '/' ? `/${part}` : current ? `${current}/${part}` : part;
       directories.add(current);
     }
   }
@@ -87,11 +98,11 @@ describe('helper cargo runner', () => {
   it('detects helper workspace state and skips when no helper crates exist', async () => {
     await expect(helperWorkspaceState({
       fileSystem: createMemoryFileSystem(),
-      root: '/repo'
+      root: repoRoot
     })).resolves.toEqual({
       hasHelperCrates: false,
       hasWorkspaceManifest: false,
-      workspaceManifestPath: path.join('crates', 'Cargo.toml')
+      workspaceManifestPath: 'crates/Cargo.toml'
     });
 
     const logs = [];
@@ -99,7 +110,7 @@ describe('helper cargo runner', () => {
       argv: ['test'],
       fileSystem: createMemoryFileSystem({ '/repo/crates/Cargo.toml': '[workspace]\n' }),
       log: (message) => logs.push(message),
-      root: '/repo',
+      root: repoRoot,
       runCommand: async () => {
         throw new Error('should not run cargo');
       }
@@ -116,7 +127,7 @@ describe('helper cargo runner', () => {
         '/repo/crates/Cargo.toml': '[workspace]\n',
         '/repo/crates/doc-rust/Cargo.toml': '[package]\nname = "doc-rust"\n'
       }),
-      root: '/repo',
+      root: repoRoot,
       runCommand: async (command, args, options) => {
         commands.push([command, args, options]);
       }
@@ -125,8 +136,8 @@ describe('helper cargo runner', () => {
     expect(commands).toEqual([
       [
         'cargo',
-        ['doc', '--no-deps', '--manifest-path', path.join('crates', 'Cargo.toml'), '--workspace'],
-        { cwd: '/repo' }
+        ['doc', '--no-deps', '--manifest-path', 'crates/Cargo.toml', '--workspace'],
+        { cwd: repoRoot }
       ]
     ]);
   });
@@ -135,7 +146,7 @@ describe('helper cargo runner', () => {
     await expect(runHelperCargo({
       argv: [],
       fileSystem: createMemoryFileSystem(),
-      root: '/repo'
+      root: repoRoot
     })).rejects.toThrow('Expected a Cargo subcommand');
 
     await expect(runHelperCargo({
@@ -143,7 +154,7 @@ describe('helper cargo runner', () => {
       fileSystem: createMemoryFileSystem({
         '/repo/crates/doc-rust/Cargo.toml': '[package]\nname = "doc-rust"\n'
       }),
-      root: '/repo'
+      root: repoRoot
     })).rejects.toThrow(/crates[\\/]Cargo\.toml does not exist/);
 
     const brokenReaddir = {
@@ -154,7 +165,7 @@ describe('helper cargo runner', () => {
         throw error;
       }
     };
-    await expect(helperWorkspaceState({ fileSystem: brokenReaddir, root: '/repo' })).rejects.toThrow(
+    await expect(helperWorkspaceState({ fileSystem: brokenReaddir, root: repoRoot })).rejects.toThrow(
       'permission denied'
     );
 
@@ -166,6 +177,6 @@ describe('helper cargo runner', () => {
         throw error;
       }
     };
-    await expect(helperWorkspaceState({ fileSystem: brokenRead, root: '/repo' })).rejects.toThrow('broken read');
+    await expect(helperWorkspaceState({ fileSystem: brokenRead, root: repoRoot })).rejects.toThrow('broken read');
   });
 });

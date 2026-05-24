@@ -1,0 +1,8 @@
+{
+  "name": "oxiquill-submodule-consumer-fixture",
+  "private": true,
+  "type": "module",
+  "dependencies": {
+    "oxiquill": "link:../../../packages/oxiquill"
+  }
+}

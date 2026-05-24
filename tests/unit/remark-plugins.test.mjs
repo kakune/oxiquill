@@ -1,9 +1,9 @@
 import { describe, expect, it } from 'vitest';
-import remarkInteractiveCells from '../../src/lib/doc-runtime/remark-interactive-cells.mjs';
-import remarkMermaidDiagrams from '../../src/lib/doc-runtime/remark-mermaid-diagrams.mjs';
+import remarkInteractiveCells from '../../packages/oxiquill/src/lib/doc-runtime/remark-interactive-cells.mjs';
+import remarkMermaidDiagrams from '../../packages/oxiquill/src/lib/doc-runtime/remark-mermaid-diagrams.mjs';
 import remarkPublicAssetBase, {
   withPublicAssetBase
-} from '../../src/lib/doc-runtime/remark-public-asset-base.mjs';
+} from '../../packages/oxiquill/src/lib/doc-runtime/remark-public-asset-base.mjs';
 
 describe('remark interactive cells', () => {
   it('turns Rust and Python cells with ids into client components', () => {
@@ -20,7 +20,7 @@ describe('remark interactive cells', () => {
     };
 
     remarkInteractiveCells({ root: '/repo' })(tree, {
-      path: '/repo/src/content/docs/page.mdx'
+      path: '/repo/content/docs/page.mdx'
     });
 
     expect(tree.children[0].value).toContain('import InteractiveCell');
@@ -46,7 +46,7 @@ describe('remark interactive cells', () => {
     expect(tree.children[6]).toMatchObject({ type: 'code', lang: 'txt' });
   });
 
-  it('uses an absolute component path when the file path is unavailable', () => {
+  it('uses a package-stable component import when the file path is unavailable', () => {
     const tree = {
       type: 'root',
       children: [{ type: 'code', lang: 'rs', value: '//| id: rust-one\nprintln!("ok");' }]
@@ -55,7 +55,7 @@ describe('remark interactive cells', () => {
     remarkInteractiveCells({ root: '/repo' })(tree, {});
 
     expect(tree.children[0].value).toBe(
-      "import InteractiveCell from '/src/components/doc-runtime/InteractiveCell';"
+      "import InteractiveCell from 'oxiquill/runtime/InteractiveCell';"
     );
     expect(tree.children[1].attributes[1]).toEqual({
       type: 'mdxJsxAttribute',
@@ -71,7 +71,7 @@ describe('remark interactive cells', () => {
     };
 
     remarkInteractiveCells({ root: '/repo' })(tree, {
-      path: '/repo/src/content/docs/ja/notes/example.mdx'
+      path: '/repo/content/docs/ja/notes/example.mdx'
     });
 
     expect(tree.children[1].attributes[1]).toEqual({
@@ -81,7 +81,7 @@ describe('remark interactive cells', () => {
     });
   });
 
-  it('prefixes same-directory component imports with a relative dot', () => {
+  it('keeps package-stable component imports for non-docs files', () => {
     const tree = {
       type: 'root',
       children: [{ type: 'code', lang: 'rust', value: '//| id: rust-one\nprintln!("ok");' }]
@@ -91,7 +91,9 @@ describe('remark interactive cells', () => {
       path: '/repo/src/components/doc-runtime/example.mdx'
     });
 
-    expect(tree.children[0].value).toContain("from './InteractiveCell'");
+    expect(tree.children[0].value).toBe(
+      "import InteractiveCell from 'oxiquill/runtime/InteractiveCell';"
+    );
   });
 
   it('leaves trees without interactive cells unchanged', () => {
@@ -101,7 +103,7 @@ describe('remark interactive cells', () => {
     };
 
     remarkInteractiveCells({ root: '/repo' })(tree, {
-      path: '/repo/src/content/docs/page.mdx'
+      path: '/repo/content/docs/page.mdx'
     });
 
     expect(tree.children).toHaveLength(1);
@@ -122,7 +124,7 @@ describe('remark Mermaid diagrams', () => {
     };
 
     remarkMermaidDiagrams({ root: '/repo' })(tree, {
-      path: '/repo/src/content/docs/page.mdx'
+      path: '/repo/content/docs/page.mdx'
     });
 
     expect(tree.children[0].value).toContain('import MermaidDiagram');
@@ -153,7 +155,7 @@ describe('remark Mermaid diagrams', () => {
     expect(tree.children[5]).toMatchObject({ type: 'code', lang: 'rust' });
   });
 
-  it('uses an absolute component path when the file path is unavailable', () => {
+  it('uses a package-stable component import when the file path is unavailable', () => {
     const tree = {
       type: 'root',
       children: [{ type: 'code', lang: 'mermaid', value: '' }]
@@ -162,11 +164,11 @@ describe('remark Mermaid diagrams', () => {
     remarkMermaidDiagrams({ root: '/repo' })(tree, {});
 
     expect(tree.children[0].value).toBe(
-      "import MermaidDiagram from '/src/components/doc-runtime/MermaidDiagram';"
+      "import MermaidDiagram from 'oxiquill/runtime/MermaidDiagram';"
     );
   });
 
-  it('prefixes same-directory Mermaid imports with a relative dot', () => {
+  it('keeps package-stable Mermaid imports for non-docs files', () => {
     const tree = {
       type: 'root',
       children: [{ type: 'code', lang: 'mermaid', value: 'flowchart LR\nA-->B' }]
@@ -176,7 +178,9 @@ describe('remark Mermaid diagrams', () => {
       path: '/repo/src/components/doc-runtime/example.mdx'
     });
 
-    expect(tree.children[0].value).toContain("from './MermaidDiagram'");
+    expect(tree.children[0].value).toBe(
+      "import MermaidDiagram from 'oxiquill/runtime/MermaidDiagram';"
+    );
   });
 
   it('leaves trees without Mermaid diagrams unchanged', () => {
@@ -186,7 +190,7 @@ describe('remark Mermaid diagrams', () => {
     };
 
     remarkMermaidDiagrams({ root: '/repo' })(tree, {
-      path: '/repo/src/content/docs/page.mdx'
+      path: '/repo/content/docs/page.mdx'
     });
 
     expect(tree.children).toHaveLength(1);

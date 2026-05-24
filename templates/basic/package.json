@@ -1,0 +1,16 @@
+{
+  "name": "oxiquill-docs",
+  "version": "0.2.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "oxiquill dev",
+    "build": "oxiquill build",
+    "check": "oxiquill check",
+    "docgen": "oxiquill docgen",
+    "clean": "oxiquill clean"
+  },
+  "dependencies": {
+    "oxiquill": "^0.2.0"
+  }
+}
