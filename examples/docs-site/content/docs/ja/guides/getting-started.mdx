@@ -22,7 +22,7 @@ Rust toolchain と Wasm target は `rust-toolchain.toml` で固定されてい�
 pnpm install
 ```
 
-依存関係には Astro、Starlight、Preact、Pyodide、Mermaid、KaTeX、Vitest、Playwright、実行可能セル runtime を生成する scripts が含まれます。
+依存関係には Astro、Starlight、Preact、Pyodide、Mermaid、KaTeX、Vitest、Playwright、実行可能セル runtime を生成する `oxiquill` CLI が含まれます。
 
 ## 開発サーバーを起動する
 
@@ -61,10 +61,12 @@ development server ではなく production output を確認したいときは、
 
 ## 生成物
 
-runtime generation scripts は次の path に生成物を書きます。
+runtime generation は次の path に生成物を書きます。
 
-- `src/generated/doc-runtime`
-- `public/pyodide`
+- `.oxiquill/generated`
+- `.oxiquill/rust-cells`
+- `public/oxiquill/pyodide`
+- `public/oxiquill/rust-wasm`
 - `dist`
 
 これらの path を直接編集しないでください。MDX、helper crate、script、手書き runtime code を変更してから既存 command で再生成します。

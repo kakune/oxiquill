@@ -5,7 +5,7 @@ description: A static MDX documentation workspace for executable technical notes
 
 Oxiquill publishes technical notes as a static Astro Starlight site. A note can stay prose-first while still including executable Rust and Python cells, mathematical notation, Mermaid diagrams, images, PDFs, tables, charts, JSON, and sandboxed HTML output.
 
-The authoring model is intentionally close to Markdown. Writers add MDX pages, describe executable cells with leading metadata comments, and let the build generate the browser runtime. English pages live under `src/content/docs`; Japanese translations use the same route under `src/content/docs/ja`.
+The authoring model is intentionally close to Markdown. Writers add MDX pages, describe executable cells with leading metadata comments, and let the build generate the browser runtime. English pages live under `content/docs`; Japanese translations use the same route under `content/docs/ja`.
 
 ## Who It Is For
 
@@ -30,7 +30,7 @@ Oxiquill is useful when documentation needs to explain a concept and show a runn
 ## Project Shape
 
 ```text
-src/content/docs/
+content/docs/
   index.mdx
   guides/
     getting-started.mdx
@@ -53,7 +53,7 @@ src/content/docs/
     samples/
 ```
 
-Generated runtime output is written under `src/generated/doc-runtime`, `public/pyodide`, and `dist`. Do not edit generated files directly; regenerate them with `pnpm docgen`, `pnpm wasm:dev`, `pnpm wasm:build`, `pnpm check`, or `pnpm build`.
+Generated runtime output is written under `.oxiquill/generated`, `.oxiquill/rust-cells`, `public/oxiquill/pyodide`, `public/oxiquill/rust-wasm`, and `dist`. Do not edit generated files directly; regenerate them with `pnpm docgen`, `pnpm wasm:dev`, `pnpm wasm:build`, `pnpm check`, or `pnpm build`.
 
 ## Start Here
 

@@ -17,14 +17,16 @@
 
 ## Project Shape
 
-- Oxiquill is a static Astro/Starlight documentation site with Preact runtime components and strict TypeScript. The repository root is not a Rust workspace; optional reusable Rust helper crates live under `crates/` when needed.
+- Oxiquill is a pnpm workspace with a reusable Astro/Starlight package in `packages/oxiquill` and a dogfood documentation site in `examples/docs-site`.
+- The reusable package owns the CLI, Astro integration, Preact runtime components, styles, and runtime generators. The dogfood site owns MDX pages, public media, and optional Rust helper crates under `examples/docs-site/crates/`.
+- The repository root is not a Rust workspace.
 - Use `pnpm` for Node commands. The Rust toolchain is pinned in `rust-toolchain.toml`; do not change it casually.
 - Prefer the existing simple structure over new framework layers. Add abstractions only when they remove real duplication or clarify a shared boundary.
 
 ## Generated Files
 
-- Do not edit generated output directly: `src/generated/doc-runtime/**`, `public/pyodide/**`, `dist/**`, `coverage/**`, `test-results/**`, or `target/**`.
-- Regenerate runtime artifacts with the existing scripts: `pnpm docgen`, `pnpm wasm:dev`, `pnpm wasm:build`, or `pnpm build`, depending on the change.
+- Do not edit generated output directly: `.oxiquill/**`, `public/oxiquill/**`, `examples/docs-site/.oxiquill/**`, `examples/docs-site/public/oxiquill/**`, `dist/**`, `examples/docs-site/dist/**`, `coverage/**`, `test-results/**`, or `target/**`.
+- Regenerate runtime artifacts with the existing CLI-backed scripts: `pnpm docgen`, `pnpm wasm:dev`, `pnpm wasm:build`, or `pnpm build`, depending on the change.
 
 ## Coding Standards
 

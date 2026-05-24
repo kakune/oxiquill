@@ -5,7 +5,7 @@ description: 実行可能な技術ノートを公開するための静的 MDX �
 
 Oxiquill は、技術ノートを Astro Starlight の静的サイトとして公開します。1つのノートに、本文、Rust/Wasm セル、Python/Pyodide セル、数式、Mermaid 図、画像、PDF、表、グラフ、JSON、sandboxed HTML 出力をまとめられます。
 
-執筆モデルは Markdown に近い形にしています。MDX ページを追加し、実行可能セルは先頭 metadata comment で説明し、build が browser runtime を生成します。英語ページは `src/content/docs`、日本語ページは同じ route で `src/content/docs/ja` に置きます。
+執筆モデルは Markdown に近い形にしています。MDX ページを追加し、実行可能セルは先頭 metadata comment で説明し、build が browser runtime を生成します。英語ページは `content/docs`、日本語ページは同じ route で `content/docs/ja` に置きます。
 
 ## 想定する用途
 
@@ -30,7 +30,7 @@ Oxiquill は、説明と実行結果を同じページに置きたいドキュ�
 ## プロジェクト構成
 
 ```text
-src/content/docs/
+content/docs/
   index.mdx
   guides/
     getting-started.mdx
@@ -53,7 +53,7 @@ src/content/docs/
     samples/
 ```
 
-生成 runtime は `src/generated/doc-runtime`、`public/pyodide`、`dist` に出力されます。生成物を直接編集せず、`pnpm docgen`、`pnpm wasm:dev`、`pnpm wasm:build`、`pnpm check`、`pnpm build` で再生成してください。
+生成 runtime は `.oxiquill/generated`、`.oxiquill/rust-cells`、`public/oxiquill/pyodide`、`public/oxiquill/rust-wasm`、`dist` に出力されます。生成物を直接編集せず、`pnpm docgen`、`pnpm wasm:dev`、`pnpm wasm:build`、`pnpm check`、`pnpm build` で再生成してください。
 
 ## 最初に読むページ
 

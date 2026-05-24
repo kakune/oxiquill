@@ -22,7 +22,7 @@ The Rust toolchain and Wasm target are pinned by `rust-toolchain.toml`. Do not c
 pnpm install
 ```
 
-Dependencies include Astro, Starlight, Preact, Pyodide, Mermaid, KaTeX, Vitest, Playwright, and the scripts that generate executable-cell runtime artifacts.
+Dependencies include Astro, Starlight, Preact, Pyodide, Mermaid, KaTeX, Vitest, Playwright, and the `oxiquill` CLI that generates executable-cell runtime artifacts.
 
 ## Run the Development Server
 
@@ -63,8 +63,10 @@ Use preview after `pnpm build` when you want to inspect the production output ra
 
 The runtime generation scripts write generated files under:
 
-- `src/generated/doc-runtime`
-- `public/pyodide`
+- `.oxiquill/generated`
+- `.oxiquill/rust-cells`
+- `public/oxiquill/pyodide`
+- `public/oxiquill/rust-wasm`
 - `dist`
 
 Do not edit those paths directly. Change MDX, helper crates, scripts, or handwritten runtime code, then regenerate with the existing commands.

@@ -46,7 +46,7 @@ coverage は statement/branch/function/line 85% を要求し、生成 runtime ou
 
 ## Rust helper check
 
-再利用可能な任意の Rust helper crate は `crates/*` にあります。次の command で検証します。
+Oxiquill site の再利用可能な任意の Rust helper crate は `crates/*` にあります。次の command で検証します。
 
 ```sh
 pnpm test:rust
@@ -61,7 +61,7 @@ pnpm doc:rust
 
 - Unknown Rust crate: cell の `crates` 値を `crates/*/Cargo.toml` の `package.name` に合わせます。
 - Unsupported Python package: vendored Pyodide package を使うか、docs に書く前に package support を追加します。
-- Missing Python runtime: `public/pyodide` があるか確認し、`pnpm wasm:dev` または `pnpm build` を実行します。
+- Missing Python runtime: `public/oxiquill/pyodide` があるか確認し、`pnpm wasm:dev` または `pnpm build` を実行します。
 - Mermaid failure: code block language が `mermaid` か確認し、`pnpm build` で MDX error を確認します。
 - Missing media: file が `public/media` 配下にあり、MDX URL が `/media/` で始まるか確認します。
 - Coverage failure: 生成物ではなく手書き source に focused test を追加します。
