@@ -1,7 +1,9 @@
 // @vitest-environment node
 
 import { realpathSync } from 'node:fs';
+import { fileURLToPath } from 'node:url';
 import { describe, expect, it, vi } from 'vitest';
+import { createServer } from 'vite';
 
 vi.mock('astro/config', () => ({
   defineConfig: (config) => config
@@ -16,6 +18,7 @@ vi.mock('@astrojs/starlight', () => ({
 }));
 
 const { defineOxiquillConfig } = await import('../../packages/oxiquill/src/astro/index.ts');
+const linkedConsumerRoot = new URL('../fixtures/linked-consumer/', import.meta.url);
 
 function integrationNames(config) {
   return config.integrations.flat().map((integration) => integration.name);
@@ -34,6 +37,31 @@ function runConfigSetup(config, root = new URL('file:///tmp/')) {
   });
 
   return update;
+}
+
+async function resolveWithVite(update, ids) {
+  const { server: serverConfig = {}, ...viteConfig } = update.vite;
+  const server = await createServer({
+    ...viteConfig,
+    root: fileURLToPath(linkedConsumerRoot),
+    cacheDir: '/tmp/oxiquill-vitest-vite-cache',
+    logLevel: 'silent',
+    server: {
+      ...serverConfig,
+      middlewareMode: true
+    }
+  });
+
+  try {
+    const pluginContainer = server.environments?.client?.pluginContainer ?? server.pluginContainer;
+    const resolvedEntries = await Promise.all(
+      ids.map(async (id) => [id, (await pluginContainer.resolveId(id))?.id])
+    );
+
+    return Object.fromEntries(resolvedEntries);
+  } finally {
+    await server.close();
+  }
 }
 
 describe('defineOxiquillConfig', () => {
@@ -105,5 +133,38 @@ describe('defineOxiquillConfig', () => {
     expect(allow).toContain(realpathSync('node_modules'));
     expect(allow.some((entry) => entry.includes('node_modules/.pnpm/katex'))).toBe(true);
     expect(allow.some((entry) => entry.includes('node_modules/.pnpm/@astrojs+preact'))).toBe(true);
+    expect(allow.some((entry) => entry.includes('node_modules/.pnpm/aria-query'))).toBe(true);
+  });
+
+  it('resolves package-managed dependencies through Vite from linked consumers', async () => {
+    const config = defineOxiquillConfig({
+      sidebar: [],
+      title: 'Docs'
+    });
+
+    const update = runConfigSetup(config, linkedConsumerRoot);
+    const resolved = await resolveWithVite(update, [
+      'preact/hooks',
+      '@preact/signals',
+      'aria-query',
+      'html-escaper',
+      'astro/app',
+      'astro/content/runtime',
+      'astro/jsx-runtime',
+      'astro/loaders',
+      'astro/runtime/client/dev-toolbar/entrypoint.js',
+      'astro/runtime/server/index.js'
+    ]);
+
+    expect(resolved['preact/hooks']).toEqual(expect.any(String));
+    expect(resolved['@preact/signals']).toEqual(expect.any(String));
+    expect(resolved['aria-query']).toEqual(expect.any(String));
+    expect(resolved['html-escaper']).toEqual(expect.any(String));
+    expect(resolved['astro/app']).toEqual(expect.any(String));
+    expect(resolved['astro/content/runtime']).toEqual(expect.any(String));
+    expect(resolved['astro/jsx-runtime']).toEqual(expect.any(String));
+    expect(resolved['astro/loaders']).toEqual(expect.any(String));
+    expect(resolved['astro/runtime/client/dev-toolbar/entrypoint.js']).toEqual(expect.any(String));
+    expect(resolved['astro/runtime/server/index.js']).toEqual(expect.any(String));
   });
 });
