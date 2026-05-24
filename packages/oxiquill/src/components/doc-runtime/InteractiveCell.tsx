@@ -3,7 +3,6 @@ import {
   labelsForLanguage,
   shouldShowRunButton
 } from '../../lib/doc-runtime/interactive-cell-model';
-import { getCell } from '../../lib/doc-runtime/manifest';
 import type { CellManifest } from '../../lib/doc-runtime/types';
 import { CellOutput } from './CellOutput';
 import { InputControl } from './InputControl';
@@ -18,8 +17,8 @@ interface InteractiveCellProps {
 }
 
 export default function InteractiveCell({ cellId }: InteractiveCellProps) {
-  const { version } = useManifestSnapshot();
-  const cell = getCell(cellId);
+  const { cells, version } = useManifestSnapshot();
+  const cell = cells.find((candidate) => candidate.id === cellId);
   const labels = useRuntimeLabels();
 
   if (!cell) {
@@ -46,7 +45,7 @@ function InteractiveCellPanel({
   const runtime = useInteractiveCellRun(cell, runtimeVersion);
 
   return (
-    <section class="doc-cell" data-language={cell.language} data-testid={`cell-${cell.id}`}>
+    <section class="doc-cell" data-cell-id={cell.id} data-language={cell.language} data-testid={`cell-${cell.id}`}>
       <div class="doc-cell__header">
         <div>
           <p class="doc-cell__eyebrow">{cell.language === 'rust' ? 'Rust + Wasm' : 'Python + Pyodide'}</p>
@@ -85,6 +84,7 @@ function InteractiveCellPanel({
 
       {isSourceVisible ? (
         <div
+          key={`${cell.id}:${cell.source}`}
           class="doc-source"
           data-testid="cell-source"
           dangerouslySetInnerHTML={{ __html: cell.sourceHtml }}

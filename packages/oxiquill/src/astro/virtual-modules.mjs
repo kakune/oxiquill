@@ -8,6 +8,7 @@ const moduleIds = new Map([
 ]);
 
 export function oxiquillVirtualModulesPlugin(paths) {
+  const cellsJsonFile = pathFromUrl(paths.cellsJsonPath);
   const generatedModules = new Map([
     ['\0virtual:oxiquill/cells', {
       file: pathFromUrl(paths.cellsModulePath),
@@ -19,20 +20,30 @@ export function oxiquillVirtualModulesPlugin(paths) {
     }]
   ]);
   const rustWasmFile = pathFromUrl(new URL('doc_rust_cells.js', paths.rustWasmPublicDir));
+  const watchedFiles = [
+    ...Array.from(generatedModules.values()).map(({ file }) => file),
+    rustWasmFile
+  ];
+  const changedFileModuleIds = new Map([
+    [normalizePath(pathFromUrl(paths.cellsModulePath)), '\0virtual:oxiquill/cells'],
+    [normalizePath(pathFromUrl(paths.runtimeVersionPath)), '\0virtual:oxiquill/runtime-version'],
+    [normalizePath(rustWasmFile), '\0virtual:oxiquill/rust-wasm']
+  ]);
 
   return {
     name: 'oxiquill-virtual-modules',
     resolveId(id) {
-      return moduleIds.get(id);
+      return resolveVirtualModuleId(id);
     },
     load(id) {
-      const generated = generatedModules.get(id);
+      const baseId = baseVirtualModuleId(id);
+      const generated = generatedModules.get(baseId);
       if (generated) {
         this.addWatchFile(generated.file);
         return existsSync(generated.file) ? readFileSync(generated.file, 'utf8') : generated.fallback;
       }
 
-      if (id === '\0virtual:oxiquill/rust-wasm') {
+      if (baseId === '\0virtual:oxiquill/rust-wasm') {
         this.addWatchFile(rustWasmFile);
         if (!existsSync(rustWasmFile)) {
           return [
@@ -50,23 +61,106 @@ export function oxiquillVirtualModulesPlugin(paths) {
 
       return undefined;
     },
+    hotUpdate(options) {
+      const resolvedId = changedFileModuleIds.get(normalizePath(options.file));
+      if (!resolvedId) return undefined;
+
+      this.environment.hot?.send({
+        type: 'custom',
+        event: 'oxiquill:manifest-changed',
+        data: { module: virtualModuleName(resolvedId) }
+      });
+      return loadedVirtualModuleNodes(this.environment.moduleGraph, resolvedId, options.modules);
+    },
     configureServer(server) {
-      const watchedFiles = [
-        ...Array.from(generatedModules.values()).map(({ file }) => file),
-        rustWasmFile
-      ];
-
       server.watcher.add(watchedFiles);
-      server.watcher.on('change', (filePath) => {
-        if (!watchedFiles.includes(filePath)) return;
-
-        for (const resolvedId of moduleIds.values()) {
-          const moduleNode = server.moduleGraph.getModuleById(resolvedId);
-          if (moduleNode) server.moduleGraph.invalidateModule(moduleNode);
+      server.watcher.on('change', (file) => {
+        const resolvedId = changedFileModuleIds.get(normalizePath(file));
+        if (resolvedId) sendManifestChanged(server, resolvedId);
+      });
+      server.middlewares.use((request, response, next) => {
+        const requestUrl = new URL(request.url ?? '/', 'http://localhost');
+        if (requestUrl.pathname !== '/__oxiquill/manifest.json') {
+          next();
+          return;
         }
 
-        server.ws.send({ type: 'full-reload' });
+        response.statusCode = 200;
+        response.setHeader('Cache-Control', 'no-store');
+        response.setHeader('Content-Type', 'application/json; charset=utf-8');
+        response.end(JSON.stringify({
+          cells: readGeneratedCellsJson(cellsJsonFile),
+          runtimeVersion: readGeneratedRuntimeVersion(pathFromUrl(paths.runtimeVersionPath))
+        }));
       });
     }
   };
+}
+
+function resolveVirtualModuleId(id) {
+  const [baseId, query = ''] = splitModuleQuery(id);
+  const resolvedBaseId = moduleIds.get(baseId);
+  return resolvedBaseId ? `${resolvedBaseId}${query}` : undefined;
+}
+
+function baseVirtualModuleId(id) {
+  return splitModuleQuery(id)[0];
+}
+
+function splitModuleQuery(id) {
+  const queryIndex = id.indexOf('?');
+  return queryIndex === -1 ? [id] : [id.slice(0, queryIndex), id.slice(queryIndex)];
+}
+
+function loadedVirtualModuleNodes(moduleGraph, resolvedId, watchedModules = []) {
+  const nodes = new Set();
+  for (const moduleNode of watchedModules) {
+    if (isVirtualModuleNode(moduleNode, resolvedId)) nodes.add(moduleNode);
+  }
+
+  const exactNode = moduleGraph.getModuleById(resolvedId);
+  if (exactNode) nodes.add(exactNode);
+
+  for (const [moduleId, moduleNode] of moduleGraph.idToModuleMap?.entries?.() ?? []) {
+    if (isMatchingVirtualModuleId(moduleId, resolvedId)) {
+      nodes.add(moduleNode);
+    }
+  }
+
+  return Array.from(nodes);
+}
+
+function isVirtualModuleNode(moduleNode, resolvedId) {
+  const ids = [moduleNode.id, moduleNode.url].filter((id) => typeof id === 'string');
+  return ids.some((id) => isMatchingVirtualModuleId(id, resolvedId));
+}
+
+function isMatchingVirtualModuleId(id, resolvedId) {
+  const unwrappedId = id.startsWith('/@id/') ? id.slice('/@id/'.length).replace('__x00__', '\0') : id;
+  return unwrappedId === resolvedId || unwrappedId.startsWith(`${resolvedId}?`);
+}
+
+function virtualModuleName(resolvedId) {
+  return resolvedId.slice('\0virtual:oxiquill/'.length);
+}
+
+function sendManifestChanged(server, resolvedId) {
+  server.environments?.client?.hot?.send({
+    type: 'custom',
+    event: 'oxiquill:manifest-changed',
+    data: { module: virtualModuleName(resolvedId) }
+  });
+}
+
+function readGeneratedCellsJson(file) {
+  if (!existsSync(file)) return [];
+
+  return JSON.parse(readFileSync(file, 'utf8'));
+}
+
+function readGeneratedRuntimeVersion(file) {
+  if (!existsSync(file)) return 'not-ready';
+
+  const match = readFileSync(file, 'utf8').match(/export const runtimeVersion = (.*);/);
+  return match ? JSON.parse(match[1]) : 'not-ready';
 }
