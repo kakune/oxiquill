@@ -8,12 +8,12 @@ import {
   shouldSyncRuntime,
   toRelativePath,
   toWatchEventRelativePath
-} from '../../scripts/doc-runtime-watch-core.mjs';
+} from '../../packages/oxiquill/src/generator/doc-runtime-watch-core.mjs';
 
 describe('doc runtime watch core', () => {
   it('classifies paths that affect runtime generation', () => {
-    expect(classifyChangedPath('src/content/docs/index.mdx')).toBe('docs');
-    expect(classifyChangedPath('src/content/docs/page.md')).toBe('docs');
+    expect(classifyChangedPath('content/docs/index.mdx')).toBe('docs');
+    expect(classifyChangedPath('content/docs/page.md')).toBe('docs');
     expect(classifyChangedPath('crates/doc-rust/src/lib.rs')).toBe('crate');
     expect(classifyChangedPath('crates/doc-rust/Cargo.toml')).toBe('crate');
     expect(classifyChangedPath('crates/Cargo.toml')).toBe('crate');
@@ -34,13 +34,13 @@ describe('doc runtime watch core', () => {
   });
 
   it('normalizes absolute paths to root-relative slash paths', () => {
-    expect(toRelativePath('/repo', '/repo/src/content/docs/index.mdx')).toBe('src/content/docs/index.mdx');
+    expect(toRelativePath('/repo', '/repo/content/docs/index.mdx')).toBe('content/docs/index.mdx');
   });
 
   it('uses non-glob watch roots and normalizes chokidar event paths', () => {
-    expect(createRuntimeWatchPaths()).toEqual(['src/content/docs', 'crates']);
-    expect(toWatchEventRelativePath('/repo', 'src/content/docs/index.mdx')).toBe(
-      'src/content/docs/index.mdx'
+    expect(createRuntimeWatchPaths()).toEqual(['content/docs', 'crates']);
+    expect(toWatchEventRelativePath('/repo', 'content/docs/index.mdx')).toBe(
+      'content/docs/index.mdx'
     );
     expect(toWatchEventRelativePath('/repo', '/repo/crates/doc-rust/src/lib.rs')).toBe(
       'crates/doc-rust/src/lib.rs'

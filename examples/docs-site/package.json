@@ -1,0 +1,33 @@
+{
+  "name": "oxiquill-docs-site",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "oxiquill dev",
+    "dev:astro": "oxiquill dev:astro",
+    "dev:runtime": "oxiquill dev:runtime",
+    "build": "oxiquill build",
+    "preview": "oxiquill preview",
+    "docgen": "oxiquill docgen",
+    "wasm:dev": "oxiquill docgen --wasm dev",
+    "wasm:build": "oxiquill docgen --wasm build",
+    "check": "oxiquill check",
+    "test:rust": "oxiquill test-rust",
+    "test:rust:coverage": "oxiquill test-rust-coverage",
+    "doc:rust": "oxiquill doc-rust",
+    "test:wasm": "oxiquill test-wasm",
+    "lint:rust": "oxiquill lint-rust",
+    "clean": "oxiquill clean"
+  },
+  "dependencies": {
+    "@astrojs/preact": "5.1.3",
+    "@astrojs/starlight": "0.39.2",
+    "oxiquill": "workspace:*"
+  },
+  "devDependencies": {
+    "@astrojs/check": "0.9.9",
+    "astro": "6.3.7",
+    "typescript": "6.0.3"
+  }
+}

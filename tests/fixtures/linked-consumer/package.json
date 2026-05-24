@@ -1,0 +1,15 @@
+{
+  "name": "oxiquill-linked-consumer-fixture",
+  "private": true,
+  "type": "module",
+  "dependencies": {
+    "@astrojs/preact": "5.1.3",
+    "@astrojs/starlight": "0.39.2",
+    "astro": "6.3.7",
+    "oxiquill": "link:../../../packages/oxiquill"
+  },
+  "devDependencies": {
+    "@astrojs/check": "0.9.9",
+    "typescript": "6.0.3"
+  }
+}

@@ -1,5 +1,5 @@
 {
-    "extends": "./node_modules/astro/tsconfigs/strict.json",
+    "extends": "./packages/oxiquill/node_modules/astro/tsconfigs/strict.json",
     "compilerOptions": {
         "jsx": "react-jsx",
         "jsxImportSource": "preact",
@@ -9,7 +9,8 @@
     },
     "include": [
         ".astro/types.d.ts",
-        "src/**/*",
+        "packages/oxiquill/src/**/*",
+        "examples/docs-site/content.config.ts",
         "tests/**/*",
         "playwright.config.ts"
     ],

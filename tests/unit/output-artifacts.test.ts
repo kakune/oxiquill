@@ -6,7 +6,7 @@ import {
   normalizeCellExecutionResult,
   outputsToLegacyResult,
   withDefaultOutputLimits
-} from '../../src/lib/doc-runtime/output-artifacts';
+} from '../../packages/oxiquill/src/lib/doc-runtime/output-artifacts';
 
 describe('output artifact normalization', () => {
   it('converts legacy cell fields to ordered output artifacts', () => {

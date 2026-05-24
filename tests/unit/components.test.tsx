@@ -1,74 +1,57 @@
 import { act, cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/preact';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import type { CellExecutionResult, CellManifest, InputSpec } from '../../src/lib/doc-runtime/types';
+import type { CellExecutionResult, CellManifest, InputSpec } from '../../packages/oxiquill/src/lib/doc-runtime/types';
+import {
+  chart,
+  echartsInit,
+  echartsUse,
+  mermaidInitialize,
+  mermaidRender
+} from './mocks/external-runtime';
 
-const mocks = vi.hoisted(() => {
-  const chart = {
-    dispose: vi.fn(),
-    resize: vi.fn(),
-    setOption: vi.fn()
-  };
-
-  return {
-    chart,
-    echartsInit: vi.fn(() => chart),
-    echartsUse: vi.fn(),
+const runtimeMocks = vi.hoisted(() => ({
     getCell: vi.fn(),
     getManifestSnapshot: vi.fn(() => ({ cells: [], version: 'v1' })),
     manifestListeners: [] as Array<() => void>,
-    mermaidInitialize: vi.fn(),
-    mermaidRender: vi.fn(),
     runInteractiveCell: vi.fn()
-  };
-});
+}));
 
-vi.mock('echarts/charts', () => ({ BarChart: {}, HeatmapChart: {}, LineChart: {}, ScatterChart: {} }));
-vi.mock('echarts/components', () => ({
-  DataZoomComponent: {},
-  GridComponent: {},
-  LegendComponent: {},
-  TitleComponent: {},
-  TooltipComponent: {},
-  VisualMapComponent: {}
-}));
-vi.mock('echarts/renderers', () => ({ CanvasRenderer: {} }));
-vi.mock('echarts/core', () => ({
-  init: mocks.echartsInit,
-  use: mocks.echartsUse
-}));
-vi.mock('mermaid', () => ({
-  default: {
-    initialize: mocks.mermaidInitialize,
-    render: mocks.mermaidRender
-  }
-}));
-vi.mock('../../src/lib/doc-runtime/manifest', () => ({
-  getCell: mocks.getCell,
-  getManifestSnapshot: mocks.getManifestSnapshot,
+const mocks = {
+  ...runtimeMocks,
+  chart,
+  echartsInit,
+  echartsUse,
+  mermaidInitialize,
+  mermaidRender
+};
+
+vi.mock('../../packages/oxiquill/src/lib/doc-runtime/manifest', () => ({
+  getCell: runtimeMocks.getCell,
+  getManifestSnapshot: runtimeMocks.getManifestSnapshot,
   subscribeManifest: vi.fn((listener: () => void) => {
-    mocks.manifestListeners.push(listener);
+    runtimeMocks.manifestListeners.push(listener);
     return vi.fn();
   })
 }));
-vi.mock('../../src/lib/doc-runtime/runtime-client', () => ({
-  runInteractiveCell: mocks.runInteractiveCell
+vi.mock('../../packages/oxiquill/src/lib/doc-runtime/runtime-client', () => ({
+  runInteractiveCell: runtimeMocks.runInteractiveCell
 }));
 
-const { default: InteractiveCell } = await import('../../src/components/doc-runtime/InteractiveCell');
+const { default: InteractiveCell } = await import('../../packages/oxiquill/src/components/doc-runtime/InteractiveCell');
 const {
   default: MermaidDiagram,
   getMermaidColorScheme
-} = await import('../../src/components/doc-runtime/MermaidDiagram');
-const { default: OutputRenderer, imageArtifactSource } = await import('../../src/components/doc-runtime/OutputRenderer');
-const { default: PlotOutput } = await import('../../src/components/doc-runtime/PlotOutput');
-const { chartSpecToEChartsOptions } = await import('../../src/components/doc-runtime/ChartOutput');
+} = await import('../../packages/oxiquill/src/components/doc-runtime/MermaidDiagram');
+const { default: OutputRenderer, imageArtifactSource } = await import('../../packages/oxiquill/src/components/doc-runtime/OutputRenderer');
+const { default: PlotOutput } = await import('../../packages/oxiquill/src/components/doc-runtime/PlotOutput');
+const { chartSpecToEChartsOptions } = await import('../../packages/oxiquill/src/components/doc-runtime/ChartOutput');
 const {
   default: TableOutput,
   formatTableCell,
   sortRows,
   tableToCsv,
   visibleRows
-} = await import('../../src/components/doc-runtime/TableOutput');
+} = await import('../../packages/oxiquill/src/components/doc-runtime/TableOutput');
 
 class TestResizeObserver {
   static instances: TestResizeObserver[] = [];
@@ -141,7 +124,8 @@ function createDeferredResult() {
 
 beforeEach(() => {
   vi.clearAllMocks();
-  mocks.manifestListeners = [];
+  runtimeMocks.manifestListeners = [];
+  mocks.manifestListeners = runtimeMocks.manifestListeners;
   TestResizeObserver.instances = [];
   document.documentElement.lang = 'en';
   document.documentElement.removeAttribute('data-theme');

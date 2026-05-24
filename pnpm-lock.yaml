@@ -7,7 +7,62 @@ settings:
 importers:
 
   .:
+    devDependencies:
+      '@playwright/test':
+        specifier: 1.60.0
+        version: 1.60.0
+      '@testing-library/jest-dom':
+        specifier: 6.9.1
+        version: 6.9.1
+      '@testing-library/preact':
+        specifier: 3.2.4
+        version: 3.2.4(preact@10.29.2)
+      '@vitest/coverage-v8':
+        specifier: 4.1.7
+        version: 4.1.7(vitest@4.1.7)
+      jsdom:
+        specifier: 29.1.1
+        version: 29.1.1
+      preact:
+        specifier: 10.29.2
+        version: 10.29.2
+      typescript:
+        specifier: 6.0.3
+        version: 6.0.3
+      vite:
+        specifier: 7.3.3
+        version: 7.3.3(@types/node@24.12.4)(yaml@2.9.0)
+      vitest:
+        specifier: 4.1.7
+        version: 4.1.7(@types/node@24.12.4)(@vitest/coverage-v8@4.1.7)(jsdom@29.1.1)(vite@7.3.3(@types/node@24.12.4)(yaml@2.9.0))
+
+  examples/docs-site:
     dependencies:
+      '@astrojs/preact':
+        specifier: 5.1.3
+        version: 5.1.3(@babel/core@7.29.0)(@types/node@24.12.4)(preact@10.29.2)(rollup@4.60.4)(yaml@2.9.0)
+      '@astrojs/starlight':
+        specifier: 0.39.2
+        version: 0.39.2(astro@6.3.7(@types/node@24.12.4)(rollup@4.60.4)(yaml@2.9.0))(typescript@6.0.3)
+      oxiquill:
+        specifier: workspace:*
+        version: link:../../packages/oxiquill
+    devDependencies:
+      '@astrojs/check':
+        specifier: 0.9.9
+        version: 0.9.9(prettier@3.8.3)(typescript@6.0.3)
+      astro:
+        specifier: 6.3.7
+        version: 6.3.7(@types/node@24.12.4)(rollup@4.60.4)(yaml@2.9.0)
+      typescript:
+        specifier: 6.0.3
+        version: 6.0.3
+
+  packages/oxiquill:
+    dependencies:
+      '@astrojs/check':
+        specifier: 0.9.9
+        version: 0.9.9(prettier@3.8.3)(typescript@6.0.3)
       '@astrojs/preact':
         specifier: 5.1.3
         version: 5.1.3(@babel/core@7.29.0)(@types/node@24.12.4)(preact@10.29.2)(rollup@4.60.4)(yaml@2.9.0)
@@ -17,6 +72,9 @@ importers:
       astro:
         specifier: 6.3.7
         version: 6.3.7(@types/node@24.12.4)(rollup@4.60.4)(yaml@2.9.0)
+      chokidar:
+        specifier: 5.0.0
+        version: 5.0.0
       echarts:
         specifier: 6.1.0
         version: 6.1.0
@@ -41,40 +99,15 @@ importers:
       shiki:
         specifier: 4.1.0
         version: 4.1.0
-      yaml:
-        specifier: 2.9.0
-        version: 2.9.0
-    devDependencies:
-      '@astrojs/check':
-        specifier: 0.9.9
-        version: 0.9.9(prettier@3.8.3)(typescript@6.0.3)
-      '@playwright/test':
-        specifier: 1.60.0
-        version: 1.60.0
-      '@testing-library/jest-dom':
-        specifier: 6.9.1
-        version: 6.9.1
-      '@testing-library/preact':
-        specifier: 3.2.4
-        version: 3.2.4(preact@10.29.2)
-      '@vitest/coverage-v8':
-        specifier: 4.1.7
-        version: 4.1.7(vitest@4.1.7)
-      chokidar:
-        specifier: 5.0.0
-        version: 5.0.0
-      jsdom:
-        specifier: 29.1.1
-        version: 29.1.1
       typescript:
         specifier: 6.0.3
         version: 6.0.3
       vite:
         specifier: 7.3.3
         version: 7.3.3(@types/node@24.12.4)(yaml@2.9.0)
-      vitest:
-        specifier: 4.1.7
-        version: 4.1.7(@types/node@24.12.4)(@vitest/coverage-v8@4.1.7)(jsdom@29.1.1)(vite@7.3.3(@types/node@24.12.4)(yaml@2.9.0))
+      yaml:
+        specifier: 2.9.0
+        version: 2.9.0
 
 packages:
 

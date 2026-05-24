@@ -4,7 +4,7 @@ import {
   cargoArgsForHelperWorkspace,
   helperWorkspaceState,
   runHelperCargo
-} from '../../scripts/run-helper-cargo.mjs';
+} from '../../packages/oxiquill/src/generator/run-helper-cargo.mjs';
 
 function memoryPath(filePath) {
   return String(filePath).replaceAll('\\', '/');
