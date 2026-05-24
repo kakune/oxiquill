@@ -30,25 +30,46 @@ import {
 } from '../../packages/oxiquill/src/generator/doc-runtime-service.mjs';
 import { pathFromUrl } from '../../packages/oxiquill/src/config/paths.mjs';
 
+const repoRoot = path.resolve('/repo');
+const repoRootMemoryPath = String(repoRoot).replaceAll('\\', '/');
+
 function memoryPath(filePath) {
-  return String(filePath).replaceAll('\\', '/');
+  const normalizedPath = String(filePath).replaceAll('\\', '/');
+  return normalizedPath === repoRootMemoryPath || normalizedPath.startsWith(`${repoRootMemoryPath}/`)
+    ? normalizedPath.replace(repoRootMemoryPath, '/repo')
+    : normalizedPath;
 }
 
 function repoPath(...segments) {
-  return path.join('/repo', ...segments);
+  return path.join(repoRoot, ...segments);
 }
 
 function createMemoryFileSystem(initialFiles = {}) {
   const files = new Map();
-  const directories = new Set(['/repo', '/repo/src', '/repo/src/content', '/repo/content/docs']);
+  const directories = new Set([
+    memoryPath(repoRoot),
+    memoryPath(repoPath('src')),
+    memoryPath(repoPath('src/content')),
+    memoryPath(repoPath('content/docs'))
+  ]);
   const writes = [];
   const copies = [];
 
   function ensureParents(filePath) {
-    const parts = memoryPath(filePath).split('/').filter(Boolean);
-    let current = '';
+    const normalizedPath = memoryPath(filePath);
+    const hasDriveRoot = /^[A-Za-z]:\//u.test(normalizedPath);
+    const root = hasDriveRoot ? normalizedPath.slice(0, 2) : normalizedPath.startsWith('/') ? '/' : '';
+    const relativePath = root === '/'
+      ? normalizedPath.slice(1)
+      : hasDriveRoot
+        ? normalizedPath.slice(3)
+        : normalizedPath;
+    const parts = relativePath.split('/').filter(Boolean);
+    let current = root;
+    if (current && current !== '/') directories.add(current);
+
     for (const part of parts.slice(0, -1)) {
-      current += `/${part}`;
+      current = current === '/' ? `/${part}` : current ? `${current}/${part}` : part;
       directories.add(current);
     }
   }
@@ -627,18 +648,18 @@ describe('doc runtime service', () => {
         'wasm-pack',
         [
           'build',
-          '/repo/.oxiquill/rust-cells',
+          repoPath('.oxiquill/rust-cells'),
           '--target',
           'web',
           '--release',
           '--out-dir',
-          '/repo/public/oxiquill/rust-wasm',
+          repoPath('public/oxiquill/rust-wasm'),
           '--out-name',
           'doc_rust_cells'
         ],
-        { cwd: '/repo' }
+        { cwd: repoRoot }
       ],
-      ['postprocess', [], { rustWasmDir: '/repo/public/oxiquill/rust-wasm' }]
+      ['postprocess', [], { rustWasmDir: repoPath('public/oxiquill/rust-wasm') }]
     ]);
 
     commands.length = 0;

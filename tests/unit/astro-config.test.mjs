@@ -1,7 +1,10 @@
 // @vitest-environment node
 
 import { realpathSync } from 'node:fs';
+import os from 'node:os';
+import path from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { pathToFileURL } from 'node:url';
 import { describe, expect, it, vi } from 'vitest';
 import { createServer } from 'vite';
 
@@ -19,12 +22,13 @@ vi.mock('@astrojs/starlight', () => ({
 
 const { defineOxiquillConfig } = await import('../../packages/oxiquill/src/astro/index.ts');
 const linkedConsumerRoot = new URL('../fixtures/linked-consumer/', import.meta.url);
+const tempRoot = pathToFileURL(os.tmpdir());
 
 function integrationNames(config) {
   return config.integrations.flat().map((integration) => integration.name);
 }
 
-function runConfigSetup(config, root = new URL('file:///tmp/')) {
+function runConfigSetup(config, root = tempRoot) {
   const integration = config.integrations.flat().find((entry) => entry.name === 'oxiquill');
   let update;
 
@@ -44,7 +48,7 @@ async function resolveWithVite(update, ids) {
   const server = await createServer({
     ...viteConfig,
     root: fileURLToPath(linkedConsumerRoot),
-    cacheDir: '/tmp/oxiquill-vitest-vite-cache',
+    cacheDir: path.join(os.tmpdir(), 'oxiquill-vitest-vite-cache'),
     logLevel: 'silent',
     server: {
       ...serverConfig,
@@ -128,7 +132,7 @@ describe('defineOxiquillConfig', () => {
     const allow = update.vite.server.fs.allow;
 
     expect(allow).toContain('/already-allowed');
-    expect(allow).toContain('/tmp');
+    expect(allow).toContain(realpathSync(fileURLToPath(tempRoot)));
     expect(allow).toContain(realpathSync('packages/oxiquill'));
     expect(allow).toContain(realpathSync('node_modules'));
     expect(allow.some((entry) => entry.includes('node_modules/.pnpm/katex'))).toBe(true);
