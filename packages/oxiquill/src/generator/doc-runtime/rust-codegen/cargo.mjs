@@ -11,7 +11,7 @@ export function generateRustCargoToml(rustCells, helperCrates) {
 
   return `${generatedTomlBanner()}[package]
 name = "doc-rust-cells"
-version = "0.1.0"
+version = "0.2.0"
 description = "Generated Rust cells for the documentation runtime."
 edition = "2024"
 rust-version = "1.95"
