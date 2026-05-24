@@ -24,6 +24,38 @@ pnpm install
 
 Dependencies include Astro, Starlight, Preact, Pyodide, Mermaid, KaTeX, Vitest, Playwright, and the `oxiquill` CLI that generates executable-cell runtime artifacts.
 
+## Create a Consumer Repository
+
+For a separate documentation repository, add only `oxiquill` and route scripts through its CLI:
+
+```json
+{
+  "dependencies": {
+    "oxiquill": "0.2.0"
+  },
+  "scripts": {
+    "dev": "oxiquill dev",
+    "build": "oxiquill build",
+    "check": "oxiquill check"
+  }
+}
+```
+
+Use the same setup for `link:`, workspace, Git dependency, or submodule-style installs; only the dependency specifier changes. The consumer config is:
+
+```js
+import { defineOxiquillConfig } from 'oxiquill/astro';
+
+export default defineOxiquillConfig({
+  title: 'My Docs',
+  sidebar: [{ label: 'Overview', items: [{ label: 'Home', slug: 'index' }] }]
+});
+```
+
+```ts
+export { collections } from 'oxiquill/content';
+```
+
 ## Run the Development Server
 
 ```sh

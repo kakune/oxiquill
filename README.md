@@ -67,6 +67,50 @@ Preview the built site:
 pnpm preview
 ```
 
+### Use From Another Repository
+
+A consuming docs repository only needs `oxiquill` as its documentation framework dependency:
+
+```json
+{
+  "dependencies": {
+    "oxiquill": "0.2.0"
+  },
+  "scripts": {
+    "dev": "oxiquill dev",
+    "build": "oxiquill build",
+    "check": "oxiquill check"
+  }
+}
+```
+
+For local development against this checkout, use the same API with a local package link:
+
+```json
+{
+  "dependencies": {
+    "oxiquill": "link:../oxiquill/packages/oxiquill"
+  }
+}
+```
+
+The consumer config stays small:
+
+```js
+import { defineOxiquillConfig } from 'oxiquill/astro';
+
+export default defineOxiquillConfig({
+  title: 'My Docs',
+  sidebar: [{ label: 'Overview', items: [{ label: 'Home', slug: 'index' }] }]
+});
+```
+
+```ts
+export { collections } from 'oxiquill/content';
+```
+
+Use `content/docs`, `crates`, `public`, and `.oxiquill` at the consumer repository root. Oxiquill writes generated internals and browser runtime assets into the consumer workspace, not into the installed package.
+
 ### Repository Layout
 
 - `packages/oxiquill`: the reusable package, Astro integration, CLI, runtime components, styles, and generators.
@@ -246,6 +290,50 @@ pnpm build
 ```sh
 pnpm preview
 ```
+
+### 別リポジトリから使う
+
+利用側の documentation repository では、framework dependency として `oxiquill` だけを追加します。
+
+```json
+{
+  "dependencies": {
+    "oxiquill": "0.2.0"
+  },
+  "scripts": {
+    "dev": "oxiquill dev",
+    "build": "oxiquill build",
+    "check": "oxiquill check"
+  }
+}
+```
+
+この checkout に対して local development する場合も、同じ API のまま local package link を使います。
+
+```json
+{
+  "dependencies": {
+    "oxiquill": "link:../oxiquill/packages/oxiquill"
+  }
+}
+```
+
+consumer config は小さく保ちます。
+
+```js
+import { defineOxiquillConfig } from 'oxiquill/astro';
+
+export default defineOxiquillConfig({
+  title: 'My Docs',
+  sidebar: [{ label: 'Overview', items: [{ label: 'Home', slug: 'index' }] }]
+});
+```
+
+```ts
+export { collections } from 'oxiquill/content';
+```
+
+利用側 repository root に `content/docs`、`crates`、`public`、`.oxiquill` を置きます。Oxiquill は生成内部ファイルと browser runtime asset を利用側 workspace に書き、installed package には書きません。
 
 ### リポジトリ構成
 

@@ -24,6 +24,38 @@ pnpm install
 
 依存関係には Astro、Starlight、Preact、Pyodide、Mermaid、KaTeX、Vitest、Playwright、実行可能セル runtime を生成する `oxiquill` CLI が含まれます。
 
+## Consumer repository を作る
+
+別の documentation repository では、`oxiquill` だけを追加し、script は CLI に委譲します。
+
+```json
+{
+  "dependencies": {
+    "oxiquill": "0.2.0"
+  },
+  "scripts": {
+    "dev": "oxiquill dev",
+    "build": "oxiquill build",
+    "check": "oxiquill check"
+  }
+}
+```
+
+`link:`、workspace、Git dependency、submodule 形式でも同じ setup を使い、dependency specifier だけを変えます。consumer config は次の形です。
+
+```js
+import { defineOxiquillConfig } from 'oxiquill/astro';
+
+export default defineOxiquillConfig({
+  title: 'My Docs',
+  sidebar: [{ label: 'Overview', items: [{ label: 'Home', slug: 'index' }] }]
+});
+```
+
+```ts
+export { collections } from 'oxiquill/content';
+```
+
 ## 開発サーバーを起動する
 
 ```sh
