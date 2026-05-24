@@ -107,7 +107,7 @@ function createStarlightOptions(options) {
     description,
     ...rest,
     customCss: [
-      'katex/dist/katex.min.css',
+      'oxiquill/styles/katex.css',
       'oxiquill/styles/custom.css',
       ...customCss
     ],
@@ -141,11 +141,17 @@ function mergeMarkdownConfig(base, paths, markdown) {
 }
 
 function mergeViteConfig(paths, vite) {
+  const worker = vite.worker ?? {};
+
   return {
     ...vite,
     worker: {
       format: 'es',
-      ...vite.worker
+      ...worker,
+      plugins: () => [
+        oxiquillVirtualModulesPlugin(paths),
+        ...resolveWorkerPlugins(worker.plugins)
+      ]
     },
     build: {
       chunkSizeWarningLimit: 650,
@@ -156,4 +162,11 @@ function mergeViteConfig(paths, vite) {
       ...(vite.plugins ?? [])
     ]
   };
+}
+
+function resolveWorkerPlugins(plugins) {
+  if (!plugins) return [];
+
+  const resolved = typeof plugins === 'function' ? plugins() : plugins;
+  return Array.isArray(resolved) ? resolved : [resolved];
 }

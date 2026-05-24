@@ -23,6 +23,7 @@
     "./runtime/MermaidDiagram": "./src/components/doc-runtime/MermaidDiagram.tsx",
     "./runtime/types": "./src/lib/doc-runtime/types.ts",
     "./components/starlight/PageFrame": "./src/components/starlight/PageFrame.astro",
+    "./styles/katex.css": "./src/styles/katex.css",
     "./styles/custom.css": "./src/styles/custom.css",
     "./env": "./src/env.d.ts"
   },

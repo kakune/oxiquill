@@ -5,7 +5,7 @@ import {
 import { rustFunctionName } from './rust-identifiers.mjs';
 
 export function generateCellsModule(cells) {
-  return `${generatedBanner()}export const cells = ${JSON.stringify(cells, null, 2)} as const;\n`;
+  return `${generatedBanner()}export const cells = ${JSON.stringify(cells, null, 2)};\n`;
 }
 
 export function generateCellsJson(cells) {
