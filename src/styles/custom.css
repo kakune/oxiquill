@@ -49,6 +49,7 @@
   font: inherit;
   font-weight: 650;
   cursor: pointer;
+  margin-top: 0;
 }
 
 .doc-cell__actions,
