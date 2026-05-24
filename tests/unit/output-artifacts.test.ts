@@ -1,11 +1,9 @@
 import { describe, expect, it } from 'vitest';
 import {
-  defaultOutputLimits,
   isOutputArtifact,
   legacyResultToOutputs,
   normalizeCellExecutionResult,
-  outputsToLegacyResult,
-  withDefaultOutputLimits
+  outputsToLegacyResult
 } from '../../packages/oxiquill/src/lib/doc-runtime/output-artifacts';
 
 describe('output artifact normalization', () => {
@@ -162,20 +160,5 @@ describe('output artifact normalization', () => {
     expect(isOutputArtifact({ kind: 'image', mime: 'image/gif', data: '' })).toBe(false);
     expect(isOutputArtifact({ kind: 'html', html: '<script></script>', sandboxed: false })).toBe(false);
     expect(isOutputArtifact({ kind: 'missing' })).toBe(false);
-  });
-
-  it('exposes overridable default output limits', () => {
-    expect(defaultOutputLimits).toEqual({
-      maxTextBytes: 200_000,
-      maxJsonBytes: 500_000,
-      maxJsonDepth: 32,
-      maxTableRows: 1_000,
-      maxImageBytes: 2_000_000,
-      maxHtmlBytes: 500_000
-    });
-    expect(withDefaultOutputLimits({ maxTableRows: 10 })).toEqual({
-      ...defaultOutputLimits,
-      maxTableRows: 10
-    });
   });
 });

@@ -1,7 +1,17 @@
-export declare const collections: Record<string, unknown>;
+import type { defineCollection } from 'astro:content';
+import type { docsLoader } from '@astrojs/starlight/loaders';
+import type { docsSchema } from '@astrojs/starlight/schema';
 
-export declare function createOxiquillCollections(dependencies: {
-  defineCollection: (...args: any[]) => any;
-  docsLoader: (...args: any[]) => any;
-  docsSchema: (...args: any[]) => any;
-}): Record<string, unknown>;
+export interface OxiquillContentDependencies {
+  defineCollection: typeof defineCollection;
+  docsLoader: typeof docsLoader;
+  docsSchema: typeof docsSchema;
+}
+
+export interface OxiquillCollections {
+  docs: ReturnType<typeof defineCollection>;
+}
+
+export declare const collections: OxiquillCollections;
+
+export declare function createOxiquillCollections(dependencies: OxiquillContentDependencies): OxiquillCollections;

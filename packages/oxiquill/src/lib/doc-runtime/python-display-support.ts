@@ -1,4 +1,4 @@
-export const pythonDisplaySupportCode = String.raw`
+const pythonDisplayJsonAndScalarSupport = String.raw`
 import base64
 import builtins
 import io
@@ -54,7 +54,9 @@ def __oxiquill_scalar_value(value):
         except Exception:
             pass
     return __oxiquill_jsonable(value)
+`;
 
+const pythonDisplayTableSupport = String.raw`
 def __oxiquill_column_key(label, used_keys):
     base = str(label) or "column"
     key = base
@@ -201,7 +203,9 @@ def __oxiquill_dataframe_artifact(value, *, title=None, caption=None):
             "content": f"Failed to convert dataframe output: {error}",
         }, title, caption)
     return None
+`;
 
+const pythonDisplayMimeSupport = String.raw`
 def __oxiquill_image_data(data):
     if isinstance(data, bytes):
         return base64.b64encode(data).decode("ascii")
@@ -296,7 +300,9 @@ def __oxiquill_markdown_repr_artifact(value, *, title=None, caption=None):
     if not markdown:
         return None
     return __oxiquill_text_artifact(markdown, title=title, caption=caption)
+`;
 
+const pythonDisplayMatplotlibSupport = String.raw`
 def __oxiquill_configure_matplotlib():
     try:
         import matplotlib
@@ -362,7 +368,9 @@ def __oxiquill_collect_matplotlib_outputs(preferred="svg", close_figures=True):
     if close_figures:
         plt.close("all")
     return outputs
+`;
 
+const pythonDisplayDispatchSupport = String.raw`
 def __oxiquill_artifact(value, title=None, caption=None):
     if value is None or isinstance(value, (str, int, float, bool, list, tuple, dict)):
         return __oxiquill_json_artifact(value, title, caption)
@@ -400,7 +408,9 @@ def __oxiquill_artifact(value, title=None, caption=None):
     if markdown_repr_artifact is not None:
         return markdown_repr_artifact
     return __oxiquill_text_artifact(value, title=title, caption=caption)
+`;
 
+const pythonDisplayPublicFunctions = String.raw`
 def display(value, *, title=None, caption=None):
     __oxiquill_outputs.append(__oxiquill_artifact(value, title, caption))
 
@@ -442,7 +452,9 @@ def display_table(value, *, title=None, caption=None):
         "rowCount": len(rows),
         "truncated": truncated,
     }, title, caption))
+`;
 
+const pythonDisplayBootstrapSupport = String.raw`
 def __oxiquill_reset_outputs():
     __oxiquill_outputs.clear()
     __oxiquill_displayed_figures.clear()
@@ -462,3 +474,13 @@ builtins.display_html = display_html
 builtins.display_table = display_table
 builtins.display_image = display_image
 `;
+
+export const pythonDisplaySupportCode = [
+  pythonDisplayJsonAndScalarSupport,
+  pythonDisplayTableSupport,
+  pythonDisplayMimeSupport,
+  pythonDisplayMatplotlibSupport,
+  pythonDisplayDispatchSupport,
+  pythonDisplayPublicFunctions,
+  pythonDisplayBootstrapSupport
+].join('\n');

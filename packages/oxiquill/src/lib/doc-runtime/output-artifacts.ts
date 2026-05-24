@@ -3,21 +3,11 @@ import type {
   ChartSpec,
   CellExecutionResult,
   OutputArtifact,
-  OutputLimits,
   PlotSpec,
   RawCellExecutionResult,
   TableColumn,
   TextArtifact
 } from './types';
-
-export const defaultOutputLimits: OutputLimits = {
-  maxTextBytes: 200_000,
-  maxJsonBytes: 500_000,
-  maxJsonDepth: 32,
-  maxTableRows: 1_000,
-  maxImageBytes: 2_000_000,
-  maxHtmlBytes: 500_000
-};
 
 const artifactKinds = new Set(['text', 'json', 'table', 'chart', 'image', 'html']);
 const artifactStreams = new Set(['stdout', 'stderr', 'display']);
@@ -95,10 +85,6 @@ export function isOutputArtifact(value: unknown): value is OutputArtifact {
     default:
       return false;
   }
-}
-
-export function withDefaultOutputLimits(overrides: Partial<OutputLimits> = {}): OutputLimits {
-  return { ...defaultOutputLimits, ...overrides };
 }
 
 function legacyPlotToChartArtifact(plot: PlotSpec): ChartArtifact {

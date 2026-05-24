@@ -44,7 +44,6 @@ const {
   getMermaidColorScheme
 } = await import('../../packages/oxiquill/src/components/doc-runtime/MermaidDiagram');
 const { default: OutputRenderer, imageArtifactSource } = await import('../../packages/oxiquill/src/components/doc-runtime/OutputRenderer');
-const { default: PlotOutput } = await import('../../packages/oxiquill/src/components/doc-runtime/PlotOutput');
 const { chartSpecToEChartsOptions } = await import('../../packages/oxiquill/src/components/doc-runtime/ChartOutput');
 const {
   default: TableOutput,
@@ -537,31 +536,6 @@ describe('MermaidDiagram', () => {
 
     expect(screen.queryByText('late')).not.toBeInTheDocument();
     expect(screen.queryByText('late error')).not.toBeInTheDocument();
-  });
-});
-
-describe('PlotOutput', () => {
-  it('initializes, updates, and disposes an ECharts line plot', () => {
-    const { unmount } = render(
-      <PlotOutput plot={{ kind: 'line', x_label: 'n', y_label: 'x', points: [[0, 0.2]] }} />
-    );
-
-    expect(mocks.echartsInit).toHaveBeenCalled();
-    TestResizeObserver.instances[0].callback(
-      [],
-      TestResizeObserver.instances[0] as unknown as ResizeObserver
-    );
-    expect(mocks.chart.resize).toHaveBeenCalled();
-    expect(mocks.chart.setOption).toHaveBeenCalledWith(
-      expect.objectContaining({
-        color: expect.arrayContaining(['#0f766e']),
-        series: [expect.objectContaining({ type: 'line', data: [[0, 0.2]] })]
-      }),
-      true
-    );
-
-    unmount();
-    expect(mocks.chart.dispose).toHaveBeenCalled();
   });
 });
 

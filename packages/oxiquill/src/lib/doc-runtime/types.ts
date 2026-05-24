@@ -184,15 +184,6 @@ export interface HeatmapChartSpec extends BaseChartSpec {
   data: readonly (readonly [number | string, number | string, number])[];
 }
 
-export interface OutputLimits {
-  maxTextBytes: number;
-  maxJsonBytes: number;
-  maxJsonDepth: number;
-  maxTableRows: number;
-  maxImageBytes: number;
-  maxHtmlBytes: number;
-}
-
 export interface RawCellExecutionResult {
   stdout?: string;
   stderr?: string;

@@ -4,6 +4,8 @@ import {
   relativePagePath,
   scopedCellId
 } from '../../packages/oxiquill/src/lib/doc-runtime/authoring-ids.mjs';
+import { rustSourceCapabilities } from '../../packages/oxiquill/src/generator/doc-runtime/rust-codegen/capabilities.mjs';
+import { generateRustPreludeMacros } from '../../packages/oxiquill/src/generator/doc-runtime/rust-codegen/macros.mjs';
 import {
   assertUniqueCellIds,
   assertUniqueRustInputBindings,
@@ -430,5 +432,30 @@ describe('doc runtime core', () => {
     expect(generateRustLib([chartCell])).toContain('fn histogram_chart_spec');
     expect(generateRustLib([chartCell])).toContain('fn heatmap_chart_spec');
     expect(generateRustLib([rustCell])).toContain('first_generated_cell_runs');
+  });
+
+  it('detects Rust output capabilities from source tokens', () => {
+    expect(rustSourceCapabilities('emit_json!(&value);\nemit_table!(&rows);')).toMatchObject({
+      chart: false,
+      image: false,
+      json: true,
+      table: true
+    });
+
+    expect(rustSourceCapabilities('emit_svg!("<svg />");\nemit_heatmap!(&data);')).toMatchObject({
+      chart: true,
+      heatmapChart: true,
+      image: true
+    });
+  });
+
+  it('selects only required generated Rust macros', () => {
+    const macros = generateRustPreludeMacros('emit_svg!("<svg />");\nemit_table_with_columns!(&columns, &rows);');
+
+    expect(macros).toContain('macro_rules! emit_image_svg');
+    expect(macros).toContain('macro_rules! emit_svg');
+    expect(macros).toContain('macro_rules! emit_table_with_columns');
+    expect(macros).not.toContain('macro_rules! emit_json');
+    expect(macros).not.toContain('macro_rules! emit_line_chart');
   });
 });
