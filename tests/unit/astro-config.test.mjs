@@ -181,6 +181,93 @@ describe('defineOxiquillConfig', () => {
     }
   });
 
+  it('keeps Oxiquill Preact runtime dependencies bundled for dev SSR', () => {
+    const config = defineOxiquillConfig({
+      sidebar: [],
+      title: 'Docs'
+    });
+
+    const update = runConfigSetup(config, linkedConsumerRoot);
+
+    expect(update.vite.ssr.noExternal).toEqual(expect.arrayContaining([
+      '@astrojs/preact',
+      'preact',
+      'preact-render-to-string'
+    ]));
+    expect(update.vite.resolve.dedupe).toEqual(expect.arrayContaining([
+      '@preact/signals',
+      'preact'
+    ]));
+  });
+
+  it('merges consumer Vite SSR and dedupe settings with Oxiquill defaults', () => {
+    const consumerNoExternal = /^consumer-/;
+    const config = defineOxiquillConfig({
+      sidebar: [],
+      title: 'Docs',
+      vite: {
+        resolve: {
+          dedupe: ['consumer-runtime']
+        },
+        ssr: {
+          external: ['external-runtime'],
+          noExternal: ['consumer-package', consumerNoExternal]
+        }
+      }
+    });
+
+    const update = runConfigSetup(config, linkedConsumerRoot);
+
+    expect(update.vite.ssr.external).toEqual(['external-runtime']);
+    expect(update.vite.ssr.noExternal).toEqual(expect.arrayContaining([
+      'consumer-package',
+      consumerNoExternal,
+      '@astrojs/preact',
+      'preact',
+      'preact-render-to-string'
+    ]));
+    expect(update.vite.resolve.dedupe).toEqual(expect.arrayContaining([
+      'consumer-runtime',
+      '@preact/signals',
+      'preact'
+    ]));
+  });
+
+  it('normalizes singular consumer SSR noExternal entries when merging Oxiquill defaults', () => {
+    for (const noExternal of ['consumer-package', /^consumer-/]) {
+      const config = defineOxiquillConfig({
+        sidebar: [],
+        title: 'Docs',
+        vite: {
+          ssr: { noExternal }
+        }
+      });
+
+      const update = runConfigSetup(config, linkedConsumerRoot);
+
+      expect(update.vite.ssr.noExternal).toEqual(expect.arrayContaining([
+        noExternal,
+        '@astrojs/preact',
+        'preact',
+        'preact-render-to-string'
+      ]));
+    }
+  });
+
+  it('preserves vite.ssr.noExternal true semantics', () => {
+    const config = defineOxiquillConfig({
+      sidebar: [],
+      title: 'Docs',
+      vite: {
+        ssr: { noExternal: true }
+      }
+    });
+
+    const update = runConfigSetup(config, linkedConsumerRoot);
+
+    expect(update.vite.ssr.noExternal).toBe(true);
+  });
+
   it('resolves package-managed dependencies through Vite from linked consumers', async () => {
     const config = defineOxiquillConfig({
       sidebar: [],
