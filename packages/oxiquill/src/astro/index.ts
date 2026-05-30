@@ -68,6 +68,7 @@ const viteAliasedPackageNames = [
   'astro',
   '@astrojs/preact',
   '@preact/signals',
+  'preact',
   'aria-query',
   'axobject-query',
   'html-escaper'

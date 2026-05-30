@@ -23,9 +23,33 @@ vi.mock('@astrojs/starlight', () => ({
 const { defineOxiquillConfig } = await import('../../packages/oxiquill/src/astro/index.ts');
 const linkedConsumerRoot = new URL('../fixtures/linked-consumer/', import.meta.url);
 const tempRoot = pathToFileURL(os.tmpdir());
+const preactExportSpecifiers = [
+  'preact',
+  'preact/jsx-runtime',
+  'preact/jsx-dev-runtime',
+  'preact/hooks',
+  'preact/debug',
+  'preact/devtools'
+];
 
 function integrationNames(config) {
   return config.integrations.flat().map((integration) => integration.name);
+}
+
+function aliasReplacementFor(alias, id) {
+  const entries = Array.isArray(alias)
+    ? alias
+    : Object.entries(alias ?? {}).map(([find, replacement]) => ({ find, replacement }));
+
+  for (const { find, replacement } of entries) {
+    if (typeof find === 'string' && find === id) return replacement;
+    if (find instanceof RegExp) {
+      find.lastIndex = 0;
+      if (find.test(id)) return replacement;
+    }
+  }
+
+  return undefined;
 }
 
 function runConfigSetup(config, root = tempRoot) {
@@ -141,6 +165,22 @@ describe('defineOxiquillConfig', () => {
     expect(normalizedAllow.some((entry) => entry.includes('node_modules/.pnpm/aria-query'))).toBe(true);
   });
 
+  it('aliases Preact exports needed by Astro Preact dependency optimization', () => {
+    const config = defineOxiquillConfig({
+      sidebar: [],
+      title: 'Docs'
+    });
+
+    const update = runConfigSetup(config, linkedConsumerRoot);
+
+    for (const id of preactExportSpecifiers) {
+      const replacement = aliasReplacementFor(update.vite.resolve.alias, id);
+
+      expect(replacement, id).toEqual(expect.any(String));
+      expect(replacement.replaceAll('\\', '/'), id).toContain('/node_modules/preact/');
+    }
+  });
+
   it('resolves package-managed dependencies through Vite from linked consumers', async () => {
     const config = defineOxiquillConfig({
       sidebar: [],
@@ -149,7 +189,7 @@ describe('defineOxiquillConfig', () => {
 
     const update = runConfigSetup(config, linkedConsumerRoot);
     const resolved = await resolveWithVite(update, [
-      'preact/hooks',
+      ...preactExportSpecifiers,
       '@preact/signals',
       'aria-query',
       'html-escaper',
@@ -161,7 +201,10 @@ describe('defineOxiquillConfig', () => {
       'astro/runtime/server/index.js'
     ]);
 
-    expect(resolved['preact/hooks']).toEqual(expect.any(String));
+    for (const id of preactExportSpecifiers) {
+      expect(resolved[id], id).toEqual(expect.any(String));
+    }
+
     expect(resolved['@preact/signals']).toEqual(expect.any(String));
     expect(resolved['aria-query']).toEqual(expect.any(String));
     expect(resolved['html-escaper']).toEqual(expect.any(String));
