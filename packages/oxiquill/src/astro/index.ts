@@ -73,6 +73,15 @@ const viteAliasedPackageNames = [
   'axobject-query',
   'html-escaper'
 ];
+const viteSsrNoExternalPackageNames = [
+  '@astrojs/preact',
+  'preact',
+  'preact-render-to-string'
+];
+const viteResolveDedupePackageNames = [
+  '@preact/signals',
+  'preact'
+];
 
 export interface OxiquillFrameworkOptions {
   preact?: PreactIntegrationFactory;
@@ -280,6 +289,7 @@ function mergeViteConfig(paths: OxiquillPaths, vite: ViteUserConfig): ViteUserCo
   const worker = vite.worker ?? {};
   const server = vite.server ?? {};
   const serverFs = server.fs ?? {};
+  const ssr = vite.ssr ?? {};
   const resolve = vite.resolve ?? {};
   const alias = mergeAlias(oxiquillDependencyAliases(paths), resolve.alias);
 
@@ -287,7 +297,12 @@ function mergeViteConfig(paths: OxiquillPaths, vite: ViteUserConfig): ViteUserCo
     ...vite,
     resolve: {
       ...resolve,
-      ...(alias ? { alias } : {})
+      ...(alias ? { alias } : {}),
+      dedupe: mergeStringList(resolve.dedupe, viteResolveDedupePackageNames)
+    },
+    ssr: {
+      ...ssr,
+      noExternal: mergeSsrNoExternal(ssr.noExternal, viteSsrNoExternalPackageNames)
     },
     server: {
       ...server,
@@ -617,6 +632,45 @@ function existingRealPaths(paths: string[]): string[] {
 
 function mergeServerFsAllow(allow: string[] | undefined, additions: string[]): string[] {
   return [...new Set([...(allow ?? []), ...additions])];
+}
+
+type SsrNoExternal = NonNullable<NonNullable<ViteUserConfig['ssr']>['noExternal']>;
+type SsrNoExternalEntry = string | RegExp;
+
+function mergeSsrNoExternal(
+  noExternal: SsrNoExternal | undefined,
+  additions: SsrNoExternalEntry[]
+): SsrNoExternal {
+  if (noExternal === true) return true;
+
+  return uniqueSsrNoExternalEntries([
+    ...ssrNoExternalEntries(noExternal),
+    ...additions
+  ]);
+}
+
+function ssrNoExternalEntries(noExternal: SsrNoExternal | undefined): SsrNoExternalEntry[] {
+  if (noExternal == null || noExternal === true) return [];
+  return Array.isArray(noExternal) ? noExternal : [noExternal];
+}
+
+function uniqueSsrNoExternalEntries(entries: SsrNoExternalEntry[]): SsrNoExternalEntry[] {
+  const seen = new Set<string>();
+  const unique: SsrNoExternalEntry[] = [];
+
+  for (const entry of entries) {
+    const key = typeof entry === 'string' ? `string:${entry}` : `regexp:${entry.toString()}`;
+    if (seen.has(key)) continue;
+
+    seen.add(key);
+    unique.push(entry);
+  }
+
+  return unique;
+}
+
+function mergeStringList(value: string[] | undefined, additions: string[]): string[] {
+  return [...new Set([...(value ?? []), ...additions])];
 }
 
 function resolveWorkerPlugins(plugins: ViteWorkerPlugins | undefined): PluginOption[] {
