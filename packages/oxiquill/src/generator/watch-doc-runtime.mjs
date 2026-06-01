@@ -2,9 +2,11 @@ import chokidar from 'chokidar';
 import { pathToFileURL } from 'node:url';
 import { pathFromUrl } from '../config/paths.mjs';
 import {
+  buildHaskellWasm,
   buildRustWasm,
   createDocRuntimeContext,
   markRuntimeReady,
+  shouldBuildHaskellWasm,
   shouldBuildWasm,
   syncDocRuntime
 } from './doc-runtime-service.mjs';
@@ -44,6 +46,10 @@ export async function main(argv = process.argv.slice(2)) {
     if (shouldBuildWasm({ changeKinds: currentKinds, current, previous })) {
       console.log('[runtime] rebuilding Rust/Wasm cells');
       await buildRustWasm({ mode: 'dev', paths: context.paths });
+    }
+    if (shouldBuildHaskellWasm({ current, previous })) {
+      console.log('[runtime] rebuilding Haskell/WASI cells');
+      await buildHaskellWasm({ mode: 'dev', paths: context.paths });
     }
 
     await markRuntimeReady({ paths: context.paths, summary: current });

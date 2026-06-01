@@ -6,6 +6,7 @@ import {
   stripUnusedWasmPackState
 } from '../../packages/oxiquill/src/generator/postprocess-rust-wasm.mjs';
 import {
+  buildHaskellWasm,
   buildRustWasm,
   collectCells,
   copyFileIfChanged,
@@ -725,5 +726,34 @@ describe('doc runtime service', () => {
       }
     });
     expect(commands[0][1]).toContain('--dev');
+
+    commands.length = 0;
+    const fileSystem = createMemoryFileSystem();
+    await buildHaskellWasm({
+      fileSystem,
+      mode: 'build',
+      root: '/repo',
+      runCommand: async (command, args, options) => {
+        commands.push([command, args, options]);
+      }
+    });
+    expect(commands).toEqual([
+      [
+        'wasm32-wasi-ghc',
+        [
+          '-O2',
+          '-odir',
+          repoPath('.oxiquill/haskell-cells/build'),
+          '-hidir',
+          repoPath('.oxiquill/haskell-cells/build'),
+          repoPath('.oxiquill/haskell-cells/Main.hs'),
+          '-o',
+          repoPath('public/oxiquill/haskell-wasm/doc_haskell_cells.wasm')
+        ],
+        { cwd: repoRoot }
+      ]
+    ]);
+    expect(fileSystem.existsSync('/repo/.oxiquill/haskell-cells/build')).toBe(true);
+    expect(fileSystem.existsSync('/repo/public/oxiquill/haskell-wasm')).toBe(true);
   });
 });

@@ -102,23 +102,29 @@ describe('runtime client', () => {
 
     const rust = runInteractiveCell(makeCell('rust'), {});
     const python = runInteractiveCell(makeCell('python'), {});
+    const haskell = runInteractiveCell(makeCell('haskell'), {});
 
     expect(defaultWorkers[0].options).toEqual({ type: 'module' });
     expect(defaultWorkers[0].url.href).toContain('rust-worker.ts');
     expect(defaultWorkers[1].url.href).toContain('python-worker.ts');
+    expect(defaultWorkers[2].url.href).toContain('haskell-worker.ts');
 
     defaultWorkers[0].emitMessage({ requestId: 1, ok: true, result });
     defaultWorkers[1].emitMessage({ requestId: 2, ok: true, result });
+    defaultWorkers[2].emitMessage({ requestId: 3, ok: true, result });
 
     await expect(rust).resolves.toEqual(result);
     await expect(python).resolves.toEqual(result);
+    await expect(haskell).resolves.toEqual(result);
 
     resetInteractiveRuntime('rust');
     expect(defaultWorkers[0].terminated).toBe(true);
     expect(defaultWorkers[1].terminated).toBe(false);
+    expect(defaultWorkers[2].terminated).toBe(false);
 
     resetInteractiveRuntime();
     expect(defaultWorkers[1].terminated).toBe(true);
+    expect(defaultWorkers[2].terminated).toBe(true);
     globalThis.Worker = originalWorker;
   });
 
@@ -183,11 +189,43 @@ describe('runtime client', () => {
     expect(workers[0].messages[0]).toEqual({
       requestId: 1,
       cellId: 'rust-cell',
+      inputArgs: undefined,
       inputs: {},
       source: undefined,
       packages: undefined
     });
     expect(workers[0].messages[1].cellId).toBe('rust-cell-two');
+
+    workers[0].emitMessage({ requestId: 1, ok: true, result });
+    workers[0].emitMessage({ requestId: 2, ok: true, result });
+
+    await expect(first).resolves.toEqual(result);
+    await expect(second).resolves.toEqual(result);
+  });
+
+  it('sends Haskell input arguments in manifest order', async () => {
+    const { runner, workers } = makeRunner();
+    const first = runner.runInteractiveCell(
+      makeCell('haskell', {
+        inputs: [
+          { name: 'enabled', type: 'checkbox', label: 'enabled', value: false, options: [] },
+          { name: 'scale', type: 'integer', label: 'scale', value: 2, options: [] },
+          { name: 'label', type: 'text', label: 'label', value: 'fallback', options: [] }
+        ]
+      }),
+      { enabled: true, scale: 4 }
+    );
+    const second = runner.runInteractiveCell(makeCell('haskell', { id: 'haskell-cell-two' }), {});
+
+    expect(workers).toHaveLength(1);
+    expect(workers[0].messages[0]).toMatchObject({
+      requestId: 1,
+      cellId: 'haskell-cell',
+      inputArgs: ['true', '4', 'fallback'],
+      source: undefined,
+      packages: undefined
+    });
+    expect(workers[0].messages[1].cellId).toBe('haskell-cell-two');
 
     workers[0].emitMessage({ requestId: 1, ok: true, result });
     workers[0].emitMessage({ requestId: 2, ok: true, result });

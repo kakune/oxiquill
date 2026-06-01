@@ -37,6 +37,7 @@ export function resetInteractiveRuntime(language?: CellLanguage): void {
 
   defaultRuntimeClient.resetWorker('rust');
   defaultRuntimeClient.resetWorker('python');
+  defaultRuntimeClient.resetWorker('haskell');
 }
 
 export function createInteractiveCellRunner(dependencies: RuntimeClientDependencies) {
@@ -128,6 +129,7 @@ function createWorkerRequest(
   return {
     requestId,
     cellId: cell.id,
+    inputArgs: cell.language === 'haskell' ? cell.inputs.map((input) => inputArgument(input, inputs)) : undefined,
     inputs,
     source: cell.language === 'python' ? cell.source : undefined,
     packages: cell.language === 'python' ? cell.packages : undefined
@@ -136,9 +138,23 @@ function createWorkerRequest(
 
 function createDefaultWorker(language: CellLanguage): Worker {
   /* v8 ignore next -- covered by browser integration and E2E tests. */
-  return language === 'rust'
-    ? new Worker(new URL('./rust-worker.ts', import.meta.url), { type: 'module' })
-    : new Worker(new URL('./python-worker.ts', import.meta.url), { type: 'module' });
+  switch (language) {
+    case 'rust':
+      return new Worker(new URL('./rust-worker.ts', import.meta.url), { type: 'module' });
+    case 'python':
+      return new Worker(new URL('./python-worker.ts', import.meta.url), { type: 'module' });
+    case 'haskell':
+      return new Worker(new URL('./haskell-worker.ts', import.meta.url), { type: 'module' });
+  }
+}
+
+function inputArgument(
+  input: CellManifest['inputs'][number],
+  inputs: InputValues
+): string {
+  const value = inputs[input.name] ?? input.value;
+  if (typeof value === 'boolean') return value ? 'true' : 'false';
+  return String(value);
 }
 
 const defaultRuntimeClient = createInteractiveCellRunner({

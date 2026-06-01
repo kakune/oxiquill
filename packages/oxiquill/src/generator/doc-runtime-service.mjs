@@ -57,7 +57,10 @@ export {
   shouldBuildWasm,
   summarizeCells
 } from './doc-runtime/runtime-summary.mjs';
-export { buildRustWasm } from './doc-runtime/wasm-build.mjs';
+export {
+  buildHaskellWasm,
+  buildRustWasm
+} from './doc-runtime/wasm-build.mjs';
 
 export function createDocRuntimePaths(rootOrOptions = process.cwd()) {
   const options = typeof rootOrOptions === 'object' && !(rootOrOptions instanceof URL)

@@ -5,6 +5,7 @@ import path from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import { createOxiquillPaths, pathFromUrl, pathInUrl } from '../config/paths.mjs';
 import {
+  buildHaskellWasm,
   buildRustWasm,
   createDocRuntimeContext,
   markRuntimeReady,
@@ -95,6 +96,9 @@ async function generateRuntime({ paths, wasmMode }) {
 
   if (wasmMode) {
     await buildRustWasm({ mode: wasmMode, paths });
+    if (summary.haskellCellCount > 0) {
+      await buildHaskellWasm({ mode: wasmMode, paths });
+    }
   }
 
   await markRuntimeReady({ paths, summary });
