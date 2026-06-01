@@ -7,7 +7,7 @@ export default defineOxiquillConfig({
   ...(basePath ? { base: basePath } : {}),
   starlight: {
     title: 'Oxiquill',
-    description: 'A static documentation workspace for Rust, Python, math, diagrams, and media-rich MDX notes.',
+    description: 'A static documentation workspace for Rust, Python, Haskell, math, diagrams, and media-rich MDX notes.',
     defaultLocale: 'root',
     locales: {
       root: {
@@ -53,7 +53,8 @@ export default defineOxiquillConfig({
         translations: { ja: 'サンプルノート' },
         items: [
           { label: 'Rust Ownership', translations: { ja: 'Rust の所有権' }, slug: 'samples/rust-ownership' },
-          { label: 'Logistic Map', translations: { ja: 'ロジスティック写像' }, slug: 'samples/logistic-map' }
+          { label: 'Logistic Map', translations: { ja: 'ロジスティック写像' }, slug: 'samples/logistic-map' },
+          { label: 'Haskell Series', translations: { ja: 'Haskell 数列' }, slug: 'samples/haskell-series' }
         ]
       }
     ]

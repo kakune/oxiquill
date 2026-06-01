@@ -66,6 +66,26 @@ print(scale * 10)
 
 Python セルは Pyodide worker で実行されます。vendored package が必要な場合は `packages` に指定します。対応 package には `numpy`、`pandas`、`matplotlib` と、それらの vendored dependency が含まれます。
 
+## Haskell セルを書く
+
+Haskell セルは `haskell` の fenced code block で、先頭に `--|` metadata comment を置きます。runtime generation 時に WASI WebAssembly へ compile され、browser worker で実行されます。
+
+````md
+```haskell
+--| id: sample-haskell-cell
+--| title: Haskell calculation
+--| run: reactive
+--| inputs:
+--|   count: { type: integer, label: count, min: 1, max: 10, step: 1, value: 4 }
+import Data.List (intercalate)
+
+let values = take count [2, 4 ..]
+putStrLn (intercalate ", " (map show values))
+```
+````
+
+standard library module だけを使います。Haskell セルでは外部 package、`packages`、`crates` は使えません。
+
 ## セルの動作を設定する
 
 主な metadata field:
