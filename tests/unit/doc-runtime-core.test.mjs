@@ -8,10 +8,14 @@ import { rustSourceCapabilities } from '../../packages/oxiquill/src/generator/do
 import { generateRustPreludeMacros } from '../../packages/oxiquill/src/generator/doc-runtime/rust-codegen/macros.mjs';
 import {
   assertUniqueCellIds,
+  assertUniqueHaskellInputBindings,
   assertUniqueRustInputBindings,
   extractCellsFromMarkdown,
   generateCellsJson,
   generateCellsModule,
+  generateHaskellFunction,
+  generateHaskellInputBinding,
+  generateHaskellMain,
   generateRustCargoToml,
   generateRustDependency,
   generateRustFunction,
@@ -32,9 +36,13 @@ import {
   parseCell,
   parseLanguage,
   packageNameFromCargoToml,
+  haskellFunctionName,
+  haskellIdentifier,
+  haskellReaderName,
   rustFunctionName,
   rustIdentifier,
   rustReaderName,
+  splitHaskellCellSource,
   splitCellSource
 } from '../../packages/oxiquill/src/generator/doc-runtime-core.mjs';
 
@@ -60,6 +68,8 @@ describe('doc runtime core', () => {
     expect(parseLanguage('rust')).toBe('rust');
     expect(parseLanguage('{rs} title')).toBe('rust');
     expect(parseLanguage('.py')).toBe('python');
+    expect(parseLanguage('haskell')).toBe('haskell');
+    expect(parseLanguage('{hs} title')).toBe('haskell');
     expect(parseLanguage('mermaid')).toBeUndefined();
   });
 
@@ -71,6 +81,10 @@ describe('doc runtime core', () => {
     expect(splitCellSource('///| id: doc\n#| title: py\nprint("ok")')).toEqual({
       metadataLines: ['id: doc', 'title: py'],
       sourceLines: ['print("ok")']
+    });
+    expect(splitCellSource('--| id: hs\nputStrLn "ok"')).toEqual({
+      metadataLines: ['id: hs'],
+      sourceLines: ['putStrLn "ok"']
     });
   });
 
@@ -121,6 +135,10 @@ describe('doc runtime core', () => {
           '#| id: two',
           'print("two")',
           '~~~',
+          '```haskell',
+          '--| id: three',
+          'putStrLn "three"',
+          '```',
           '```rust',
           'println!("no metadata");',
           '```'
@@ -128,7 +146,7 @@ describe('doc runtime core', () => {
         'page.mdx',
         { helperCrates, highlighter }
       )
-    ).resolves.toHaveLength(2);
+    ).resolves.toHaveLength(3);
   });
 
   it('returns no cell without metadata and rejects invalid cell metadata', async () => {
@@ -176,7 +194,8 @@ describe('doc runtime core', () => {
     expect(normalizePackages([], 'python', 'cell', 'page')).toEqual([]);
     expect(normalizePackages(['numpy', 'numpy', 'pandas'], 'python', 'cell', 'page')).toEqual(['numpy', 'pandas']);
     expect(() => normalizePackages(['scipy'], 'python', 'cell', 'page')).toThrow('unsupported packages: scipy');
-    expect(() => normalizePackages(['numpy'], 'rust', 'cell', 'page')).toThrow('must use crates');
+    expect(() => normalizePackages(['numpy'], 'rust', 'cell', 'page')).toThrow('cannot specify packages');
+    expect(() => normalizePackages(['numpy'], 'haskell', 'cell', 'page')).toThrow('Haskell cell');
 
     expect(normalizeCrates(null, 'rust', 'cell', 'page', helperCrates)).toEqual([]);
     expect(normalizeCrates(['doc-rust-text', 'doc-rust'], 'rust', 'cell', 'page', helperCrates)).toEqual([
@@ -186,6 +205,7 @@ describe('doc runtime core', () => {
     expect(() => normalizeCrates(['missing'], 'rust', 'cell', 'page', helperCrates)).toThrow('helper crate');
     expect(() => normalizeCrates(['missing'], 'rust', 'cell', 'page', new Map())).toThrow('(none)');
     expect(() => normalizeCrates(['doc-rust'], 'python', 'cell', 'page', helperCrates)).toThrow('cannot specify crates');
+    expect(() => normalizeCrates(['doc-rust'], 'haskell', 'cell', 'page', helperCrates)).toThrow('Haskell cell');
   });
 
   it('validates string arrays and normalizes input specifications', () => {
@@ -291,6 +311,16 @@ describe('doc runtime core', () => {
         { id: 'keyword', pagePath: 'page', inputs: [{ name: 'type' }, { name: 'cell-type' }] }
       ])
     ).toThrow('both map to Rust binding "cell_type"');
+    expect(() =>
+      assertUniqueHaskellInputBindings([
+        { id: 'ok', pagePath: 'page', inputs: [{ name: 'value-a' }, { name: 'value_b' }] }
+      ])
+    ).not.toThrow();
+    expect(() =>
+      assertUniqueHaskellInputBindings([
+        { id: 'bad', pagePath: 'page', inputs: [{ name: 'data' }, { name: 'cell-data' }] }
+      ])
+    ).toThrow('both map to Haskell binding "cell_data"');
 
     const crates = helperCratesFromManifests([
       { content: '[package]\nname = "b-crate"\n', manifestPath: '/repo/crates/b/Cargo.toml' },
@@ -347,6 +377,19 @@ describe('doc runtime core', () => {
     );
     expect(generateRustInputBinding({ name: 'type', type: 'text' })).toBe(
       'let cell_type = read_string(inputs, "type")?;'
+    );
+    expect(haskellIdentifier('1-bad id')).toBe('cell_1_bad_id');
+    expect(haskellIdentifier('data')).toBe('cell_data');
+    expect(haskellIdentifier('Type')).toBe('cell_Type');
+    expect(haskellFunctionName('page__cell')).toBe('run_page_cell');
+    expect(haskellReaderName({ type: 'checkbox' })).toBe('readBoolInput');
+    expect(haskellReaderName({ type: 'integer' })).toBe('readIntInput');
+    expect(haskellReaderName({ type: 'text', integer: true })).toBe('readIntInput');
+    expect(haskellReaderName({ type: 'range' })).toBe('readDoubleInput');
+    expect(haskellReaderName({ type: 'number' })).toBe('readDoubleInput');
+    expect(haskellReaderName({ type: 'text' })).toBe('readStringInput');
+    expect(generateHaskellInputBinding({ name: 'type', type: 'text' })).toBe(
+      'cell_type <- readStringInput "type" raw_cell_type'
     );
 
     const rustCell = {
@@ -432,6 +475,40 @@ describe('doc runtime core', () => {
     expect(generateRustLib([chartCell])).toContain('fn histogram_chart_spec');
     expect(generateRustLib([chartCell])).toContain('fn heatmap_chart_spec');
     expect(generateRustLib([rustCell])).toContain('first_generated_cell_runs');
+
+    const haskellCell = {
+      id: 'haskell-cell',
+      pagePath: 'page',
+      language: 'haskell',
+      source: [
+        '{-# LANGUAGE ScopedTypeVariables #-}',
+        'import Data.List (intercalate)',
+        'let values = map (* scale) [1, 2, 3 :: Int]',
+        'putStrLn (label ++ ": " ++ intercalate "," (map show values))'
+      ].join('\n'),
+      inputs: [
+        { name: 'scale', type: 'integer' },
+        { name: 'label', type: 'text' }
+      ]
+    };
+    expect(splitHaskellCellSource(haskellCell)).toEqual({
+      pragmas: ['{-# LANGUAGE ScopedTypeVariables #-}'],
+      imports: ['import Data.List (intercalate)'],
+      body: [
+        'let values = map (* scale) [1, 2, 3 :: Int]',
+        'putStrLn (label ++ ": " ++ intercalate "," (map show values))'
+      ].join('\n')
+    });
+    expect(generateHaskellFunction(haskellCell)).toContain('scale <- readIntInput "scale" raw_scale');
+    expect(generateHaskellFunction(haskellCell)).toContain('label <- readStringInput "label" raw_label');
+    expect(generateHaskellFunction(haskellCell)).toContain('putStrLn');
+    expect(generateHaskellMain([haskellCell])).toContain('module Main (main) where');
+    expect(generateHaskellMain([haskellCell])).toContain('import Data.List (intercalate)');
+    expect(generateHaskellMain([haskellCell])).toContain('"haskell-cell" -> run_haskell_cell inputValues');
+    expect(generateHaskellMain([])).toContain('unknown Haskell cell');
+    expect(() => splitHaskellCellSource({ ...haskellCell, source: 'module Example where\nmain = pure ()' })).toThrow(
+      'cannot declare a module'
+    );
   });
 
   it('detects Rust output capabilities from source tokens', () => {

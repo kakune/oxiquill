@@ -7,10 +7,12 @@ import {
 } from '../config/paths.mjs';
 import {
   assertUniqueCellIds,
+  assertUniqueHaskellInputBindings,
   assertUniqueRustInputBindings,
   extractCellsFromMarkdown,
   generateCellsJson,
   generateCellsModule,
+  generateHaskellMain,
   generateRustCargoToml,
   generateRustLib,
   sourceThemes
@@ -51,6 +53,7 @@ export {
 export {
   createRuntimeVersion,
   generateRuntimeVersionModule,
+  shouldBuildHaskellWasm,
   shouldBuildWasm,
   summarizeCells
 } from './doc-runtime/runtime-summary.mjs';
@@ -77,7 +80,7 @@ export async function createDocRuntimeContext({
     highlighter:
       highlighter ??
       (await createHighlighter({
-        langs: ['rust', 'python'],
+        langs: ['rust', 'python', 'haskell'],
         themes: Object.values(sourceThemes)
       })),
     paths,
@@ -97,14 +100,17 @@ export async function syncDocRuntime({
     highlighter,
     paths
   });
+  const haskellCells = cells.filter((cell) => cell.language === 'haskell');
   const rustCells = cells.filter((cell) => cell.language === 'rust');
 
   assertUniqueCellIds(cells);
+  assertUniqueHaskellInputBindings(haskellCells);
   assertUniqueRustInputBindings(rustCells);
 
   const writes = await Promise.all([
     writeIfChanged(pathFromUrl(paths.cellsModulePath), generateCellsModule(cells), { fileSystem }),
     writeIfChanged(pathFromUrl(paths.cellsJsonPath), generateCellsJson(cells), { fileSystem }),
+    writeIfChanged(pathInUrl(paths.haskellCellsDir, 'Main.hs'), generateHaskellMain(haskellCells), { fileSystem }),
     writeIfChanged(pathInUrl(paths.rustCellsDir, 'Cargo.toml'), generateRustCargoToml(rustCells, helperCrates), {
       fileSystem
     }),
@@ -116,8 +122,9 @@ export async function syncDocRuntime({
   return {
     ...summary,
     cellsChanged: writes[0] || writes[1],
+    haskellChanged: writes[2],
     pyodideChanged,
-    rustChanged: writes[2] || writes[3]
+    rustChanged: writes[3] || writes[4]
   };
 }
 

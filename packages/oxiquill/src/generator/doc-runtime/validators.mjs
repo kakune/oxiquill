@@ -1,3 +1,4 @@
+import { haskellIdentifier } from './haskell-identifiers.mjs';
 import { rustIdentifier } from './rust-identifiers.mjs';
 
 export function assertUniqueCellIds(cells) {
@@ -21,6 +22,23 @@ export function assertUniqueRustInputBindings(rustCells) {
         throw new Error(
           `Rust cell "${cell.id}" in ${cell.pagePath} has inputs "${previous}" and "${input.name}" ` +
             `that both map to Rust binding "${binding}".`
+        );
+      }
+      seen.set(binding, input.name);
+    }
+  }
+}
+
+export function assertUniqueHaskellInputBindings(haskellCells) {
+  for (const cell of haskellCells) {
+    const seen = new Map();
+    for (const input of cell.inputs) {
+      const binding = haskellIdentifier(input.name);
+      const previous = seen.get(binding);
+      if (previous) {
+        throw new Error(
+          `Haskell cell "${cell.id}" in ${cell.pagePath} has inputs "${previous}" and "${input.name}" ` +
+            `that both map to Haskell binding "${binding}".`
         );
       }
       seen.set(binding, input.name);

@@ -5,9 +5,18 @@ import {
 
 export function summarizeCells(cells) {
   const rustCells = cells.filter((cell) => cell.language === 'rust');
+  const haskellCells = cells.filter((cell) => cell.language === 'haskell');
 
   return {
     cellCount: cells.length,
+    haskellCellCount: haskellCells.length,
+    haskellFingerprint: stableFingerprint(
+      haskellCells.map((cell) => ({
+        id: cell.id,
+        inputs: cell.inputs,
+        source: cell.source
+      }))
+    ),
     manifestFingerprint: stableFingerprint(cells),
     rustCellCount: rustCells.length,
     rustFingerprint: stableFingerprint(
@@ -28,9 +37,16 @@ export function shouldBuildWasm({ changeKinds = new Set(), current, force = fals
   return previous.rustFingerprint !== current.rustFingerprint;
 }
 
+export function shouldBuildHaskellWasm({ current, force = false, previous }) {
+  if (current.haskellCellCount === 0) return false;
+  if (force || !previous) return true;
+  return previous.haskellFingerprint !== current.haskellFingerprint;
+}
+
 export function createRuntimeVersion(summary) {
   return stableFingerprint({
     readyAt: Date.now(),
+    haskell: hashText(summary?.haskellFingerprint ?? ''),
     manifest: hashText(summary?.manifestFingerprint ?? ''),
     rust: hashText(summary?.rustFingerprint ?? '')
   });

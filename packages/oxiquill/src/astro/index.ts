@@ -37,6 +37,8 @@ type OxiquillPathOptionName =
   | 'docsDir'
   | 'frameworkRoot'
   | 'generatedDir'
+  | 'haskellCellsDir'
+  | 'haskellWasmPublicDir'
   | 'publicAssetsDir'
   | 'publicDir'
   | 'pyodidePublicDir'

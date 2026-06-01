@@ -29,7 +29,7 @@ export function normalizeTimeout(value, cellId = 'cell', pagePath = 'page') {
 export function normalizePackages(value, language, cellId, pagePath) {
   if (value == null) return [];
   if (language !== 'python') {
-    throw new Error(`Rust cell "${cellId}" in ${pagePath} must use crates instead of packages.`);
+    throw new Error(`${languageLabel(language)} cell "${cellId}" in ${pagePath} cannot specify packages.`);
   }
 
   const packages = normalizeStringArray(value, 'packages', cellId, pagePath);
@@ -47,7 +47,7 @@ export function normalizePackages(value, language, cellId, pagePath) {
 export function normalizeCrates(value, language, cellId, pagePath, helperCrates) {
   if (value == null) return [];
   if (language !== 'rust') {
-    throw new Error(`Non-Rust cell "${cellId}" in ${pagePath} cannot specify crates.`);
+    throw new Error(`${languageLabel(language)} cell "${cellId}" in ${pagePath} cannot specify crates.`);
   }
 
   const crates = normalizeStringArray(value, 'crates', cellId, pagePath);
@@ -136,4 +136,11 @@ export function normalizeOptions(options) {
 
     return { label: String(option), value: String(option) };
   });
+}
+
+function languageLabel(language) {
+  if (language === 'rust') return 'Rust';
+  if (language === 'python') return 'Python';
+  if (language === 'haskell') return 'Haskell';
+  return 'Interactive';
 }

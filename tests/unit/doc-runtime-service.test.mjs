@@ -22,6 +22,7 @@ import {
   markRuntimeReady,
   readHelperManifests,
   resolveVendoredPyodidePackages,
+  shouldBuildHaskellWasm,
   shouldBuildWasm,
   stableFingerprint,
   summarizeCells,
@@ -197,12 +198,16 @@ describe('doc runtime service', () => {
     expect({
       docsDir: pathFromUrl(paths.docsDir),
       generatedDir: pathFromUrl(paths.generatedDir),
+      haskellCellsDir: pathFromUrl(paths.haskellCellsDir),
+      haskellWasmPublicDir: pathFromUrl(paths.haskellWasmPublicDir),
       pyodidePublicDir: pathFromUrl(paths.pyodidePublicDir),
       rustCellsDir: pathFromUrl(paths.rustCellsDir),
       runtimeVersionPath: pathFromUrl(paths.runtimeVersionPath)
     }).toEqual({
       docsDir: repoPath('content/docs'),
       generatedDir: repoPath('.oxiquill/generated'),
+      haskellCellsDir: repoPath('.oxiquill/haskell-cells'),
+      haskellWasmPublicDir: repoPath('public/oxiquill/haskell-wasm'),
       pyodidePublicDir: repoPath('public/oxiquill/pyodide'),
       rustCellsDir: repoPath('.oxiquill/rust-cells'),
       runtimeVersionPath: repoPath('.oxiquill/generated/runtime-version.ts')
@@ -287,7 +292,16 @@ describe('doc runtime service', () => {
     const fileSystem = createMemoryFileSystem({
       '/repo/content/docs/index.mdx': 'plain',
       '/repo/content/docs/note.mdx': '```rust\n//| id: a\n//| crates: []\nprintln!("a");\n```',
-      '/repo/content/docs/deep/page.md': '```python\n#| id: b\nprint("b")\n```'
+      '/repo/content/docs/deep/page.md': [
+        '```python',
+        '#| id: b',
+        'print("b")',
+        '```',
+        '```haskell',
+        '--| id: c',
+        'putStrLn "c"',
+        '```'
+      ].join('\n')
     });
     const paths = createDocRuntimePaths('/repo');
 
@@ -305,7 +319,7 @@ describe('doc runtime service', () => {
         root: '/repo',
         helperCrates: new Map()
       })
-    ).resolves.toMatchObject([{ id: 'deep__page__b' }, { id: 'note__a' }]);
+    ).resolves.toMatchObject([{ id: 'deep__page__b' }, { id: 'deep__page__c' }, { id: 'note__a' }]);
 
     const oddFileSystem = {
       readdir: async () => [
@@ -352,6 +366,24 @@ describe('doc runtime service', () => {
       })
     ).rejects.toThrow(
       'Python cell "py" in content/docs/page.mdx specifies unsupported packages: scipy'
+    );
+  });
+
+  it('fails clearly when an MDX Haskell cell uses unsupported dependency metadata', async () => {
+    const fileSystem = createMemoryFileSystem({
+      '/repo/content/docs/page.mdx': '```haskell\n--| id: hs\n--| packages: [lens]\nputStrLn "hs"\n```'
+    });
+
+    await expect(
+      collectCells({
+        fileSystem,
+        helperCrates: new Map(),
+        highlighter,
+        paths: createDocRuntimePaths('/repo'),
+        root: '/repo'
+      })
+    ).rejects.toThrow(
+      'Haskell cell "hs" in content/docs/page.mdx cannot specify packages'
     );
   });
 
@@ -548,7 +580,17 @@ describe('doc runtime service', () => {
   it('syncs generated runtime files and reports changed surfaces', async () => {
     const paths = createDocRuntimePaths('/repo');
     const fileSystem = createMemoryFileSystem({
-      '/repo/content/docs/page.mdx': '```rust\n//| id: a\n//| crates: [doc-rust]\nprintln!("a");\n```'
+      '/repo/content/docs/page.mdx': [
+        '```rust',
+        '//| id: a',
+        '//| crates: [doc-rust]',
+        'println!("a");',
+        '```',
+        '```haskell',
+        '--| id: h',
+        'putStrLn "h"',
+        '```'
+      ].join('\n')
     });
     const helperCrates = await listHelperCrates({
       fileSystem: createMemoryFileSystem({
@@ -567,14 +609,17 @@ describe('doc runtime service', () => {
     });
 
     expect(first).toMatchObject({
-      cellCount: 1,
+      cellCount: 2,
       cellsChanged: true,
+      haskellCellCount: 1,
+      haskellChanged: true,
       pyodideChanged: false,
       rustCellCount: 1,
       rustChanged: true
     });
     expect(fileSystem.writes.sort()).toEqual([
       '/repo/.oxiquill/generated/cells.ts',
+      '/repo/.oxiquill/haskell-cells/Main.hs',
       '/repo/.oxiquill/generated/cells.json',
       '/repo/.oxiquill/rust-cells/Cargo.toml',
       '/repo/.oxiquill/rust-cells/src/lib.rs'
@@ -592,6 +637,7 @@ describe('doc runtime service', () => {
       rustFingerprint: 'rust'
     }));
     expect(runtimeVersion.manifest).toBe(hashText('manifest'));
+    expect(runtimeVersion.haskell).toBe(hashText(''));
     expect(runtimeVersion.rust).toBe(hashText('rust'));
 
     const emptyRuntimeVersion = JSON.parse(createRuntimeVersion());
@@ -617,19 +663,26 @@ describe('doc runtime service', () => {
   it('summarizes cells, decides when Wasm is needed, and builds with injected commands', async () => {
     const cells = [
       { crates: ['doc-rust'], id: 'rust', inputs: [], language: 'rust', source: 'println!("a");' },
-      { crates: [], id: 'py', inputs: [], language: 'python', source: 'print("a")' }
+      { crates: [], id: 'py', inputs: [], language: 'python', source: 'print("a")' },
+      { crates: [], id: 'hs', inputs: [], language: 'haskell', source: 'putStrLn "a"' }
     ];
     const previous = summarizeCells(cells);
     const changed = summarizeCells([{ ...cells[0], source: 'println!("b");' }]);
+    const changedHaskell = summarizeCells([{ ...cells[2], source: 'putStrLn "b"' }]);
 
     expect(stableFingerprint({ b: 2 })).toBe('{"b":2}');
-    expect(previous).toMatchObject({ cellCount: 2, rustCellCount: 1 });
+    expect(previous).toMatchObject({ cellCount: 3, haskellCellCount: 1, rustCellCount: 1 });
     expect(shouldBuildWasm({ current: previous, force: true, previous })).toBe(true);
     expect(shouldBuildWasm({ current: previous })).toBe(true);
     expect(shouldBuildWasm({ changeKinds: new Set(['crate']), current: previous, previous })).toBe(true);
     expect(shouldBuildWasm({ current: changed, previous })).toBe(true);
     expect(shouldBuildWasm({ current: previous, previous })).toBe(false);
     expect(shouldBuildWasm({ current: { ...previous, rustCellCount: 0 }, force: true })).toBe(false);
+    expect(shouldBuildHaskellWasm({ current: previous, force: true, previous })).toBe(true);
+    expect(shouldBuildHaskellWasm({ current: previous })).toBe(true);
+    expect(shouldBuildHaskellWasm({ current: changedHaskell, previous })).toBe(true);
+    expect(shouldBuildHaskellWasm({ current: previous, previous })).toBe(false);
+    expect(shouldBuildHaskellWasm({ current: { ...previous, haskellCellCount: 0 }, force: true })).toBe(false);
 
     const commands = [];
     await buildRustWasm({
