@@ -49,7 +49,15 @@ export async function main(argv = process.argv.slice(2)) {
     }
     if (shouldBuildHaskellWasm({ current, previous })) {
       console.log('[runtime] rebuilding Haskell/WASI cells');
-      await buildHaskellWasm({ mode: 'dev', paths: context.paths });
+      const result = await buildHaskellWasm({
+        haskellFingerprint: current.haskellFingerprint,
+        mode: 'dev',
+        paths: context.paths,
+        tolerateFailure: true
+      });
+      if (!result.ok) {
+        console.warn(`[runtime] Haskell/WASI runtime unavailable: ${result.error.message}`);
+      }
     }
 
     await markRuntimeReady({ paths: context.paths, summary: current });

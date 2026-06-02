@@ -2,6 +2,7 @@ import { describe, expect, it, vi } from 'vitest';
 import {
   createInteractiveCellRunner,
   resetInteractiveRuntime,
+  runtimeHaskellFingerprintHash,
   runInteractiveCell
 } from '../../packages/oxiquill/src/lib/doc-runtime/runtime-client';
 import type {
@@ -213,7 +214,8 @@ describe('runtime client', () => {
           { name: 'label', type: 'text', label: 'label', value: 'fallback', options: [] }
         ]
       }),
-      { enabled: true, scale: 4 }
+      { enabled: true, scale: 4 },
+      '{"haskell":"haskell-hash"}'
     );
     const second = runner.runInteractiveCell(makeCell('haskell', { id: 'haskell-cell-two' }), {});
 
@@ -221,6 +223,7 @@ describe('runtime client', () => {
     expect(workers[0].messages[0]).toMatchObject({
       requestId: 1,
       cellId: 'haskell-cell',
+      haskellFingerprintHash: 'haskell-hash',
       inputArgs: ['true', '4', 'fallback'],
       source: undefined,
       packages: undefined
@@ -232,6 +235,13 @@ describe('runtime client', () => {
 
     await expect(first).resolves.toEqual(result);
     await expect(second).resolves.toEqual(result);
+  });
+
+  it('extracts the Haskell fingerprint hash from generated runtime versions', () => {
+    expect(runtimeHaskellFingerprintHash('{"haskell":"hash-one","rust":"hash-two"}')).toBe('hash-one');
+    expect(runtimeHaskellFingerprintHash('"not-an-object"')).toBeUndefined();
+    expect(runtimeHaskellFingerprintHash('not-json')).toBeUndefined();
+    expect(runtimeHaskellFingerprintHash(undefined)).toBeUndefined();
   });
 
   it('rejects failed worker responses', async () => {

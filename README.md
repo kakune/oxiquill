@@ -32,7 +32,7 @@ English is the root documentation language. Japanese pages are published under `
 - `cargo-llvm-cov`
 - `wasm32-wasi-ghc` when authoring Haskell cells
 
-The Rust toolchain and Wasm target are pinned by `rust-toolchain.toml`. Haskell cells use GHC's `wasm32-wasi` backend.
+The Rust toolchain and Wasm target are pinned by `rust-toolchain.toml`. Haskell cells use GHC's `wasm32-wasi` backend. If you install it with `ghc-wasm-meta`, `~/.ghc-wasm/env` exposes the toolchain; for Oxiquill commands you can also set `OXIQUILL_HASKELL_GHC` to the `wasm32-wasi-ghc` path without changing the rest of `PATH`.
 
 ### Setup
 
@@ -48,7 +48,7 @@ Start the development server:
 pnpm dev
 ```
 
-`pnpm dev` delegates to `examples/docs-site` and generates the executable-cell runtime on startup, then watches MDX files and optional Rust helper sources. Prose, normal code blocks, math, Mermaid, and media changes use Astro HMR. Python cell changes update the generated manifest. Rust cell and `examples/docs-site/crates/*` changes rebuild the Rust Wasm runtime. Haskell cell changes rebuild the Haskell/WASI runtime when Haskell cells are present.
+`pnpm dev` delegates to `examples/docs-site` and generates the executable-cell runtime on startup, then watches MDX files and optional Rust helper sources. Prose, normal code blocks, math, Mermaid, and media changes use Astro HMR. Python cell changes update the generated manifest. Rust cell and `examples/docs-site/crates/*` changes rebuild the Rust Wasm runtime. Haskell cell changes rebuild the Haskell/WASI runtime when Haskell cells are present. In development, a missing or failing Haskell compiler leaves Astro running and shows a browser-visible Haskell cell error until the compiler is installed and the runtime is regenerated.
 
 To run the runtime watcher and Astro separately, start these commands in separate terminals:
 
@@ -188,7 +188,7 @@ Put public media files in `examples/docs-site/public/media`. They are served as-
 
 ### Generated Files
 
-`pnpm build`, `pnpm check`, and test commands run the `oxiquill` CLI. This extracts Rust/Python/Haskell cells from MDX and writes generated runtime files.
+`pnpm build`, `pnpm check`, and test commands run the `oxiquill` CLI. This extracts Rust/Python/Haskell cells from MDX and writes generated runtime files. These strict commands, along with `pnpm wasm:dev`, `pnpm wasm:build`, and `pnpm test:wasm`, require `wasm32-wasi-ghc` when Haskell cells exist.
 
 Generated output includes:
 
@@ -237,8 +237,8 @@ Contributions are welcome. Please open issues for bug reports, questions, and pr
 - If a Rust cell helper crate cannot be found, match the cell `crates` value to the `package.name` in `examples/docs-site/crates/*/Cargo.toml`.
 - If a Python cell specifies an unsupported package, use one of the vendored Pyodide packages or add support before documenting it.
 - If a Python cell does not start, confirm that `examples/docs-site/public/oxiquill/pyodide` exists and run `pnpm wasm:dev` or `pnpm build`.
-- If a Haskell cell does not build, confirm `wasm32-wasi-ghc` is on `PATH`.
-- If a Haskell cell does not start, confirm that `examples/docs-site/public/oxiquill/haskell-wasm` exists and run `pnpm wasm:dev` or `pnpm build`.
+- If a Haskell cell does not build in a strict command, confirm `wasm32-wasi-ghc` is on `PATH`, source `~/.ghc-wasm/env`, or set `OXIQUILL_HASKELL_GHC` to the compiler path.
+- If a Haskell cell reports that the runtime is unavailable in dev, install or fix `wasm32-wasi-ghc` and rerun `pnpm wasm:dev`; `pnpm dev` will keep serving while the Haskell runtime is unavailable.
 - If a Mermaid diagram does not render, run `pnpm build` to catch MDX syntax errors and confirm the code block language is `mermaid`.
 - If a media file does not load, confirm that it is under `examples/docs-site/public/media` and referenced with a `/media/...` URL.
 - If coverage fails, add focused tests for the uncovered handwritten source rather than editing generated files.
@@ -275,7 +275,7 @@ Oxiquill は、MDX で書いた技術ノートを静的サイトとして公開�
 - `cargo-llvm-cov`
 - Haskell セルを書く場合は `wasm32-wasi-ghc`
 
-Rust toolchain と Wasm target は `rust-toolchain.toml` で固定しています。Haskell セルは GHC の `wasm32-wasi` backend を使います。
+Rust toolchain と Wasm target は `rust-toolchain.toml` で固定しています。Haskell セルは GHC の `wasm32-wasi` backend を使います。`ghc-wasm-meta` で導入した場合、`~/.ghc-wasm/env` で toolchain を有効化できます。Oxiquill command では、`PATH` 全体を変えずに `OXIQUILL_HASKELL_GHC` に `wasm32-wasi-ghc` の path を指定することもできます。
 
 ### セットアップ
 
@@ -291,7 +291,7 @@ pnpm install
 pnpm dev
 ```
 
-`pnpm dev` は `examples/docs-site` に委譲し、起動時に実行可能セルのruntimeを生成します。その後は MDX と任意の Rust helper ソースを監視します。本文、通常コードブロック、数式、Mermaid、メディアの変更は Astro HMR で反映されます。Python セルの変更は生成manifestを更新します。Rust セルや `examples/docs-site/crates/*` の変更は Rust Wasm runtime を再ビルドします。Haskell セルの変更は、Haskell セルがある場合に Haskell/WASI runtime を再ビルドします。
+`pnpm dev` は `examples/docs-site` に委譲し、起動時に実行可能セルのruntimeを生成します。その後は MDX と任意の Rust helper ソースを監視します。本文、通常コードブロック、数式、Mermaid、メディアの変更は Astro HMR で反映されます。Python セルの変更は生成manifestを更新します。Rust セルや `examples/docs-site/crates/*` の変更は Rust Wasm runtime を再ビルドします。Haskell セルの変更は、Haskell セルがある場合に Haskell/WASI runtime を再ビルドします。開発中は Haskell compiler がない、または build に失敗しても Astro は起動したままになり、compiler を導入して runtime を再生成するまで Haskell セルに browser 上の error を表示します。
 
 runtime watcher と Astro を分けて起動したい場合は、次のコマンドを別々のターミナルで実行します。
 
@@ -431,7 +431,7 @@ putStrLn ("scaled = " <> show (scale * sum [1..5]))
 
 ### 生成物
 
-`pnpm build`、`pnpm check`、各種 test command は `oxiquill` CLI を実行します。この処理は MDX 内の Rust/Python/Haskell セルを抽出し、生成runtimeファイルを書き出します。
+`pnpm build`、`pnpm check`、各種 test command は `oxiquill` CLI を実行します。この処理は MDX 内の Rust/Python/Haskell セルを抽出し、生成runtimeファイルを書き出します。これらの strict command と `pnpm wasm:dev`、`pnpm wasm:build`、`pnpm test:wasm` は、Haskell セルがある場合に `wasm32-wasi-ghc` を必要とします。
 
 生成物には次の path が含まれます。
 
@@ -480,8 +480,8 @@ docs-only の本文変更では、通常 `pnpm check` で十分です。実行�
 - Rust セルの helper crate が見つからない場合は、`examples/docs-site/crates/*/Cargo.toml` の `package.name` とセルの `crates` 指定を一致させます。
 - Python セルが未対応 package を指定している場合は、vendored Pyodide package を使うか、docs に書く前に対応を追加します。
 - Python セルが起動しない場合は、`examples/docs-site/public/oxiquill/pyodide` が生成されているか確認し、`pnpm wasm:dev` または `pnpm build` を実行します。
-- Haskell セルが build できない場合は、`wasm32-wasi-ghc` が `PATH` にあるか確認します。
-- Haskell セルが起動しない場合は、`examples/docs-site/public/oxiquill/haskell-wasm` が生成されているか確認し、`pnpm wasm:dev` または `pnpm build` を実行します。
+- strict command で Haskell セルが build できない場合は、`wasm32-wasi-ghc` が `PATH` にあるか、`~/.ghc-wasm/env` を source したか、または `OXIQUILL_HASKELL_GHC` に compiler path を指定したか確認します。
+- dev で Haskell セルが runtime unavailable を表示する場合は、`wasm32-wasi-ghc` を導入または修正して `pnpm wasm:dev` を再実行します。`pnpm dev` は Haskell runtime が unavailable でも serving を続けます。
 - Mermaid 図が表示されない場合は、`pnpm build` で MDX の構文エラーを確認し、図の code block language が `mermaid` になっているか確認します。
 - メディアが表示されない場合は、ファイルが `examples/docs-site/public/media` 配下にあり、`/media/...` の URL で参照しているか確認します。
 - coverage が失敗した場合は、生成物ではなく対象ソースの未実行行を確認し、必要な正常系・失敗系 test を追加します。

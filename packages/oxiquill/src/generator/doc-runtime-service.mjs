@@ -59,7 +59,16 @@ export {
 } from './doc-runtime/runtime-summary.mjs';
 export {
   buildHaskellWasm,
-  buildRustWasm
+  buildRustWasm,
+  createHaskellRuntimeStatus,
+  generateHaskellRuntimeStatusJson,
+  HASKELL_RUNTIME_STATUS_FILE,
+  HASKELL_WASI_COMPILER,
+  HASKELL_WASI_COMPILER_ENV,
+  HASKELL_WASM_FILE,
+  HaskellWasmBuildError,
+  MissingHaskellWasiCompilerError,
+  resolveHaskellWasiCompiler
 } from './doc-runtime/wasm-build.mjs';
 
 export function createDocRuntimePaths(rootOrOptions = process.cwd()) {

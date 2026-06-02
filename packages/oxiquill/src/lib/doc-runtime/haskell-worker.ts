@@ -23,9 +23,23 @@ type WasiInstance = WebAssembly.Instance & {
   };
 };
 
+export type HaskellRuntimeStatus =
+  | {
+      status: 'ready';
+      haskellFingerprintHash: string;
+      message: string;
+    }
+  | {
+      status: 'unavailable';
+      haskellFingerprintHash: string;
+      message: string;
+    };
+
 const worker = self as unknown as WorkerScope;
 let wasmModuleReady: Promise<WebAssembly.Module> | undefined;
+let wasmModuleFingerprintHash: string | undefined;
 const haskellWasmUrl = resolveHaskellWasmUrl();
+const haskellRuntimeStatusUrl = resolveHaskellRuntimeStatusUrl();
 
 worker.addEventListener('message', (event) => {
   void handleRequest(event.data);
@@ -33,7 +47,7 @@ worker.addEventListener('message', (event) => {
 
 async function handleRequest(request: RuntimeWorkerRequest): Promise<void> {
   try {
-    const module = await ensureHaskellModule();
+    const module = await ensureHaskellModule(request.haskellFingerprintHash);
     const result = await runHaskellCell(module, request);
 
     worker.postMessage({ requestId: request.requestId, ok: true, result });
@@ -102,9 +116,79 @@ export function resolveHaskellWasmUrl(baseUrl = import.meta.env.BASE_URL): strin
   return `${base}oxiquill/haskell-wasm/doc_haskell_cells.wasm`;
 }
 
-function ensureHaskellModule(): Promise<WebAssembly.Module> {
-  wasmModuleReady ??= fetchHaskellModule(haskellWasmUrl);
+export function resolveHaskellRuntimeStatusUrl(baseUrl = import.meta.env.BASE_URL): string {
+  const base = baseUrl.endsWith('/') ? baseUrl : `${baseUrl}/`;
+  return `${base}oxiquill/haskell-wasm/status.json`;
+}
+
+function ensureHaskellModule(expectedFingerprintHash: string | undefined): Promise<WebAssembly.Module> {
+  if (!wasmModuleReady || wasmModuleFingerprintHash !== expectedFingerprintHash) {
+    wasmModuleFingerprintHash = expectedFingerprintHash;
+    wasmModuleReady = fetchReadyHaskellModule({
+      expectedFingerprintHash,
+      statusUrl: haskellRuntimeStatusUrl,
+      wasmUrl: haskellWasmUrl
+    });
+  }
   return wasmModuleReady;
+}
+
+async function fetchReadyHaskellModule({
+  expectedFingerprintHash,
+  statusUrl,
+  wasmUrl
+}: {
+  expectedFingerprintHash: string | undefined;
+  statusUrl: string;
+  wasmUrl: string;
+}): Promise<WebAssembly.Module> {
+  const status = await fetchHaskellRuntimeStatus(statusUrl);
+  assertReadyHaskellRuntimeStatus(status, expectedFingerprintHash);
+  return fetchHaskellModule(wasmUrl);
+}
+
+export async function fetchHaskellRuntimeStatus(
+  url: string,
+  fetchImpl: typeof fetch = fetch
+): Promise<HaskellRuntimeStatus> {
+  const response = await fetchImpl(url, { cache: 'no-store' });
+  if (!response.ok) {
+    throw new Error(
+      `Haskell WASI runtime is not available: generated runtime status is missing; rerun pnpm wasm:dev.`
+    );
+  }
+
+  return parseHaskellRuntimeStatus(await response.json());
+}
+
+export function assertReadyHaskellRuntimeStatus(
+  status: HaskellRuntimeStatus,
+  expectedFingerprintHash: string | undefined
+): void {
+  if (status.status === 'unavailable') {
+    throw new Error(`Haskell WASI runtime is not available: ${status.message}`);
+  }
+
+  if (expectedFingerprintHash && status.haskellFingerprintHash !== expectedFingerprintHash) {
+    throw new Error('Haskell WASI runtime is not available: generated runtime is stale; rerun pnpm wasm:dev.');
+  }
+}
+
+export function parseHaskellRuntimeStatus(value: unknown): HaskellRuntimeStatus {
+  if (!isRecord(value)) {
+    throw new Error('Haskell WASI runtime is not available: generated runtime status is invalid.');
+  }
+
+  const { haskellFingerprintHash, message, status } = value;
+  if (
+    (status !== 'ready' && status !== 'unavailable') ||
+    typeof haskellFingerprintHash !== 'string' ||
+    typeof message !== 'string'
+  ) {
+    throw new Error('Haskell WASI runtime is not available: generated runtime status is invalid.');
+  }
+
+  return { haskellFingerprintHash, message, status };
 }
 
 async function fetchHaskellModule(url: string): Promise<WebAssembly.Module> {
@@ -122,6 +206,10 @@ async function fetchHaskellModule(url: string): Promise<WebAssembly.Module> {
   }
 
   return WebAssembly.compile(await response.arrayBuffer());
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null;
 }
 
 function createOutputCapture(): {

@@ -19,7 +19,7 @@ export async function runCli(command, args = [], { cwd = process.cwd(), runComma
 
   switch (command) {
     case 'dev':
-      await generateRuntime({ paths, wasmMode: 'dev' });
+      await generateRuntime({ paths, tolerateHaskellBuildFailure: true, wasmMode: 'dev' });
       await runDevServer({ paths });
       return;
     case 'dev:runtime': {
@@ -89,7 +89,7 @@ export async function runCli(command, args = [], { cwd = process.cwd(), runComma
   }
 }
 
-async function generateRuntime({ paths, wasmMode }) {
+async function generateRuntime({ paths, tolerateHaskellBuildFailure = false, wasmMode }) {
   const context = await createDocRuntimeContext({ paths });
   const summary = await syncDocRuntime(context);
   console.log(`Generated ${summary.cellCount} interactive cell(s).`);
@@ -97,11 +97,22 @@ async function generateRuntime({ paths, wasmMode }) {
   if (wasmMode) {
     await buildRustWasm({ mode: wasmMode, paths });
     if (summary.haskellCellCount > 0) {
-      await buildHaskellWasm({ mode: wasmMode, paths });
+      const result = await buildHaskellWasm({
+        haskellFingerprint: summary.haskellFingerprint,
+        mode: wasmMode,
+        paths,
+        tolerateFailure: tolerateHaskellBuildFailure
+      });
+      warnToleratedHaskellBuildFailure(result);
     }
   }
 
   await markRuntimeReady({ paths, summary });
+}
+
+function warnToleratedHaskellBuildFailure(result) {
+  if (result.ok) return;
+  console.warn(`[runtime] Haskell/WASI runtime unavailable: ${result.error.message}`);
 }
 
 async function runDevServer({ paths }) {

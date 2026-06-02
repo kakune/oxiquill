@@ -220,7 +220,7 @@ export function oxiquillIntegration({
         const summary = await syncDocRuntime(context);
         await buildRustWasm({ mode: 'build', paths });
         if (summary.haskellCellCount > 0) {
-          await buildHaskellWasm({ mode: 'build', paths });
+          await buildHaskellWasm({ haskellFingerprint: summary.haskellFingerprint, mode: 'build', paths });
         }
         await markRuntimeReady({ paths, summary });
       }

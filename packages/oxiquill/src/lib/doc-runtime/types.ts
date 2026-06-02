@@ -203,6 +203,7 @@ export interface CellExecutionResult {
 export interface RuntimeWorkerRequest {
   requestId: number;
   cellId: string;
+  haskellFingerprintHash?: string;
   inputArgs?: readonly string[];
   inputs: InputValues;
   source?: string;

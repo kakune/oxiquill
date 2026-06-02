@@ -23,10 +23,11 @@ type RuntimeClientDependencies = {
 
 export function runInteractiveCell(
   cell: CellManifest,
-  inputs: InputValues
+  inputs: InputValues,
+  runtimeVersion?: string
 ): Promise<CellExecutionResult> {
   /* v8 ignore next -- the factory is unit-tested; this delegates to browser Worker adapters. */
-  return defaultRuntimeClient.runInteractiveCell(cell, inputs);
+  return defaultRuntimeClient.runInteractiveCell(cell, inputs, runtimeVersion);
 }
 
 export function resetInteractiveRuntime(language?: CellLanguage): void {
@@ -45,10 +46,10 @@ export function createInteractiveCellRunner(dependencies: RuntimeClientDependenc
   const workers = new Map<CellLanguage, Worker>();
   const pending = new Map<number, PendingRequest>();
 
-  function runCell(cell: CellManifest, inputs: InputValues): Promise<CellExecutionResult> {
+  function runCell(cell: CellManifest, inputs: InputValues, runtimeVersion?: string): Promise<CellExecutionResult> {
     const requestId = nextRequestId++;
     const worker = getWorker(cell.language);
-    const request = createWorkerRequest(requestId, cell, inputs);
+    const request = createWorkerRequest(requestId, cell, inputs, runtimeVersion);
 
     return new Promise((resolve, reject) => {
       const timeout = dependencies.setTimeout(() => {
@@ -124,16 +125,33 @@ export function createInteractiveCellRunner(dependencies: RuntimeClientDependenc
 function createWorkerRequest(
   requestId: number,
   cell: CellManifest,
-  inputs: InputValues
+  inputs: InputValues,
+  runtimeVersion?: string
 ): RuntimeWorkerRequest {
   return {
     requestId,
     cellId: cell.id,
+    ...(cell.language === 'haskell'
+      ? { haskellFingerprintHash: runtimeHaskellFingerprintHash(runtimeVersion) }
+      : {}),
     inputArgs: cell.language === 'haskell' ? cell.inputs.map((input) => inputArgument(input, inputs)) : undefined,
     inputs,
     source: cell.language === 'python' ? cell.source : undefined,
     packages: cell.language === 'python' ? cell.packages : undefined
   };
+}
+
+export function runtimeHaskellFingerprintHash(runtimeVersion: string | undefined): string | undefined {
+  if (!runtimeVersion) return undefined;
+
+  try {
+    const parsed = JSON.parse(runtimeVersion) as unknown;
+    if (isRecord(parsed) && typeof parsed.haskell === 'string') return parsed.haskell;
+  } catch {
+    return undefined;
+  }
+
+  return undefined;
 }
 
 function createDefaultWorker(language: CellLanguage): Worker {
@@ -146,6 +164,10 @@ function createDefaultWorker(language: CellLanguage): Worker {
     case 'haskell':
       return new Worker(new URL('./haskell-worker.ts', import.meta.url), { type: 'module' });
   }
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null;
 }
 
 function inputArgument(

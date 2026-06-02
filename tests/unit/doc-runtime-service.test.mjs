@@ -15,14 +15,18 @@ import {
   createRuntimeVersion,
   createDocRuntimeContext,
   createDocRuntimePaths,
+  createHaskellRuntimeStatus,
   generateRuntimeVersionModule,
+  HASKELL_WASM_FILE,
   hashBytes,
   hashText,
   listFiles,
   listHelperCrates,
   markRuntimeReady,
+  MissingHaskellWasiCompilerError,
   readHelperManifests,
   resolveVendoredPyodidePackages,
+  resolveHaskellWasiCompiler,
   shouldBuildHaskellWasm,
   shouldBuildWasm,
   stableFingerprint,
@@ -56,6 +60,7 @@ function createMemoryFileSystem(initialFiles = {}) {
   ]);
   const writes = [];
   const copies = [];
+  const removals = [];
 
   function ensureParents(filePath) {
     const normalizedPath = memoryPath(filePath);
@@ -122,6 +127,12 @@ function createMemoryFileSystem(initialFiles = {}) {
         };
       });
     },
+    rm: async (filePath) => {
+      const normalizedPath = memoryPath(filePath);
+      files.delete(normalizedPath);
+      directories.delete(normalizedPath);
+      removals.push(normalizedPath);
+    },
     writeFile: async (filePath, content) => {
       const normalizedPath = memoryPath(filePath);
       ensureParents(normalizedPath);
@@ -135,6 +146,7 @@ function createMemoryFileSystem(initialFiles = {}) {
       files.set(normalizedTargetPath, Buffer.from(files.get(normalizedSourcePath)));
       copies.push([normalizedSourcePath, normalizedTargetPath]);
     },
+    removals,
     writes
   };
 }
@@ -731,6 +743,7 @@ describe('doc runtime service', () => {
     const fileSystem = createMemoryFileSystem();
     await buildHaskellWasm({
       fileSystem,
+      haskellFingerprint: previous.haskellFingerprint,
       mode: 'build',
       root: '/repo',
       runCommand: async (command, args, options) => {
@@ -755,5 +768,73 @@ describe('doc runtime service', () => {
     ]);
     expect(fileSystem.existsSync('/repo/.oxiquill/haskell-cells/build')).toBe(true);
     expect(fileSystem.existsSync('/repo/public/oxiquill/haskell-wasm')).toBe(true);
+    expect(JSON.parse(fileSystem.files.get('/repo/public/oxiquill/haskell-wasm/status.json').toString())).toEqual(
+      createHaskellRuntimeStatus({
+        haskellFingerprint: previous.haskellFingerprint,
+        status: 'ready'
+      })
+    );
+  });
+
+  it('resolves the Haskell compiler and reports strict build failures clearly', async () => {
+    expect(resolveHaskellWasiCompiler({})).toBe('wasm32-wasi-ghc');
+    expect(resolveHaskellWasiCompiler({ OXIQUILL_HASKELL_GHC: '/opt/ghc/bin/wasm-ghc' })).toBe(
+      '/opt/ghc/bin/wasm-ghc'
+    );
+    expect(resolveHaskellWasiCompiler({ OXIQUILL_HASKELL_GHC: '  ' })).toBe('wasm32-wasi-ghc');
+
+    const missingCompiler = new Error('spawn wasm32-wasi-ghc ENOENT');
+    missingCompiler.code = 'ENOENT';
+
+    await expect(
+      buildHaskellWasm({
+        fileSystem: createMemoryFileSystem(),
+        mode: 'dev',
+        root: '/repo',
+        runCommand: async () => {
+          throw missingCompiler;
+        }
+      })
+    ).rejects.toThrow(MissingHaskellWasiCompilerError);
+
+    await expect(
+      buildHaskellWasm({
+        fileSystem: createMemoryFileSystem(),
+        mode: 'dev',
+        root: '/repo',
+        runCommand: async () => {
+          throw new Error('type error in Main.hs');
+        }
+      })
+    ).rejects.toThrow('Haskell WASI runtime build failed with wasm32-wasi-ghc: type error in Main.hs');
+  });
+
+  it('writes unavailable Haskell runtime status and removes stale wasm for tolerated dev failures', async () => {
+    const missingCompiler = new Error('spawn wasm32-wasi-ghc ENOENT');
+    missingCompiler.code = 'ENOENT';
+    const staleWasmPath = `/repo/public/oxiquill/haskell-wasm/${HASKELL_WASM_FILE}`;
+    const fileSystem = createMemoryFileSystem({
+      [staleWasmPath]: 'stale wasm'
+    });
+    const result = await buildHaskellWasm({
+      fileSystem,
+      haskellFingerprint: 'current-haskell-fingerprint',
+      mode: 'dev',
+      root: '/repo',
+      runCommand: async () => {
+        throw missingCompiler;
+      },
+      tolerateFailure: true
+    });
+
+    expect(result.ok).toBe(false);
+    expect(result.error).toBeInstanceOf(MissingHaskellWasiCompilerError);
+    expect(fileSystem.existsSync(staleWasmPath)).toBe(false);
+    expect(fileSystem.removals).toEqual([staleWasmPath]);
+    expect(JSON.parse(fileSystem.files.get('/repo/public/oxiquill/haskell-wasm/status.json').toString())).toEqual({
+      status: 'unavailable',
+      haskellFingerprintHash: hashText('current-haskell-fingerprint'),
+      message: 'install wasm32-wasi-ghc and rerun pnpm wasm:dev.'
+    });
   });
 });
