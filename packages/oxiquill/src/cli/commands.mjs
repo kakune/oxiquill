@@ -14,7 +14,15 @@ import {
 import { cleanOxiquillWorkspace } from '../generator/clean.mjs';
 import { runHelperCargo } from '../generator/run-helper-cargo.mjs';
 
-export async function runCli(command, args = [], { cwd = process.cwd(), runCommand = runCommandWithInheritedStdio } = {}) {
+export async function runCli(
+  command,
+  args = [],
+  {
+    cwd = process.cwd(),
+    runCommand = runCommandWithInheritedStdio,
+    selectNode = frameworkNode
+  } = {}
+) {
   const paths = createOxiquillPaths({ workspaceRoot: cwd });
 
   switch (command) {
@@ -28,19 +36,19 @@ export async function runCli(command, args = [], { cwd = process.cwd(), runComma
       return;
     }
     case 'dev:astro':
-      await runAstro(paths, ['dev', ...args], { runCommand });
+      await runAstro(paths, ['dev', ...args], { runCommand, selectNode });
       return;
     case 'preview':
-      await runAstro(paths, ['preview', ...args], { runCommand });
+      await runAstro(paths, ['preview', ...args], { runCommand, selectNode });
       return;
     case 'build':
       await generateRuntime({ paths, wasmMode: 'build' });
-      await runOxiquillCheck(paths, [], { runCommand });
-      await runAstro(paths, ['build', ...args], { runCommand });
+      await runOxiquillCheck(paths, [], { runCommand, selectNode });
+      await runAstro(paths, ['build', ...args], { runCommand, selectNode });
       return;
     case 'check':
       await generateRuntime({ paths, wasmMode: 'dev' });
-      await runOxiquillCheck(paths, args, { runCommand });
+      await runOxiquillCheck(paths, args, { runCommand, selectNode });
       return;
     case 'docgen':
       await generateRuntime({ paths, wasmMode: parseWasmMode(args) });
@@ -152,8 +160,8 @@ async function runDevServer({ paths }) {
   });
 }
 
-async function runAstro(paths, args, { runCommand }) {
-  const nodePath = frameworkNode(paths);
+async function runAstro(paths, args, { runCommand, selectNode }) {
+  const nodePath = selectNode(paths);
 
   await runCommand(nodePath, [frameworkBinScript(paths, 'astro'), ...args], {
     cwd: pathFromUrl(paths.workspaceRoot),
@@ -161,8 +169,8 @@ async function runAstro(paths, args, { runCommand }) {
   });
 }
 
-async function runOxiquillCheck(paths, args, { runCommand }) {
-  await runAstro(paths, ['sync'], { runCommand });
+async function runOxiquillCheck(paths, args, { runCommand, selectNode }) {
+  await runAstro(paths, ['sync'], { runCommand, selectNode });
 
   const { check, parseArgsAsCheckConfig } = await importFromFramework(paths, '@astrojs/check');
   const config = parseArgsAsCheckConfig(['node', 'oxiquill-check', ...args]);

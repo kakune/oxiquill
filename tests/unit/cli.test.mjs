@@ -1,6 +1,6 @@
 // @vitest-environment node
 
-import { chmod, mkdtemp, rm, symlink, writeFile } from 'node:fs/promises';
+import { mkdtemp, rm, symlink } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
@@ -14,6 +14,7 @@ const repoRoot = path.resolve('/repo');
 const { canLoadNativePackage, isCliEntrypoint, nodeExecutableCandidates, runCli, selectFrameworkNode } = await import(
   '../../packages/oxiquill/src/cli/commands.mjs'
 );
+const testRoot = path.parse(process.cwd()).root;
 
 afterEach(() => {
   vi.restoreAllMocks();
@@ -49,16 +50,19 @@ describe('oxiquill CLI', () => {
   });
 
   it('deduplicates node executable candidates from PATH', () => {
-    const exists = (candidate) => ['/bad/bin/node', '/good/bin/node'].includes(candidate);
+    const badDirectory = path.join(testRoot, 'bad', 'bin');
+    const goodDirectory = path.join(testRoot, 'good', 'bin');
+    const badNode = fakeNodeExecutable(badDirectory);
+    const goodNode = fakeNodeExecutable(goodDirectory);
+    const exists = (candidate) => [badNode, goodNode].includes(candidate);
 
     expect(
       nodeExecutableCandidates({
-        execPath: '/bad/bin/node',
+        execPath: badNode,
         exists,
-        pathValue: ['/bad/bin', '/good/bin'].join(path.delimiter),
-        platform: 'linux'
+        pathValue: [badDirectory, goodDirectory].join(path.delimiter)
       })
-    ).toEqual(['/bad/bin/node', '/good/bin/node']);
+    ).toEqual([badNode, goodNode]);
   });
 
   it('checks whether a node executable can load a native package', () => {
@@ -79,59 +83,47 @@ describe('oxiquill CLI', () => {
   });
 
   it('uses a later PATH node for Astro when the current node cannot load native addons', () => {
-    const spawn = vi.fn((nodePath) => ({ status: nodePath === '/good/bin/node' ? 0 : 1 }));
+    const badDirectory = path.join(testRoot, 'bad', 'bin');
+    const goodDirectory = path.join(testRoot, 'good', 'bin');
+    const badNode = fakeNodeExecutable(badDirectory);
+    const goodNode = fakeNodeExecutable(goodDirectory);
+    const spawn = vi.fn((nodePath) => ({ status: nodePath === goodNode ? 0 : 1 }));
     const warn = vi.fn();
-    const exists = (candidate) => ['/bad/bin/node', '/good/bin/node'].includes(candidate);
+    const exists = (candidate) => [badNode, goodNode].includes(candidate);
 
     expect(
       selectFrameworkNode(actualPaths, {
         env: {
-          PATH: ['/bad/bin', '/good/bin'].join(path.delimiter)
+          PATH: [badDirectory, goodDirectory].join(path.delimiter)
         },
-        execPath: '/bad/bin/node',
+        execPath: badNode,
         exists,
         spawn,
         warn
       })
-    ).toBe('/good/bin/node');
-    expect(warn).toHaveBeenCalledWith(expect.stringContaining('Using /good/bin/node for Astro/Vite'));
+    ).toBe(goodNode);
+    expect(warn).toHaveBeenCalledWith(expect.stringContaining(`Using ${goodNode} for Astro/Vite`));
   });
 
   it('selects the framework node separately for each CLI invocation', async () => {
-    const directory = await mkdtemp(path.join(tmpdir(), 'oxiquill-node-'));
-    const firstNode = path.join(directory, 'node-one');
-    const secondNode = path.join(directory, 'node-two');
-    const originalOverride = process.env.OXIQUILL_NODE;
+    const firstNode = fakeNodeExecutable(path.join(testRoot, 'first', 'bin'));
+    const secondNode = fakeNodeExecutable(path.join(testRoot, 'second', 'bin'));
     const commands = [];
+    const selectNode = vi.fn()
+      .mockReturnValueOnce(firstNode)
+      .mockReturnValueOnce(secondNode);
     const runCommand = async (command) => {
       commands.push(command);
     };
 
-    try {
-      await Promise.all([
-        writeExecutable(firstNode),
-        writeExecutable(secondNode)
-      ]);
+    await runCli('preview', [], { cwd: actualRepoRoot, runCommand, selectNode });
+    await runCli('preview', [], { cwd: actualRepoRoot, runCommand, selectNode });
 
-      process.env.OXIQUILL_NODE = firstNode;
-      await runCli('preview', [], { cwd: actualRepoRoot, runCommand });
-
-      process.env.OXIQUILL_NODE = secondNode;
-      await runCli('preview', [], { cwd: actualRepoRoot, runCommand });
-
-      expect(commands).toEqual([firstNode, secondNode]);
-    } finally {
-      if (originalOverride == null) {
-        delete process.env.OXIQUILL_NODE;
-      } else {
-        process.env.OXIQUILL_NODE = originalOverride;
-      }
-      await rm(directory, { force: true, recursive: true });
-    }
+    expect(selectNode).toHaveBeenCalledTimes(2);
+    expect(commands).toEqual([firstNode, secondNode]);
   });
 });
 
-async function writeExecutable(filePath) {
-  await writeFile(filePath, '#!/bin/sh\nexit 0\n');
-  await chmod(filePath, 0o755);
+function fakeNodeExecutable(directory) {
+  return path.join(directory, process.platform === 'win32' ? 'node.exe' : 'node');
 }
