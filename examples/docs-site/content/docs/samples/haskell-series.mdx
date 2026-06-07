@@ -1,0 +1,43 @@
+---
+title: Haskell Series
+description: A sample note that combines Haskell/WASI computation, inputs, and text output.
+---
+
+This sample shows a compact Haskell note. It lets readers change a numeric sequence and inspect the result that runs from a build-time WASI module in the browser.
+
+## What This Demonstrates
+
+- Reactive Haskell inputs for sequence parameters.
+- Standard-library Haskell code with a lifted import.
+- Text output captured from `putStrLn`.
+
+## Series
+
+The cell computes scaled triangular numbers. Toggle the delta output to compare each term with the previous one.
+
+```haskell
+--| id: haskell-series-note
+--| title: Explore a Haskell series
+--| run: reactive
+--| inputs:
+--|   count: { type: integer, label: count, min: 3, max: 10, step: 1, value: 6 }
+--|   multiplier: { type: integer, label: multiplier, min: 1, max: 5, step: 1, value: 2 }
+--|   label: { type: text, label: label, value: series }
+--|   showDeltas: { type: checkbox, label: show deltas, value: true }
+import Data.List (intercalate)
+
+let indexes = [1 .. count]
+let values = map (\n -> multiplier * n * (n + 1) `div` 2) indexes
+let deltas = zipWith (-) (drop 1 values) values
+
+putStrLn (label ++ ": " ++ intercalate ", " (map show values))
+putStrLn ("total = " ++ show (sum values))
+
+if showDeltas
+  then putStrLn ("deltas = " ++ intercalate ", " (map show deltas))
+  else putStrLn "deltas hidden"
+```
+
+## Notes
+
+Haskell cells are intended for deterministic examples that fit the standard library. Use them when a short functional transformation is clearer than a handwritten table of results.

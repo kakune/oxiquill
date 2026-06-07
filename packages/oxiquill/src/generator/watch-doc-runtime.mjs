@@ -2,9 +2,11 @@ import chokidar from 'chokidar';
 import { pathToFileURL } from 'node:url';
 import { pathFromUrl } from '../config/paths.mjs';
 import {
+  buildHaskellWasm,
   buildRustWasm,
   createDocRuntimeContext,
   markRuntimeReady,
+  shouldBuildHaskellWasm,
   shouldBuildWasm,
   syncDocRuntime
 } from './doc-runtime-service.mjs';
@@ -45,6 +47,18 @@ export async function main(argv = process.argv.slice(2)) {
       console.log('[runtime] rebuilding Rust/Wasm cells');
       await buildRustWasm({ mode: 'dev', paths: context.paths });
     }
+    if (shouldBuildHaskellWasm({ current, previous })) {
+      console.log('[runtime] rebuilding Haskell/WASI cells');
+      const result = await buildHaskellWasm({
+        haskellFingerprint: current.haskellFingerprint,
+        mode: 'dev',
+        paths: context.paths,
+        tolerateFailure: true
+      });
+      if (!result.ok) {
+        console.warn(`[runtime] Haskell/WASI runtime unavailable: ${result.error.message}`);
+      }
+    }
 
     await markRuntimeReady({ paths: context.paths, summary: current });
     previous = current;
@@ -77,7 +91,7 @@ export async function main(argv = process.argv.slice(2)) {
   });
 
   watcher.on('ready', () => {
-    console.log('[runtime] watching MDX and Rust sources');
+    console.log('[runtime] watching MDX, Rust, and Haskell cell sources');
   });
 }
 

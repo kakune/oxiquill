@@ -162,6 +162,7 @@ describe('defineOxiquillConfig', () => {
     expect(allow).toContain(realpathSync('node_modules'));
     expect(normalizedAllow.some((entry) => entry.includes('node_modules/.pnpm/katex'))).toBe(true);
     expect(normalizedAllow.some((entry) => entry.includes('node_modules/.pnpm/@astrojs+preact'))).toBe(true);
+    expect(normalizedAllow.some((entry) => entry.includes('node_modules/.pnpm/@bjorn3+browser_wasi_shim'))).toBe(true);
     expect(normalizedAllow.some((entry) => entry.includes('node_modules/.pnpm/aria-query'))).toBe(true);
   });
 
@@ -278,6 +279,7 @@ describe('defineOxiquillConfig', () => {
     const resolved = await resolveWithVite(update, [
       ...preactExportSpecifiers,
       '@preact/signals',
+      '@bjorn3/browser_wasi_shim',
       'aria-query',
       'html-escaper',
       'astro/app',

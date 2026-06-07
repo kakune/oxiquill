@@ -1,4 +1,4 @@
-export type CellLanguage = 'rust' | 'python';
+export type CellLanguage = 'rust' | 'python' | 'haskell';
 export type RunMode = 'button' | 'reactive' | 'autorun' | 'hidden';
 export type InputType =
   | 'range'
@@ -203,6 +203,8 @@ export interface CellExecutionResult {
 export interface RuntimeWorkerRequest {
   requestId: number;
   cellId: string;
+  haskellFingerprintHash?: string;
+  inputArgs?: readonly string[];
   inputs: InputValues;
   source?: string;
   packages?: readonly string[];
