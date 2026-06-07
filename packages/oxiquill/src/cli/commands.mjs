@@ -1,5 +1,5 @@
-import { spawn } from 'node:child_process';
-import { existsSync, realpathSync } from 'node:fs';
+import { spawn, spawnSync } from 'node:child_process';
+import { existsSync, readFileSync, realpathSync } from 'node:fs';
 import { createRequire } from 'node:module';
 import path from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
@@ -13,6 +13,8 @@ import {
 } from '../generator/doc-runtime-service.mjs';
 import { cleanOxiquillWorkspace } from '../generator/clean.mjs';
 import { runHelperCargo } from '../generator/run-helper-cargo.mjs';
+
+let cachedFrameworkNodePath;
 
 export async function runCli(command, args = [], { cwd = process.cwd(), runCommand = runCommandWithInheritedStdio } = {}) {
   const paths = createOxiquillPaths({ workspaceRoot: cwd });
@@ -116,14 +118,17 @@ function warnToleratedHaskellBuildFailure(result) {
 }
 
 async function runDevServer({ paths }) {
+  const nodePath = frameworkNode(paths);
+  const env = frameworkEnv(paths, { nodePath });
   const children = [
-    spawn(process.execPath, [fileURLToPath(new URL('../generator/watch-doc-runtime.mjs', import.meta.url)), '--skip-initial'], {
+    spawn(nodePath, [fileURLToPath(new URL('../generator/watch-doc-runtime.mjs', import.meta.url)), '--skip-initial'], {
       cwd: pathFromUrl(paths.workspaceRoot),
+      env,
       stdio: 'inherit'
     }),
-    spawn(frameworkBin(paths, 'astro'), ['dev'], {
+    spawn(nodePath, [frameworkBinScript(paths, 'astro'), 'dev'], {
       cwd: pathFromUrl(paths.workspaceRoot),
-      env: frameworkEnv(paths),
+      env,
       stdio: 'inherit'
     })
   ];
@@ -150,9 +155,11 @@ async function runDevServer({ paths }) {
 }
 
 async function runAstro(paths, args, { runCommand }) {
-  await runCommand(frameworkBin(paths, 'astro'), args, {
+  const nodePath = frameworkNode(paths);
+
+  await runCommand(nodePath, [frameworkBinScript(paths, 'astro'), ...args], {
     cwd: pathFromUrl(paths.workspaceRoot),
-    env: frameworkEnv(paths)
+    env: frameworkEnv(paths, { nodePath })
   });
 }
 
@@ -170,23 +177,136 @@ async function runOxiquillCheck(paths, args, { runCommand }) {
 }
 
 async function importFromFramework(paths, specifier) {
+  return import(pathToFileURL(resolveFromFramework(paths, specifier)).href);
+}
+
+function resolveFromFramework(paths, specifier) {
   const require = createRequire(pathInUrl(paths.frameworkRoot, 'package.json'));
-  return import(pathToFileURL(require.resolve(specifier)).href);
+  return require.resolve(specifier);
 }
 
-function frameworkBin(paths, name) {
-  const workspaceBin = pathInUrl(paths.workspaceRoot, `node_modules/.bin/${name}`);
-  return existsSync(workspaceBin) ? workspaceBin : pathInUrl(paths.frameworkRoot, `node_modules/.bin/${name}`);
+function resolveFromWorkspaceOrFramework(paths, specifier) {
+  const workspacePackageJsonPath = pathInUrl(paths.workspaceRoot, 'package.json');
+  if (existsSync(workspacePackageJsonPath)) {
+    const require = createRequire(workspacePackageJsonPath);
+    try {
+      return require.resolve(specifier);
+    } catch {
+      // Fall back to Oxiquill's own framework dependencies.
+    }
+  }
+
+  return resolveFromFramework(paths, specifier);
 }
 
-function frameworkEnv(paths) {
+function frameworkNode(paths) {
+  cachedFrameworkNodePath ??= selectFrameworkNode(paths);
+  return cachedFrameworkNodePath;
+}
+
+export function selectFrameworkNode(
+  paths,
+  { env = process.env, execPath = process.execPath, exists = existsSync, spawn = spawnSync, warn = console.warn } = {}
+) {
+  const vitePath = resolveFromFramework(paths, 'vite');
+  const probeEnv = frameworkEnv(paths, { env });
+  const overridePath = env.OXIQUILL_NODE;
+  const candidates = overridePath ? [overridePath] : nodeExecutableCandidates({ execPath, exists, pathValue: env.PATH });
+  const selected = candidates.find((candidate) =>
+    canLoadNativePackage(candidate, vitePath, { cwd: pathFromUrl(paths.workspaceRoot), env: probeEnv, spawn })
+  );
+
+  if (selected) {
+    if (!overridePath && realpathSafe(selected) !== realpathSafe(execPath)) {
+      warn(
+        `[oxiquill] Using ${selected} for Astro/Vite because ${execPath} cannot load Rollup native addons.`
+      );
+    }
+    return selected;
+  }
+
+  const overrideDetail = overridePath ? ` OXIQUILL_NODE is set to ${overridePath}, but it failed the same probe.` : '';
+  throw new Error(
+    `Astro/Vite requires a Node.js runtime that can load native addons, but ${execPath} could not load Vite/Rollup.${overrideDetail} ` +
+      'If ghc-wasm placed its static Node first in PATH, set OXIQUILL_NODE to a normal Node.js binary or place that Node earlier in PATH.'
+  );
+}
+
+export function nodeExecutableCandidates({
+  execPath = process.execPath,
+  pathValue = process.env.PATH,
+  platform = process.platform,
+  exists = existsSync
+} = {}) {
+  const executableNames = platform === 'win32' ? ['node.exe', 'node.cmd', 'node'] : ['node'];
+  const candidates = [execPath];
+
+  for (const directory of (pathValue ?? '').split(path.delimiter).filter(Boolean)) {
+    for (const executableName of executableNames) {
+      candidates.push(path.join(directory, executableName));
+    }
+  }
+
+  const seen = new Set();
+  return candidates.filter((candidate) => {
+    if (!exists(candidate)) return false;
+
+    const key = realpathSafe(candidate);
+    if (seen.has(key)) return false;
+    seen.add(key);
+    return true;
+  });
+}
+
+export function canLoadNativePackage(
+  nodePath,
+  packagePath,
+  { cwd = process.cwd(), env = process.env, spawn = spawnSync } = {}
+) {
+  const result = spawn(
+    nodePath,
+    [
+      '-e',
+      "import(process.argv[1]).catch(() => process.exit(1));",
+      packagePath
+    ],
+    {
+      cwd,
+      env,
+      stdio: 'ignore'
+    }
+  );
+
+  return result.status === 0;
+}
+
+function frameworkBinScript(paths, packageName, binName = packageName) {
+  const packageJsonPath = resolveFromWorkspaceOrFramework(paths, `${packageName}/package.json`);
+  const packageJson = JSON.parse(readFileSync(packageJsonPath, 'utf8'));
+  const binPath = typeof packageJson.bin === 'string' ? packageJson.bin : packageJson.bin?.[binName];
+
+  if (!binPath) {
+    throw new Error(`Package "${packageName}" does not define a "${binName}" bin.`);
+  }
+
+  return path.resolve(path.dirname(packageJsonPath), binPath);
+}
+
+function frameworkEnv(paths, { env = process.env, nodePath } = {}) {
   const frameworkNodePath = pathInUrl(paths.frameworkRoot, 'node_modules');
-  const currentNodePath = process.env.NODE_PATH;
-
-  return {
-    ...process.env,
+  const currentNodePath = env.NODE_PATH;
+  const nextEnv = {
+    ...env,
     NODE_PATH: currentNodePath ? `${frameworkNodePath}${path.delimiter}${currentNodePath}` : frameworkNodePath
   };
+
+  if (nodePath) {
+    nextEnv.PATH = nextEnv.PATH
+      ? `${path.dirname(nodePath)}${path.delimiter}${nextEnv.PATH}`
+      : path.dirname(nodePath);
+  }
+
+  return nextEnv;
 }
 
 function parseWasmMode(args) {
