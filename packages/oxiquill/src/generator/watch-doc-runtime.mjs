@@ -91,7 +91,7 @@ export async function main(argv = process.argv.slice(2)) {
   });
 
   watcher.on('ready', () => {
-    console.log('[runtime] watching MDX and Rust sources');
+    console.log('[runtime] watching MDX, Rust, and Haskell cell sources');
   });
 }
 

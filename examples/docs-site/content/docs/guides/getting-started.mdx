@@ -15,7 +15,7 @@ Install these tools before running the project:
 - `cargo-llvm-cov`
 - `wasm32-wasi-ghc` when authoring Haskell cells
 
-The Rust toolchain and Wasm target are pinned by `rust-toolchain.toml`. Do not change the pinned toolchain as part of normal documentation work. Haskell cells use the GHC `wasm32-wasi` backend, commonly installed through `ghc-wasm-meta`. Its `~/.ghc-wasm/env` file exposes the toolchain; Oxiquill commands can also use `OXIQUILL_HASKELL_GHC` to point at `wasm32-wasi-ghc` without changing the rest of `PATH`.
+The Rust toolchain and Wasm target are pinned by `rust-toolchain.toml`. Do not change the pinned toolchain as part of normal documentation work. Haskell cells use the GHC `wasm32-wasi` backend, commonly installed through `ghc-wasm-meta`. Its `~/.ghc-wasm/env` file exposes the toolchain; Oxiquill commands can also use `OXIQUILL_HASKELL_GHC` to point at `wasm32-wasi-ghc` without changing the rest of `PATH`. If ghc-wasm's static Node is first in `PATH`, set `OXIQUILL_NODE` to a normal Node.js binary for Astro/Vite subprocesses.
 
 ## Install Dependencies
 

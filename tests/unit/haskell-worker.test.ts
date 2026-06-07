@@ -1,7 +1,8 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import {
   assertReadyHaskellRuntimeStatus,
   createHaskellCellResult,
+  fetchHaskellModule,
   fetchHaskellRuntimeStatus,
   parseHaskellRuntimeStatus,
   resolveHaskellRuntimeStatusUrl,
@@ -83,5 +84,41 @@ describe('haskell worker helpers', () => {
     await expect(fetchHaskellRuntimeStatus('/missing.json', missing as typeof fetch)).rejects.toThrow(
       'Haskell WASI runtime is not available: generated runtime status is missing; rerun pnpm wasm:dev.'
     );
+  });
+
+  it('uses a cloned wasm response when streaming compile falls back', async () => {
+    const cloneBuffer = new ArrayBuffer(8);
+    const module = {} as WebAssembly.Module;
+    const cloned = {
+      arrayBuffer: vi.fn(async () => cloneBuffer)
+    };
+    const response = {
+      ok: true,
+      status: 200,
+      statusText: 'OK',
+      arrayBuffer: vi.fn(async () => {
+        throw new Error('original response body was consumed');
+      }),
+      clone: vi.fn(() => cloned)
+    };
+    const compileStreaming = vi.spyOn(WebAssembly, 'compileStreaming').mockRejectedValue(
+      new TypeError('unsupported content type')
+    );
+    const compile = vi.spyOn(WebAssembly, 'compile').mockResolvedValue(module);
+
+    try {
+      await expect(
+        fetchHaskellModule('/doc_haskell_cells.wasm', (async () => response as unknown as Response) as typeof fetch)
+      ).resolves.toBe(module);
+
+      const [[streamingInput]] = compileStreaming.mock.calls;
+      await expect(streamingInput).resolves.toBe(response);
+      expect(response.clone).toHaveBeenCalledTimes(1);
+      expect(response.arrayBuffer).not.toHaveBeenCalled();
+      expect(cloned.arrayBuffer).toHaveBeenCalledTimes(1);
+      expect(compile).toHaveBeenCalledWith(cloneBuffer);
+    } finally {
+      vi.restoreAllMocks();
+    }
   });
 });

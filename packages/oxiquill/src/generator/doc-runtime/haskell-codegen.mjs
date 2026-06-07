@@ -80,6 +80,7 @@ export function splitHaskellCellSource(cellOrSource) {
     const trimmed = line.trim();
 
     if (isPreamble && trimmed === '') continue;
+    if (isPreamble && /^--(?!\|)/u.test(trimmed)) continue;
     if (isPreamble && /^\{-#\s+LANGUAGE\b/u.test(trimmed)) {
       pragmas.push(trimmed);
       continue;

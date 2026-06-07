@@ -14,8 +14,6 @@ import {
 import { cleanOxiquillWorkspace } from '../generator/clean.mjs';
 import { runHelperCargo } from '../generator/run-helper-cargo.mjs';
 
-let cachedFrameworkNodePath;
-
 export async function runCli(command, args = [], { cwd = process.cwd(), runCommand = runCommandWithInheritedStdio } = {}) {
   const paths = createOxiquillPaths({ workspaceRoot: cwd });
 
@@ -200,8 +198,7 @@ function resolveFromWorkspaceOrFramework(paths, specifier) {
 }
 
 function frameworkNode(paths) {
-  cachedFrameworkNodePath ??= selectFrameworkNode(paths);
-  return cachedFrameworkNodePath;
+  return selectFrameworkNode(paths);
 }
 
 export function selectFrameworkNode(

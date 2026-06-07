@@ -742,6 +742,7 @@ describe('doc runtime service', () => {
     commands.length = 0;
     const fileSystem = createMemoryFileSystem();
     await buildHaskellWasm({
+      environment: {},
       fileSystem,
       haskellFingerprint: previous.haskellFingerprint,
       mode: 'build',
@@ -788,6 +789,7 @@ describe('doc runtime service', () => {
 
     await expect(
       buildHaskellWasm({
+        environment: {},
         fileSystem: createMemoryFileSystem(),
         mode: 'dev',
         root: '/repo',
@@ -799,6 +801,7 @@ describe('doc runtime service', () => {
 
     await expect(
       buildHaskellWasm({
+        environment: {},
         fileSystem: createMemoryFileSystem(),
         mode: 'dev',
         root: '/repo',
@@ -817,6 +820,7 @@ describe('doc runtime service', () => {
       [staleWasmPath]: 'stale wasm'
     });
     const result = await buildHaskellWasm({
+      environment: {},
       fileSystem,
       haskellFingerprint: 'current-haskell-fingerprint',
       mode: 'dev',

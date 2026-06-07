@@ -1,6 +1,6 @@
 // @vitest-environment node
 
-import { mkdtemp, rm, symlink } from 'node:fs/promises';
+import { chmod, mkdtemp, rm, symlink, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
@@ -96,4 +96,42 @@ describe('oxiquill CLI', () => {
     ).toBe('/good/bin/node');
     expect(warn).toHaveBeenCalledWith(expect.stringContaining('Using /good/bin/node for Astro/Vite'));
   });
+
+  it('selects the framework node separately for each CLI invocation', async () => {
+    const directory = await mkdtemp(path.join(tmpdir(), 'oxiquill-node-'));
+    const firstNode = path.join(directory, 'node-one');
+    const secondNode = path.join(directory, 'node-two');
+    const originalOverride = process.env.OXIQUILL_NODE;
+    const commands = [];
+    const runCommand = async (command) => {
+      commands.push(command);
+    };
+
+    try {
+      await Promise.all([
+        writeExecutable(firstNode),
+        writeExecutable(secondNode)
+      ]);
+
+      process.env.OXIQUILL_NODE = firstNode;
+      await runCli('preview', [], { cwd: actualRepoRoot, runCommand });
+
+      process.env.OXIQUILL_NODE = secondNode;
+      await runCli('preview', [], { cwd: actualRepoRoot, runCommand });
+
+      expect(commands).toEqual([firstNode, secondNode]);
+    } finally {
+      if (originalOverride == null) {
+        delete process.env.OXIQUILL_NODE;
+      } else {
+        process.env.OXIQUILL_NODE = originalOverride;
+      }
+      await rm(directory, { force: true, recursive: true });
+    }
+  });
 });
+
+async function writeExecutable(filePath) {
+  await writeFile(filePath, '#!/bin/sh\nexit 0\n');
+  await chmod(filePath, 0o755);
+}

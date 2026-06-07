@@ -8,7 +8,9 @@ import { rustSourceCapabilities } from '../../packages/oxiquill/src/generator/do
 import { generateRustPreludeMacros } from '../../packages/oxiquill/src/generator/doc-runtime/rust-codegen/macros.mjs';
 import {
   assertUniqueCellIds,
+  assertUniqueHaskellFunctionNames,
   assertUniqueHaskellInputBindings,
+  assertUniqueRustFunctionNames,
   assertUniqueRustInputBindings,
   extractCellsFromMarkdown,
   generateCellsJson,
@@ -312,6 +314,12 @@ describe('doc runtime core', () => {
       ])
     ).toThrow('both map to Rust binding "cell_type"');
     expect(() =>
+      assertUniqueRustFunctionNames([
+        { id: 'page__a-b', pagePath: 'one' },
+        { id: 'page__a_b', pagePath: 'two' }
+      ])
+    ).toThrow('both map to generated function "run_page_a_b"');
+    expect(() =>
       assertUniqueHaskellInputBindings([
         { id: 'ok', pagePath: 'page', inputs: [{ name: 'value-a' }, { name: 'value_b' }] }
       ])
@@ -321,6 +329,12 @@ describe('doc runtime core', () => {
         { id: 'bad', pagePath: 'page', inputs: [{ name: 'data' }, { name: 'cell-data' }] }
       ])
     ).toThrow('both map to Haskell binding "cell_data"');
+    expect(() =>
+      assertUniqueHaskellFunctionNames([
+        { id: 'page__a-b', pagePath: 'one' },
+        { id: 'page__a_b', pagePath: 'two' }
+      ])
+    ).toThrow('both map to generated function "run_page_a_b"');
 
     const crates = helperCratesFromManifests([
       { content: '[package]\nname = "b-crate"\n', manifestPath: '/repo/crates/b/Cargo.toml' },
@@ -481,7 +495,9 @@ describe('doc runtime core', () => {
       pagePath: 'page',
       language: 'haskell',
       source: [
+        '-- a leading comment should not block lifted pragmas and imports',
         '{-# LANGUAGE ScopedTypeVariables #-}',
+        '-- an import comment should not become generated do-block code',
         'import Data.List (intercalate)',
         'let values = map (* scale) [1, 2, 3 :: Int]',
         'putStrLn (label ++ ": " ++ intercalate "," (map show values))'

@@ -7,7 +7,9 @@ import {
 } from '../config/paths.mjs';
 import {
   assertUniqueCellIds,
+  assertUniqueHaskellFunctionNames,
   assertUniqueHaskellInputBindings,
+  assertUniqueRustFunctionNames,
   assertUniqueRustInputBindings,
   extractCellsFromMarkdown,
   generateCellsJson,
@@ -116,7 +118,9 @@ export async function syncDocRuntime({
   const rustCells = cells.filter((cell) => cell.language === 'rust');
 
   assertUniqueCellIds(cells);
+  assertUniqueHaskellFunctionNames(haskellCells);
   assertUniqueHaskellInputBindings(haskellCells);
+  assertUniqueRustFunctionNames(rustCells);
   assertUniqueRustInputBindings(rustCells);
 
   const writes = await Promise.all([

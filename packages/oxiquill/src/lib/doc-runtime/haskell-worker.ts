@@ -191,11 +191,15 @@ export function parseHaskellRuntimeStatus(value: unknown): HaskellRuntimeStatus 
   return { haskellFingerprintHash, message, status };
 }
 
-async function fetchHaskellModule(url: string): Promise<WebAssembly.Module> {
-  const response = await fetch(url, { cache: 'no-store' });
+export async function fetchHaskellModule(
+  url: string,
+  fetchImpl: typeof fetch = fetch
+): Promise<WebAssembly.Module> {
+  const response = await fetchImpl(url, { cache: 'no-store' });
   if (!response.ok) {
     throw new Error(`Failed to load ${url}: ${response.status} ${response.statusText}`);
   }
+  const fallbackResponse = response.clone();
 
   if (typeof WebAssembly.compileStreaming === 'function') {
     try {
@@ -205,7 +209,7 @@ async function fetchHaskellModule(url: string): Promise<WebAssembly.Module> {
     }
   }
 
-  return WebAssembly.compile(await response.arrayBuffer());
+  return WebAssembly.compile(await fallbackResponse.arrayBuffer());
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {

@@ -23,7 +23,9 @@ export {
 } from './doc-runtime/cell-metadata.mjs';
 export {
   assertUniqueCellIds,
+  assertUniqueHaskellFunctionNames,
   assertUniqueHaskellInputBindings,
+  assertUniqueRustFunctionNames,
   assertUniqueRustInputBindings
 } from './doc-runtime/validators.mjs';
 export {

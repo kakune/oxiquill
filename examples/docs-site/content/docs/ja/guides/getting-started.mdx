@@ -15,7 +15,7 @@ description: 依存関係を入れ、ローカルサイトを起動し、静的�
 - `cargo-llvm-cov`
 - Haskell セルを書く場合は `wasm32-wasi-ghc`
 
-Rust toolchain と Wasm target は `rust-toolchain.toml` で固定されています。通常のドキュメント作業で toolchain を変更しないでください。Haskell セルは GHC の `wasm32-wasi` backend を使い、通常は `ghc-wasm-meta` で導入します。`~/.ghc-wasm/env` は toolchain を有効化します。Oxiquill command では、`PATH` 全体を変えずに `OXIQUILL_HASKELL_GHC` で `wasm32-wasi-ghc` を指定することもできます。
+Rust toolchain と Wasm target は `rust-toolchain.toml` で固定されています。通常のドキュメント作業で toolchain を変更しないでください。Haskell セルは GHC の `wasm32-wasi` backend を使い、通常は `ghc-wasm-meta` で導入します。`~/.ghc-wasm/env` は toolchain を有効化します。Oxiquill command では、`PATH` 全体を変えずに `OXIQUILL_HASKELL_GHC` で `wasm32-wasi-ghc` を指定することもできます。ghc-wasm の static Node が `PATH` の先頭にある場合は、Astro/Vite subprocess 用に `OXIQUILL_NODE` で通常の Node.js binary を指定してください。
 
 ## 依存関係を入れる
 
