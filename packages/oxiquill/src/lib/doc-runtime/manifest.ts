@@ -95,7 +95,7 @@ function applyRuntimeVersionSnapshot(nextVersion: string): void {
 
   versionSnapshot = nextVersion;
   persistHotData();
-  resetInteractiveRuntime('rust');
+  resetGeneratedWasmRuntimes();
   notifyManifestListeners();
   syncRenderedSourceBlocks();
 }
@@ -108,7 +108,7 @@ function applyGeneratedSnapshot(nextSnapshot: ManifestSnapshot): void {
   cellsSnapshot = nextSnapshot.cells;
   versionSnapshot = nextSnapshot.version;
   persistHotData();
-  if (versionChanged) resetInteractiveRuntime('rust');
+  if (versionChanged) resetGeneratedWasmRuntimes();
   notifyManifestListeners();
   syncRenderedSourceBlocks();
 }
@@ -117,6 +117,11 @@ function notifyManifestListeners(): void {
   for (const listener of listeners) {
     listener();
   }
+}
+
+function resetGeneratedWasmRuntimes(): void {
+  resetInteractiveRuntime('rust');
+  resetInteractiveRuntime('haskell');
 }
 
 export async function refreshGeneratedManifest(): Promise<void> {

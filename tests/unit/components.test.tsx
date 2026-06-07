@@ -210,7 +210,8 @@ describe('InteractiveCell', () => {
         ratio: 2.5,
         count: 4,
         label: 'next'
-      })
+      }),
+      'v1'
     );
   });
 

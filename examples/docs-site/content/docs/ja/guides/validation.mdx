@@ -31,7 +31,7 @@ pnpm test:wasm
 pnpm test:e2e
 ```
 
-`pnpm wasm:dev` は local development 用 runtime を再生成します。`pnpm test:wasm` は生成 Rust cell の動作を確認します。`pnpm test:e2e` は build 済み site を browser で確認します。
+`pnpm wasm:dev` は local development 用 runtime を再生成します。Haskell セルがある場合は `wasm32-wasi-ghc` が必要で、`pnpm build`、`pnpm check`、`pnpm wasm:build`、`pnpm test:wasm` でも同じです。`pnpm dev` と `pnpm dev:runtime` は意図的により寛容で、Haskell compiler がない、または Haskell compile に失敗しても Astro の serving を続け、browser 上の Haskell セルに error を表示します。`pnpm test:wasm` は生成 Rust cell の動作を確認します。`pnpm test:e2e` は Haskell セルを含む build 済み site を browser で確認します。
 
 ## unit と coverage check
 
@@ -62,6 +62,8 @@ pnpm doc:rust
 - Unknown Rust crate: cell の `crates` 値を `crates/*/Cargo.toml` の `package.name` に合わせます。
 - Unsupported Python package: vendored Pyodide package を使うか、docs に書く前に package support を追加します。
 - Missing Python runtime: `public/oxiquill/pyodide` があるか確認し、`pnpm wasm:dev` または `pnpm build` を実行します。
+- Missing Haskell compiler: `wasm32-wasi-ghc` を install し、`ghc-wasm-meta` を使っている場合は `~/.ghc-wasm/env` を source するか、`OXIQUILL_HASKELL_GHC` に compiler path を指定してから `pnpm wasm:dev` または `pnpm build` を実行します。
+- Missing Haskell runtime: `public/oxiquill/haskell-wasm/status.json` があるか確認し、runtime generation を再実行します。
 - Mermaid failure: code block language が `mermaid` か確認し、`pnpm build` で MDX error を確認します。
 - Missing media: file が `public/media` 配下にあり、MDX URL が `/media/` で始まるか確認します。
 - Coverage failure: 生成物ではなく手書き source に focused test を追加します。

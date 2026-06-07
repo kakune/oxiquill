@@ -13,7 +13,7 @@ This flowchart shows how prose, executable cells, and static site generation fit
 flowchart LR
   Author[Author] --> MDX[MDX body]
   MDX --> Extract[Extract cells and diagrams]
-  Extract --> Wasm[Compile Rust cells to Wasm]
+  Extract --> Wasm[Compile Rust and Haskell cells to Wasm]
   Extract --> Mermaid[Register Mermaid diagrams]
   Wasm --> Build[Astro build]
   Mermaid --> Build

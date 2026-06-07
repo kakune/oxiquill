@@ -32,6 +32,7 @@ export default defineConfig({
       ],
       exclude: [
         '**/.oxiquill/**',
+        'packages/oxiquill/src/lib/doc-runtime/haskell-worker.ts',
         'packages/oxiquill/src/lib/doc-runtime/manifest.ts',
         'packages/oxiquill/src/lib/doc-runtime/python-worker.ts',
         'packages/oxiquill/src/lib/doc-runtime/rust-worker.ts',

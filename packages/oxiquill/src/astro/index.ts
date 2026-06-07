@@ -19,7 +19,7 @@ import type { StarlightUserConfig } from '@astrojs/starlight/types';
 import type { Alias, Plugin, PluginOption, UserConfig as ViteUserConfig } from 'vite';
 import { pathFromUrl, pathInUrl } from '../config/paths.mjs';
 import { createDocRuntimeContext, markRuntimeReady, syncDocRuntime } from '../generator/doc-runtime-service.mjs';
-import { buildRustWasm } from '../generator/doc-runtime/wasm-build.mjs';
+import { buildHaskellWasm, buildRustWasm } from '../generator/doc-runtime/wasm-build.mjs';
 import remarkInteractiveCells from '../lib/doc-runtime/remark-interactive-cells.mjs';
 import remarkMermaidDiagrams from '../lib/doc-runtime/remark-mermaid-diagrams.mjs';
 import remarkPublicAssetBase from '../lib/doc-runtime/remark-public-asset-base.mjs';
@@ -37,6 +37,8 @@ type OxiquillPathOptionName =
   | 'docsDir'
   | 'frameworkRoot'
   | 'generatedDir'
+  | 'haskellCellsDir'
+  | 'haskellWasmPublicDir'
   | 'publicAssetsDir'
   | 'publicDir'
   | 'pyodidePublicDir'
@@ -56,6 +58,7 @@ const viteManagedPackageNames = [
   '@preact/signals',
   'aria-query',
   'axobject-query',
+  '@bjorn3/browser_wasi_shim',
   'echarts',
   'html-escaper',
   'katex',
@@ -216,6 +219,9 @@ export function oxiquillIntegration({
         const context = await createDocRuntimeContextForPaths({ paths });
         const summary = await syncDocRuntime(context);
         await buildRustWasm({ mode: 'build', paths });
+        if (summary.haskellCellCount > 0) {
+          await buildHaskellWasm({ haskellFingerprint: summary.haskellFingerprint, mode: 'build', paths });
+        }
         await markRuntimeReady({ paths, summary });
       }
     }

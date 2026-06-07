@@ -34,7 +34,7 @@ export function useInteractiveCellRun(cell: CellManifest, runtimeVersion: string
     setError(undefined);
 
     try {
-      const nextResult = await runInteractiveCell(cell, values);
+      const nextResult = await runInteractiveCell(cell, values, runtimeVersion);
       if (latestRunId.current === runId) {
         setResult(nextResult);
       }

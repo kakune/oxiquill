@@ -13,8 +13,9 @@ description: 依存関係を入れ、ローカルサイトを起動し、静的�
 - Rust toolchain `1.95.0`
 - `wasm-pack`
 - `cargo-llvm-cov`
+- Haskell セルを書く場合は `wasm32-wasi-ghc`
 
-Rust toolchain と Wasm target は `rust-toolchain.toml` で固定されています。通常のドキュメント作業で toolchain を変更しないでください。
+Rust toolchain と Wasm target は `rust-toolchain.toml` で固定されています。通常のドキュメント作業で toolchain を変更しないでください。Haskell セルは GHC の `wasm32-wasi` backend を使い、通常は `ghc-wasm-meta` で導入します。`~/.ghc-wasm/env` は toolchain を有効化します。Oxiquill command では、`PATH` 全体を変えずに `OXIQUILL_HASKELL_GHC` で `wasm32-wasi-ghc` を指定することもできます。ghc-wasm の static Node が `PATH` の先頭にある場合は、Astro/Vite subprocess 用に `OXIQUILL_NODE` で通常の Node.js binary を指定してください。
 
 ## 依存関係を入れる
 
@@ -67,6 +68,9 @@ dev command は runtime 生成から始まり、その後 docs と helper source
 - 本文、通常 code block、数式、Mermaid、メディアの変更は Astro HMR で更新されます。
 - Python セルの変更は生成 cell manifest を更新します。
 - Rust セルや `crates/*` の変更は生成 Wasm runtime を再ビルドします。
+- Haskell セルの変更は、Haskell セルがある場合に生成 WASI runtime を再ビルドします。
+
+Haskell compiler がない、または Haskell セルの build に失敗した場合でも、`pnpm dev` と `pnpm dev:runtime` は serving を続け、browser 上の Haskell セルに error を表示します。`pnpm build`、`pnpm check`、`pnpm wasm:dev`、`pnpm wasm:build`、`pnpm test:wasm` などの strict command は、`wasm32-wasi-ghc` が利用でき、セルが build できるまで失敗します。
 
 runtime 生成を Astro と分けて確認したい場合は、次の command を別々の terminal で実行します。
 
@@ -97,8 +101,10 @@ runtime generation は次の path に生成物を書きます。
 
 - `.oxiquill/generated`
 - `.oxiquill/rust-cells`
+- `.oxiquill/haskell-cells`
 - `public/oxiquill/pyodide`
 - `public/oxiquill/rust-wasm`
+- `public/oxiquill/haskell-wasm`
 - `dist`
 
 これらの path を直接編集しないでください。MDX、helper crate、script、手書き runtime code を変更してから既存 command で再生成します。

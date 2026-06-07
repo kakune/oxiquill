@@ -13,7 +13,7 @@ import {
 } from './constants.mjs';
 
 const fencePattern = /(^|\n)(`{3,}|~{3,})([^\n]*)\n([\s\S]*?)\n\2(?=\n|$)/g;
-const optionPattern = /^\s*(?:(?:\/\/\/|\/\/|#)\|)\s?(.*)$/;
+const optionPattern = /^\s*(?:(?:\/\/\/|\/\/|#|--)\|)\s?(.*)$/;
 
 export async function extractCellsFromMarkdown(source, pagePath, context) {
   const cells = [];

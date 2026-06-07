@@ -59,6 +59,33 @@ println!("value = {value}");
 Explain what changed in the result and what readers should notice.
 ````
 
+## Haskell Executable Note
+
+Use this shape for standard-library Haskell examples with text output.
+
+````md
+---
+title: Haskell note
+description: A note where readers can change Haskell inputs and inspect output.
+---
+
+Explain the computation before the cell.
+
+```haskell
+--| id: unique-haskell-cell-id
+--| title: Calculate with Haskell
+--| run: reactive
+--| inputs:
+--|   count: { type: integer, label: count, min: 1, max: 8, step: 1, value: 4 }
+import Data.List (intercalate)
+
+let values = take count [1, 3 ..]
+putStrLn (intercalate ", " (map show values))
+```
+
+Explain what readers should notice in the output.
+````
+
 ## Diagram Note
 
 Use this shape when structure, states, or sequence matter more than code.

@@ -13,7 +13,7 @@ Mermaid は text で図を書く形式です。Oxiquill では fenced `mermaid` 
 flowchart LR
   Author[Author] --> MDX[MDX body]
   MDX --> Extract[Extract cells and diagrams]
-  Extract --> Wasm[Compile Rust cells to Wasm]
+  Extract --> Wasm[Compile Rust and Haskell cells to Wasm]
   Extract --> Mermaid[Register Mermaid diagrams]
   Wasm --> Build[Astro build]
   Mermaid --> Build

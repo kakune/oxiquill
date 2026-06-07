@@ -107,7 +107,7 @@ test('Rust cells run from MDX code fences and redraw plots', async ({ page }) =>
   expect(updatedImage.length).toBeGreaterThan(1_000);
 });
 
-test('Python cells and math rendering are available', async ({ page }) => {
+test('interactive cells and math rendering are available', async ({ page }) => {
   await page.goto('/features/interactive-cells/');
   await expect(page.getByRole('heading', { name: 'Interactive Cells' })).toBeVisible();
 
@@ -115,11 +115,15 @@ test('Python cells and math rendering are available', async ({ page }) => {
   await expect(page.getByTestId('cell-features__interactive-cells__rust-controls')).toBeVisible();
   await expect(page.getByTestId('cell-features__interactive-cells__rust-multiple-crates')).toBeVisible();
   await expect(page.getByTestId('cell-features__interactive-cells__python-controls')).toBeVisible();
+  await expect(page.getByTestId('cell-features__interactive-cells__haskell-controls')).toBeVisible();
   await expect(
     page.getByTestId('cell-features__interactive-cells__logistic-rust').locator('[data-testid="cell-source"] .shiki')
   ).toBeVisible();
   await expect(
     page.getByTestId('cell-features__interactive-cells__python-controls').locator('[data-testid="cell-source"] .shiki')
+  ).toBeVisible();
+  await expect(
+    page.getByTestId('cell-features__interactive-cells__haskell-controls').locator('[data-testid="cell-source"] .shiki')
   ).toBeVisible();
 
   const rustControls = page.getByTestId('cell-features__interactive-cells__rust-controls');
@@ -146,6 +150,13 @@ test('Python cells and math rendering are available', async ({ page }) => {
 
   await page.getByLabel('method').selectOption('sum');
   await expect(page.getByTestId('run-output').filter({ hasText: 'SAMPLE: sum = 30' })).toBeVisible();
+
+  const haskell = page.getByTestId('cell-features__interactive-cells__haskell-controls');
+  await expect(haskell.getByTestId('run-output')).toContainText('sample: 9, 36, 81, 144', {
+    timeout: 45_000
+  });
+  await haskell.getByLabel('include squares').uncheck();
+  await expect(haskell.getByTestId('run-output')).toContainText('total = 30');
 
   await page.goto('/features/math/');
   await expect(page.getByRole('heading', { name: 'Math', exact: true })).toBeVisible();
@@ -191,6 +202,10 @@ test('theme note and Mermaid examples are available without author-side TSX impo
 
   await page.goto('/samples/logistic-map/');
   await expect(page.getByRole('heading', { name: 'Logistic Map', exact: true })).toBeVisible();
+
+  await page.goto('/samples/haskell-series/');
+  await expect(page.getByRole('heading', { name: 'Haskell Series', exact: true })).toBeVisible();
+  await expect(page.getByTestId('cell-samples__haskell-series__haskell-series-note')).toBeVisible();
 
   await page.goto('/features/interactive-cells/');
   await expect(page.locator('text=import RunExample')).toHaveCount(0);

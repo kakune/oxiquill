@@ -3,7 +3,7 @@ title: Oxiquill
 description: A static MDX documentation workspace for executable technical notes.
 ---
 
-Oxiquill publishes technical notes as a static Astro Starlight site. A note can stay prose-first while still including executable Rust and Python cells, mathematical notation, Mermaid diagrams, images, PDFs, tables, charts, JSON, and sandboxed HTML output.
+Oxiquill publishes technical notes as a static Astro Starlight site. A note can stay prose-first while still including executable Rust, Python, and Haskell cells, mathematical notation, Mermaid diagrams, images, PDFs, tables, charts, JSON, and sandboxed HTML output.
 
 The authoring model is intentionally close to Markdown. Writers add MDX pages, describe executable cells with leading metadata comments, and let the build generate the browser runtime. English pages live under `content/docs`; Japanese translations use the same route under `content/docs/ja`.
 
@@ -11,7 +11,7 @@ The authoring model is intentionally close to Markdown. Writers add MDX pages, d
 
 Oxiquill is useful when documentation needs to explain a concept and show a runnable result in the same page:
 
-- Learning notes that combine explanation with short Rust or Python experiments.
+- Learning notes that combine explanation with short Rust, Python, or Haskell experiments.
 - Numerical or data notes that need formulas, parameters, tables, and charts.
 - Project documentation that should remain static but still offer interactive examples.
 - Bilingual documentation where English and Japanese pages should follow the same structure.
@@ -20,6 +20,7 @@ Oxiquill is useful when documentation needs to explain a concept and show a runn
 
 - Rust cells are compiled to WebAssembly at build time and executed in the browser.
 - Python cells run in a Pyodide worker and can load vendored packages such as `numpy`, `pandas`, and `matplotlib`.
+- Haskell cells are compiled to WASI WebAssembly at build time and run in the browser with standard-library code.
 - Cell metadata generates input controls, run behavior, timeouts, and source visibility.
 - Rich output artifacts render text, JSON, tables, charts, images, and sandboxed HTML.
 - KaTeX renders inline and block math.
@@ -43,9 +44,10 @@ content/docs/
     math.mdx
     diagrams.mdx
     media.mdx
-  samples/
-    rust-ownership.mdx
-    logistic-map.mdx
+    samples/
+      rust-ownership.mdx
+      logistic-map.mdx
+      haskell-series.mdx
   ja/
     index.mdx
     guides/
@@ -53,13 +55,13 @@ content/docs/
     samples/
 ```
 
-Generated runtime output is written under `.oxiquill/generated`, `.oxiquill/rust-cells`, `public/oxiquill/pyodide`, `public/oxiquill/rust-wasm`, and `dist`. Do not edit generated files directly; regenerate them with `pnpm docgen`, `pnpm wasm:dev`, `pnpm wasm:build`, `pnpm check`, or `pnpm build`.
+Generated runtime output is written under `.oxiquill/generated`, `.oxiquill/rust-cells`, `.oxiquill/haskell-cells`, `public/oxiquill/pyodide`, `public/oxiquill/rust-wasm`, `public/oxiquill/haskell-wasm`, and `dist`. Do not edit generated files directly; regenerate them with `pnpm docgen`, `pnpm wasm:dev`, `pnpm wasm:build`, `pnpm check`, or `pnpm build`.
 
 ## Start Here
 
 - [Getting Started](./guides/getting-started/) covers install, local preview, build, and static preview.
 - [Authoring Guide](./guides/authoring/) explains page structure, localization, cell metadata, media, and diagrams.
-- [Interactive Cells](./features/interactive-cells/) describes Rust and Python execution, inputs, run modes, helper crates, packages, and source display.
+- [Interactive Cells](./features/interactive-cells/) describes Rust, Python, and Haskell execution, inputs, run modes, helper crates, packages, and source display.
 - [Rich Output](./features/rich-output/) lists the output artifacts available from Rust and Python cells.
 - [Templates](./guides/templates/) gives starter MDX patterns for common note shapes.
 - [Sample Notes](./samples/logistic-map/) show complete prose-first pages that use Oxiquill features in context.
