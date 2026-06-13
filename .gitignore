@@ -29,12 +29,14 @@ examples/docs-site/crates/target/
 .codex/
 .serena/
 .agents/
+.direnv/
 .vscode/
 .idea/
 
 # Environment files
 .env
 .env.*
+.envrc.local
 !.env.example
 
 # Logs and package-manager diagnostics

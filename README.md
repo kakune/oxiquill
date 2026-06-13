@@ -26,13 +26,23 @@ English is the root documentation language. Japanese pages are published under `
 
 ### Requirements
 
-- Node.js and `pnpm`
-- Rust toolchain `1.95.0`
+- Nix with flakes enabled, or equivalent manual tools
+- Node.js 24 and `pnpm` 11.2.2
+- Rust toolchain `1.95.0` with `wasm32-unknown-unknown`
 - `wasm-pack`
 - `cargo-llvm-cov`
-- `wasm32-wasi-ghc` when authoring Haskell cells
+- `wasm32-wasi-ghc` 9.14 when authoring Haskell cells
+- Chromium for Playwright e2e tests
 
-The Rust toolchain and Wasm target are pinned by `rust-toolchain.toml`. Haskell cells use GHC's `wasm32-wasi` backend. When using `ghc-wasm-meta`, keep a normal Node.js runtime first in `PATH` and point Oxiquill at the Haskell compiler directly:
+On NixOS or any Linux system with Nix, use the checked-in flake to enter a shell with Node, pnpm, Rust, `wasm-pack`, `cargo-llvm-cov`, `wasm32-wasi-ghc`, and Chromium already wired up:
+
+```sh
+nix develop
+```
+
+The Nix shell sets `OXIQUILL_NODE`, `OXIQUILL_HASKELL_GHC`, `LLVM_COV`, `LLVM_PROFDATA`, `PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD=1`, and `PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH`. Writable tool caches are kept under the ignored `.cache/` directory.
+
+Without Nix, install equivalent tools manually. Haskell cells use GHC's `wasm32-wasi` backend. When using `ghc-wasm-meta`, keep a normal Node.js runtime first in `PATH` and point Oxiquill at the Haskell compiler directly:
 
 ```sh
 nvm alias default 24.2.0
@@ -43,10 +53,11 @@ Avoid putting ghc-wasm's static Node ahead of the normal Node used by Vite, Vite
 
 ### Setup
 
-Install dependencies:
+Enter the development shell and install dependencies:
 
 ```sh
-pnpm install
+nix develop
+pnpm install --frozen-lockfile
 ```
 
 Start the development server:
@@ -276,13 +287,23 @@ Oxiquill は、MDX で書いた技術ノートを静的サイトとして公開�
 
 ### 前提
 
-- Node.js と `pnpm`
-- Rust toolchain `1.95.0`
+- Nix flakes、または同等の手動 tool
+- Node.js 24 と `pnpm` 11.2.2
+- `wasm32-unknown-unknown` を含む Rust toolchain `1.95.0`
 - `wasm-pack`
 - `cargo-llvm-cov`
-- Haskell セルを書く場合は `wasm32-wasi-ghc`
+- Haskell セルを書く場合は `wasm32-wasi-ghc` 9.14
+- Playwright e2e test 用の Chromium
 
-Rust toolchain と Wasm target は `rust-toolchain.toml` で固定しています。Haskell セルは GHC の `wasm32-wasi` backend を使います。`ghc-wasm-meta` を使う場合は、通常の Node.js runtime を `PATH` の先頭に置いたまま、Oxiquill には Haskell compiler の path を直接指定します。
+NixOS または Nix を使える Linux では、このリポジトリの flake で shell に入ると、Node、pnpm、Rust、`wasm-pack`、`cargo-llvm-cov`、`wasm32-wasi-ghc`、Chromium が設定済みになります。
+
+```sh
+nix develop
+```
+
+Nix shell は `OXIQUILL_NODE`、`OXIQUILL_HASKELL_GHC`、`LLVM_COV`、`LLVM_PROFDATA`、`PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD=1`、`PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH` を設定します。tool cache は ignore 済みの `.cache/` 配下に置かれます。
+
+Nix を使わない場合は、同等の tool を手動で導入してください。Haskell セルは GHC の `wasm32-wasi` backend を使います。`ghc-wasm-meta` を使う場合は、通常の Node.js runtime を `PATH` の先頭に置いたまま、Oxiquill には Haskell compiler の path を直接指定します。
 
 ```sh
 nvm alias default 24.2.0
@@ -293,10 +314,11 @@ Vite、Vitest、Astro が使う通常の Node より前に ghc-wasm の static N
 
 ### セットアップ
 
-依存関係をインストールします。
+開発 shell に入り、依存関係をインストールします。
 
 ```sh
-pnpm install
+nix develop
+pnpm install --frozen-lockfile
 ```
 
 開発サーバーを起動します。
