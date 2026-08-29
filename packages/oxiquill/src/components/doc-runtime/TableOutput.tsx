@@ -54,7 +54,7 @@ export default function TableOutput({
   async function copyVisibleCsv(): Promise<void> {
     if (copyStatus?.kind === 'copying') return;
     setCopyStatus({ kind: 'copying', message: labels.copyingCsv });
-    const converted = tableToCsv(table.columns, currentRows);
+    const converted = tableToCsv(table.columns, currentRows, labels);
     if (!converted.ok) {
       setCopyStatus({ kind: 'error', message: labels.copyCsvError(converted.error) });
       return;
@@ -189,17 +189,21 @@ export function visibleRows(rows: readonly unknown[][], page: number, pageSize: 
   return rows.slice(page * pageSize, (page + 1) * pageSize);
 }
 
-export function tableToCsv(columns: readonly TableColumn[], rows: readonly unknown[][]): TableCsvResult {
+export function tableToCsv(
+  columns: readonly TableColumn[],
+  rows: readonly unknown[][],
+  labels: RuntimeLabels = labelsForLanguage('en')
+): TableCsvResult {
   try {
     return {
       ok: true,
       csv: [
-        columns.map((column) => csvCell(column.label)).join(','),
+        columns.map((column) => csvCell(column.label, labels)).join(','),
         ...rows.map((row, rowIndex) => {
           if (row.length !== columns.length) {
-            throw new Error(`Row ${rowIndex + 1} has ${row.length} cells; expected ${columns.length}.`);
+            throw new Error(labels.tableRowWidthError(rowIndex + 1, row.length, columns.length));
           }
-          return columns.map((_, index) => csvCell(row[index])).join(',');
+          return columns.map((_, index) => csvCell(row[index], labels)).join(',');
         })
       ].join('\n')
     };
@@ -218,7 +222,7 @@ export function formatTableCell(value: unknown, labels: RuntimeLabels = labelsFo
   }
   if (typeof value === 'boolean') return value ? 'true' : 'false';
   if (typeof value === 'string') return value;
-  throw new Error(`Unsupported validated table cell type: ${typeof value}.`);
+  throw new Error(labels.tableCellTypeError(typeof value));
 }
 
 function compareCellValues(left: unknown, right: unknown): number {
@@ -230,13 +234,13 @@ function compareCellValues(left: unknown, right: unknown): number {
   return String(left).localeCompare(String(right));
 }
 
-function csvCell(value: unknown): string {
+function csvCell(value: unknown, labels: RuntimeLabels): string {
   if (value == null) return '';
   if (!['string', 'number', 'boolean'].includes(typeof value)) {
-    throw new Error(`Unsupported validated table cell type: ${typeof value}.`);
+    throw new Error(labels.tableCellTypeError(typeof value));
   }
   if (typeof value === 'number' && !Number.isFinite(value)) {
-    throw new Error('Validated table cells must contain finite numbers.');
+    throw new Error(labels.tableFiniteNumberError);
   }
   const text = String(value);
   return /[",\n\r]/u.test(text) ? `"${text.replace(/"/gu, '""')}"` : text;

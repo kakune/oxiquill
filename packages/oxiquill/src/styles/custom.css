@@ -95,7 +95,9 @@
   cursor: pointer;
 }
 
-.run-button:disabled {
+.run-button:disabled,
+.run-button[aria-disabled='true'],
+.doc-table-output button[aria-disabled='true'] {
   cursor: wait;
   opacity: 0.72;
 }

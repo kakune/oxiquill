@@ -60,8 +60,11 @@ export type RuntimeLabels = {
   runningCell: string;
   showCode: string;
   tableControls: string;
+  tableCellTypeError: (type: string) => string;
+  tableFiniteNumberError: string;
   tableMissingValue: string;
   tableOutput: string;
+  tableRowWidthError: (row: number, received: number, expected: number) => string;
   unknownCell: (cellId: string) => string;
 };
 
@@ -157,8 +160,11 @@ const runtimeLabels = {
     runningCell: 'Running cell...',
     showCode: 'Show code',
     tableControls: 'Table controls',
+    tableCellTypeError: (type) => `Unsupported validated table cell type: ${type}.`,
+    tableFiniteNumberError: 'Validated table cells must contain finite numbers.',
     tableMissingValue: 'missing',
     tableOutput: 'Data table',
+    tableRowWidthError: (row, received, expected) => `Row ${row} has ${received} cells; expected ${expected}.`,
     unknownCell: (cellId) => `Unknown interactive cell: ${cellId}`
   },
   ja: {
@@ -210,8 +216,12 @@ const runtimeLabels = {
     runningCell: 'セルを実行中…',
     showCode: 'コードを表示',
     tableControls: '表の操作',
+    tableCellTypeError: (type) => `検証済み表セルの型 ${type} には対応していません。`,
+    tableFiniteNumberError: '検証済み表セルには有限の数値が必要です。',
     tableMissingValue: '値なし',
     tableOutput: 'データ表',
+    tableRowWidthError: (row, received, expected) =>
+      `${row} 行目のセルは ${received} 個ですが、${expected} 個である必要があります。`,
     unknownCell: (cellId) => `不明な実行可能セル: ${cellId}`
   }
 } satisfies Record<RuntimeLocale, RuntimeLabels>;
@@ -242,6 +252,10 @@ function runtimeLanguageLabel(language: 'haskell' | 'python' | 'rust'): string {
 }
 
 function translateDiagnostic(detail: string): string {
+  const timeout = /^(.*) timed out after (\d+)ms$/u.exec(detail);
+  if (timeout) {
+    return `${timeout[1]} は ${timeout[2]} ミリ秒でタイムアウトしました。`;
+  }
   const artifactLimit = /^Artifact limit exceeded: received (\d+), maximum (\d+)\.$/u.exec(detail);
   if (artifactLimit) {
     return `成果物の上限を超えました。${artifactLimit[1]} 件を受け取りましたが、上限は ${artifactLimit[2]} 件です。`;
