@@ -6,6 +6,7 @@ import { fileURLToPath } from 'node:url';
 
 const repositoryRoot = fileURLToPath(new URL('../../', import.meta.url));
 const packageRoot = path.join(repositoryRoot, 'packages/oxiquill');
+const packageReadme = readFileSync(path.join(packageRoot, 'README.md'), 'utf8');
 const licenseDataRoot = path.join(packageRoot, 'src/generator/license-data');
 const runtimeManifest = readJson('runtime-artifacts.json');
 const packageOverrides = readJson('bundled-package-overrides.json');
@@ -40,6 +41,16 @@ assert.ok(
   files.every((filePath) => path.basename(filePath) !== 'AGENTS.md'),
   `npm tarball contains an internal AGENTS.md:\n${files.filter((filePath) => path.basename(filePath) === 'AGENTS.md').join('\n')}`
 );
+for (const requiredText of [
+  'pnpm dlx oxiquill init',
+  'npm install oxiquill',
+  'oxiquill preview',
+  'https://kakune.github.io/oxiquill/reference/package-api/',
+  'https://github.com/kakune/oxiquill/security/policy',
+  'MIT License or the Apache License, Version 2.0'
+]) {
+  assert.ok(packageReadme.includes(requiredText), `npm package README is missing ${requiredText}`);
+}
 
 console.log(`Verified ${files.length} files in the oxiquill npm tarball.`);
 
