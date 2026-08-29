@@ -15,6 +15,15 @@ pnpm check
 
 この command は development runtime を再生成し、Astro check を実行します。多くの MDX、frontmatter、route、import、TypeScript の問題を検出できます。
 
+prose、navigation、package export、command example、public schema を変更した場合は documentation contract checker も実行します。
+
+```sh
+pnpm test:docs
+pnpm test:package
+```
+
+`test:docs` は internal file/route/fragment、英日 route parity、sidebar entry、全 package export/path/CLI contract、JSON example、package import、shell command を検証します。`test:package` は README と必須 public file が npm archive に入ることを確認します。
+
 広い変更が完了したら、可能な範囲で full suite を実行します。
 
 ```sh
@@ -67,3 +76,4 @@ pnpm doc:rust
 - Mermaid failure: code block language が `mermaid` か確認し、`pnpm build` で MDX error を確認します。
 - Missing media: file が `public/media` 配下にあり、MDX URL が `/media/` で始まるか確認します。
 - Coverage failure: 生成物ではなく手書き source に focused test を追加します。
+- Documentation link/contract failure: exception を追加せず、referenced page、route、public contract table、canonical command を修正します。

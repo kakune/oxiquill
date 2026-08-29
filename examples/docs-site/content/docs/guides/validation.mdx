@@ -15,6 +15,15 @@ pnpm check
 
 This regenerates the development runtime and runs Astro checks. It catches most MDX, frontmatter, route, import, and TypeScript issues.
 
+Run the documentation contract checker whenever prose, navigation, package exports, command examples, or public schemas change:
+
+```sh
+pnpm test:docs
+pnpm test:package
+```
+
+`test:docs` validates internal files/routes/fragments, English/Japanese route parity, sidebar entries, every package export/path/CLI contract, JSON examples, package imports, and shell commands. `test:package` confirms the README and required public files are present in the npm archive.
+
 Run the full suite before broad changes are considered complete when practical:
 
 ```sh
@@ -67,3 +76,4 @@ pnpm doc:rust
 - Mermaid failure: confirm the code block language is `mermaid` and run `pnpm build` for MDX errors.
 - Missing media: confirm the file is under `public/media` and the MDX URL starts with `/media/`.
 - Coverage failure: add focused tests for handwritten source rather than modifying generated output.
+- Documentation link/contract failure: fix the referenced page, route, public contract table, or canonical command instead of adding an exception.

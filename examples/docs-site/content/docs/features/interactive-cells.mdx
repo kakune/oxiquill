@@ -7,39 +7,48 @@ Interactive cells are ordinary MDX code blocks with metadata comments at the top
 
 Rust cells are compiled to WebAssembly at build time. Python cells run in a browser Pyodide worker. Haskell cells are compiled to a WASI WebAssembly module at build time. All three languages use the same input metadata and run-mode model.
 
-## Cell Metadata
+## Fence and Metadata Grammar
 
-Common fields:
+Interactive fences use `rust`, `python`, or `haskell` (including Markdown's `{.rust}` form) and may use legal backtick or tilde fences and indentation. Metadata is one contiguous block of language-appropriate option comments at the beginning of the fence: `//|` or `///|` for Rust, `#|` for Python, and `--|` for Haskell. An option-looking comment after the first source line remains source code.
 
-- `id`: required page-local identifier.
-- `title`: label shown in the cell header.
-- `run`: `button`, `reactive`, `autorun`, or `hidden`.
-- `inputs`: input controls whose values become variables in the cell.
-- `timeoutMs`: execution timeout in milliseconds.
-- `showSource`: `false` hides source by default while keeping the toggle available.
+Only these top-level fields are accepted; unknown fields are errors:
 
-Rust-only field:
+| Field | Type and rule | Default |
+| --- | --- | --- |
+| `id` | Required lowercase kebab-case matching `^[a-z][a-z0-9]*(?:-[a-z0-9]+)*$`; unique within the page and after route scoping. | — |
+| `title` | String shown in the cell header. | `id` |
+| `run` | `button`, `reactive`, or `autorun`. | `button` |
+| `inputs` | Mapping from lowercase cross-language identifiers matching `^[a-z][a-z0-9_]*$` to input specs. Not allowed with `autorun`. | `{}` |
+| `packages` | Unique non-empty Pyodide package names; Python only. | `[]` |
+| `crates` | Unique non-empty helper package names from direct children of `cratesDir`; Rust only. | `[]` |
+| `timeoutMs` | Positive integer milliseconds. | `30000` |
+| `showSource` | Boolean controlling initial source visibility. | `true` |
 
-- `crates`: helper crate package names under `crates/*`; use `crates: []` when no helper is needed.
+The source must contain non-metadata code. Malformed YAML, a wrong scalar/collection type, duplicate normalized ID/binding/function, unknown package/crate, or language-mismatched dependency field fails before output is written. Diagnostics include page path, fence start line, cell ID when available, and the exact field path.
 
-Python-only field:
-
-- `packages`: vendored Pyodide package names such as `numpy`, `pandas`, or `matplotlib`.
-
-Haskell cells use standard-library code only. They do not support `packages` or external helper modules.
+Haskell cells use standard-library code only and accept neither `packages` nor `crates`. Rust cells without helpers should explicitly use `crates: []` in examples. Package and crate lists are deduplicated and sorted after strict validation.
 
 ## Run Modes
 
-- `button`: the reader starts execution explicitly.
-- `reactive`: the cell runs initially and reruns when inputs change.
-- `autorun`: the cell runs automatically once without showing a run button.
-- `hidden`: the cell has no run button; use this only for intentionally hidden examples.
+- `button`: show inputs and a Run button; do not execute on mount.
+- `reactive`: show inputs, hide the Run button, execute once on mount, then use a 150 ms trailing debounce. At most one execution and one newest replacement are retained.
+- `autorun`: show neither inputs nor Run button and execute exactly once for each `cell.id + runtimeVersion`.
 
-## Inputs
+Superseded queued work is discarded, stale results cannot replace newer state, and ordinary reactive updates keep the shared language worker alive. A timeout or worker fault rejects requests owned by that worker, clears their timers, and creates a fresh worker for future runs. Unmounting cancels pending UI work and prevents late state updates.
 
-Supported input types are `range`, `number`, `integer`, `text`, `textarea`, `checkbox`, `select`, and `radio`.
+## Input Schema
 
-Input names are available as variables inside the cell. In Rust and Haskell cells, names are converted into safe language identifiers. Avoid names that differ only by punctuation, because they may map to the same binding.
+Every input accepts only fields relevant to its type. Common fields are `type`, `label`, and `value`; numeric inputs also use `min`, `max`, `step`, and `integer`, while `select` and `radio` use `options`.
+
+| Type | Value and constraints |
+| --- | --- |
+| `range`, `number` | Finite number; `step > 0`, `min <= max`, and the default must be within bounds. |
+| `integer` | Integer value and integer bounds/step; the same numeric constraints apply. |
+| `text`, `textarea` | String value. |
+| `checkbox` | Boolean value. |
+| `select`, `radio` | Non-empty unique string options or `{ label, value }` objects; the default must equal an option value. |
+
+The visible `label` is the control's accessible name; the input key is only the generated language binding. Normalization must not make two Rust or Haskell bindings collide. Labels, descriptions, current values, validation messages, and grouped controls use stable IDs, keyboard focus remains visible, and run/error status is announced without stealing focus.
 
 ## Rust and Plots
 

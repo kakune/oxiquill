@@ -1,0 +1,79 @@
+---
+title: プロジェクト設定
+description: Astro、Starlight、Oxiquill path、生成物を一つの project state として設定します。
+---
+
+Oxiquill は一つの project config を読み込み、development、check、generation、build、test、clean のすべてで同じ resolved path を使います。すべての command に同じ `--config` を渡す場合を除き、`astro.config.mjs` は project root に置きます。
+
+## 最小構成
+
+```js
+import { defineOxiquillConfig } from 'oxiquill/astro';
+
+export default defineOxiquillConfig({
+  site: 'https://example.com',
+  title: 'My Docs',
+  sidebar: [{ label: 'Overview', items: [{ label: 'Home', slug: 'index' }] }]
+});
+```
+
+```ts
+// content.config.ts
+export { collections } from 'oxiquill/content';
+```
+
+`defineOxiquillConfig()` は static output、Oxiquill の Markdown transform、Preact、Starlight を設定済みの Astro config を返します。
+
+## 設定 field
+
+| Field | 意味 |
+| --- | --- |
+| `title`, `description`, `sidebar` | 対応する Starlight setting の shorthand。 |
+| `starlight` | その他の Starlight option。同じ setting はこちらが shorthand より優先されます。 |
+| `framework.preact`, `framework.starlight` | 組み込み用途向けの高度な integration-factory override。 |
+| `integrations` | Oxiquill、Preact、Starlight の後に追加する Astro integration。 |
+| `markdown` | 追加の Astro Markdown setting/plugin。Oxiquill 必須 plugin が先に動きます。 |
+| `vite` | 追加の Vite setting。必須 alias、dedupe、worker plugin、filesystem access は保持されます。 |
+| `paths` | 下記の source/cache/generated/public path。 |
+| その他の Astro field | Astro に渡されます。Oxiquill の output は常に static です。 |
+
+Astro config を手動で組み立てる場合だけ `oxiquillIntegration()` を使います。受け取る option は `base`、`markdown`、`paths`、`vite` で、Preact と Starlight は caller が追加します。
+
+## Path field
+
+| Field | Default | 解決基準 |
+| --- | --- | --- |
+| `workspaceRoot` | project root | current project/config root |
+| `frameworkRoot` | install 済み `oxiquill` package | absolute/package location |
+| `docsDir` | `content/docs` | `workspaceRoot` |
+| `cratesDir` | `crates` | `workspaceRoot` |
+| `publicDir` | `public` | `workspaceRoot` |
+| `cacheDir` | `.oxiquill` | `workspaceRoot` |
+| `generatedDir` | `generated` | `cacheDir` |
+| `rustCellsDir` | `rust-cells` | `cacheDir` |
+| `haskellCellsDir` | `haskell-cells` | `cacheDir` |
+| `publicAssetsDir` | `oxiquill` | `publicDir` |
+| `rustWasmPublicDir` | `rust-wasm` | `publicAssetsDir` |
+| `haskellWasmPublicDir` | `haskell-wasm` | `publicAssetsDir` |
+| `pyodidePublicDir` | `pyodide` | `publicAssetsDir` |
+| `licensesPublicDir` | `licenses` | `publicAssetsDir` |
+
+各 path は relative string、absolute string、`file:` URL を受け取ります。nested relative path は偶然の working directory ではなく、表に示した parent から解決されます。
+
+Astro の `root`、`publicDir`、`outDir`、`cacheDir` と Oxiquill の path setting が同じ directory を示す場合、正規化後の location が一致しなければなりません。明示値の競合は error になり、Oxiquill が黙って一方を選ぶことはありません。すべての CLI command は file の読み書きや clean より前にこの config を解決します。
+
+## 優先順位と merge
+
+1. `--config <path>` が config file を選び、省略時は Astro 標準の探索を使います。
+2. 明示した project setting が default より優先されます。
+3. `starlight.title`、`starlight.description`、`starlight.sidebar` が shorthand field より優先されます。
+4. Consumer の Markdown、Vite、CSS、component、integration の追加は Oxiquill 必須 entry の後に保持されます。
+5. path の競合、Oxiquill integration の欠落・重複、config 読み込み失敗は generation/clean より前に失敗します。
+
+Oxiquill-owned output に project root や広すぎる directory を指定しないでください。`oxiquill clean` は検証済みの resolved Oxiquill path と設定済み Astro output だけを削除します。
+
+## Base path と public asset
+
+subpath 配下へ公開するときは Astro の `base` を設定します。Oxiquill は interactive-cell manifest、language runtime、diagram、`/media/...` reference に適用します。authoring では public URL を root-relative のまま記述し、Markdown transform が base を一度だけ追加します。
+
+生成 runtime は `.oxiquill` と `public/oxiquill`、最終 static site は Astro の `outDir`（通常 `dist`）に置かれます。生成 directory を直接編集しないでください。
