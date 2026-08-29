@@ -366,7 +366,7 @@ describe('doc runtime core', () => {
     expect(generateCellsJson(cells)).toContain('"id": "one"');
 
     expect(generateRustCargoToml([], helperCrates)).not.toContain('doc-rust =');
-    expect(generateRustCargoToml([], helperCrates)).toContain('license = "AGPL-3.0-only"');
+    expect(generateRustCargoToml([], helperCrates)).toContain('license = "MIT OR Apache-2.0"');
     expect(generateRustCargoToml([{ crates: ['doc-rust'] }], helperCrates)).toContain(
       'doc-rust = { path = "../../crates/doc-rust" }'
     );

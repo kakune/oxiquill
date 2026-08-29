@@ -1,0 +1,24 @@
+---
+title: Licensing
+description: Understand Oxiquill's dual license and the notices included with generated sites.
+---
+
+Oxiquill is licensed under your choice of the MIT License or the Apache License, Version 2.0. You may use, modify, and redistribute Oxiquill under either license, subject to that license's terms.
+
+## Generated License Files
+
+Oxiquill writes these files into every generated site's non-visible static assets:
+
+- `oxiquill/licenses/LICENSE-MIT`
+- `oxiquill/licenses/LICENSE-APACHE`
+- `oxiquill/licenses/THIRD_PARTY_LICENSES.txt`
+
+The third-party report is deterministic. A production build records packages actually included in the site's main and worker bundles, together with the audited manifest for copied Pyodide, Rust/Wasm, and Haskell/WASI runtime artifacts. Generation fails if required license metadata or text is missing or unknown.
+
+These files satisfy Oxiquill's distribution-notice requirement automatically. Your site does not need visible attribution, a footer link, or a “Powered by Oxiquill” message.
+
+## Scope
+
+The generated report covers Oxiquill and the runtime artifacts that Oxiquill places in the site. It deliberately excludes content written by the consumer and optional helper crates under the consumer's `crates/` directory. Site owners remain responsible for their own content, helper crates, custom integrations, and any other assets they distribute.
+
+Historical Oxiquill releases retain the license recorded in their tags. The dual license applies to the current codebase and future contributions accepted under the repository's contribution terms.

@@ -3,7 +3,7 @@
   "version": "0.2.0",
   "private": false,
   "type": "module",
-  "license": "AGPL-3.0-only",
+  "license": "MIT OR Apache-2.0",
   "bin": {
     "oxiquill": "./src/cli/index.mjs"
   },
