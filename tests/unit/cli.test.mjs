@@ -10,10 +10,16 @@ import { createOxiquillPaths } from '../../packages/oxiquill/src/config/paths.mj
 const cliPath = fileURLToPath(new URL('../../packages/oxiquill/src/cli/index.mjs', import.meta.url));
 const actualRepoRoot = fileURLToPath(new URL('../..', import.meta.url));
 const actualPaths = createOxiquillPaths({ workspaceRoot: actualRepoRoot });
+const actualProjectConfig = Object.freeze({
+  astroConfigArgs: Object.freeze([]),
+  cwd: actualRepoRoot,
+  paths: actualPaths
+});
 const repoRoot = path.resolve('/repo');
 const { canLoadNativePackage, isCliEntrypoint, nodeExecutableCandidates, runCli, selectFrameworkNode } = await import(
   '../../packages/oxiquill/src/cli/commands.mjs'
 );
+const { parseConfigOption } = await import('../../packages/oxiquill/src/cli/config-option.mjs');
 const testRoot = path.parse(process.cwd()).root;
 
 afterEach(() => {
@@ -21,6 +27,47 @@ afterEach(() => {
 });
 
 describe('oxiquill CLI', () => {
+  it('parses one config option without forwarding it to command-specific arguments', () => {
+    expect(parseConfigOption(['--host', 'localhost', '--config', 'custom config.mts'])).toEqual({
+      commandArgs: ['--host', 'localhost'],
+      configFile: 'custom config.mts'
+    });
+    expect(parseConfigOption(['--config=custom.mjs'])).toEqual({
+      commandArgs: [],
+      configFile: 'custom.mjs'
+    });
+    expect(() => parseConfigOption(['--config'])).toThrow('--config must be followed by a path');
+    expect(() => parseConfigOption(['--config=a', '--config', 'b'])).toThrow(
+      '--config may only be specified once'
+    );
+  });
+
+  it('loads a selected config once and forwards the resolved Astro arguments', async () => {
+    const loadProjectConfig = vi.fn(async () => ({
+      ...actualProjectConfig,
+      astroConfigArgs: ['--root', actualRepoRoot, '--config', '../custom config.mts']
+    }));
+    const runCommand = vi.fn(async () => undefined);
+    const nodePath = fakeNodeExecutable(path.join(testRoot, 'node', 'bin'));
+
+    await runCli('preview', ['--host', 'localhost', '--config', 'custom config.mts'], {
+      cwd: '/invocation',
+      loadProjectConfig,
+      runCommand,
+      selectNode: () => nodePath
+    });
+
+    expect(loadProjectConfig).toHaveBeenCalledOnce();
+    expect(loadProjectConfig).toHaveBeenCalledWith({ cwd: '/invocation', configFile: 'custom config.mts' });
+    expect(runCommand).toHaveBeenCalledWith(
+      nodePath,
+      expect.arrayContaining([
+        'preview', '--root', actualRepoRoot, '--config', '../custom config.mts', '--host', 'localhost'
+      ]),
+      expect.objectContaining({ cwd: actualRepoRoot })
+    );
+  });
+
   it('can be imported without running the command dispatcher', async () => {
     const log = vi.spyOn(console, 'log').mockImplementation(() => {});
 
@@ -116,8 +163,19 @@ describe('oxiquill CLI', () => {
       commands.push(command);
     };
 
-    await runCli('preview', [], { cwd: actualRepoRoot, runCommand, selectNode });
-    await runCli('preview', [], { cwd: actualRepoRoot, runCommand, selectNode });
+    const loadProjectConfig = async () => actualProjectConfig;
+    await runCli('preview', [], {
+      cwd: actualRepoRoot,
+      loadProjectConfig,
+      runCommand,
+      selectNode
+    });
+    await runCli('preview', [], {
+      cwd: actualRepoRoot,
+      loadProjectConfig,
+      runCommand,
+      selectNode
+    });
 
     expect(selectNode).toHaveBeenCalledTimes(2);
     expect(commands).toEqual([firstNode, secondNode]);
