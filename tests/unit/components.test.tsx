@@ -42,6 +42,7 @@ vi.mock('../../packages/oxiquill/src/lib/doc-runtime/runtime-client', () => ({
   runInteractiveCell: runtimeMocks.runInteractiveCell
 }));
 
+await import('./mocks/mermaid');
 const { default: InteractiveCell } = await import('../../packages/oxiquill/src/components/doc-runtime/InteractiveCell');
 const {
   default: MermaidDiagram,
