@@ -138,6 +138,16 @@ describe('defineOxiquillConfig', () => {
     expect(update.markdown.processor).toBe(processor);
   });
 
+  it('installs package-owned main and worker bundle reporters', () => {
+    const update = runConfigSetup(defineOxiquillConfig({ sidebar: [], title: 'Docs' }));
+    const mainPlugins = update.vite.plugins.map((plugin) => plugin.name);
+    const workerPlugins = update.vite.worker.plugins().map((plugin) => plugin.name);
+
+    expect(mainPlugins).toContain('oxiquill-browser-bundle-main');
+    expect(workerPlugins).toContain('oxiquill-browser-bundle-worker');
+    expect(update.vite.build.chunkSizeWarningLimit).toBe(675);
+  });
+
   it('passes top-level shorthand options to Starlight', () => {
     const starlight = vi.fn(() => ({ hooks: {}, name: 'custom-starlight' }));
 

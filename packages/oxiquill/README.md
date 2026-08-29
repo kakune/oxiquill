@@ -41,6 +41,8 @@ export { collections } from 'oxiquill/content';
 
 Write pages under `content/docs`. Generated internals go under `.oxiquill`, and browser assets go under `public/oxiquill`.
 
+Production builds emit `dist/oxiquill/bundle-report.json` and fail if any generated client or worker JavaScript chunk exceeds 650 KiB uncompressed. Copied runtime assets such as Pyodide remain outside this chunk budget and are loaded only by the relevant runtime.
+
 ## License notices
 
 Oxiquill is available under your choice of the MIT License or the Apache License, Version 2.0. Each generated site automatically receives `oxiquill/licenses/LICENSE-MIT`, `LICENSE-APACHE`, and `THIRD_PARTY_LICENSES.txt` as non-visible static assets. No visible attribution or “Powered by Oxiquill” notice is required.

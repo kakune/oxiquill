@@ -22,6 +22,7 @@ const requiredFiles = [
   'LICENSE-MIT',
   'README.md',
   'package.json',
+  'src/generator/browser-bundle-report.mjs',
   'src/generator/license-data/bundled-package-overrides.json',
   'src/generator/license-data/runtime-artifacts.json',
   'src/generator/license-data/rust/runtime-Cargo.lock',

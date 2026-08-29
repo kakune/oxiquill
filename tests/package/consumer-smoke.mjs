@@ -43,6 +43,14 @@ try {
     await assertFile(path.join(publicLicenses, fileName));
     await assertFile(path.join(builtLicenses, fileName));
   }
+  const bundleReportPath = path.join(consumerRoot, 'dist/oxiquill/bundle-report.json');
+  const bundleReport = JSON.parse(await readFile(bundleReportPath, 'utf8'));
+  assert.equal(bundleReport.limitBytes, 650 * 1024);
+  assert.ok(bundleReport.chunks.length > 0, 'packed consumer bundle report contains no chunks');
+  assert.ok(
+    bundleReport.chunks.every((chunk) => chunk.uncompressedBytes <= bundleReport.limitBytes),
+    'packed consumer emitted an oversized client chunk'
+  );
   await assertFile(path.join(consumerRoot, 'public/oxiquill/rust-wasm/doc_rust_cells_bg.wasm'));
   console.log(`Packed consumer smoke test passed with ${packageManager} in ${consumerRoot}.`);
 } finally {
