@@ -6,10 +6,7 @@ on:
       - main
   workflow_dispatch:
 
-permissions:
-  contents: read
-  pages: write
-  id-token: write
+permissions: {}
 
 concurrency:
   group: pages
@@ -30,10 +27,14 @@ jobs:
   build:
     name: Build Pages artifact
     runs-on: ubuntu-latest
+    permissions:
+      contents: read # Required to check out the site sources.
 
     steps:
       - name: Check out repository
         uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6.1.0
+        with:
+          persist-credentials: false
 
       - name: Set up pnpm
         uses: pnpm/action-setup@b906affcce14559ad1aafd4ab0e942779e9f58b1 # v4.3.0
@@ -88,6 +89,9 @@ jobs:
     environment:
       name: github-pages
       url: ${{ steps.deployment.outputs.page_url }}
+    permissions:
+      id-token: write # Required to authenticate the Pages deployment.
+      pages: write # Required to deploy the Pages artifact.
 
     steps:
       - name: Deploy Pages artifact

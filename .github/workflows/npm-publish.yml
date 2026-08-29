@@ -4,13 +4,17 @@ on:
   release:
     types:
       - published
+  workflow_dispatch:
+    inputs:
+      release_tag:
+        description: Existing vMAJOR.MINOR.PATCH tag to verify without publishing
+        required: true
+        type: string
 
-permissions:
-  contents: read
-  id-token: write
+permissions: {}
 
 concurrency:
-  group: npm-publish-${{ github.event.release.tag_name }}
+  group: npm-publish-${{ github.event.release.tag_name || inputs.release_tag }}
   cancel-in-progress: false
 
 env:
@@ -19,20 +23,52 @@ env:
   GHC_WASM_FLAVOUR: '9.14'
   GHC_WASM_REVISION: 8fd59591635cb47ad7db124562039bea8441cae8
   NODE_VERSION: '24'
+  NPM_VERSION: '11.19.1'
   PNPM_VERSION: '11.2.2'
   RUST_TOOLCHAIN: '1.95.0'
 
 jobs:
-  publish:
-    name: Validate and publish
+  verify:
+    name: Verify release archive
     runs-on: ubuntu-latest
+    timeout-minutes: 120
+    permissions:
+      contents: read
+      issues: read # Required to enforce the release-blocker milestone gate.
+    outputs:
+      archive_filename: ${{ steps.archive.outputs.archive_filename }}
+      artifact_name: ${{ steps.archive.outputs.artifact_name }}
+      release_tag: ${{ steps.release.outputs.release_tag }}
+      release_version: ${{ steps.release.outputs.release_version }}
 
     steps:
       - name: Check out the release tag
         uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6.1.0
         with:
           fetch-depth: 0
-          ref: ${{ github.event.release.tag_name }}
+          persist-credentials: false
+          ref: ${{ github.event.release.tag_name || inputs.release_tag }}
+
+      - name: Verify the release tag is on main
+        env:
+          RELEASE_TAG: ${{ github.event.release.tag_name || inputs.release_tag }}
+        run: |
+          set -euo pipefail
+          if [[ ! "$RELEASE_TAG" =~ ^v(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)$ ]]; then
+            echo "Release tag $RELEASE_TAG must match vMAJOR.MINOR.PATCH" >&2
+            exit 1
+          fi
+          git fetch origin main:refs/remotes/origin/main --no-tags
+          tag_commit="$(git rev-parse "$RELEASE_TAG^{commit}")"
+          head_commit="$(git rev-parse HEAD)"
+          if [[ "$head_commit" != "$tag_commit" ]]; then
+            echo "Checked out commit $head_commit does not match $RELEASE_TAG commit $tag_commit" >&2
+            exit 1
+          fi
+          if ! git merge-base --is-ancestor "$tag_commit" origin/main; then
+            echo "Release tag $RELEASE_TAG is not contained in origin/main" >&2
+            exit 1
+          fi
 
       - name: Set up pnpm
         uses: pnpm/action-setup@b906affcce14559ad1aafd4ab0e942779e9f58b1 # v4.3.0
@@ -45,34 +81,18 @@ jobs:
         with:
           node-version: ${{ env.NODE_VERSION }}
           package-manager-cache: false
-          registry-url: https://registry.npmjs.org
 
-      - name: Verify release identity and ancestry
-        shell: bash
+      - name: Install the pinned npm CLI
+        run: npm install --global "npm@${NPM_VERSION}"
+
+      - name: Verify release identity and blockers
+        id: release
         env:
-          RELEASE_PRERELEASE: ${{ github.event.release.prerelease }}
-          RELEASE_TAG: ${{ github.event.release.tag_name }}
+          GITHUB_TOKEN: ${{ github.token }}
+          RELEASE_PRERELEASE: ${{ github.event.release.prerelease || false }}
+          RELEASE_TAG: ${{ github.event.release.tag_name || inputs.release_tag }}
         run: |
-          set -euo pipefail
-          package_version="$(node -p "require('./packages/oxiquill/package.json').version")"
-          if [[ "$package_version" == *-* ]]; then
-            echo "Refusing to publish prerelease package version $package_version" >&2
-            exit 1
-          fi
-          if [[ "$RELEASE_PRERELEASE" == "true" ]]; then
-            echo "Refusing to publish from a prerelease GitHub Release" >&2
-            exit 1
-          fi
-          if [[ "$RELEASE_TAG" != "v$package_version" ]]; then
-            echo "Release tag $RELEASE_TAG does not match package version v$package_version" >&2
-            exit 1
-          fi
-          git fetch origin main --no-tags
-          tag_commit="$(git rev-list -n 1 "$RELEASE_TAG")"
-          if ! git merge-base --is-ancestor "$tag_commit" origin/main; then
-            echo "Release tag $RELEASE_TAG is not based on main" >&2
-            exit 1
-          fi
+          node .github/scripts/verify-release.mjs
           legacy_license_pattern='AG''PL|Aff''ero'
           if git grep -n -E "$legacy_license_pattern"; then
             echo "Tracked current-license references must be removed before publishing" >&2
@@ -91,12 +111,6 @@ jobs:
           fallback: none
           tool: cargo-llvm-cov@0.9.0,wasm-pack@0.15.0
 
-      - name: Cache ghc-wasm
-        uses: actions/cache@caa296126883cff596d87d8935842f9db880ef25 # v5.1.0
-        with:
-          path: ~/.ghc-wasm
-          key: ghc-wasm-${{ runner.os }}-${{ runner.arch }}-${{ env.GHC_WASM_FLAVOUR }}-${{ env.GHC_WASM_REVISION }}-${{ env.GHC_WASM_ARCHIVE_SHA256 }}
-
       - name: Install ghc-wasm
         shell: bash
         run: bash .github/scripts/install-ghc-wasm.sh
@@ -113,8 +127,60 @@ jobs:
       - name: Run release validation
         run: pnpm test
 
-      - name: Publish package
-        working-directory: packages/oxiquill
-        run: npm publish --access public --provenance
+      - name: Build the release archive once
+        id: archive
+        run: node .github/scripts/release-archive.mjs create "$RUNNER_TEMP/npm-release"
+
+      - name: Upload the verified release archive
+        uses: actions/upload-artifact@330a01c490aca151604b8cf639adc76d48f6c5d4 # v5.0.0
+        with:
+          name: ${{ steps.archive.outputs.artifact_name }}
+          path: ${{ runner.temp }}/npm-release
+          if-no-files-found: error
+          compression-level: 0
+          retention-days: 14
+
+  publish:
+    name: Stage npm package
+    if: github.event_name == 'release'
+    needs: verify
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    environment:
+      name: npm-publish
+    permissions:
+      contents: read
+      id-token: write # Required for npm Trusted Publishing and provenance.
+
+    steps:
+      - name: Check out release verification code
+        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6.1.0
+        with:
+          persist-credentials: false
+          ref: ${{ needs.verify.outputs.release_tag }}
+
+      - name: Set up Node.js
+        uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6.5.0
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          package-manager-cache: false
+
+      - name: Install the pinned npm CLI
+        run: npm install --global "npm@${NPM_VERSION}"
+
+      - name: Download the verified release archive
+        uses: actions/download-artifact@634f93cb2916e3fdff6788551b99b062d0335ce0 # v5.0.0
+        with:
+          name: ${{ needs.verify.outputs.artifact_name }}
+          path: ${{ runner.temp }}/npm-release
+
+      - name: Verify the release archive and OIDC environment
+        id: archive
         env:
-          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+          RELEASE_VERSION: ${{ needs.verify.outputs.release_version }}
+        run: node .github/scripts/release-archive.mjs verify "$RUNNER_TEMP/npm-release" "$RELEASE_VERSION" --require-oidc
+
+      - name: Submit package for staged publication
+        env:
+          RELEASE_ARCHIVE: ${{ steps.archive.outputs.archive_path }}
+        run: npm stage publish "$RELEASE_ARCHIVE" --registry https://registry.npmjs.org/

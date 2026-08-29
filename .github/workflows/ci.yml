@@ -29,6 +29,8 @@ jobs:
     steps:
       - name: Check out repository
         uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6.1.0
+        with:
+          persist-credentials: false
       - name: Set up pnpm
         uses: pnpm/action-setup@b906affcce14559ad1aafd4ab0e942779e9f58b1 # v4.3.0
         with:
@@ -54,6 +56,8 @@ jobs:
     steps:
       - name: Check out repository
         uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6.1.0
+        with:
+          persist-credentials: false
       - name: Set up pnpm
         uses: pnpm/action-setup@b906affcce14559ad1aafd4ab0e942779e9f58b1 # v4.3.0
         with:
@@ -97,6 +101,8 @@ jobs:
     steps:
       - name: Check out repository
         uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6.1.0
+        with:
+          persist-credentials: false
       - name: Set up pnpm
         uses: pnpm/action-setup@b906affcce14559ad1aafd4ab0e942779e9f58b1 # v4.3.0
         with:
@@ -147,6 +153,8 @@ jobs:
     steps:
       - name: Check out repository
         uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6.1.0
+        with:
+          persist-credentials: false
       - name: Set up pnpm
         uses: pnpm/action-setup@b906affcce14559ad1aafd4ab0e942779e9f58b1 # v4.3.0
         with:
@@ -171,7 +179,9 @@ jobs:
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
       - name: Test packed consumer
-        run: pnpm test:consumer:${{ matrix.package-manager }}
+        env:
+          PACKAGE_MANAGER: ${{ matrix.package-manager }}
+        run: pnpm "test:consumer:${PACKAGE_MANAGER}"
 
   runtime:
     name: Runtime (${{ matrix.label }})
@@ -188,6 +198,8 @@ jobs:
     steps:
       - name: Check out repository
         uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6.1.0
+        with:
+          persist-credentials: false
       - name: Set up pnpm
         uses: pnpm/action-setup@b906affcce14559ad1aafd4ab0e942779e9f58b1 # v4.3.0
         with:
@@ -248,6 +260,8 @@ jobs:
     steps:
       - name: Check out repository
         uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6.1.0
+        with:
+          persist-credentials: false
       - name: Set up pnpm
         uses: pnpm/action-setup@b906affcce14559ad1aafd4ab0e942779e9f58b1 # v4.3.0
         with:
@@ -267,9 +281,13 @@ jobs:
           name: browser-site
           path: examples/docs-site/dist
       - name: Install Playwright browser
-        run: pnpm exec playwright install --with-deps ${{ matrix.project }}
+        env:
+          PLAYWRIGHT_PROJECT: ${{ matrix.project }}
+        run: pnpm exec playwright install --with-deps "$PLAYWRIGHT_PROJECT"
       - name: Run browser suite
-        run: pnpm test:e2e --project=${{ matrix.project }}
+        env:
+          PLAYWRIGHT_PROJECT: ${{ matrix.project }}
+        run: pnpm test:e2e --project="$PLAYWRIGHT_PROJECT"
       - name: Upload failed browser report
         if: failure()
         uses: actions/upload-artifact@330a01c490aca151604b8cf639adc76d48f6c5d4 # v5.0.0
