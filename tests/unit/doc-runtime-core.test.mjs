@@ -153,33 +153,95 @@ describe('doc runtime core', () => {
     ['scalar input definition', '//| id: bad\n//| inputs:\n//|   label: text', 'inputs.label'],
     ['wrong inputs collection', '//| id: bad\n//| inputs: []', 'inputs'],
     ['unknown input type', '//| id: bad\n//| inputs:\n//|   count: { type: knob, value: text }', 'inputs.count.type'],
-    ['wrong input value type', '//| id: bad\n//| inputs:\n//|   count: { type: number, value: text }', 'inputs.count.value'],
-    ['wrong input label type', '//| id: bad\n//| inputs:\n//|   count: { label: 2, value: text }', 'inputs.count.label'],
-    ['wrong integer flag type', '//| id: bad\n//| inputs:\n//|   count: { type: number, integer: yes, value: 1 }', 'inputs.count.integer'],
-    ['integer flag on text', '//| id: bad\n//| inputs:\n//|   label: { integer: false, value: text }', 'inputs.label.integer'],
+    [
+      'wrong input value type',
+      '//| id: bad\n//| inputs:\n//|   count: { type: number, value: text }',
+      'inputs.count.value'
+    ],
+    [
+      'wrong input label type',
+      '//| id: bad\n//| inputs:\n//|   count: { label: 2, value: text }',
+      'inputs.count.label'
+    ],
+    [
+      'wrong integer flag type',
+      '//| id: bad\n//| inputs:\n//|   count: { type: number, integer: yes, value: 1 }',
+      'inputs.count.integer'
+    ],
+    [
+      'integer flag on text',
+      '//| id: bad\n//| inputs:\n//|   label: { integer: false, value: text }',
+      'inputs.label.integer'
+    ],
     ['numeric field on text', '//| id: bad\n//| inputs:\n//|   label: { value: text, min: 1 }', 'inputs.label.min'],
-    ['non-finite bound', '//| id: bad\n//| inputs:\n//|   count: { type: number, value: 1, max: .nan }', 'inputs.count.max'],
-    ['non-positive step', '//| id: bad\n//| inputs:\n//|   count: { type: number, value: 1, step: 0 }', 'inputs.count.step'],
-    ['reversed bounds', '//| id: bad\n//| inputs:\n//|   count: { type: number, value: 2, min: 3, max: 1 }', 'inputs.count.min'],
-    ['default below bounds', '//| id: bad\n//| inputs:\n//|   count: { type: number, value: 0, min: 1 }', 'inputs.count.value'],
-    ['fractional integer', '//| id: bad\n//| inputs:\n//|   count: { type: integer, value: 1.5 }', 'inputs.count.value'],
-    ['empty options', '//| id: bad\n//| inputs:\n//|   mode: { type: select, value: a, options: [] }', 'inputs.mode.options'],
-    ['duplicate options', '//| id: bad\n//| inputs:\n//|   mode: { type: radio, value: a, options: [a, a] }', 'inputs.mode.options[1].value'],
-    ['missing option default', '//| id: bad\n//| inputs:\n//|   mode: { type: select, value: b, options: [a] }', 'inputs.mode.value'],
+    [
+      'non-finite bound',
+      '//| id: bad\n//| inputs:\n//|   count: { type: number, value: 1, max: .nan }',
+      'inputs.count.max'
+    ],
+    [
+      'non-positive step',
+      '//| id: bad\n//| inputs:\n//|   count: { type: number, value: 1, step: 0 }',
+      'inputs.count.step'
+    ],
+    [
+      'reversed bounds',
+      '//| id: bad\n//| inputs:\n//|   count: { type: number, value: 2, min: 3, max: 1 }',
+      'inputs.count.min'
+    ],
+    [
+      'default below bounds',
+      '//| id: bad\n//| inputs:\n//|   count: { type: number, value: 0, min: 1 }',
+      'inputs.count.value'
+    ],
+    [
+      'fractional integer',
+      '//| id: bad\n//| inputs:\n//|   count: { type: integer, value: 1.5 }',
+      'inputs.count.value'
+    ],
+    [
+      'empty options',
+      '//| id: bad\n//| inputs:\n//|   mode: { type: select, value: a, options: [] }',
+      'inputs.mode.options'
+    ],
+    [
+      'duplicate options',
+      '//| id: bad\n//| inputs:\n//|   mode: { type: radio, value: a, options: [a, a] }',
+      'inputs.mode.options[1].value'
+    ],
+    [
+      'missing option default',
+      '//| id: bad\n//| inputs:\n//|   mode: { type: select, value: b, options: [a] }',
+      'inputs.mode.value'
+    ],
     ['options on text', '//| id: bad\n//| inputs:\n//|   mode: { value: a, options: [a] }', 'inputs.mode.options'],
-    ['invalid option mapping', '//| id: bad\n//| inputs:\n//|   mode: { type: select, value: a, options: [{ label: A }] }', 'inputs.mode.options[0].value'],
-    ['unknown option field', '//| id: bad\n//| inputs:\n//|   mode: { type: select, value: a, options: [{ label: A, value: a, extra: true }] }', 'inputs.mode.options[0].extra'],
-    ['unknown input field', '//| id: bad\n//| inputs:\n//|   mode: { value: text, unknown: true }', 'inputs.mode.unknown']
+    [
+      'invalid option mapping',
+      '//| id: bad\n//| inputs:\n//|   mode: { type: select, value: a, options: [{ label: A }] }',
+      'inputs.mode.options[0].value'
+    ],
+    [
+      'unknown option field',
+      '//| id: bad\n//| inputs:\n//|   mode: { type: select, value: a, options: [{ label: A, value: a, extra: true }] }',
+      'inputs.mode.options[0].extra'
+    ],
+    [
+      'unknown input field',
+      '//| id: bad\n//| inputs:\n//|   mode: { value: text, unknown: true }',
+      'inputs.mode.unknown'
+    ]
   ])('reports strict metadata diagnostics for %s', (_name, metadata, fieldPath) => {
     const source = ['before', '```rust', metadata, 'println!("ok");', '```'].join('\n');
     const parsed = parseCellsFromMarkdown(source, 'content/docs/page.mdx');
 
     expect(parsed.cells).toEqual([]);
-    expect(parsed.diagnostics).toContainEqual(expect.objectContaining({
-      pagePath: 'content/docs/page.mdx',
-      fenceStartLine: 2,
-      fieldPath
-    }));
+    expect(parsed.diagnostics).toContainEqual(
+      expect.objectContaining({
+        pagePath: 'content/docs/page.mdx',
+        fenceStartLine: 2,
+        fieldPath
+      })
+    );
   });
 
   it('normalizes strict input defaults and option mappings', () => {
@@ -200,10 +262,43 @@ describe('doc runtime core', () => {
     expect(parsed.diagnostics).toEqual([]);
     expect(parsed.cells[0]).toMatchObject({ packages: ['matplotlib', 'pandas'] });
     expect(parsed.cells[0].inputs).toEqual([
-      { name: 'plain', type: 'text', label: 'plain', value: '', min: undefined, max: undefined, step: undefined, integer: false, options: [] },
-      { name: 'enabled', type: 'checkbox', label: 'enabled', value: false, min: undefined, max: undefined, step: undefined, integer: false, options: [] },
+      {
+        name: 'plain',
+        type: 'text',
+        label: 'plain',
+        value: '',
+        min: undefined,
+        max: undefined,
+        step: undefined,
+        integer: false,
+        options: []
+      },
+      {
+        name: 'enabled',
+        type: 'checkbox',
+        label: 'enabled',
+        value: false,
+        min: undefined,
+        max: undefined,
+        step: undefined,
+        integer: false,
+        options: []
+      },
       { name: 'count', type: 'number', label: 'count', value: 2, min: 1, max: 3, step: 1, integer: true, options: [] },
-      { name: 'mode', type: 'select', label: 'mode', value: 'b', min: undefined, max: undefined, step: undefined, integer: false, options: [{ label: 'a', value: 'a' }, { label: 'Bee', value: 'b' }] }
+      {
+        name: 'mode',
+        type: 'select',
+        label: 'mode',
+        value: 'b',
+        min: undefined,
+        max: undefined,
+        step: undefined,
+        integer: false,
+        options: [
+          { label: 'a', value: 'a' },
+          { label: 'Bee', value: 'b' }
+        ]
+      }
     ]);
   });
 
@@ -225,10 +320,18 @@ describe('doc runtime core', () => {
   });
 
   it('validates uniqueness and derives helper crates from manifests', () => {
-    expect(() => assertUniqueCellIds([{ id: 'one__a', pagePath: 'one' }, { id: 'two__a', pagePath: 'two' }])).not.toThrow();
-    expect(() => assertUniqueCellIds([{ id: 'page__a', pagePath: 'page' }, { id: 'page__a', pagePath: 'page' }])).toThrow(
-      'Scoped cell id'
-    );
+    expect(() =>
+      assertUniqueCellIds([
+        { id: 'one__a', pagePath: 'one' },
+        { id: 'two__a', pagePath: 'two' }
+      ])
+    ).not.toThrow();
+    expect(() =>
+      assertUniqueCellIds([
+        { id: 'page__a', pagePath: 'page' },
+        { id: 'page__a', pagePath: 'page' }
+      ])
+    ).toThrow('Scoped cell id');
 
     expect(() =>
       assertUniqueRustInputBindings([
@@ -268,16 +371,17 @@ describe('doc runtime core', () => {
       ])
     ).toThrow('both map to generated function "run_page_a_b"');
 
-    const crates = helperCratesFromManifests([
-      { content: '[package]\nname = "b-crate"\n', manifestPath: '/repo/crates/b/Cargo.toml' },
-      { content: '[package]\nname = "a-crate"\n', manifestPath: '/repo/crates/a/Cargo.toml' }
-    ], { rustCellsDir: '/repo/.oxiquill/rust-cells' });
+    const crates = helperCratesFromManifests(
+      [
+        { content: '[package]\nname = "b-crate"\n', manifestPath: '/repo/crates/b/Cargo.toml' },
+        { content: '[package]\nname = "a-crate"\n', manifestPath: '/repo/crates/a/Cargo.toml' }
+      ],
+      { rustCellsDir: '/repo/.oxiquill/rust-cells' }
+    );
 
     expect(Array.from(crates.keys())).toEqual(['a-crate', 'b-crate']);
     expect(crates.get('a-crate')).toEqual({ name: 'a-crate', relativePath: '../../crates/a' });
-    expect(helperCratesFromManifests([], { rustCellsDir: '/repo/.oxiquill/rust-cells' })).toEqual(
-      new Map()
-    );
+    expect(helperCratesFromManifests([], { rustCellsDir: '/repo/.oxiquill/rust-cells' })).toEqual(new Map());
     expect(packageNameFromCargoToml('[package]\nname = "doc-rust"\n', '/repo/crates/doc-rust/Cargo.toml')).toBe(
       'doc-rust'
     );
@@ -285,10 +389,13 @@ describe('doc runtime core', () => {
       'missing [package] name'
     );
     expect(() =>
-      helperCratesFromManifests([
-        { content: '[package]\nname = "same"\n', manifestPath: '/repo/crates/a/Cargo.toml' },
-        { content: '[package]\nname = "same"\n', manifestPath: '/repo/crates/b/Cargo.toml' }
-      ], { rustCellsDir: '/repo/.oxiquill/rust-cells' })
+      helperCratesFromManifests(
+        [
+          { content: '[package]\nname = "same"\n', manifestPath: '/repo/crates/a/Cargo.toml' },
+          { content: '[package]\nname = "same"\n', manifestPath: '/repo/crates/b/Cargo.toml' }
+        ],
+        { rustCellsDir: '/repo/.oxiquill/rust-cells' }
+      )
     ).toThrow('Duplicate helper crate');
   });
 

@@ -5,13 +5,7 @@ import {
   validateOutputArtifacts,
   type ValidatedImageArtifact
 } from '../../packages/oxiquill/src/lib/doc-runtime/output-artifact-validation';
-import {
-  chart,
-  echartsInit,
-  echartsUse,
-  mermaidInitialize,
-  mermaidRender
-} from './mocks/external-runtime';
+import { chart, echartsInit, echartsUse, mermaidInitialize, mermaidRender } from './mocks/external-runtime';
 
 type ManifestSnapshot = {
   cells: readonly CellManifest[];
@@ -48,11 +42,10 @@ vi.mock('../../packages/oxiquill/src/lib/doc-runtime/runtime-client', () => ({
 }));
 
 const { default: InteractiveCell } = await import('../../packages/oxiquill/src/components/doc-runtime/InteractiveCell');
-const {
-  default: MermaidDiagram,
-  getMermaidColorScheme
-} = await import('../../packages/oxiquill/src/components/doc-runtime/MermaidDiagram');
-const { default: OutputRenderer, imageArtifactSource } = await import('../../packages/oxiquill/src/components/doc-runtime/OutputRenderer');
+const { default: MermaidDiagram, getMermaidColorScheme } =
+  await import('../../packages/oxiquill/src/components/doc-runtime/MermaidDiagram');
+const { default: OutputRenderer, imageArtifactSource } =
+  await import('../../packages/oxiquill/src/components/doc-runtime/OutputRenderer');
 const { chartSpecToEChartsOptions } = await import('../../packages/oxiquill/src/components/doc-runtime/ChartOutput');
 const {
   default: TableOutput,
@@ -308,10 +301,12 @@ describe('InteractiveCell', () => {
       pending.push(deferred);
       return deferred.promise;
     });
-    setManifestCells([makeCell({
-      run: 'reactive',
-      inputs: [inputs.find((input) => input.name === 'label') as InputSpec]
-    })]);
+    setManifestCells([
+      makeCell({
+        run: 'reactive',
+        inputs: [inputs.find((input) => input.name === 'label') as InputSpec]
+      })
+    ]);
 
     render(<InteractiveCell cellId="cell-one" />);
     await waitFor(() => expect(pending).toHaveLength(1));
@@ -352,10 +347,12 @@ describe('InteractiveCell', () => {
       pending.push(deferred);
       return deferred.promise;
     });
-    setManifestCells([makeCell({
-      run: 'reactive',
-      inputs: [inputs.find((input) => input.name === 'label') as InputSpec]
-    })]);
+    setManifestCells([
+      makeCell({
+        run: 'reactive',
+        inputs: [inputs.find((input) => input.name === 'label') as InputSpec]
+      })
+    ]);
 
     render(<InteractiveCell cellId="cell-one" />);
     await waitFor(() => expect(pending).toHaveLength(1));
@@ -580,12 +577,17 @@ describe('MermaidDiagram', () => {
 
 describe('ChartOutput options', () => {
   it('maps supported chart specs to ECharts options', () => {
-    expect(chartSpecToEChartsOptions({
-      kind: 'line',
-      xLabel: 'n',
-      yLabel: 'x',
-      series: [{ name: 'a', points: [[0, 1]] }, { name: 'b', points: [[0, 2]] }]
-    })).toMatchObject({
+    expect(
+      chartSpecToEChartsOptions({
+        kind: 'line',
+        xLabel: 'n',
+        yLabel: 'x',
+        series: [
+          { name: 'a', points: [[0, 1]] },
+          { name: 'b', points: [[0, 2]] }
+        ]
+      })
+    ).toMatchObject({
       legend: { top: 4 },
       tooltip: { trigger: 'axis' },
       xAxis: { type: 'value', name: 'n' },
@@ -596,58 +598,73 @@ describe('ChartOutput options', () => {
       ]
     });
 
-    expect(chartSpecToEChartsOptions({
-      kind: 'scatter',
-      tooltip: true,
-      series: [{ points: [[0, 1]] }]
-    })).toMatchObject({
+    expect(
+      chartSpecToEChartsOptions({
+        kind: 'scatter',
+        tooltip: true,
+        series: [{ points: [[0, 1]] }]
+      })
+    ).toMatchObject({
       tooltip: { trigger: 'item' },
       series: [{ type: 'scatter', symbolSize: 6, data: [[0, 1]] }]
     });
 
-    expect(chartSpecToEChartsOptions({
-      kind: 'scatter',
-      legend: false,
-      tooltip: false,
-      series: [{ name: 'hidden', points: [[0, 1]] }]
-    })).toMatchObject({
+    expect(
+      chartSpecToEChartsOptions({
+        kind: 'scatter',
+        legend: false,
+        tooltip: false,
+        series: [{ name: 'hidden', points: [[0, 1]] }]
+      })
+    ).toMatchObject({
       legend: undefined,
       tooltip: undefined
     });
 
-    expect(chartSpecToEChartsOptions({
-      kind: 'bar',
-      categories: ['A', 'B'],
-      series: [{ values: [1, null] }]
-    })).toMatchObject({
+    expect(
+      chartSpecToEChartsOptions({
+        kind: 'bar',
+        categories: ['A', 'B'],
+        series: [{ values: [1, null] }]
+      })
+    ).toMatchObject({
       xAxis: { type: 'category', data: ['A', 'B'] },
       series: [{ type: 'bar', data: [1, null] }]
     });
 
-    expect(chartSpecToEChartsOptions({
-      kind: 'histogram',
-      bins: [[0, 1, 2], [1, 2, 3]]
-    })).toMatchObject({
+    expect(
+      chartSpecToEChartsOptions({
+        kind: 'histogram',
+        bins: [
+          [0, 1, 2],
+          [1, 2, 3]
+        ]
+      })
+    ).toMatchObject({
       xAxis: { type: 'category', data: ['0-1', '1-2'] },
       series: [{ type: 'bar', barCategoryGap: '8%', data: [2, 3] }]
     });
 
-    expect(chartSpecToEChartsOptions({
-      kind: 'area',
-      dataZoom: false,
-      series: [{ points: [[0, 1]] }]
-    })).toMatchObject({
+    expect(
+      chartSpecToEChartsOptions({
+        kind: 'area',
+        dataZoom: false,
+        series: [{ points: [[0, 1]] }]
+      })
+    ).toMatchObject({
       dataZoom: undefined,
       series: [{ type: 'line', areaStyle: { opacity: 0.18 }, data: [[0, 1]] }]
     });
 
-    expect(chartSpecToEChartsOptions({
-      kind: 'heatmap',
-      title: 'Heat',
-      xCategories: ['x'],
-      yCategories: ['y'],
-      data: [['x', 'y', 5]]
-    })).toMatchObject({
+    expect(
+      chartSpecToEChartsOptions({
+        kind: 'heatmap',
+        title: 'Heat',
+        xCategories: ['x'],
+        yCategories: ['y'],
+        data: [['x', 'y', 5]]
+      })
+    ).toMatchObject({
       title: { text: 'Heat' },
       xAxis: { type: 'category', data: ['x'] },
       yAxis: { type: 'category', data: ['y'] },
@@ -656,18 +673,22 @@ describe('ChartOutput options', () => {
       series: [{ type: 'heatmap', data: [['x', 'y', 5]] }]
     });
 
-    expect(chartSpecToEChartsOptions({
-      kind: 'unsupported',
-      series: []
-    } as unknown as Parameters<typeof chartSpecToEChartsOptions>[0])).toMatchObject({
+    expect(
+      chartSpecToEChartsOptions({
+        kind: 'unsupported',
+        series: []
+      } as unknown as Parameters<typeof chartSpecToEChartsOptions>[0])
+    ).toMatchObject({
       series: []
     });
 
-    expect(chartSpecToEChartsOptions({
-      kind: 'line',
-      legend: true,
-      series: [{ points: [[0, 1]] }]
-    })).toMatchObject({
+    expect(
+      chartSpecToEChartsOptions({
+        kind: 'line',
+        legend: true,
+        series: [{ points: [[0, 1]] }]
+      })
+    ).toMatchObject({
       legend: { top: 4 }
     });
   });
@@ -723,21 +744,33 @@ describe('OutputRenderer', () => {
   });
 
   it('builds data URLs for raw SVG and base64 image artifacts', () => {
-    expect(imageArtifactSource(validatedImage({
-      kind: 'image',
-      mime: 'image/svg+xml',
-      data: '<svg><text>plot</text></svg>'
-    }))).toBe('data:image/svg+xml;charset=utf-8,%3Csvg%3E%3Ctext%3Eplot%3C%2Ftext%3E%3C%2Fsvg%3E');
-    expect(imageArtifactSource(validatedImage({
-      kind: 'image',
-      mime: 'image/jpeg',
-      data: jpegBase64
-    }))).toBe(`data:image/jpeg;base64,${jpegBase64}`);
-    expect(imageArtifactSource(validatedImage({
-      kind: 'image',
-      mime: 'image/png',
-      data: `data:image/png;base64,${pngBase64}`
-    }))).toBe(`data:image/png;base64,${pngBase64}`);
+    expect(
+      imageArtifactSource(
+        validatedImage({
+          kind: 'image',
+          mime: 'image/svg+xml',
+          data: '<svg><text>plot</text></svg>'
+        })
+      )
+    ).toBe('data:image/svg+xml;charset=utf-8,%3Csvg%3E%3Ctext%3Eplot%3C%2Ftext%3E%3C%2Fsvg%3E');
+    expect(
+      imageArtifactSource(
+        validatedImage({
+          kind: 'image',
+          mime: 'image/jpeg',
+          data: jpegBase64
+        })
+      )
+    ).toBe(`data:image/jpeg;base64,${jpegBase64}`);
+    expect(
+      imageArtifactSource(
+        validatedImage({
+          kind: 'image',
+          mime: 'image/png',
+          data: `data:image/png;base64,${pngBase64}`
+        })
+      )
+    ).toBe(`data:image/png;base64,${pngBase64}`);
   });
 
   it('isolates renderer failures and resets the boundary for replacement output', async () => {
@@ -745,30 +778,38 @@ describe('OutputRenderer', () => {
       throw new Error('chart renderer failed');
     });
     const { rerender } = render(
-      <OutputRenderer outputs={validateOutputArtifacts([
-        { kind: 'text', stream: 'stdout', content: 'before' },
-        { kind: 'chart', spec: { kind: 'line', series: [] } },
-        { kind: 'text', stream: 'stdout', content: 'after' }
-      ])} />
+      <OutputRenderer
+        outputs={validateOutputArtifacts([
+          { kind: 'text', stream: 'stdout', content: 'before' },
+          { kind: 'chart', spec: { kind: 'line', series: [] } },
+          { kind: 'text', stream: 'stdout', content: 'after' }
+        ])}
+      />
     );
 
     await waitFor(() => expect(screen.getByText(/chart renderer failed/)).toBeVisible());
     expect(screen.getByText('before')).toBeVisible();
     expect(screen.getByText('after')).toBeVisible();
 
-    rerender(<OutputRenderer outputs={validateOutputArtifacts([
-      { kind: 'text', stream: 'stdout', content: 'replacement' }
-    ])} />);
+    rerender(
+      <OutputRenderer outputs={validateOutputArtifacts([{ kind: 'text', stream: 'stdout', content: 'replacement' }])} />
+    );
     await waitFor(() => expect(screen.getByText('replacement')).toBeVisible());
     expect(screen.queryByText(/chart renderer failed/)).not.toBeInTheDocument();
   });
 
   it('shows truncation without hiding the validated artifact', () => {
-    render(<OutputRenderer outputs={validateOutputArtifacts([{
-      kind: 'text',
-      stream: 'stdout',
-      content: 'x'.repeat(1024 * 1024 + 1)
-    }])} />);
+    render(
+      <OutputRenderer
+        outputs={validateOutputArtifacts([
+          {
+            kind: 'text',
+            stream: 'stdout',
+            content: 'x'.repeat(1024 * 1024 + 1)
+          }
+        ])}
+      />
+    );
 
     expect(screen.getByTestId('run-output')).toBeVisible();
     expect(screen.getByTestId('artifact-truncated')).toHaveTextContent('Output truncated.');
@@ -839,30 +880,40 @@ describe('TableOutput', () => {
       value: { writeText }
     });
     const { rerender } = render(
-      <TableOutput table={{
-        kind: 'table',
-        columns: [{ key: 'value', label: 'Value' }],
-        rows: [['safe']]
-      }} />
+      <TableOutput
+        table={{
+          kind: 'table',
+          columns: [{ key: 'value', label: 'Value' }],
+          rows: [['safe']]
+        }}
+      />
     );
 
     fireEvent.click(screen.getByTestId('table-copy-csv'));
     await waitFor(() => expect(screen.getByRole('alert')).toHaveTextContent('permission denied'));
 
-    rerender(<TableOutput table={{
-      kind: 'table',
-      columns: [{ key: 'value', label: 'Value' }],
-      rows: [[1, 2]]
-    }} />);
+    rerender(
+      <TableOutput
+        table={{
+          kind: 'table',
+          columns: [{ key: 'value', label: 'Value' }],
+          rows: [[1, 2]]
+        }}
+      />
+    );
     fireEvent.click(screen.getByTestId('table-copy-csv'));
     await waitFor(() => expect(screen.getByRole('alert')).toHaveTextContent('Row 1 has 2 cells; expected 1.'));
 
     Object.defineProperty(globalThis.navigator, 'clipboard', { configurable: true, value: undefined });
-    rerender(<TableOutput table={{
-      kind: 'table',
-      columns: [{ key: 'value', label: 'Value' }],
-      rows: [['safe again']]
-    }} />);
+    rerender(
+      <TableOutput
+        table={{
+          kind: 'table',
+          columns: [{ key: 'value', label: 'Value' }],
+          rows: [['safe again']]
+        }}
+      />
+    );
     fireEvent.click(screen.getByTestId('table-copy-csv'));
     expect(screen.getByRole('alert')).toHaveTextContent('Clipboard access is unavailable.');
   });
@@ -884,13 +935,42 @@ describe('TableOutput', () => {
   });
 
   it('sorts and formats table values without mutating rows', () => {
-    const rows = [[2, 'b'], [null, 'z'], [1, 'a'], [undefined, 'y']];
+    const rows = [
+      [2, 'b'],
+      [null, 'z'],
+      [1, 'a'],
+      [undefined, 'y']
+    ];
 
-    expect(sortRows(rows, { columnIndex: 0, direction: 'asc' })).toEqual([[1, 'a'], [2, 'b'], [null, 'z'], [undefined, 'y']]);
-    expect(sortRows(rows, { columnIndex: 1, direction: 'desc' })).toEqual([[null, 'z'], [undefined, 'y'], [2, 'b'], [1, 'a']]);
-    expect(sortRows([[1, 'first'], [1, 'second']], { columnIndex: 0, direction: 'desc' })).toEqual([[1, 'first'], [1, 'second']]);
+    expect(sortRows(rows, { columnIndex: 0, direction: 'asc' })).toEqual([
+      [1, 'a'],
+      [2, 'b'],
+      [null, 'z'],
+      [undefined, 'y']
+    ]);
+    expect(sortRows(rows, { columnIndex: 1, direction: 'desc' })).toEqual([
+      [null, 'z'],
+      [undefined, 'y'],
+      [2, 'b'],
+      [1, 'a']
+    ]);
+    expect(
+      sortRows(
+        [
+          [1, 'first'],
+          [1, 'second']
+        ],
+        { columnIndex: 0, direction: 'desc' }
+      )
+    ).toEqual([
+      [1, 'first'],
+      [1, 'second']
+    ]);
     expect(sortRows([[true], [false]], { columnIndex: 0, direction: 'asc' })).toEqual([[false], [true]]);
-    expect(visibleRows(rows, 1, 2)).toEqual([[1, 'a'], [undefined, 'y']]);
+    expect(visibleRows(rows, 1, 2)).toEqual([
+      [1, 'a'],
+      [undefined, 'y']
+    ]);
     expect(rows[0]).toEqual([2, 'b']);
     expect(formatTableCell(1234.5678)).toBe('1,234.57');
     expect(formatTableCell(Number.POSITIVE_INFINITY)).toBe('Infinity');

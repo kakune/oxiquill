@@ -1,14 +1,7 @@
 import { spawn } from 'node:child_process';
-import {
-  createOxiquillPaths,
-  pathFromUrl,
-  pathInUrl
-} from '../../config/paths.mjs';
+import { createOxiquillPaths, pathFromUrl, pathInUrl } from '../../config/paths.mjs';
 import { postprocessRustWasm } from '../postprocess-rust-wasm.mjs';
-import {
-  defaultFileSystem,
-  writeIfChanged
-} from './file-system.mjs';
+import { defaultFileSystem, writeIfChanged } from './file-system.mjs';
 import { hashText } from './hashing.mjs';
 
 export const HASKELL_WASI_COMPILER = 'wasm32-wasi-ghc';
@@ -50,17 +43,21 @@ export async function buildRustWasm({
 }) {
   const resolvedPaths = paths ?? createOxiquillPaths({ workspaceRoot: root });
   const modeFlag = mode === 'build' ? '--release' : '--dev';
-  await runCommand('wasm-pack', [
-    'build',
-    pathFromUrl(resolvedPaths.rustCellsDir),
-    '--target',
-    'web',
-    modeFlag,
-    '--out-dir',
-    pathFromUrl(resolvedPaths.rustWasmPublicDir),
-    '--out-name',
-    'doc_rust_cells'
-  ], { cwd: pathFromUrl(resolvedPaths.workspaceRoot) });
+  await runCommand(
+    'wasm-pack',
+    [
+      'build',
+      pathFromUrl(resolvedPaths.rustCellsDir),
+      '--target',
+      'web',
+      modeFlag,
+      '--out-dir',
+      pathFromUrl(resolvedPaths.rustWasmPublicDir),
+      '--out-name',
+      'doc_rust_cells'
+    ],
+    { cwd: pathFromUrl(resolvedPaths.workspaceRoot) }
+  );
   await postprocess({ rustWasmDir: pathFromUrl(resolvedPaths.rustWasmPublicDir) });
 }
 
@@ -86,16 +83,20 @@ export async function buildHaskellWasm({
   ]);
 
   try {
-    await runCommand(compiler, [
-      optimizationFlag,
-      '-odir',
-      buildDir,
-      '-hidir',
-      buildDir,
-      pathInUrl(resolvedPaths.haskellCellsDir, 'Main.hs'),
-      '-o',
-      pathInUrl(resolvedPaths.haskellWasmPublicDir, HASKELL_WASM_FILE)
-    ], { cwd: pathFromUrl(resolvedPaths.workspaceRoot) });
+    await runCommand(
+      compiler,
+      [
+        optimizationFlag,
+        '-odir',
+        buildDir,
+        '-hidir',
+        buildDir,
+        pathInUrl(resolvedPaths.haskellCellsDir, 'Main.hs'),
+        '-o',
+        pathInUrl(resolvedPaths.haskellWasmPublicDir, HASKELL_WASM_FILE)
+      ],
+      { cwd: pathFromUrl(resolvedPaths.workspaceRoot) }
+    );
   } catch (error) {
     const buildError = normalizeHaskellBuildError(error, compiler);
     if (!tolerateFailure) throw buildError;
@@ -123,11 +124,7 @@ export function resolveHaskellWasiCompiler(environment = process.env) {
   return override || HASKELL_WASI_COMPILER;
 }
 
-export function createHaskellRuntimeStatus({
-  haskellFingerprint = '',
-  message = '',
-  status
-}) {
+export function createHaskellRuntimeStatus({ haskellFingerprint = '', message = '', status }) {
   return {
     status,
     haskellFingerprintHash: hashText(haskellFingerprint),
@@ -147,12 +144,7 @@ function normalizeHaskellBuildError(error, command) {
   return new HaskellWasmBuildError(command, error);
 }
 
-async function markHaskellRuntimeUnavailable({
-  error,
-  fileSystem,
-  haskellFingerprint,
-  paths
-}) {
+async function markHaskellRuntimeUnavailable({ error, fileSystem, haskellFingerprint, paths }) {
   await Promise.all([
     fileSystem.rm(pathInUrl(paths.haskellWasmPublicDir, HASKELL_WASM_FILE), { force: true }),
     writeHaskellRuntimeStatus({
@@ -175,13 +167,7 @@ function haskellUnavailableMessage(error) {
     : 'rerun pnpm wasm:dev after fixing the Haskell runtime build.';
 }
 
-async function writeHaskellRuntimeStatus({
-  fileSystem,
-  haskellFingerprint,
-  message,
-  paths,
-  status
-}) {
+async function writeHaskellRuntimeStatus({ fileSystem, haskellFingerprint, message, paths, status }) {
   return writeIfChanged(
     pathInUrl(paths.haskellWasmPublicDir, HASKELL_RUNTIME_STATUS_FILE),
     generateHaskellRuntimeStatusJson(createHaskellRuntimeStatus({ haskellFingerprint, message, status })),
@@ -210,7 +196,8 @@ function runCommandWithInheritedStdio(command, args, options) {
 }
 
 function wasmPackEnv() {
-  const { NODE_PATH, ...env } = process.env;
+  const env = { ...process.env };
+  delete env.NODE_PATH;
   return env;
 }
 /* v8 ignore stop */

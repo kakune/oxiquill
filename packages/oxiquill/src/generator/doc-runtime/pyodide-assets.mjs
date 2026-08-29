@@ -1,11 +1,7 @@
 import path from 'node:path';
 import { pathInUrl } from '../../config/paths.mjs';
 import { vendoredPyodidePackageRoots } from './constants.mjs';
-import {
-  copyFileIfChanged,
-  defaultFileSystem,
-  hasPackageContent
-} from './file-system.mjs';
+import { copyFileIfChanged, defaultFileSystem, hasPackageContent } from './file-system.mjs';
 import { hashBytes } from './hashing.mjs';
 
 export async function copyPyodideAssets({ fetchPackage, fileSystem = defaultFileSystem, paths }) {

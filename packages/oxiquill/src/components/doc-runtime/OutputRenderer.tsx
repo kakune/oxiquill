@@ -18,11 +18,7 @@ export default function OutputRenderer({ outputs }: OutputRendererProps) {
   return (
     <>
       {outputs.map((output, index) => (
-        <ArtifactErrorBoundary
-          key={artifactKey(output, index)}
-          index={output.index}
-          resetKey={output}
-        >
+        <ArtifactErrorBoundary key={artifactKey(output, index)} index={output.index} resetKey={output}>
           <ArtifactOutput output={output} />
         </ArtifactErrorBoundary>
       ))}
@@ -55,19 +51,23 @@ function TextOutput({ output }: { output: TextArtifact }) {
   const isError = output.stream === 'stderr';
   const className = isError ? 'error-output' : 'run-output';
 
-  return <OutputWithTruncation truncated={output.truncated}>
-    <pre class={className} data-testid={isError ? undefined : 'run-output'}>
-      <code>{output.content}</code>
-    </pre>
-  </OutputWithTruncation>;
+  return (
+    <OutputWithTruncation truncated={output.truncated}>
+      <pre class={className} data-testid={isError ? undefined : 'run-output'}>
+        <code>{output.content}</code>
+      </pre>
+    </OutputWithTruncation>
+  );
 }
 
 function JsonOutput({ output }: { output: ValidatedJsonArtifact }) {
-  return <OutputWithTruncation truncated={output.truncated}>
-    <pre class="run-output" data-testid="value-output">
-      <code>{output.formattedValue}</code>
-    </pre>
-  </OutputWithTruncation>;
+  return (
+    <OutputWithTruncation truncated={output.truncated}>
+      <pre class="run-output" data-testid="value-output">
+        <code>{output.formattedValue}</code>
+      </pre>
+    </OutputWithTruncation>
+  );
 }
 
 function ImageOutput({ output }: { output: ValidatedImageArtifact }) {
@@ -105,7 +105,11 @@ function OutputWithTruncation({ children, truncated }: { children: ComponentChil
   return (
     <div class="doc-output-artifact">
       {children}
-      {truncated ? <p class="doc-output-artifact__notice" data-testid="artifact-truncated">Output truncated.</p> : null}
+      {truncated ? (
+        <p class="doc-output-artifact__notice" data-testid="artifact-truncated">
+          Output truncated.
+        </p>
+      ) : null}
     </div>
   );
 }
@@ -115,7 +119,5 @@ export function imageArtifactSource(output: ValidatedImageArtifact): string {
 }
 
 function artifactKey(output: ValidatedArtifactResult, index: number): string {
-  return output.status === 'valid' && output.artifact.id
-    ? `${output.artifact.id}:${index}`
-    : String(index);
+  return output.status === 'valid' && output.artifact.id ? `${output.artifact.id}:${index}` : String(index);
 }

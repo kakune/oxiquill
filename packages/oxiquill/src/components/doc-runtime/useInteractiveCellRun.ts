@@ -2,10 +2,7 @@ import { useEffect, useMemo, useRef, useState } from 'preact/hooks';
 import { initialValues } from '../../lib/doc-runtime/interactive-cell-model';
 import { runInteractiveCell } from '../../lib/doc-runtime/runtime-client';
 import type { NormalizedCellExecutionResult } from '../../lib/doc-runtime/output-artifacts';
-import type {
-  CellManifest,
-  InputValues
-} from '../../lib/doc-runtime/types';
+import type { CellManifest, InputValues } from '../../lib/doc-runtime/types';
 
 type InputValue = InputValues[string];
 

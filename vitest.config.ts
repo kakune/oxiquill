@@ -10,7 +10,10 @@ export default defineConfig({
       'echarts/components': testFile('./tests/unit/mocks/echarts-modules.ts'),
       'echarts/core': testFile('./tests/unit/mocks/echarts-core.ts'),
       'echarts/renderers': testFile('./tests/unit/mocks/echarts-modules.ts'),
-      mermaid: testFile('./tests/unit/mocks/mermaid.ts')
+      mermaid: testFile('./tests/unit/mocks/mermaid.ts'),
+      'virtual:oxiquill/cells': testFile('./tests/unit/mocks/virtual-runtime.ts'),
+      'virtual:oxiquill/runtime-version': testFile('./tests/unit/mocks/virtual-runtime.ts'),
+      'virtual:oxiquill/rust-wasm': testFile('./tests/unit/mocks/virtual-runtime.ts')
     }
   },
   test: {
@@ -21,24 +24,8 @@ export default defineConfig({
     coverage: {
       provider: 'v8',
       reporter: ['text', 'json-summary'],
-      include: [
-        'packages/oxiquill/src/generator/doc-runtime-core.mjs',
-        'packages/oxiquill/src/generator/doc-runtime-service.mjs',
-        'packages/oxiquill/src/generator/doc-runtime-watch-core.mjs',
-        'packages/oxiquill/src/generator/license-notices.mjs',
-        'packages/oxiquill/src/generator/run-helper-cargo.mjs',
-        'packages/oxiquill/src/components/doc-runtime/**/*.tsx',
-        'packages/oxiquill/src/lib/doc-runtime/**/*.ts',
-        'packages/oxiquill/src/lib/doc-runtime/**/*.mjs'
-      ],
-      exclude: [
-        '**/.oxiquill/**',
-        'packages/oxiquill/src/lib/doc-runtime/haskell-worker.ts',
-        'packages/oxiquill/src/lib/doc-runtime/manifest.ts',
-        'packages/oxiquill/src/lib/doc-runtime/python-worker.ts',
-        'packages/oxiquill/src/lib/doc-runtime/rust-worker.ts',
-        'packages/oxiquill/src/lib/doc-runtime/types.ts'
-      ],
+      include: ['packages/oxiquill/src/**/*.{mjs,ts,tsx}'],
+      exclude: ['packages/oxiquill/src/**/*.d.ts', 'packages/oxiquill/src/lib/doc-runtime/types.ts'],
       thresholds: {
         lines: 85,
         functions: 85,

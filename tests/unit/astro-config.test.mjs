@@ -82,9 +82,7 @@ async function resolveWithVite(update, ids) {
 
   try {
     const pluginContainer = server.environments?.client?.pluginContainer ?? server.pluginContainer;
-    const resolvedEntries = await Promise.all(
-      ids.map(async (id) => [id, (await pluginContainer.resolveId(id))?.id])
-    );
+    const resolvedEntries = await Promise.all(ids.map(async (id) => [id, (await pluginContainer.resolveId(id))?.id]));
 
     return Object.fromEntries(resolvedEntries);
   } finally {
@@ -202,7 +200,7 @@ describe('defineOxiquillConfig', () => {
     expect(normalizedAllow.some((entry) => entry.includes('node_modules/.pnpm/aria-query'))).toBe(true);
   });
 
-  it('aliases Preact exports needed by Astro Preact dependency optimization', () => {
+  it('aliases Preact when the workspace does not expose a direct install', () => {
     const config = defineOxiquillConfig({
       sidebar: [],
       title: 'Docs'
@@ -218,22 +216,33 @@ describe('defineOxiquillConfig', () => {
     }
   });
 
+  it('shares a directly installed workspace Preact runtime during SSR', () => {
+    const config = defineOxiquillConfig({
+      sidebar: [],
+      title: 'Docs'
+    });
+
+    const update = runConfigSetup(config, new URL('../../', import.meta.url));
+
+    for (const id of preactExportSpecifiers) {
+      expect(aliasReplacementFor(update.vite.resolve.alias, id), id).toBeUndefined();
+    }
+  });
+
   it('transforms installed Oxiquill TSX with the Preact JSX runtime', async () => {
     const config = defineOxiquillConfig({ sidebar: [], title: 'Docs' });
     const update = runConfigSetup(config, linkedConsumerRoot);
     const plugin = update.vite.plugins.find((entry) => entry.name === 'oxiquill-preact-jsx');
-    const componentPath = fileURLToPath(new URL(
-      '../../packages/oxiquill/src/components/doc-runtime/InteractiveCell.tsx',
-      import.meta.url
-    ));
+    const componentPath = fileURLToPath(
+      new URL('../../packages/oxiquill/src/components/doc-runtime/InteractiveCell.tsx', import.meta.url)
+    );
 
     const transformed = await plugin.transform('export default () => <section>ok</section>;', componentPath);
     expect(transformed.code).toContain('preact/jsx-runtime');
-    await expect(plugin.transform('export default () => <div />;', '/consumer/Component.tsx'))
-      .resolves.toBeUndefined();
+    await expect(plugin.transform('export default () => <div />;', '/consumer/Component.tsx')).resolves.toBeUndefined();
   });
 
-  it('keeps Oxiquill Preact runtime dependencies bundled for dev SSR', () => {
+  it('bundles the Astro integration while sharing the Preact SSR runtime', () => {
     const config = defineOxiquillConfig({
       sidebar: [],
       title: 'Docs'
@@ -241,15 +250,9 @@ describe('defineOxiquillConfig', () => {
 
     const update = runConfigSetup(config, linkedConsumerRoot);
 
-    expect(update.vite.ssr.noExternal).toEqual(expect.arrayContaining([
-      '@astrojs/preact',
-      'preact',
-      'preact-render-to-string'
-    ]));
-    expect(update.vite.resolve.dedupe).toEqual(expect.arrayContaining([
-      '@preact/signals',
-      'preact'
-    ]));
+    expect(update.vite.ssr.noExternal).toEqual(expect.arrayContaining(['@astrojs/preact']));
+    expect(update.vite.ssr.noExternal).not.toEqual(expect.arrayContaining(['preact', 'preact-render-to-string']));
+    expect(update.vite.resolve.dedupe).toEqual(expect.arrayContaining(['@preact/signals', 'preact']));
   });
 
   it('merges consumer Vite SSR and dedupe settings with Oxiquill defaults', () => {
@@ -271,18 +274,12 @@ describe('defineOxiquillConfig', () => {
     const update = runConfigSetup(config, linkedConsumerRoot);
 
     expect(update.vite.ssr.external).toEqual(['external-runtime']);
-    expect(update.vite.ssr.noExternal).toEqual(expect.arrayContaining([
-      'consumer-package',
-      consumerNoExternal,
-      '@astrojs/preact',
-      'preact',
-      'preact-render-to-string'
-    ]));
-    expect(update.vite.resolve.dedupe).toEqual(expect.arrayContaining([
-      'consumer-runtime',
-      '@preact/signals',
-      'preact'
-    ]));
+    expect(update.vite.ssr.noExternal).toEqual(
+      expect.arrayContaining(['consumer-package', consumerNoExternal, '@astrojs/preact'])
+    );
+    expect(update.vite.resolve.dedupe).toEqual(
+      expect.arrayContaining(['consumer-runtime', '@preact/signals', 'preact'])
+    );
   });
 
   it('normalizes singular consumer SSR noExternal entries when merging Oxiquill defaults', () => {
@@ -297,12 +294,7 @@ describe('defineOxiquillConfig', () => {
 
       const update = runConfigSetup(config, linkedConsumerRoot);
 
-      expect(update.vite.ssr.noExternal).toEqual(expect.arrayContaining([
-        noExternal,
-        '@astrojs/preact',
-        'preact',
-        'preact-render-to-string'
-      ]));
+      expect(update.vite.ssr.noExternal).toEqual(expect.arrayContaining([noExternal, '@astrojs/preact']));
     }
   });
 

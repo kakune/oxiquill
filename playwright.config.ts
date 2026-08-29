@@ -14,8 +14,6 @@ export default defineConfig({
   use: {
     baseURL: 'http://127.0.0.1:4322',
     trace: 'on-first-retry',
-    ...(chromiumExecutablePath
-      ? { launchOptions: { executablePath: chromiumExecutablePath } }
-      : {})
+    ...(chromiumExecutablePath ? { launchOptions: { executablePath: chromiumExecutablePath } } : {})
   }
 });

@@ -1,10 +1,6 @@
 import path from 'node:path';
 import { createHighlighter } from 'shiki';
-import {
-  createOxiquillPaths,
-  pathFromUrl,
-  pathInUrl
-} from '../config/paths.mjs';
+import { createOxiquillPaths, pathFromUrl, pathInUrl } from '../config/paths.mjs';
 import {
   assertUniqueCellIds,
   assertUniqueHaskellFunctionNames,
@@ -20,39 +16,17 @@ import {
   parseCellsFromMarkdown,
   sourceThemes
 } from './doc-runtime-core.mjs';
-import {
-  throwInteractiveCellDiagnostics,
-  validateCellDependencies
-} from '../lib/doc-runtime/cell-authoring.mjs';
-import {
-  defaultFileSystem,
-  listFiles,
-  writeIfChanged
-} from './doc-runtime/file-system.mjs';
+import { throwInteractiveCellDiagnostics, validateCellDependencies } from '../lib/doc-runtime/cell-authoring.mjs';
+import { defaultFileSystem, listFiles, writeIfChanged } from './doc-runtime/file-system.mjs';
 import { listHelperCrates } from './doc-runtime/helper-crate-service.mjs';
 import { normalizePath } from './doc-runtime/path-utils.mjs';
 import { copyPyodideAssets } from './doc-runtime/pyodide-assets.mjs';
 import { syncLicenseArtifacts } from './license-notices.mjs';
-import {
-  createRuntimeVersion,
-  generateRuntimeVersionModule,
-  summarizeCells
-} from './doc-runtime/runtime-summary.mjs';
+import { createRuntimeVersion, generateRuntimeVersionModule, summarizeCells } from './doc-runtime/runtime-summary.mjs';
 
-export {
-  copyFileIfChanged,
-  listFiles,
-  writeIfChanged
-} from './doc-runtime/file-system.mjs';
-export {
-  listHelperCrates,
-  readHelperManifests
-} from './doc-runtime/helper-crate-service.mjs';
-export {
-  hashBytes,
-  hashText,
-  stableFingerprint
-} from './doc-runtime/hashing.mjs';
+export { copyFileIfChanged, listFiles, writeIfChanged } from './doc-runtime/file-system.mjs';
+export { listHelperCrates, readHelperManifests } from './doc-runtime/helper-crate-service.mjs';
+export { hashBytes, hashText, stableFingerprint } from './doc-runtime/hashing.mjs';
 export {
   copyPyodideAssets,
   copyVendoredPyodidePackages,
@@ -89,9 +63,10 @@ export {
 } from './license-notices.mjs';
 
 export function createDocRuntimePaths(rootOrOptions = process.cwd()) {
-  const options = typeof rootOrOptions === 'object' && !(rootOrOptions instanceof URL)
-    ? rootOrOptions
-    : { workspaceRoot: rootOrOptions };
+  const options =
+    typeof rootOrOptions === 'object' && !(rootOrOptions instanceof URL)
+      ? rootOrOptions
+      : { workspaceRoot: rootOrOptions };
 
   return createOxiquillPaths(options);
 }

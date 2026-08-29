@@ -8,13 +8,7 @@ import starlight from '@astrojs/starlight';
 import rehypeKatex from 'rehype-katex';
 import remarkMath from 'remark-math';
 import { mergeAlias, transformWithOxc } from 'vite';
-import type {
-  AstroIntegration,
-  AstroUserConfig,
-  FontProvider,
-  Locales,
-  SessionDriverConfig
-} from 'astro';
+import type { AstroIntegration, AstroUserConfig, FontProvider, Locales, SessionDriverConfig } from 'astro';
 import type { Options as PreactIntegrationOptions } from '@astrojs/preact';
 import type { StarlightUserConfig } from '@astrojs/starlight/types';
 import type { Alias, Plugin, PluginOption, UserConfig as ViteUserConfig } from 'vite';
@@ -61,12 +55,7 @@ type ViteWorkerPlugins = PluginOption[] | (() => PluginOption[]);
 type DocRuntimeContext = Awaited<ReturnType<typeof createDocRuntimeContext>>;
 type BundledModuleCollector = ReturnType<typeof createBundledModuleCollector>;
 
-const frameworkPackageNames = [
-  'astro',
-  '@astrojs/markdown-remark',
-  '@astrojs/preact',
-  '@astrojs/starlight'
-];
+const frameworkPackageNames = ['astro', '@astrojs/markdown-remark', '@astrojs/preact', '@astrojs/starlight'];
 const viteManagedPackageNames = [
   ...frameworkPackageNames,
   '@preact/signals',
@@ -77,8 +66,6 @@ const viteManagedPackageNames = [
   'html-escaper',
   'katex',
   'mermaid',
-  'preact',
-  'preact-render-to-string',
   'pyodide'
 ];
 const viteAliasedPackageNames = [
@@ -90,15 +77,8 @@ const viteAliasedPackageNames = [
   'axobject-query',
   'html-escaper'
 ];
-const viteSsrNoExternalPackageNames = [
-  '@astrojs/preact',
-  'preact',
-  'preact-render-to-string'
-];
-const viteResolveDedupePackageNames = [
-  '@preact/signals',
-  'preact'
-];
+const viteSsrNoExternalPackageNames = ['@astrojs/preact'];
+const viteResolveDedupePackageNames = ['@preact/signals', 'preact'];
 
 export interface OxiquillFrameworkOptions {
   preact?: PreactIntegrationFactory;
@@ -124,9 +104,9 @@ export interface OxiquillIntegrationOptions {
   vite?: ViteUserConfig;
 }
 
-const createDocRuntimeContextForPaths = createDocRuntimeContext as unknown as (
-  options: { paths: OxiquillPaths }
-) => Promise<DocRuntimeContext>;
+const createDocRuntimeContextForPaths = createDocRuntimeContext as unknown as (options: {
+  paths: OxiquillPaths;
+}) => Promise<DocRuntimeContext>;
 
 export function defineOxiquillConfig(options: OxiquillConfig = {}): BaseAstroUserConfig {
   const {
@@ -268,11 +248,7 @@ function createStarlightOptions(options: Partial<StarlightUserConfig>): Starligh
     title,
     description,
     ...rest,
-    customCss: [
-      'oxiquill/styles/katex.css',
-      'oxiquill/styles/custom.css',
-      ...customCss
-    ],
+    customCss: ['oxiquill/styles/katex.css', 'oxiquill/styles/custom.css', ...customCss],
     components: {
       PageFrame: 'oxiquill/components/starlight/PageFrame',
       ...components
@@ -280,11 +256,7 @@ function createStarlightOptions(options: Partial<StarlightUserConfig>): Starligh
   };
 }
 
-function mergeMarkdownConfig(
-  base: BaseAstroUserConfig['base'],
-  paths: OxiquillPaths,
-  markdown: AstroMarkdownConfig
-) {
+function mergeMarkdownConfig(base: BaseAstroUserConfig['base'], paths: OxiquillPaths, markdown: AstroMarkdownConfig) {
   const {
     gfm,
     processor,
@@ -299,22 +271,21 @@ function mergeMarkdownConfig(
 
   return {
     ...markdownRest,
-    processor: processor ?? unified({
-      gfm,
-      rehypePlugins: [
-        rehypeKatex,
-        ...rehypePlugins
-      ],
-      remarkPlugins: [
-        remarkMath,
-        [remarkPublicAssetBase, { base }],
-        [remarkInteractiveCells, { root: pathFromUrl(paths.workspaceRoot) }],
-        remarkMermaidDiagrams,
-        ...remarkPlugins
-      ],
-      remarkRehype,
-      smartypants
-    }),
+    processor:
+      processor ??
+      unified({
+        gfm,
+        rehypePlugins: [rehypeKatex, ...rehypePlugins],
+        remarkPlugins: [
+          remarkMath,
+          [remarkPublicAssetBase, { base }],
+          [remarkInteractiveCells, { root: pathFromUrl(paths.workspaceRoot) }],
+          remarkMermaidDiagrams,
+          ...remarkPlugins
+        ],
+        remarkRehype,
+        smartypants
+      }),
     syntaxHighlight: {
       ...syntaxHighlightOptions,
       type: syntaxHighlightOptions.type ?? 'shiki',
@@ -403,17 +374,12 @@ function oxiquillPreactJsxPlugin(paths: OxiquillPaths): Plugin {
   };
 }
 
-function bundledModuleCollectorPlugin(
-  collector: BundledModuleCollector,
-  source: 'main' | 'worker'
-): Plugin {
+function bundledModuleCollectorPlugin(collector: BundledModuleCollector, source: 'main' | 'worker'): Plugin {
   return {
     name: `oxiquill-license-modules-${source}`,
     generateBundle(_options, bundle) {
       const browserBundle = Object.fromEntries(
-        Object.entries(bundle).filter(([, output]) =>
-          output.type === 'chunk' && output.fileName.endsWith('.js')
-        )
+        Object.entries(bundle).filter(([, output]) => output.type === 'chunk' && output.fileName.endsWith('.js'))
       );
       collector.add(source, collectBundleModuleIds(browserBundle));
     }
@@ -462,9 +428,11 @@ function oxiquillServeAllow(paths: OxiquillPaths): string[] {
 
 function oxiquillDependencyAliases(paths: OxiquillPaths): Alias[] {
   const requires = dependencyRequireContexts(paths);
+  const workspacePreactPackage = pathInUrl(paths.workspaceRoot, 'node_modules', 'preact', 'package.json');
   const aliases: Alias[] = [];
 
   for (const packageName of viteAliasedPackageNames) {
+    if (packageName === 'preact' && existsSync(workspacePreactPackage)) continue;
     aliases.push(...resolvePackageExportAliases(requires, packageName));
   }
 
@@ -730,16 +698,10 @@ function mergeServerFsAllow(allow: string[] | undefined, additions: string[]): s
 type SsrNoExternal = NonNullable<NonNullable<ViteUserConfig['ssr']>['noExternal']>;
 type SsrNoExternalEntry = string | RegExp;
 
-function mergeSsrNoExternal(
-  noExternal: SsrNoExternal | undefined,
-  additions: SsrNoExternalEntry[]
-): SsrNoExternal {
+function mergeSsrNoExternal(noExternal: SsrNoExternal | undefined, additions: SsrNoExternalEntry[]): SsrNoExternal {
   if (noExternal === true) return true;
 
-  return uniqueSsrNoExternalEntries([
-    ...ssrNoExternalEntries(noExternal),
-    ...additions
-  ]);
+  return uniqueSsrNoExternalEntries([...ssrNoExternalEntries(noExternal), ...additions]);
 }
 
 function ssrNoExternalEntries(noExternal: SsrNoExternal | undefined): SsrNoExternalEntry[] {

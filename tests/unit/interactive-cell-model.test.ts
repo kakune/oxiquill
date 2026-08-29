@@ -21,10 +21,7 @@ const textInput: InputSpec = {
 describe('interactive cell model', () => {
   it('builds initial values from input specs', () => {
     expect(
-      initialValues([
-        textInput,
-        { name: 'enabled', type: 'checkbox', label: 'enabled', value: true, options: [] }
-      ])
+      initialValues([textInput, { name: 'enabled', type: 'checkbox', label: 'enabled', value: true, options: [] }])
     ).toEqual({ label: 'sample', enabled: true });
   });
 

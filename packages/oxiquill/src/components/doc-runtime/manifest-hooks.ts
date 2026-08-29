@@ -1,10 +1,6 @@
 import { useEffect, useMemo, useState } from 'preact/hooks';
 import { labelsForLanguage } from '../../lib/doc-runtime/interactive-cell-model';
-import {
-  getManifestSnapshot,
-  refreshGeneratedManifest,
-  subscribeManifest
-} from '../../lib/doc-runtime/manifest';
+import { getManifestSnapshot, refreshGeneratedManifest, subscribeManifest } from '../../lib/doc-runtime/manifest';
 
 export function useManifestSnapshot() {
   const [snapshot, setSnapshot] = useState(getManifestSnapshot);

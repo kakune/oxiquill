@@ -10,20 +10,23 @@ const moduleIds = new Map([
 export function oxiquillVirtualModulesPlugin(paths) {
   const cellsJsonFile = pathFromUrl(paths.cellsJsonPath);
   const generatedModules = new Map([
-    ['\0virtual:oxiquill/cells', {
-      file: pathFromUrl(paths.cellsModulePath),
-      fallback: 'export const cells = [];\n'
-    }],
-    ['\0virtual:oxiquill/runtime-version', {
-      file: pathFromUrl(paths.runtimeVersionPath),
-      fallback: 'export const runtimeVersion = "not-ready";\n'
-    }]
+    [
+      '\0virtual:oxiquill/cells',
+      {
+        file: pathFromUrl(paths.cellsModulePath),
+        fallback: 'export const cells = [];\n'
+      }
+    ],
+    [
+      '\0virtual:oxiquill/runtime-version',
+      {
+        file: pathFromUrl(paths.runtimeVersionPath),
+        fallback: 'export const runtimeVersion = "not-ready";\n'
+      }
+    ]
   ]);
   const rustWasmFile = pathFromUrl(new URL('doc_rust_cells.js', paths.rustWasmPublicDir));
-  const watchedFiles = [
-    ...Array.from(generatedModules.values()).map(({ file }) => file),
-    rustWasmFile
-  ];
+  const watchedFiles = [...Array.from(generatedModules.values()).map(({ file }) => file), rustWasmFile];
   const changedFileModuleIds = new Map([
     [normalizePath(pathFromUrl(paths.cellsModulePath)), '\0virtual:oxiquill/cells'],
     [normalizePath(pathFromUrl(paths.runtimeVersionPath)), '\0virtual:oxiquill/runtime-version'],
@@ -88,10 +91,12 @@ export function oxiquillVirtualModulesPlugin(paths) {
         response.statusCode = 200;
         response.setHeader('Cache-Control', 'no-store');
         response.setHeader('Content-Type', 'application/json; charset=utf-8');
-        response.end(JSON.stringify({
-          cells: readGeneratedCellsJson(cellsJsonFile),
-          runtimeVersion: readGeneratedRuntimeVersion(pathFromUrl(paths.runtimeVersionPath))
-        }));
+        response.end(
+          JSON.stringify({
+            cells: readGeneratedCellsJson(cellsJsonFile),
+            runtimeVersion: readGeneratedRuntimeVersion(pathFromUrl(paths.runtimeVersionPath))
+          })
+        );
       });
     }
   };

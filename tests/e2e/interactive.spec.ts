@@ -98,9 +98,7 @@ test('Rust cells run from MDX code fences and redraw plots', async ({ page }) =>
   await expect(page.getByTestId('r-value')).toHaveText('3.70');
 
   await expect
-    .poll(async () =>
-      canvas.evaluate((element) => (element as HTMLCanvasElement).toDataURL())
-    )
+    .poll(async () => canvas.evaluate((element) => (element as HTMLCanvasElement).toDataURL()))
     .not.toEqual(initialImage);
 
   const updatedImage = await canvas.evaluate((element) => (element as HTMLCanvasElement).toDataURL());
@@ -136,13 +134,9 @@ test('interactive cells and math rendering are available', async ({ page }) => {
 
   const multipleCrates = page.getByTestId('cell-features__interactive-cells__rust-multiple-crates');
   await expect(multipleCrates.getByTestId('run-output')).toContainText('final step: 8');
-  await expect(multipleCrates.getByTestId('run-output')).toContainText(
-    'compact output keeps only the essentials'
-  );
+  await expect(multipleCrates.getByTestId('run-output')).toContainText('compact output keeps only the essentials');
   await multipleCrates.getByLabel('verbose').check();
-  await expect(multipleCrates.getByTestId('run-output')).toContainText(
-    'verbose output includes explanatory labels'
-  );
+  await expect(multipleCrates.getByTestId('run-output')).toContainText('verbose output includes explanatory labels');
 
   await expect(page.getByTestId('run-output').filter({ hasText: 'SAMPLE: mean = 7.5' })).toBeVisible({
     timeout: 45_000
@@ -243,7 +237,9 @@ test('localized pages and media examples are available', async ({ page }) => {
   await page.goto('/ja/features/interactive-cells/');
   await expect(page.getByRole('heading', { name: '実行可能セル' })).toBeVisible();
   await expect(
-    page.getByTestId('cell-ja__features__interactive-cells__rust-controls').getByRole('button', { name: 'コードを隠す' })
+    page
+      .getByTestId('cell-ja__features__interactive-cells__rust-controls')
+      .getByRole('button', { name: 'コードを隠す' })
   ).toBeVisible();
 });
 
@@ -272,12 +268,7 @@ async function canvasStats(canvas: Locator): Promise<{
     let inkPixels = 0;
 
     for (let index = 0; index < pixels.length; index += 4) {
-      const [red, green, blue, alpha] = [
-        pixels[index],
-        pixels[index + 1],
-        pixels[index + 2],
-        pixels[index + 3]
-      ];
+      const [red, green, blue, alpha] = [pixels[index], pixels[index + 1], pixels[index + 2], pixels[index + 3]];
 
       if (alpha > 0 && (red < 245 || green < 245 || blue < 245)) {
         inkPixels += 1;

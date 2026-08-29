@@ -50,7 +50,8 @@ export default function ChartOutput({ spec }: ChartOutputProps) {
   if (renderError) throw renderError;
 
   useEffect(() => {
-    const chartElement = element.current!;
+    const chartElement = element.current;
+    if (!chartElement) return undefined;
     let cancelled = false;
     let nextChart: EChartsInstance | undefined;
     let resizeObserver: ResizeObserver | undefined;
@@ -169,7 +170,10 @@ function xAxis(spec: ChartSpec): Record<string, unknown> {
   }
 
   if (spec.kind === 'histogram') {
-    return categoryAxis(spec.bins.map((bin) => `${bin[0]}-${bin[1]}`), spec.xLabel);
+    return categoryAxis(
+      spec.bins.map((bin) => `${bin[0]}-${bin[1]}`),
+      spec.xLabel
+    );
   }
 
   if (spec.kind === 'heatmap' && spec.xCategories) {

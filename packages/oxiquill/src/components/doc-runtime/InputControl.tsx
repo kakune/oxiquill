@@ -1,7 +1,4 @@
-import {
-  coerceInputValue,
-  formatInputValue
-} from '../../lib/doc-runtime/interactive-cell-model';
+import { coerceInputValue, formatInputValue } from '../../lib/doc-runtime/interactive-cell-model';
 import type { InputSpec } from '../../lib/doc-runtime/types';
 
 type InputValue = string | number | boolean;

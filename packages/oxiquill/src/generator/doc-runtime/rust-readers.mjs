@@ -1,12 +1,7 @@
-import {
-  rustIdentifier,
-  rustReaderName
-} from './rust-identifiers.mjs';
+import { rustIdentifier, rustReaderName } from './rust-identifiers.mjs';
 
 export function generateRustReaders(rustCells) {
-  const readers = new Set(
-    rustCells.flatMap((cell) => cell.inputs.map((input) => rustReaderName(input)))
-  );
+  const readers = new Set(rustCells.flatMap((cell) => cell.inputs.map((input) => rustReaderName(input))));
 
   return [
     readers.has('read_f64') ? rustReadF64() : '',

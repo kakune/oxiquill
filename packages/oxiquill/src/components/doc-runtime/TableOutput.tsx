@@ -11,9 +11,7 @@ type SortState = {
   direction: SortDirection;
 };
 
-export type TableCsvResult =
-  | { ok: true; csv: string }
-  | { ok: false; error: string };
+export type TableCsvResult = { ok: true; csv: string } | { ok: false; error: string };
 
 type CopyStatus = {
   kind: 'success' | 'error';

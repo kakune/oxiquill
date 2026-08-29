@@ -1,10 +1,4 @@
-import type {
-  AstroIntegration,
-  AstroUserConfig,
-  FontProvider,
-  Locales,
-  SessionDriverConfig
-} from 'astro';
+import type { AstroIntegration, AstroUserConfig, FontProvider, Locales, SessionDriverConfig } from 'astro';
 import type { Options as PreactIntegrationOptions } from '@astrojs/preact';
 import type { StarlightUserConfig } from '@astrojs/starlight/types';
 import type { UserConfig as ViteUserConfig } from 'vite';
@@ -14,22 +8,24 @@ type AstroIntegrations = NonNullable<BaseAstroUserConfig['integrations']>;
 type AstroMarkdownConfig = NonNullable<BaseAstroUserConfig['markdown']>;
 type IntegrationFactory<Options> = (options: Options) => AstroIntegration;
 
-export type OxiquillPathOptions = Partial<Record<
-  | 'cacheDir'
-  | 'cratesDir'
-  | 'docsDir'
-  | 'frameworkRoot'
-  | 'generatedDir'
-  | 'haskellCellsDir'
-  | 'haskellWasmPublicDir'
-  | 'publicAssetsDir'
-  | 'publicDir'
-  | 'pyodidePublicDir'
-  | 'rustCellsDir'
-  | 'rustWasmPublicDir'
-  | 'workspaceRoot',
-  string | URL
->>;
+export type OxiquillPathOptions = Partial<
+  Record<
+    | 'cacheDir'
+    | 'cratesDir'
+    | 'docsDir'
+    | 'frameworkRoot'
+    | 'generatedDir'
+    | 'haskellCellsDir'
+    | 'haskellWasmPublicDir'
+    | 'publicAssetsDir'
+    | 'publicDir'
+    | 'pyodidePublicDir'
+    | 'rustCellsDir'
+    | 'rustWasmPublicDir'
+    | 'workspaceRoot',
+    string | URL
+  >
+>;
 
 export interface OxiquillFrameworkOptions {
   preact?: IntegrationFactory<PreactIntegrationOptions | undefined>;

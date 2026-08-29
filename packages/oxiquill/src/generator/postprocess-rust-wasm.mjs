@@ -41,10 +41,6 @@ export function removeUnusedWasmPackState(source) {
       '    wasm = instance.exports;',
       '    wasmModule = module;'
     ].join('\n'),
-    [
-      'let wasm;',
-      'function __wbg_finalize_init(instance) {',
-      '    wasm = instance.exports;'
-    ].join('\n')
+    ['let wasm;', 'function __wbg_finalize_init(instance) {', '    wasm = instance.exports;'].join('\n')
   );
 }

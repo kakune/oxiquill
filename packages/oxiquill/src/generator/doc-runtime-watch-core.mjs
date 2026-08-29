@@ -1,8 +1,5 @@
 import path from 'node:path';
-import {
-  pathFromUrl,
-  relativePathFromUrl
-} from '../config/paths.mjs';
+import { pathFromUrl, relativePathFromUrl } from '../config/paths.mjs';
 
 export function classifyChangedPath(filePath, paths) {
   const normalized = normalizePath(filePath);

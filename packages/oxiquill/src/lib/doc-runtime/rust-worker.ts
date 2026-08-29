@@ -16,9 +16,7 @@ worker.addEventListener('message', (event) => {
 async function handleRequest(request: RuntimeWorkerRequest): Promise<void> {
   try {
     await ensureWasm();
-    const result = JSON.parse(
-      run_rust_cell(request.cellId, JSON.stringify(request.inputs))
-    ) as CellExecutionResult;
+    const result = JSON.parse(run_rust_cell(request.cellId, JSON.stringify(request.inputs))) as CellExecutionResult;
 
     worker.postMessage({ requestId: request.requestId, ok: true, result });
   } catch (error) {

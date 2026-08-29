@@ -36,10 +36,10 @@ function shouldPrefixPublicAsset(url, base) {
 
 function isUrlAttribute(attribute) {
   return (
-    attribute
-    && attribute.type === 'mdxJsxAttribute'
-    && urlAttributes.has(attribute.name)
-    && typeof attribute.value === 'string'
+    attribute &&
+    attribute.type === 'mdxJsxAttribute' &&
+    urlAttributes.has(attribute.name) &&
+    typeof attribute.value === 'string'
   );
 }
 

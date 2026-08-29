@@ -1,13 +1,7 @@
 import { chromium, expect } from '@playwright/test';
 import { spawn } from 'node:child_process';
 import { createServer } from 'node:net';
-import {
-  cpSync,
-  mkdtempSync,
-  readFileSync,
-  rmSync,
-  writeFileSync
-} from 'node:fs';
+import { cpSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -22,12 +16,7 @@ let browser;
 try {
   copyWorkspace(repoRoot, tempRoot);
   disableDevToolbar();
-  await runCommand(
-    'install',
-    'pnpm',
-    ['install', '--offline', '--frozen-lockfile', '--ignore-scripts'],
-    tempRoot
-  );
+  await runCommand('install', 'pnpm', ['install', '--offline', '--frozen-lockfile', '--ignore-scripts'], tempRoot);
 
   const port = await availablePort();
   const runtime = startProcess(
@@ -246,24 +235,26 @@ async function availablePort() {
 
 async function stopChildren() {
   await Promise.all(
-    Array.from(children, (child) =>
-      new Promise((resolve) => {
-        if (child.exitCode !== null || child.signalCode !== null) {
-          resolve();
-          return;
-        }
+    Array.from(
+      children,
+      (child) =>
+        new Promise((resolve) => {
+          if (child.exitCode !== null || child.signalCode !== null) {
+            resolve();
+            return;
+          }
 
-        const timeout = setTimeout(() => {
-          if (child.exitCode === null && child.signalCode === null) stopProcessGroup(child, 'SIGKILL');
-        }, 5_000);
-        timeout.unref();
+          const timeout = setTimeout(() => {
+            if (child.exitCode === null && child.signalCode === null) stopProcessGroup(child, 'SIGKILL');
+          }, 5_000);
+          timeout.unref();
 
-        child.once('exit', () => {
-          clearTimeout(timeout);
-          resolve();
-        });
-        stopProcessGroup(child, 'SIGTERM');
-      })
+          child.once('exit', () => {
+            clearTimeout(timeout);
+            resolve();
+          });
+          stopProcessGroup(child, 'SIGTERM');
+        })
     )
   );
 }

@@ -1,8 +1,4 @@
-import {
-  createDefaultImport,
-  expressionAttribute,
-  visit
-} from './remark-mdx-helpers.mjs';
+import { createDefaultImport, expressionAttribute, visit } from './remark-mdx-helpers.mjs';
 
 const mermaidLanguage = 'mermaid';
 
