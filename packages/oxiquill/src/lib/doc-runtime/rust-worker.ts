@@ -1,5 +1,5 @@
 import init, { run_rust_cell } from 'virtual:oxiquill/rust-wasm';
-import type { CellExecutionResult, RuntimeWorkerRequest, RuntimeWorkerResponse } from './types';
+import type { CellExecutionResult, RuntimeWorkerRequest, RuntimeWorkerResponse } from './types.js';
 
 type WorkerScope = {
   addEventListener(type: 'message', listener: (event: MessageEvent<RuntimeWorkerRequest>) => void): void;
@@ -29,6 +29,5 @@ async function handleRequest(request: RuntimeWorkerRequest): Promise<void> {
 }
 
 function ensureWasm(): Promise<void> {
-  wasmReady ??= init().then(() => undefined);
-  return wasmReady;
+  return (wasmReady ??= init().then(() => undefined));
 }

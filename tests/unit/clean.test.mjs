@@ -1,38 +1,45 @@
 // @vitest-environment node
 
-import { access, mkdir, mkdtemp, writeFile } from 'node:fs/promises';
-import { tmpdir } from 'node:os';
 import path from 'node:path';
-import { pathToFileURL } from 'node:url';
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
+import { createOxiquillPaths } from '../../packages/oxiquill/src/config/paths.mjs';
 import { cleanOxiquillWorkspace } from '../../packages/oxiquill/src/generator/clean.mjs';
 
-describe('workspace cleaner', () => {
-  it('removes only owned generated and explicitly supplied paths', async () => {
-    const root = await mkdtemp(path.join(tmpdir(), 'oxiquill-clean-'));
+describe('Oxiquill cleanup', () => {
+  it('removes only exact resolved Oxiquill and Astro output paths', async () => {
+    const root = path.resolve('/repo');
+    const paths = createOxiquillPaths({
+      cacheDir: 'custom-cache',
+      outDir: 'custom-output',
+      publicAssetsDir: 'custom-assets',
+      workspaceRoot: root
+    });
+    const fileSystem = { rm: vi.fn(async () => undefined) };
+
+    await cleanOxiquillWorkspace({ fileSystem, paths });
+
+    expect(fileSystem.rm.mock.calls).toEqual(
+      expect.arrayContaining([
+        [path.join(root, 'custom-cache'), { force: true, recursive: true }],
+        [path.join(root, 'custom-output'), { force: true, recursive: true }],
+        [path.join(root, 'public/custom-assets'), { force: true, recursive: true }]
+      ])
+    );
+    expect(fileSystem.rm).toHaveBeenCalledTimes(3);
+  });
+
+  it('validates every target before deleting anything', async () => {
+    const root = path.resolve('/repo');
     const paths = {
-      cacheDir: pathToFileURL(path.join(root, '.oxiquill/')),
-      publicAssetsDir: pathToFileURL(path.join(root, 'public/oxiquill/')),
-      workspaceRoot: pathToFileURL(`${root}/`)
+      ...createOxiquillPaths({ workspaceRoot: root }),
+      cacheDir: root
     };
-    const targets = [
-      path.join(root, '.oxiquill'),
-      path.join(root, 'public/oxiquill'),
-      path.join(root, 'dist'),
-      path.join(root, '.astro'),
-      path.join(root, 'playwright-report'),
-      path.join(root, 'test-results'),
-      path.join(root, 'extra')
-    ];
-    const preserved = path.join(root, 'content', 'index.mdx');
+    const fileSystem = { rm: vi.fn(async () => undefined) };
 
-    await Promise.all(targets.map((target) => mkdir(target, { recursive: true })));
-    await mkdir(path.dirname(preserved), { recursive: true });
-    await writeFile(preserved, '# Preserved\n');
-
-    await cleanOxiquillWorkspace({ paths, extraPaths: [path.join(root, 'extra')] });
-
-    await expect(access(preserved)).resolves.toBeUndefined();
-    await Promise.all(targets.map((target) => expect(access(target)).rejects.toThrow()));
+    await expect(cleanOxiquillWorkspace({ fileSystem, paths })).rejects.toThrow(
+      'cacheDir must resolve to a directory inside'
+    );
+    expect(fileSystem.rm).not.toHaveBeenCalled();
+    await expect(cleanOxiquillWorkspace()).rejects.toThrow('requires resolved project paths');
   });
 });

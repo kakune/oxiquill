@@ -3,7 +3,8 @@ import { existsSync, readFileSync, realpathSync } from 'node:fs';
 import { createRequire } from 'node:module';
 import path from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
-import { createOxiquillPaths, pathFromUrl, pathInUrl } from '../config/paths.mjs';
+import { pathFromUrl, pathInUrl } from '../config/paths.mjs';
+import { loadOxiquillProjectConfig } from '../config/project-config.mjs';
 import {
   buildHaskellWasm,
   buildRustWasm,
@@ -14,41 +15,77 @@ import {
 } from '../generator/doc-runtime-service.mjs';
 import { cleanOxiquillWorkspace } from '../generator/clean.mjs';
 import { runHelperCargo } from '../generator/run-helper-cargo.mjs';
+import { parseConfigOption } from './config-option.mjs';
+
+const projectCommands = new Set([
+  'dev',
+  'dev:runtime',
+  'dev:astro',
+  'preview',
+  'build',
+  'check',
+  'docgen',
+  'clean',
+  'test-rust',
+  'test-rust-coverage',
+  'lint-rust',
+  'doc-rust',
+  'test-wasm'
+]);
 
 export async function runCli(
   command,
   args = [],
-  { cwd = process.cwd(), runCommand = runCommandWithInheritedStdio, selectNode = frameworkNode } = {}
+  {
+    cwd = process.cwd(),
+    loadProjectConfig = loadOxiquillProjectConfig,
+    runCommand = runCommandWithInheritedStdio,
+    selectNode = frameworkNode
+  } = {}
 ) {
-  const paths = createOxiquillPaths({ workspaceRoot: cwd });
+  if (command === 'help' || command === '--help' || command === '-h') {
+    printHelp();
+    return;
+  }
+  if (!projectCommands.has(command)) {
+    throw new Error(`Unknown oxiquill command "${command}".`);
+  }
+
+  const { commandArgs, configFile } = parseConfigOption(args);
+  const projectConfig = await loadProjectConfig({ cwd, configFile });
+  const paths = projectConfig.paths;
+  const astroArgs = [...projectConfig.astroConfigArgs, ...commandArgs];
 
   switch (command) {
     case 'dev':
-      await generateRuntime({ paths, tolerateHaskellBuildFailure: true, wasmMode: 'dev' });
-      await runDevServer({ paths });
+      await generateRuntime({ projectConfig, tolerateHaskellBuildFailure: true, wasmMode: 'dev' });
+      await runDevServer({ args: astroArgs, projectConfig, selectNode });
       return;
     case 'dev:runtime': {
-      const { main: watchDocRuntime } = await import('../generator/watch-doc-runtime.mjs');
-      await watchDocRuntime(args);
+      const { watchDocRuntime } = await import('../generator/watch-doc-runtime.mjs');
+      await watchDocRuntime({
+        projectConfig,
+        skipInitial: commandArgs.includes('--skip-initial')
+      });
       return;
     }
     case 'dev:astro':
-      await runAstro(paths, ['dev', ...args], { runCommand, selectNode });
+      await runAstro(projectConfig, ['dev', ...astroArgs], { runCommand, selectNode });
       return;
     case 'preview':
-      await runAstro(paths, ['preview', ...args], { runCommand, selectNode });
+      await runAstro(projectConfig, ['preview', ...astroArgs], { runCommand, selectNode });
       return;
     case 'build':
-      await generateRuntime({ paths, wasmMode: 'build' });
-      await runOxiquillCheck(paths, [], { runCommand, selectNode });
-      await runAstro(paths, ['build', ...args], { runCommand, selectNode });
+      await generateRuntime({ projectConfig, wasmMode: 'build' });
+      await runOxiquillCheck(projectConfig, [], { runCommand, selectNode });
+      await runAstro(projectConfig, ['build', ...astroArgs], { runCommand, selectNode });
       return;
     case 'check':
-      await generateRuntime({ paths, wasmMode: 'dev' });
-      await runOxiquillCheck(paths, args, { runCommand, selectNode });
+      await generateRuntime({ projectConfig, wasmMode: 'dev' });
+      await runOxiquillCheck(projectConfig, commandArgs, { runCommand, selectNode });
       return;
     case 'docgen':
-      await generateRuntime({ paths, wasmMode: parseWasmMode(args) });
+      await generateRuntime({ projectConfig, wasmMode: parseWasmMode(commandArgs) });
       return;
     case 'clean':
       await cleanOxiquillWorkspace({ paths });
@@ -79,22 +116,16 @@ export async function runCli(
       await runHelperCargo({ argv: ['doc', '--no-deps'], paths });
       return;
     case 'test-wasm':
-      await generateRuntime({ paths, wasmMode: 'dev' });
+      await generateRuntime({ projectConfig, wasmMode: 'dev' });
       await runCommand('wasm-pack', ['test', '--node', pathFromUrl(paths.rustCellsDir)], {
         cwd: pathFromUrl(paths.workspaceRoot)
       });
       return;
-    case 'help':
-    case '--help':
-    case '-h':
-      printHelp();
-      return;
-    default:
-      throw new Error(`Unknown oxiquill command "${command}".`);
   }
 }
 
-async function generateRuntime({ paths, tolerateHaskellBuildFailure = false, wasmMode }) {
+async function generateRuntime({ projectConfig, tolerateHaskellBuildFailure = false, wasmMode }) {
+  const { paths } = projectConfig;
   const context = await createDocRuntimeContext({ paths });
   const summary = await syncDocRuntime(context);
   console.log(`Generated ${summary.cellCount} interactive cell(s).`);
@@ -121,54 +152,48 @@ function warnToleratedHaskellBuildFailure(result) {
   console.warn(`[runtime] Haskell/WASI runtime unavailable: ${result.error.message}`);
 }
 
-async function runDevServer({ paths }) {
-  const nodePath = frameworkNode(paths);
+async function runDevServer({ args, projectConfig, selectNode }) {
+  const { paths } = projectConfig;
+  const nodePath = selectNode(paths);
   const env = frameworkEnv(paths, { nodePath });
-  const children = [
-    spawn(nodePath, [fileURLToPath(new URL('../generator/watch-doc-runtime.mjs', import.meta.url)), '--skip-initial'], {
-      cwd: pathFromUrl(paths.workspaceRoot),
-      env,
-      stdio: 'inherit'
-    }),
-    spawn(nodePath, [frameworkBinScript(paths, 'astro'), 'dev'], {
-      cwd: pathFromUrl(paths.workspaceRoot),
-      env,
-      stdio: 'inherit'
-    })
-  ];
+  const { watchDocRuntime } = await import('../generator/watch-doc-runtime.mjs');
+  const watcher = await watchDocRuntime({ projectConfig, skipInitial: true });
+  const child = spawn(nodePath, [frameworkBinScript(paths, 'astro'), 'dev', ...args], {
+    cwd: projectConfig.cwd,
+    env,
+    stdio: 'inherit'
+  });
 
-  const stop = () => {
-    for (const child of children) {
-      if (!child.killed) child.kill('SIGTERM');
-    }
-  };
-
-  await new Promise((resolve, reject) => {
-    for (const child of children) {
+  try {
+    await new Promise((resolve, reject) => {
       child.on('error', reject);
       child.on('exit', (code, signal) => {
-        stop();
         if (code === 0 || signal === 'SIGTERM') {
           resolve();
         } else {
           reject(new Error(`dev child exited with ${signal ?? code}`));
         }
       });
-    }
-  });
+    });
+  } finally {
+    if (!child.killed) child.kill('SIGTERM');
+    await watcher.close();
+  }
 }
 
-async function runAstro(paths, args, { runCommand, selectNode }) {
+async function runAstro(projectConfig, args, { runCommand, selectNode }) {
+  const { paths } = projectConfig;
   const nodePath = selectNode(paths);
 
   await runCommand(nodePath, [frameworkBinScript(paths, 'astro'), ...args], {
-    cwd: pathFromUrl(paths.workspaceRoot),
+    cwd: projectConfig.cwd,
     env: frameworkEnv(paths, { nodePath })
   });
 }
 
-async function runOxiquillCheck(paths, args, { runCommand, selectNode }) {
-  await runAstro(paths, ['sync'], { runCommand, selectNode });
+async function runOxiquillCheck(projectConfig, args, { runCommand, selectNode }) {
+  const { paths } = projectConfig;
+  await runAstro(projectConfig, ['sync', ...projectConfig.astroConfigArgs], { runCommand, selectNode });
 
   const { check, parseArgsAsCheckConfig } = await importFromFramework(paths, '@astrojs/check');
   const config = parseArgsAsCheckConfig(['node', 'oxiquill-check', ...args]);
@@ -318,7 +343,9 @@ function parseWasmMode(args) {
 }
 
 function printHelp() {
-  console.log('Usage: oxiquill <dev|build|check|docgen|clean|test-rust|lint-rust|doc-rust|test-wasm>');
+  console.log(
+    'Usage: oxiquill <dev|build|check|docgen|clean|test-rust|lint-rust|doc-rust|test-wasm> [--config <path>]'
+  );
 }
 
 function runCommandWithInheritedStdio(command, args, options) {

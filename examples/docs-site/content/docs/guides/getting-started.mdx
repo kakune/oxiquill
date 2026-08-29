@@ -1,111 +1,137 @@
 ---
 title: Getting Started
-description: Install dependencies, run the local site, build static output, and preview the result.
+description: Create, install, check, build, preview, and publish an Oxiquill static documentation project.
 ---
 
-Use this guide when you want to run the documentation site locally or verify that a docs change builds.
+Oxiquill requires Node.js 24 or newer. A static starter with no executable cells needs only Node.js and npm or pnpm; language toolchains become prerequisites only when the document manifest uses that language.
 
-## Requirements
+## Create a Project
 
-Install these tools before running the project:
-
-- Node.js with `pnpm`
-- Rust toolchain `1.95.0`
-- `wasm-pack`
-- `cargo-llvm-cov`
-- `wasm32-wasi-ghc` when authoring Haskell cells
-
-The Rust toolchain and Wasm target are pinned by `rust-toolchain.toml`. Do not change the pinned toolchain as part of normal documentation work. Haskell cells use the GHC `wasm32-wasi` backend, commonly installed through `ghc-wasm-meta`. Its `~/.ghc-wasm/env` file exposes the toolchain; Oxiquill commands can also use `OXIQUILL_HASKELL_GHC` to point at `wasm32-wasi-ghc` without changing the rest of `PATH`. If ghc-wasm's static Node is first in `PATH`, set `OXIQUILL_NODE` to a normal Node.js binary for Astro/Vite subprocesses.
-
-## Install Dependencies
+The supported starter command creates a new directory without installing dependencies or initializing Git:
 
 ```sh
-pnpm install
+pnpm dlx oxiquill init my-docs
+cd my-docs
 ```
 
-Dependencies include Astro, Starlight, Preact, Pyodide, Mermaid, KaTeX, Vitest, Playwright, and the `oxiquill` CLI that generates executable-cell runtime artifacts.
+Omit `my-docs` to initialize the current directory. The target must not exist or must be empty; `init` never overwrites a non-empty directory and has no force option.
 
-## Create a Consumer Repository
+You can also install Oxiquill into an existing static documentation project:
 
-For a separate documentation repository, add only `oxiquill` and route scripts through its CLI:
+```sh
+pnpm add oxiquill astro @astrojs/starlight
+```
+
+or:
+
+```sh
+npm install oxiquill astro @astrojs/starlight
+```
+
+Add these scripts to `package.json` if the starter did not create them:
 
 ```json
 {
-  "dependencies": {
-    "oxiquill": "0.2.0"
-  },
   "scripts": {
     "dev": "oxiquill dev",
     "build": "oxiquill build",
-    "check": "oxiquill check"
+    "check": "oxiquill check",
+    "preview": "oxiquill preview",
+    "clean": "oxiquill clean"
   }
 }
 ```
 
-Use the same setup for `link:`, workspace, Git dependency, or submodule-style installs; only the dependency specifier changes. The consumer config is:
+## Configure the Site
+
+Create `astro.config.mjs`:
 
 ```js
+import starlight from '@astrojs/starlight';
 import { defineOxiquillConfig } from 'oxiquill/astro';
 
 export default defineOxiquillConfig({
+  framework: { starlight },
+  site: 'https://example.com',
   title: 'My Docs',
   sidebar: [{ label: 'Overview', items: [{ label: 'Home', slug: 'index' }] }]
 });
 ```
 
+Create `content.config.ts`:
+
 ```ts
-export { collections } from 'oxiquill/content';
+import { defineCollection } from 'astro:content';
+import { docsLoader } from '@astrojs/starlight/loaders';
+import { docsSchema } from '@astrojs/starlight/schema';
+import { createOxiquillCollections } from 'oxiquill/content';
+
+export const collections = createOxiquillCollections({ defineCollection, docsLoader, docsSchema });
 ```
 
-## Run the Development Server
+Write the first page at `content/docs/index.mdx`:
+
+```md
+---
+title: Home
+description: Start writing with Oxiquill.
+---
+
+# Home
+
+Write prose-first technical documentation in MDX.
+```
+
+See [Project Configuration](/guides/project-configuration/) before changing source, cache, public, or output paths.
+
+## Install and Check
+
+Use the package manager selected for the project:
+
+```sh
+pnpm install
+pnpm check
+```
+
+or:
+
+```sh
+npm install
+npm run check
+```
+
+`check` loads the project config, validates cell metadata, generates only required runtimes/assets, synchronizes Astro types, and reports Astro/MDX/TypeScript diagnostics.
+
+## Develop, Build, and Preview
 
 ```sh
 pnpm dev
 ```
 
-The dev command starts with runtime generation, then watches the docs and helper sources:
+Prose, ordinary code blocks, math, Mermaid, and media use Astro HMR. Cell or helper-source changes regenerate the corresponding manifest/runtime. Stop the server with Ctrl-C.
 
-- Prose, normal code blocks, math, Mermaid, and media changes update through Astro HMR.
-- Python cell changes update the generated cell manifest.
-- Rust cell changes and `crates/*` changes rebuild the generated Wasm runtime.
-- Haskell cell changes rebuild the generated WASI runtime when Haskell cells are present.
-
-If the Haskell compiler is missing or a Haskell cell fails to build, `pnpm dev` and `pnpm dev:runtime` keep serving and write a browser-visible Haskell cell error. Strict commands such as `pnpm build`, `pnpm check`, `pnpm wasm:dev`, `pnpm wasm:build`, and `pnpm test:wasm` fail until `wasm32-wasi-ghc` is available and the cell builds.
-
-If you need to inspect runtime generation separately from Astro, run the watcher and dev server in separate terminals:
-
-```sh
-pnpm dev:runtime
-pnpm dev:astro
-```
-
-## Build Static Output
+Create and inspect the production site:
 
 ```sh
 pnpm build
-```
-
-The build runs the Wasm runtime build, checks the Astro project, and writes the static site to `dist/`.
-
-## Preview the Build
-
-```sh
 pnpm preview
 ```
 
-Use preview after `pnpm build` when you want to inspect the production output rather than the development server.
+`build` runs strict generation and checks before writing Astro's static `outDir`, normally `dist`. `preview` serves that existing output; it does not replace a production web server, TLS, domain, or reverse-proxy configuration.
+
+## Optional Language Prerequisites
+
+| Content                          | Author/build prerequisites                                   | Reader prerequisites                             |
+| -------------------------------- | ------------------------------------------------------------ | ------------------------------------------------ |
+| Static MDX, math, Mermaid, media | Node.js 24+ and npm/pnpm                                     | Supported browser                                |
+| Python cells                     | Network or verified offline Pyodide cache during generation  | Supported browser; assets are served by the site |
+| Rust cells                       | Pinned Rust toolchain, `wasm32-unknown-unknown`, `wasm-pack` | Supported browser                                |
+| Haskell cells                    | Linux/macOS and `wasm32-wasi-ghc` 9.14                       | Supported browser on any desktop OS              |
+
+Repository maintainers additionally need `cargo-llvm-cov` and Playwright browsers for the full validation suite.
 
 ## Generated Output
 
-The runtime generation scripts write generated files under:
+Oxiquill owns `.oxiquill/**`, `public/oxiquill/**`, Astro's type/cache output, and `dist/**`. Keep them ignored and regenerate them through CLI commands. Do not copy generated output between configurations unless the matching manifest, fingerprints, and runtime inputs are unchanged.
 
-- `.oxiquill/generated`
-- `.oxiquill/rust-cells`
-- `.oxiquill/haskell-cells`
-- `public/oxiquill/pyodide`
-- `public/oxiquill/rust-wasm`
-- `public/oxiquill/haskell-wasm`
-- `public/oxiquill/licenses`
-- `dist`
-
-Do not edit those paths directly. Change MDX, helper crates, scripts, or handwritten runtime code, then regenerate with the existing commands.
+Continue with the [Authoring Guide](/guides/authoring/), [CLI reference](/reference/cli/), and [Troubleshooting](/guides/troubleshooting/).

@@ -15,6 +15,9 @@ describe('haskell worker helpers', () => {
     expect(resolveHaskellWasmUrl('/notes/')).toBe('/notes/oxiquill/haskell-wasm/doc_haskell_cells.wasm');
     expect(resolveHaskellWasmUrl('/notes')).toBe('/notes/oxiquill/haskell-wasm/doc_haskell_cells.wasm');
     expect(resolveHaskellRuntimeStatusUrl('/notes')).toBe('/notes/oxiquill/haskell-wasm/status.json');
+    expect(resolveHaskellWasmUrl('/notes', 'runtime%20assets/haskell/')).toBe(
+      '/notes/runtime%20assets/haskell/doc_haskell_cells.wasm'
+    );
   });
 
   it('maps captured stdout and stderr to text artifacts', () => {

@@ -6,6 +6,7 @@ import {
   initialValues,
   labelsForLanguage,
   localeFromLanguage,
+  shouldShowInputControls,
   shouldShowRunButton
 } from '../../packages/oxiquill/src/lib/doc-runtime/interactive-cell-model';
 import type { InputSpec } from '../../packages/oxiquill/src/lib/doc-runtime/types';
@@ -34,8 +35,11 @@ describe('interactive cell model', () => {
 
   it('describes run controls and idle output messages', () => {
     expect(shouldShowRunButton('button')).toBe(true);
-    expect(shouldShowRunButton('autorun')).toBe(true);
+    expect(shouldShowRunButton('autorun')).toBe(false);
     expect(shouldShowRunButton('reactive')).toBe(false);
+    expect(shouldShowInputControls('button')).toBe(true);
+    expect(shouldShowInputControls('reactive')).toBe(true);
+    expect(shouldShowInputControls('autorun')).toBe(false);
 
     expect(idleOutputMessage('reactive')).toBe('Waiting for the runtime to start.');
     expect(idleOutputMessage('autorun')).toBe('Waiting for the runtime to start.');

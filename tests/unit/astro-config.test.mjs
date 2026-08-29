@@ -1,6 +1,5 @@
 // @vitest-environment node
 
-import { realpathSync } from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -20,9 +19,11 @@ vi.mock('@astrojs/starlight', () => ({
   default: () => ({ hooks: {}, name: '@astrojs/starlight' })
 }));
 
-const { defineOxiquillConfig } = await import('../../packages/oxiquill/src/astro/index.ts');
+const { defineOxiquillConfig: definePackageConfig } = await import('../../packages/oxiquill/src/astro/index.ts');
+const { readOxiquillMetadata } = await import('../../packages/oxiquill/src/config/metadata.mjs');
+const { canonicalPath } = await import('../../packages/oxiquill/src/config/paths.mjs');
 const linkedConsumerRoot = new URL('../fixtures/linked-consumer/', import.meta.url);
-const tempRoot = pathToFileURL(os.tmpdir());
+const tempRoot = pathToFileURL(canonicalPath(os.tmpdir()));
 const preactExportSpecifiers = [
   'preact',
   'preact/jsx-runtime',
@@ -31,6 +32,16 @@ const preactExportSpecifiers = [
   'preact/debug',
   'preact/devtools'
 ];
+
+function defineOxiquillConfig(options) {
+  return definePackageConfig({
+    ...options,
+    framework: {
+      starlight: () => ({ hooks: {}, name: '@astrojs/starlight' }),
+      ...options.framework
+    }
+  });
+}
 
 function integrationNames(config) {
   return config.integrations.flat().map((integration) => integration.name);
@@ -91,6 +102,47 @@ async function resolveWithVite(update, ids) {
 }
 
 describe('defineOxiquillConfig', () => {
+  it('requires consumers to load the Starlight integration directly', () => {
+    expect(() => definePackageConfig({ sidebar: [], title: 'Docs' })).toThrow(
+      'requires framework.starlight to be an Astro integration factory'
+    );
+  });
+
+  it('retains frozen internal metadata without adding enumerable config fields', () => {
+    const config = defineOxiquillConfig({ sidebar: [], title: 'Docs' });
+    const integration = config.integrations.flat().find((entry) => entry.name === 'oxiquill');
+
+    expect(readOxiquillMetadata(config)).toMatchObject({ kind: 'config' });
+    expect(readOxiquillMetadata(integration)).toMatchObject({ kind: 'integration' });
+    expect(Object.isFrozen(readOxiquillMetadata(config))).toBe(true);
+    expect(Object.keys(config)).not.toContain('oxiquill');
+  });
+
+  it('uses configured Oxiquill paths in the Astro setup hook and rejects conflicts', () => {
+    const config = defineOxiquillConfig({
+      paths: {
+        cacheDir: 'state',
+        docsDir: 'written-docs',
+        generatedDir: 'runtime'
+      },
+      sidebar: [],
+      title: 'Docs'
+    });
+    const update = runConfigSetup(config);
+
+    expect(path.resolve(fileURLToPath(update.cacheDir))).toBe(path.join(fileURLToPath(tempRoot), 'state'));
+    expect(() =>
+      runConfigSetup(
+        defineOxiquillConfig({
+          publicDir: 'astro-public',
+          paths: { publicDir: 'oxiquill-public' },
+          sidebar: [],
+          title: 'Docs'
+        })
+      )
+    ).toThrow('Conflicting project paths: publicDir');
+  });
+
   it('composes package-owned Astro integrations by default', () => {
     const config = defineOxiquillConfig({
       sidebar: [],
@@ -201,9 +253,9 @@ describe('defineOxiquillConfig', () => {
     const normalizedAllow = allow.map((entry) => entry.replaceAll('\\', '/'));
 
     expect(allow).toContain('/already-allowed');
-    expect(allow).toContain(realpathSync(fileURLToPath(tempRoot)));
-    expect(allow).toContain(realpathSync('packages/oxiquill'));
-    expect(allow).toContain(realpathSync('node_modules'));
+    expect(allow).toContain(canonicalPath(fileURLToPath(tempRoot)));
+    expect(allow).toContain(canonicalPath('packages/oxiquill'));
+    expect(allow).toContain(canonicalPath('node_modules'));
     expect(normalizedAllow.some((entry) => entry.includes('node_modules/.pnpm/katex'))).toBe(true);
     expect(normalizedAllow.some((entry) => entry.includes('node_modules/.pnpm/@astrojs+preact'))).toBe(true);
     expect(normalizedAllow.some((entry) => entry.includes('node_modules/.pnpm/@bjorn3+browser_wasi_shim'))).toBe(true);
@@ -239,38 +291,7 @@ describe('defineOxiquillConfig', () => {
     }
   });
 
-  it('transforms installed Oxiquill TSX with the Preact JSX runtime', async () => {
-    const config = defineOxiquillConfig({ sidebar: [], title: 'Docs' });
-    const update = runConfigSetup(config, linkedConsumerRoot);
-    const plugin = update.vite.plugins.find((entry) => entry.name === 'oxiquill-preact-jsx');
-    const componentPath = fileURLToPath(
-      new URL('../../packages/oxiquill/src/components/doc-runtime/InteractiveCell.tsx', import.meta.url)
-    );
-    const linkedComponentPath = fileURLToPath(
-      new URL(
-        '../../examples/docs-site/node_modules/oxiquill/src/components/doc-runtime/InteractiveCell.tsx',
-        import.meta.url
-      )
-    );
-    const windowsPnpmComponentPath =
-      'C:/Users/RUNNER~1/AppData/Local/Temp/consumer/node_modules/.pnpm/oxiquill@file+..+oxiquill/node_modules/oxiquill/src/components/doc-runtime/InteractiveCell.tsx';
-
-    const transformed = await plugin.transform('export default () => <section>ok</section>;', componentPath);
-    const linkedTransformed = await plugin.transform(
-      'export default () => <section>ok</section>;',
-      linkedComponentPath
-    );
-    const windowsPnpmTransformed = await plugin.transform(
-      'export default () => <section>ok</section>;',
-      windowsPnpmComponentPath
-    );
-    expect(transformed.code).toContain('preact/jsx-runtime');
-    expect(linkedTransformed.code).toContain('preact/jsx-runtime');
-    expect(windowsPnpmTransformed.code).toContain('preact/jsx-runtime');
-    await expect(plugin.transform('export default () => <div />;', '/consumer/Component.tsx')).resolves.toBeUndefined();
-  });
-
-  it('bundles the Astro integration while sharing the Preact SSR runtime', () => {
+  it('bundles compiled Oxiquill while sharing the Preact SSR runtime', () => {
     const config = defineOxiquillConfig({
       sidebar: [],
       title: 'Docs'
@@ -278,7 +299,7 @@ describe('defineOxiquillConfig', () => {
 
     const update = runConfigSetup(config, linkedConsumerRoot);
 
-    expect(update.vite.ssr.noExternal).toEqual(expect.arrayContaining(['@astrojs/preact']));
+    expect(update.vite.ssr.noExternal).toEqual(expect.arrayContaining(['@astrojs/preact', 'oxiquill']));
     expect(update.vite.ssr.noExternal).not.toEqual(expect.arrayContaining(['preact', 'preact-render-to-string']));
     expect(update.vite.resolve.dedupe).toEqual(expect.arrayContaining(['@preact/signals', 'preact']));
   });
@@ -303,7 +324,7 @@ describe('defineOxiquillConfig', () => {
 
     expect(update.vite.ssr.external).toEqual(['external-runtime']);
     expect(update.vite.ssr.noExternal).toEqual(
-      expect.arrayContaining(['consumer-package', consumerNoExternal, '@astrojs/preact'])
+      expect.arrayContaining(['consumer-package', consumerNoExternal, '@astrojs/preact', 'oxiquill'])
     );
     expect(update.vite.resolve.dedupe).toEqual(
       expect.arrayContaining(['consumer-runtime', '@preact/signals', 'preact'])
@@ -322,7 +343,7 @@ describe('defineOxiquillConfig', () => {
 
       const update = runConfigSetup(config, linkedConsumerRoot);
 
-      expect(update.vite.ssr.noExternal).toEqual(expect.arrayContaining([noExternal, '@astrojs/preact']));
+      expect(update.vite.ssr.noExternal).toEqual(expect.arrayContaining([noExternal, '@astrojs/preact', 'oxiquill']));
     }
   });
 

@@ -1,59 +1,86 @@
-import { useEffect, useMemo, useRef, useState } from 'preact/hooks';
-import { initialValues } from '../../lib/doc-runtime/interactive-cell-model';
-import { runInteractiveCell } from '../../lib/doc-runtime/runtime-client';
-import type { NormalizedCellExecutionResult } from '../../lib/doc-runtime/output-artifacts';
-import type { CellManifest, InputValues } from '../../lib/doc-runtime/types';
+import { useEffect, useRef, useState } from 'preact/hooks';
+import { initialValues } from '../../lib/doc-runtime/interactive-cell-model.js';
+import { createLatestRequestScheduler, createRunOnceCache } from '../../lib/doc-runtime/interactive-cell-scheduler.js';
+import { runInteractiveCell } from '../../lib/doc-runtime/runtime-client.js';
+import type { NormalizedCellExecutionResult } from '../../lib/doc-runtime/output-artifacts.js';
+import type { CellManifest, InputValues } from '../../lib/doc-runtime/types.js';
 
 type InputValue = InputValues[string];
 
+type CellRunRequest = {
+  autorunKey?: string;
+  cell: CellManifest;
+  runtimeVersion: string;
+  values: InputValues;
+};
+
+type ExecutionState =
+  | { status: 'idle' }
+  | { status: 'running' }
+  | { result: NormalizedCellExecutionResult; status: 'success' }
+  | { error: string; status: 'error' };
+
+const autorunRequests = createRunOnceCache<string, NormalizedCellExecutionResult>();
+const reactiveDebounceMs = 150;
+
 export function useInteractiveCellRun(cell: CellManifest, runtimeVersion: string) {
   const [values, setValues] = useState<InputValues>(() => initialValues(cell.inputs));
-  const [result, setResult] = useState<NormalizedCellExecutionResult>();
-  const [error, setError] = useState<string>();
-  const [isRunning, setIsRunning] = useState(false);
-  const latestRunId = useRef(0);
-  const serializedValues = useMemo(() => JSON.stringify(values), [values]);
+  const [execution, setExecution] = useState<ExecutionState>({ status: 'idle' });
+  const valuesRef = useRef(values);
+  const schedulerRef =
+    useRef<ReturnType<typeof createLatestRequestScheduler<CellRunRequest, NormalizedCellExecutionResult>>>();
 
-  useEffect(() => {
-    if (cell.run !== 'autorun') return;
-    void run();
-  }, [cell.id, runtimeVersion]);
-
-  useEffect(() => {
-    if (cell.run !== 'reactive') return;
-    void run();
-  }, [cell.id, runtimeVersion, serializedValues]);
-
-  async function run() {
-    const runId = latestRunId.current + 1;
-    latestRunId.current = runId;
-    setIsRunning(true);
-    setError(undefined);
-
-    try {
-      const nextResult = await runInteractiveCell(cell, values, runtimeVersion);
-      if (latestRunId.current === runId) {
-        setResult(nextResult);
-      }
-    } catch (caught) {
-      if (latestRunId.current === runId) {
-        setError(caught instanceof Error ? caught.message : String(caught));
-      }
-    } finally {
-      if (latestRunId.current === runId) {
-        setIsRunning(false);
-      }
+  schedulerRef.current ??= createLatestRequestScheduler({
+    execute: ({ autorunKey, cell: requestedCell, runtimeVersion: requestedVersion, values: requestedValues }) => {
+      const execute = () => runInteractiveCell(requestedCell, requestedValues, requestedVersion);
+      return autorunKey ? autorunRequests.getOrCreate(autorunKey, execute) : execute();
+    },
+    onError: (caught) => {
+      setExecution({ error: caught instanceof Error ? caught.message : String(caught), status: 'error' });
+    },
+    onResult: (result) => {
+      setExecution({ result, status: 'success' });
+    },
+    onScheduled: () => {
+      setExecution({ status: 'running' });
     }
+  });
+
+  useEffect(() => {
+    const scheduler = schedulerRef.current;
+    return () => scheduler?.dispose();
+  }, []);
+
+  useEffect(() => {
+    if (cell.run === 'reactive') {
+      schedule(valuesRef.current);
+    } else if (cell.run === 'autorun') {
+      schedule(valuesRef.current, 0, JSON.stringify([cell.id, runtimeVersion]));
+    }
+  }, [cell.id, cell.run, runtimeVersion]);
+
+  function schedule(nextValues: InputValues, delayMs = 0, autorunKey?: string): void {
+    schedulerRef.current?.schedule({ autorunKey, cell, runtimeVersion, values: nextValues }, delayMs);
+  }
+
+  function run(): void {
+    schedule(valuesRef.current);
   }
 
   function setInputValue(inputName: string, value: InputValue) {
-    setValues((current) => ({ ...current, [inputName]: value }));
+    const nextValues = { ...valuesRef.current, [inputName]: value };
+    valuesRef.current = nextValues;
+    setValues(nextValues);
+
+    if (cell.run === 'reactive') {
+      schedule(nextValues, reactiveDebounceMs);
+    }
   }
 
   return {
-    error,
-    isRunning,
-    result,
+    error: execution.status === 'error' ? execution.error : undefined,
+    isRunning: execution.status === 'running',
+    result: execution.status === 'success' ? execution.result : undefined,
     run,
     setInputValue,
     values

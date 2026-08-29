@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'preact/hooks';
-import type { TableArtifact, TableColumn } from '../../lib/doc-runtime/types';
+import type { TableArtifact, TableColumn } from '../../lib/doc-runtime/types.js';
 
 interface TableOutputProps {
   table: TableArtifact;

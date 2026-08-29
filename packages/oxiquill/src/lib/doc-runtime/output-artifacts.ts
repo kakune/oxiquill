@@ -5,12 +5,12 @@ import type {
   PlotSpec,
   RawCellExecutionResult,
   TextArtifact
-} from './types';
+} from './types.js';
 import {
   validateOutputArtifacts,
   type ValidatedArtifactResult,
   type ValidatedOutputArtifact
-} from './output-artifact-validation';
+} from './output-artifact-validation.js';
 
 export interface NormalizedCellExecutionResult extends CellExecutionResult {
   outputResults: readonly ValidatedArtifactResult[];

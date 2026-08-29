@@ -1,0 +1,45 @@
+---
+title: Support and Security
+description: Know the supported platforms, browser matrix, execution model, and content trust boundaries.
+---
+
+## Compatibility Matrix
+
+| Capability                                                          | Linux     | macOS     | Windows                | Chromium  | Firefox   | WebKit    |
+| ------------------------------------------------------------------- | --------- | --------- | ---------------------- | --------- | --------- | --------- |
+| Core package and CLI with Node.js 24+                               | Supported | Supported | Supported              | —         | —         | —         |
+| Consumer installation with npm or pnpm                              | Supported | Supported | Supported              | —         | —         | —         |
+| Rust/Wasm generation with the pinned Rust toolchain and `wasm-pack` | Supported | Supported | Supported              | —         | —         | —         |
+| Python/Pyodide asset generation                                     | Supported | Supported | Supported              | —         | —         | —         |
+| Haskell/WASI generation with `wasm32-wasi-ghc` 9.14                 | Supported | Supported | Not supported          | —         | —         | —         |
+| Built static site and Rust/Python/Haskell execution                 | —         | —         | —                      | Supported | Supported | Supported |
+| Viewing already generated Haskell Wasm                              | —         | —         | Supported host browser | Supported | Supported | Supported |
+
+Node.js 24 or newer is the package boundary. The repository uses pnpm 11.2.2; consumers may use npm or pnpm. Native Windows cannot author/generate Haskell cells, but it can serve and view Haskell Wasm produced on Linux or macOS.
+
+## Execution Model
+
+Author-provided Rust, Python, and Haskell source becomes code that runs in a browser worker when a reader executes a cell. A worker keeps heavy computation away from the page's UI thread, but it is not a security boundary equivalent to a separate machine or account.
+
+- Rust helper crates and generated Wasm are build inputs. Review them like application dependencies.
+- Pyodide and declared Python packages execute inside the site's origin and are trusted dependencies even though Python runs in a worker.
+- Haskell runs through a WASI shim with only the descriptors supplied by Oxiquill, but the generated module remains executable content.
+- Worker timeouts protect responsiveness; they do not prove that arbitrary code is safe or confidential.
+
+Do not publish interactive code or generated runtime assets from an untrusted author without review. Do not place secrets in static pages, worker messages, source code, public assets, or build-time environment values exposed to the client.
+
+## Mermaid, Images, and Runtime Assets
+
+Mermaid source is author content rendered with Mermaid's strict security level. Review it before publication and keep Mermaid itself updated. Generated/downloaded Wasm, Pyodide JavaScript, lockfile-selected wheels, and their source mirrors are executable supply-chain inputs; Oxiquill verifies downloads but cannot establish that an intentionally selected package is trustworthy.
+
+Image data is passed to browser image decoders. SVG is rendered in image context, not injected into the page DOM, but malformed or hostile media still exercises browser parsers. Treat author-provided image data and public media as untrusted input and rely on supported, patched browsers.
+
+## Sandboxed HTML
+
+HTML artifacts render in an iframe with an empty `sandbox` attribute. The frame intentionally receives no `allow-scripts`, `allow-same-origin`, `allow-forms`, `allow-popups`, `allow-top-navigation`, or download permission. It therefore cannot execute script, access the parent DOM or same-origin storage/cookies, submit forms, open popups, or navigate the top-level page.
+
+The sandbox is not an HTML sanitizer. Passive subresources and links may still cause network requests, and browser parsing still processes the supplied markup. Prefer typed text, JSON, table, chart, or image artifacts; publish HTML only from reviewed authors.
+
+## Reporting Security Issues
+
+Do not disclose a suspected vulnerability in a public issue. Use [GitHub private vulnerability reporting](https://github.com/kakune/oxiquill/security/advisories/new). The supported-version policy and response process are in the repository [security policy](https://github.com/kakune/oxiquill/blob/main/SECURITY.md). Use [GitHub Issues](https://github.com/kakune/oxiquill/issues) for non-security bugs and support.

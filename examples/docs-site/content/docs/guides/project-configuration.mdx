@@ -1,0 +1,81 @@
+---
+title: Project Configuration
+description: Configure Astro, Starlight, Oxiquill paths, and generated output without splitting project state.
+---
+
+Oxiquill loads one project configuration and uses the same resolved paths for development, checks, generation, builds, tests, and cleanup. Keep `astro.config.mjs` at the project root unless every command receives the same `--config` option.
+
+## Minimal Configuration
+
+```js
+import { defineOxiquillConfig } from 'oxiquill/astro';
+
+export default defineOxiquillConfig({
+  site: 'https://example.com',
+  title: 'My Docs',
+  sidebar: [{ label: 'Overview', items: [{ label: 'Home', slug: 'index' }] }]
+});
+```
+
+```ts
+// content.config.ts
+export { collections } from 'oxiquill/content';
+```
+
+`defineOxiquillConfig()` returns an Astro configuration with static output, Oxiquill's Markdown transforms, Preact, and Starlight already installed.
+
+## Configuration Fields
+
+| Field                                     | Meaning                                                                                                              |
+| ----------------------------------------- | -------------------------------------------------------------------------------------------------------------------- |
+| `title`, `description`, `sidebar`         | Shorthand for the corresponding Starlight settings.                                                                  |
+| `starlight`                               | Any other Starlight option. A value here overrides the matching shorthand.                                           |
+| `framework.preact`, `framework.starlight` | Advanced integration-factory overrides used by embedded/framework consumers.                                         |
+| `integrations`                            | Additional Astro integrations, appended after Oxiquill, Preact, and Starlight.                                       |
+| `markdown`                                | Additional Astro Markdown settings and plugins. Oxiquill's required plugins run first.                               |
+| `vite`                                    | Additional Vite settings. Oxiquill preserves required aliases, deduplication, worker plugins, and filesystem access. |
+| `paths`                                   | Oxiquill-owned source, cache, generated, and public paths described below.                                           |
+| Other Astro fields                        | Passed through to Astro. Oxiquill always produces static output.                                                     |
+
+Use `oxiquillIntegration()` only when composing an Astro configuration manually. It accepts `base`, `markdown`, `paths`, and `vite`; the caller is then responsible for adding Preact and Starlight.
+
+## Path Fields
+
+| Field                  | Default                      | Resolution base             |
+| ---------------------- | ---------------------------- | --------------------------- |
+| `workspaceRoot`        | project root                 | current project/config root |
+| `frameworkRoot`        | installed `oxiquill` package | absolute/package location   |
+| `docsDir`              | `content/docs`               | `workspaceRoot`             |
+| `cratesDir`            | `crates`                     | `workspaceRoot`             |
+| `publicDir`            | `public`                     | `workspaceRoot`             |
+| `cacheDir`             | `.oxiquill`                  | `workspaceRoot`             |
+| `generatedDir`         | `generated`                  | `cacheDir`                  |
+| `rustCellsDir`         | `rust-cells`                 | `cacheDir`                  |
+| `haskellCellsDir`      | `haskell-cells`              | `cacheDir`                  |
+| `publicAssetsDir`      | `oxiquill`                   | `publicDir`                 |
+| `rustWasmPublicDir`    | `rust-wasm`                  | `publicAssetsDir`           |
+| `haskellWasmPublicDir` | `haskell-wasm`               | `publicAssetsDir`           |
+| `pyodidePublicDir`     | `pyodide`                    | `publicAssetsDir`           |
+| `licensesPublicDir`    | `licenses`                   | `publicAssetsDir`           |
+
+Every path accepts a relative string, an absolute string, or a `file:` URL. Nested relative paths resolve against the parent shown in the table, not against the process's incidental working directory.
+
+Astro's `root`, `publicDir`, `outDir`, and `cacheDir` and Oxiquill's explicit path settings must normalize to the same locations when they describe the same directory. Conflicting explicit values are errors; Oxiquill never silently chooses one. All CLI commands load this resolved configuration before reading, writing, or cleaning files.
+
+## Precedence and Merging
+
+1. `--config <path>` selects the config file; otherwise Astro's normal config discovery applies.
+2. Explicit project settings override defaults.
+3. `starlight.title`, `starlight.description`, and `starlight.sidebar` override the shorthand fields.
+4. Consumer Markdown, Vite, CSS, component, and integration additions are retained after Oxiquill's required entries.
+5. A conflicting path, missing Oxiquill integration, multiple Oxiquill integrations, or an unreadable config fails before generation or cleanup.
+
+Do not point an Oxiquill-owned output at the project root or another broad directory. `oxiquill clean` removes only validated, resolved Oxiquill paths and configured Astro output directories.
+
+## Base Paths and Public Assets
+
+Set Astro's `base` when publishing below a subpath. Oxiquill applies it to interactive-cell manifests, language runtimes, diagrams, and `/media/...` references. Keep authored public URLs root-relative; the Markdown transform adds the configured base exactly once.
+
+Generated runtime files belong under `.oxiquill` and `public/oxiquill`; the final static site belongs under Astro's `outDir` (normally `dist`). These directories are generated and must not be edited directly.
+
+When you customize generated directories, update `tsconfig.json` exclusions to the resolved cache, helper-crate target, output, and public-asset paths. Otherwise a broad include such as `**/*` can make Astro/TypeScript analyze generated JavaScript such as Pyodide instead of treating it as output.

@@ -1,10 +1,10 @@
-import { idleOutputMessage, labelsForLanguage } from '../../lib/doc-runtime/interactive-cell-model';
+import { idleOutputMessage, labelsForLanguage } from '../../lib/doc-runtime/interactive-cell-model.js';
 import {
   normalizeCellExecutionResult,
   type NormalizedCellExecutionResult
-} from '../../lib/doc-runtime/output-artifacts';
-import type { CellExecutionResult, CellManifest } from '../../lib/doc-runtime/types';
-import OutputRenderer from './OutputRenderer';
+} from '../../lib/doc-runtime/output-artifacts.js';
+import type { CellExecutionResult, CellManifest } from '../../lib/doc-runtime/types.js';
+import OutputRenderer from './OutputRenderer.js';
 
 type RuntimeLabels = ReturnType<typeof labelsForLanguage>;
 

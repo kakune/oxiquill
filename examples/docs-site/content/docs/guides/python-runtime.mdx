@@ -1,0 +1,47 @@
+---
+title: Python Runtime Assets
+description: Understand Pyodide downloads, integrity checks, caching, mirrors, retries, and offline generation.
+---
+
+Python cells execute in a browser worker using Pyodide. Oxiquill resolves the installed Pyodide release and lockfile during generation, downloads only the core files and declared packages that the manifest requires, and publishes them under `public/oxiquill/pyodide`.
+
+The built site loads those local assets. A reader does not need access to a public CDN after the site has been generated and deployed.
+
+## Verified Downloads
+
+For each wheel, Oxiquill takes the filename, release location, and expected SHA-256 from the installed `pyodide-lock.json`. A configured mirror changes only the download base; it never weakens or replaces the lockfile hash.
+
+Downloads use this sequence:
+
+1. Check the versioned Oxiquill download cache.
+2. Verify a cached file against its expected SHA-256 before use.
+3. If it is missing or corrupt and offline mode is disabled, download to a temporary file.
+4. Apply a 30-second timeout and make no more than three total attempts with bounded backoff.
+5. Verify the completed temporary file, then atomically place it in the cache.
+6. Copy the verified artifact into the resolved public Pyodide directory.
+
+A hash mismatch is always fatal for that source. Oxiquill never publishes or caches an unverified partial response.
+
+## Cache Behavior
+
+The download cache is versioned by the Pyodide/runtime inputs, so files from incompatible releases are not reused. Preserve it between local or CI builds to avoid repeat network work. Generated `.oxiquill` state and `public/oxiquill/pyodide` can be regenerated from the verified cache.
+
+If a cache entry is corrupt, remove that named entry or run online generation again; Oxiquill detects the mismatch before use. Cache diagnostics include the filename, cache path, and expected hash.
+
+## Mirrors
+
+Configure a Pyodide package mirror when the default CDN is unavailable or policy requires an internal source. The mirror must expose the same release filenames. Integrity always comes from the installed lockfile, not from mirror metadata.
+
+Mirror failures report the effective URL and distinguish DNS/connection failures, HTTP status failures, timeout, retry exhaustion, and SHA-256 mismatch. Switching mirrors does not require changing authored `packages` metadata.
+
+## Offline Mode
+
+Offline generation performs no package download. Every required core asset and wheel must already be present in the verified cache. A miss fails with the missing filename and expected SHA-256 so the cache can be populated on a connected machine and transferred without guesswork.
+
+Use offline mode only after an online generation has completed for the same Oxiquill, Pyodide, manifest, and package set. Browser execution remains offline-capable because the deployed site serves the copied assets locally.
+
+## Declared Packages
+
+Python `packages` must be a non-empty, unique list of names vendored by the installed Pyodide release. Generation rejects unknown names before downloading. Imports discovered from source may load packages already present in the published runtime, but release builds should declare non-core dependencies explicitly for deterministic preflight and caching.
+
+See [Interactive Cells](/features/interactive-cells/) for metadata and [Troubleshooting](/guides/troubleshooting/) for recovery steps.

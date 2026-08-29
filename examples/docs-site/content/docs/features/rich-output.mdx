@@ -16,20 +16,46 @@ Oxiquill renders these output kinds:
 - Images from SVG, PNG, or JPEG data.
 - Sandboxed HTML in an iframe.
 
-Oxiquill validates every artifact before rendering it and applies these runtime limits:
+Every artifact may have optional string `id`, `title`, and `caption` fields. Values received from workers are untrusted: Oxiquill validates discriminators, fields, plain-record structure, array shapes, finite numbers, row widths, MIME/base64 data, and nested values before a renderer receives them. One rejected or failing artifact shows a local diagnostic without removing valid siblings.
 
-- 100 artifacts per run.
-- 1 MiB of UTF-8 data per text, formatted JSON, or HTML artifact.
-- 10,000 rows and 100 columns per table.
-- 100,000 data points, bins, or cells per chart.
-- 10 MiB of decoded data per image.
-- 16 MiB of validated output data across one run.
+## Artifact Schema
 
-Text, JSON, and table artifacts are truncated at safe boundaries and marked as truncated. Oversized charts, images, and HTML artifacts display an artifact-local error instead. Invalid output or a renderer failure also stays local to that artifact, so valid sibling outputs remain usable.
+| Kind    | Required fields                                                | Optional behavior                                                                                   |
+| ------- | -------------------------------------------------------------- | --------------------------------------------------------------------------------------------------- |
+| `text`  | `stream: "stdout" \| "stderr" \| "display"`, `content: string` | `truncated` indicates bounded content.                                                              |
+| `json`  | `value`                                                        | Cycle-aware formatting represents BigInt explicitly; `truncated` indicates bounded serialized data. |
+| `table` | `columns`, rectangular `rows`                                  | `rowCount` records the original size; `truncated` marks a preview.                                  |
+| `chart` | Valid `spec` described below                                   | Oversize/invalid charts become a local artifact error.                                              |
+| `image` | `mime: image/png \| image/jpeg \| image/svg+xml`, valid data   | `alt` supplies the image alternative.                                                               |
+| `html`  | `html: string`, `sandboxed: true`                              | Always rendered in an iframe with an empty sandbox permission set.                                  |
 
-JSON formatting is cycle-aware. Cycles use a `[Circular -> path]` marker, BigInt values use `{ "$bigint": "value" }`, and excessively nested or oversized subtrees use a `[Truncated]` marker. Tables use the same safe formatting for structured cells. Image data must match its declared SVG, PNG, or JPEG MIME type, and PNG/JPEG payloads must be valid base64 with the matching file signature.
+Table columns contain `key`, `label`, and optional `type`: `string`, `number`, `integer`, `boolean`, `date`, `datetime`, `null`, or `unknown`. Every row must have exactly the declared column count.
 
-HTML always renders in an iframe with an empty `sandbox` attribute. Oxiquill does not grant script or same-origin permission. Table CSV controls report successful copies as well as conversion, permission, and clipboard failures.
+## Chart Schema
+
+All chart specs accept optional `title`, `xLabel`, `yLabel`, `xType`, `yType`, `legend`, `tooltip`, and `dataZoom`. Axis types are `value`, `category`, `time`, and `log`.
+
+- `line`, `scatter`, and `area`: `series[]`, each with optional `name` and `[x, y]` points.
+- `bar`: string `categories[]` plus series of numeric-or-null `values[]` with matching length.
+- `histogram`: `bins[]` as finite `[lower, upper, count]` tuples.
+- `heatmap`: optional `xCategories`/`yCategories` and finite `[x, y, value]` cells.
+
+Charts expose a textual title/caption and bounded accessible summary or equivalent table. The implementation canvas is hidden from accessibility APIs when that equivalent is present.
+
+## Resource Limits
+
+Limits apply after validation and are cumulative for each run:
+
+| Resource                    | Limit                           | Over-limit result                                              |
+| --------------------------- | ------------------------------- | -------------------------------------------------------------- |
+| Artifacts                   | 100 per run                     | Additional artifacts are rejected locally.                     |
+| Text, serialized JSON, HTML | 1 MiB per artifact              | Text/JSON may use `truncated: true`; HTML is rejected.         |
+| Table                       | 10,000 rows and 100 columns     | A bounded table may use `truncated: true` and `rowCount`.      |
+| Chart                       | 100,000 total points/bins/cells | Artifact-local error.                                          |
+| Image                       | 10 MiB decoded bytes            | Artifact-local error.                                          |
+| All validated output        | 16 MiB per run                  | Artifacts exceeding the remaining budget are rejected locally. |
+
+`truncated: true` is valid only for text, JSON, and table artifacts. Chart, image, and HTML artifacts are never silently truncated. Invalid/cyclic/over-deep JSON, ragged tables, non-finite chart values, invalid base64/MIME pairs, or unsafe structural records cannot crash the cell component.
 
 ## Python Display Helpers
 
@@ -106,3 +132,5 @@ emit_html!(r#"<p><strong>Sandboxed HTML</strong> emitted from Rust.</p>"#);
 ## When to Use Rich Output
 
 Use stdout for short explanatory text. Use JSON when readers need the exact structured value. Use tables for comparable records, charts for trends or distributions, images for generated visuals, and sandboxed HTML only when the output needs markup that cannot be represented by the other artifact types.
+
+Copy, sort, pagination, validation, running, completion, and failure states are keyboard-operable and announced with localized English/Japanese labels. Sandboxed HTML intentionally has no script or same-origin permission; see [Support and Security](/guides/support-and-security/) for the full trust boundary.

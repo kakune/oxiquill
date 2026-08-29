@@ -97,7 +97,8 @@ export async function syncDocRuntime({
   highlighter,
   helperCrates,
   paths,
-  syncLicenses = syncLicenseArtifacts
+  syncLicenses = syncLicenseArtifacts,
+  syncPyodide = copyPyodideAssets
 }) {
   const cells = await collectCells({
     fileSystem,
@@ -117,7 +118,7 @@ export async function syncDocRuntime({
     }),
     writeIfChanged(pathInUrl(paths.rustCellsDir, 'src/lib.rs'), generateRustLib(rustCells), { fileSystem })
   ]);
-  const pyodideChanged = await copyPyodideAssets({ fileSystem, paths });
+  const pyodideChanged = await syncPyodide({ fileSystem, paths });
   const licensesChanged = await syncLicenses({ fileSystem, paths });
   const summary = summarizeCells(cells);
 

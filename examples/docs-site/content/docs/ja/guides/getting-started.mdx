@@ -1,111 +1,137 @@
 ---
 title: はじめに
-description: 依存関係を入れ、ローカルサイトを起動し、静的出力をビルドして確認します。
+description: Oxiquill static documentation project を作成、install、check、build、preview、公開します。
 ---
 
-この guide は、ドキュメントサイトをローカルで動かすとき、または docs 変更が build できるか確認するときに使います。
+Oxiquill には Node.js 24 以上が必要です。実行可能 cell のない static starter は Node.js と npm/pnpm だけで動き、language toolchain は document manifest がその language を使うときだけ必要です。
 
-## 前提
+## Project を作る
 
-作業前に次の tool を用意します。
-
-- Node.js と `pnpm`
-- Rust toolchain `1.95.0`
-- `wasm-pack`
-- `cargo-llvm-cov`
-- Haskell セルを書く場合は `wasm32-wasi-ghc`
-
-Rust toolchain と Wasm target は `rust-toolchain.toml` で固定されています。通常のドキュメント作業で toolchain を変更しないでください。Haskell セルは GHC の `wasm32-wasi` backend を使い、通常は `ghc-wasm-meta` で導入します。`~/.ghc-wasm/env` は toolchain を有効化します。Oxiquill command では、`PATH` 全体を変えずに `OXIQUILL_HASKELL_GHC` で `wasm32-wasi-ghc` を指定することもできます。ghc-wasm の static Node が `PATH` の先頭にある場合は、Astro/Vite subprocess 用に `OXIQUILL_NODE` で通常の Node.js binary を指定してください。
-
-## 依存関係を入れる
+supported starter command は dependency install や Git init をせずに新しい directory を作ります。
 
 ```sh
-pnpm install
+pnpm dlx oxiquill init my-docs
+cd my-docs
 ```
 
-依存関係には Astro、Starlight、Preact、Pyodide、Mermaid、KaTeX、Vitest、Playwright、実行可能セル runtime を生成する `oxiquill` CLI が含まれます。
+`my-docs` を省略すると current directory を初期化します。target は未作成または空でなければならず、`init` は non-empty directory を上書きせず force option もありません。
 
-## Consumer repository を作る
+既存 static documentation project に Oxiquill を追加する場合:
 
-別の documentation repository では、`oxiquill` だけを追加し、script は CLI に委譲します。
+```sh
+pnpm add oxiquill astro @astrojs/starlight
+```
+
+または:
+
+```sh
+npm install oxiquill astro @astrojs/starlight
+```
+
+starter が作成していない場合は `package.json` に次の script を追加します。
 
 ```json
 {
-  "dependencies": {
-    "oxiquill": "0.2.0"
-  },
   "scripts": {
     "dev": "oxiquill dev",
     "build": "oxiquill build",
-    "check": "oxiquill check"
+    "check": "oxiquill check",
+    "preview": "oxiquill preview",
+    "clean": "oxiquill clean"
   }
 }
 ```
 
-`link:`、workspace、Git dependency、submodule 形式でも同じ setup を使い、dependency specifier だけを変えます。consumer config は次の形です。
+## Site を設定する
+
+`astro.config.mjs`:
 
 ```js
+import starlight from '@astrojs/starlight';
 import { defineOxiquillConfig } from 'oxiquill/astro';
 
 export default defineOxiquillConfig({
+  framework: { starlight },
+  site: 'https://example.com',
   title: 'My Docs',
   sidebar: [{ label: 'Overview', items: [{ label: 'Home', slug: 'index' }] }]
 });
 ```
 
+`content.config.ts`:
+
 ```ts
-export { collections } from 'oxiquill/content';
+import { defineCollection } from 'astro:content';
+import { docsLoader } from '@astrojs/starlight/loaders';
+import { docsSchema } from '@astrojs/starlight/schema';
+import { createOxiquillCollections } from 'oxiquill/content';
+
+export const collections = createOxiquillCollections({ defineCollection, docsLoader, docsSchema });
 ```
 
-## 開発サーバーを起動する
+最初の page を `content/docs/index.mdx` に書きます。
+
+```md
+---
+title: Home
+description: Start writing with Oxiquill.
+---
+
+# Home
+
+Write prose-first technical documentation in MDX.
+```
+
+source/cache/public/output path を変える前に [プロジェクト設定](/ja/guides/project-configuration/) を確認してください。
+
+## Install と check
+
+project で選んだ package manager を使います。
+
+```sh
+pnpm install
+pnpm check
+```
+
+または:
+
+```sh
+npm install
+npm run check
+```
+
+`check` は project config を読み、cell metadata を検証し、必要な runtime/asset だけを生成して Astro type を同期し、Astro/MDX/TypeScript diagnostic を報告します。
+
+## Develop、build、preview
 
 ```sh
 pnpm dev
 ```
 
-dev command は runtime 生成から始まり、その後 docs と helper source を監視します。
+prose、通常 code block、math、Mermaid、media は Astro HMR を使います。cell/helper source の変更は対応 manifest/runtime を再生成します。Ctrl-C で server を停止します。
 
-- 本文、通常 code block、数式、Mermaid、メディアの変更は Astro HMR で更新されます。
-- Python セルの変更は生成 cell manifest を更新します。
-- Rust セルや `crates/*` の変更は生成 Wasm runtime を再ビルドします。
-- Haskell セルの変更は、Haskell セルがある場合に生成 WASI runtime を再ビルドします。
-
-Haskell compiler がない、または Haskell セルの build に失敗した場合でも、`pnpm dev` と `pnpm dev:runtime` は serving を続け、browser 上の Haskell セルに error を表示します。`pnpm build`、`pnpm check`、`pnpm wasm:dev`、`pnpm wasm:build`、`pnpm test:wasm` などの strict command は、`wasm32-wasi-ghc` が利用でき、セルが build できるまで失敗します。
-
-runtime 生成を Astro と分けて確認したい場合は、次の command を別々の terminal で実行します。
-
-```sh
-pnpm dev:runtime
-pnpm dev:astro
-```
-
-## 静的出力をビルドする
+production site を作って確認します。
 
 ```sh
 pnpm build
-```
-
-build は Wasm runtime build、Astro check、静的サイトの `dist/` 出力を実行します。
-
-## build 結果を確認する
-
-```sh
 pnpm preview
 ```
 
-development server ではなく production output を確認したいときは、`pnpm build` の後に preview を使います。
+`build` は strict generation/check 後に Astro の static `outDir`（通常 `dist`）を書きます。`preview` は既存 output を serve するだけで、production web server、TLS、domain、reverse proxy の代わりではありません。
+
+## Optional language prerequisite
+
+| Content                          | Author/build prerequisite                                     | Reader prerequisite                     |
+| -------------------------------- | ------------------------------------------------------------- | --------------------------------------- |
+| Static MDX、math、Mermaid、media | Node.js 24+ と npm/pnpm                                       | supported browser                       |
+| Python cell                      | generation 時の network または verified offline Pyodide cache | supported browser。asset は site が配信 |
+| Rust cell                        | pinned Rust toolchain、`wasm32-unknown-unknown`、`wasm-pack`  | supported browser                       |
+| Haskell cell                     | Linux/macOS と `wasm32-wasi-ghc` 9.14                         | 任意 desktop OS の supported browser    |
+
+repository maintainer は full validation suite 用に `cargo-llvm-cov` と Playwright browser も必要です。
 
 ## 生成物
 
-runtime generation は次の path に生成物を書きます。
+Oxiquill は `.oxiquill/**`、`public/oxiquill/**`、Astro type/cache output、`dist/**` を所有します。ignore し、CLI command から再生成してください。matching manifest、fingerprint、runtime input が同一でない限り、config 間で生成物を copy しないでください。
 
-- `.oxiquill/generated`
-- `.oxiquill/rust-cells`
-- `.oxiquill/haskell-cells`
-- `public/oxiquill/pyodide`
-- `public/oxiquill/rust-wasm`
-- `public/oxiquill/haskell-wasm`
-- `public/oxiquill/licenses`
-- `dist`
-
-これらの path を直接編集しないでください。MDX、helper crate、script、手書き runtime code を変更してから既存 command で再生成します。
+続けて [執筆ガイド](/ja/guides/authoring/)、[CLI reference](/ja/reference/cli/)、[トラブルシューティング](/ja/guides/troubleshooting/) を参照してください。

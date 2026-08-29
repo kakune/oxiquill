@@ -1,4 +1,4 @@
-import { describe, expect, it, vi } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import {
   createInteractiveCellRunner,
   resetInteractiveRuntime,
@@ -16,6 +16,7 @@ import type {
 
 class FakeWorker {
   messages: RuntimeWorkerRequest[] = [];
+  postMessageFailure: unknown;
   terminated = false;
 
   private listeners = new Map<string, Set<(event: Event) => void>>();
@@ -25,6 +26,7 @@ class FakeWorker {
   }
 
   postMessage(message: RuntimeWorkerRequest): void {
+    if (this.postMessageFailure !== undefined) throw this.postMessageFailure;
     this.messages.push(message);
   }
 
@@ -38,6 +40,10 @@ class FakeWorker {
 
   emitError(message: string): void {
     this.emit('error', { message } as ErrorEvent);
+  }
+
+  emitMessageError(): void {
+    this.emit('messageerror', {} as MessageEvent);
   }
 
   private emit(type: string, event: Event): void {
@@ -91,6 +97,10 @@ function makeRunner() {
 
   return { runner, workers };
 }
+
+afterEach(() => {
+  vi.useRealTimers();
+});
 
 describe('runtime client', () => {
   it('delegates the default browser runner to Worker adapters', async () => {
@@ -249,17 +259,95 @@ describe('runtime client', () => {
     expect(runtimeHaskellFingerprintHash(undefined)).toBeUndefined();
   });
 
-  it('rejects failed worker responses', async () => {
+  it('rejects failed cell responses without resetting the shared worker', async () => {
     const { runner, workers } = makeRunner();
     const promise = runner.runInteractiveCell(makeCell('python'), {});
 
     workers[0].emitMessage({ requestId: 1, ok: false, error: 'boom' });
 
     await expect(promise).rejects.toThrow('boom');
+    const next = runner.runInteractiveCell(makeCell('python', { id: 'python-next' }), {});
+    expect(workers).toHaveLength(1);
+    workers[0].emitMessage({ requestId: 2, ok: true, result });
+    await expect(next).resolves.toEqual(normalizedResult);
   });
 
-  it('resets workers on timeout and explicit reset', async () => {
+  it('rejects every request owned by a timed-out worker and creates a clean replacement', async () => {
     vi.useFakeTimers();
+    const workers: FakeWorker[] = [];
+    const clearTimer = vi.fn(clearTimeout);
+    const runner = createInteractiveCellRunner({
+      clearTimeout: clearTimer,
+      createWorker: () => {
+        const worker = new FakeWorker();
+        workers.push(worker);
+        return worker as unknown as Worker;
+      },
+      setTimeout
+    });
+
+    runner.resetWorker('rust');
+    const timedOut = runner.runInteractiveCell(makeCell('rust', { timeoutMs: 10 }), {});
+    const companion = runner.runInteractiveCell(makeCell('rust', { id: 'rust-companion' }), {});
+    vi.advanceTimersByTime(10);
+
+    await expect(timedOut).rejects.toThrow('timed out after 10ms');
+    await expect(companion).rejects.toThrow('timed out after 10ms');
+    expect(workers[0].terminated).toBe(true);
+    expect(clearTimer).toHaveBeenCalledTimes(2);
+
+    const next = runner.runInteractiveCell(makeCell('rust'), {});
+    expect(workers).toHaveLength(2);
+    workers[1].emitMessage({ requestId: 3, ok: true, result });
+    await expect(next).resolves.toEqual(normalizedResult);
+
+    const reset = runner.runInteractiveCell(makeCell('rust'), {});
+    runner.resetWorker('rust');
+
+    await expect(reset).rejects.toThrow('rust worker was reset');
+    expect(workers[1].terminated).toBe(true);
+  });
+
+  it('rejects only requests owned by a failed worker and replaces that worker', async () => {
+    const { runner, workers } = makeRunner();
+    const firstRust = runner.runInteractiveCell(makeCell('rust'), {});
+    const secondRust = runner.runInteractiveCell(makeCell('rust', { id: 'rust-second' }), {});
+    const python = runner.runInteractiveCell(makeCell('python'), {});
+
+    expect(workers).toHaveLength(2);
+    workers[0].emitError('worker failed');
+
+    await expect(firstRust).rejects.toThrow('worker failed');
+    await expect(secondRust).rejects.toThrow('worker failed');
+    expect(workers[0].terminated).toBe(true);
+    workers[1].emitMessage({ requestId: 3, ok: true, result });
+    await expect(python).resolves.toEqual(normalizedResult);
+
+    const replacement = runner.runInteractiveCell(makeCell('rust'), {});
+    expect(workers).toHaveLength(3);
+    workers[2].emitMessage({ requestId: 4, ok: true, result });
+    await expect(replacement).resolves.toEqual(normalizedResult);
+  });
+
+  it('ignores responses emitted by a worker that does not own the request', async () => {
+    const { runner, workers } = makeRunner();
+    let settled = false;
+    const rust = runner.runInteractiveCell(makeCell('rust'), {}).finally(() => {
+      settled = true;
+    });
+    const python = runner.runInteractiveCell(makeCell('python'), {});
+
+    workers[1].emitMessage({ requestId: 1, ok: true, result });
+    await Promise.resolve();
+    expect(settled).toBe(false);
+
+    workers[0].emitMessage({ requestId: 1, ok: true, result });
+    workers[1].emitMessage({ requestId: 2, ok: true, result });
+    await expect(rust).resolves.toEqual(normalizedResult);
+    await expect(python).resolves.toEqual(normalizedResult);
+  });
+
+  it('replaces workers after message deserialization and synchronous post failures', async () => {
     const workers: FakeWorker[] = [];
     const runner = createInteractiveCellRunner({
       clearTimeout,
@@ -271,32 +359,36 @@ describe('runtime client', () => {
       setTimeout
     });
 
-    runner.resetWorker('rust');
-    const promise = runner.runInteractiveCell(makeCell('rust', { timeoutMs: 10 }), {});
-    vi.advanceTimersByTime(10);
-
-    await expect(promise).rejects.toThrow('timed out after 10ms');
+    const unreadable = runner.runInteractiveCell(makeCell('haskell'), {});
+    workers[0].emitMessageError();
+    await expect(unreadable).rejects.toThrow('haskell worker sent an unreadable message');
     expect(workers[0].terminated).toBe(true);
 
-    const next = runner.runInteractiveCell(makeCell('rust'), {});
-    expect(workers).toHaveLength(2);
-    runner.resetWorker('rust');
+    const failedWorker = new FakeWorker();
+    failedWorker.postMessageFailure = 'post failed';
+    const postFailureRunner = createInteractiveCellRunner({
+      clearTimeout,
+      createWorker: () => {
+        workers.push(failedWorker);
+        return failedWorker as unknown as Worker;
+      },
+      setTimeout
+    });
+    const failedPost = postFailureRunner.runInteractiveCell(makeCell('python'), {});
 
-    await expect(next).rejects.toThrow('rust worker was reset');
-    expect(workers[1].terminated).toBe(true);
-    vi.useRealTimers();
+    await expect(failedPost).rejects.toThrow('post failed');
+    expect(failedWorker.terminated).toBe(true);
   });
 
-  it('rejects pending requests when a worker errors', async () => {
-    const { runner, workers } = makeRunner();
-    const rust = runner.runInteractiveCell(makeCell('rust'), {});
-    const python = runner.runInteractiveCell(makeCell('python'), {});
+  it('returns worker construction failures as rejected promises', async () => {
+    const runner = createInteractiveCellRunner({
+      clearTimeout,
+      createWorker: () => {
+        throw new Error('worker construction failed');
+      },
+      setTimeout
+    });
 
-    expect(workers).toHaveLength(2);
-    workers[0].emitError('worker failed');
-
-    await expect(rust).rejects.toThrow('worker failed');
-    workers[1].emitMessage({ requestId: 2, ok: true, result });
-    await expect(python).resolves.toEqual(normalizedResult);
+    await expect(runner.runInteractiveCell(makeCell('rust'), {})).rejects.toThrow('worker construction failed');
   });
 });
