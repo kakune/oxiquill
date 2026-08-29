@@ -27,6 +27,7 @@ import {
 import { listHelperCrates } from './doc-runtime/helper-crate-service.mjs';
 import { normalizePath } from './doc-runtime/path-utils.mjs';
 import { copyPyodideAssets } from './doc-runtime/pyodide-assets.mjs';
+import { syncLicenseArtifacts } from './license-notices.mjs';
 import {
   createRuntimeVersion,
   generateRuntimeVersionModule,
@@ -72,6 +73,15 @@ export {
   MissingHaskellWasiCompilerError,
   resolveHaskellWasiCompiler
 } from './doc-runtime/wasm-build.mjs';
+export {
+  collectBundledPackageNotices,
+  collectBundleModuleIds,
+  collectRuntimeArtifactNotices,
+  createBundledModuleCollector,
+  generateThirdPartyLicenseReport,
+  packageRootFromModuleId,
+  syncLicenseArtifacts
+} from './license-notices.mjs';
 
 export function createDocRuntimePaths(rootOrOptions = process.cwd()) {
   const options = typeof rootOrOptions === 'object' && !(rootOrOptions instanceof URL)
@@ -106,7 +116,8 @@ export async function syncDocRuntime({
   fileSystem = defaultFileSystem,
   highlighter,
   helperCrates,
-  paths
+  paths,
+  syncLicenses = syncLicenseArtifacts
 }) {
   const cells = await collectCells({
     fileSystem,
@@ -133,12 +144,14 @@ export async function syncDocRuntime({
     writeIfChanged(pathInUrl(paths.rustCellsDir, 'src/lib.rs'), generateRustLib(rustCells), { fileSystem })
   ]);
   const pyodideChanged = await copyPyodideAssets({ fileSystem, paths });
+  const licensesChanged = await syncLicenses({ fileSystem, paths });
   const summary = summarizeCells(cells);
 
   return {
     ...summary,
     cellsChanged: writes[0] || writes[1],
     haskellChanged: writes[2],
+    licensesChanged,
     pyodideChanged,
     rustChanged: writes[3] || writes[4]
   };

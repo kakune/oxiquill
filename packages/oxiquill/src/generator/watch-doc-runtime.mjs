@@ -8,6 +8,7 @@ import {
   markRuntimeReady,
   shouldBuildHaskellWasm,
   shouldBuildWasm,
+  syncLicenseArtifacts,
   syncDocRuntime
 } from './doc-runtime-service.mjs';
 import {
@@ -59,6 +60,8 @@ export async function main(argv = process.argv.slice(2)) {
         console.warn(`[runtime] Haskell/WASI runtime unavailable: ${result.error.message}`);
       }
     }
+
+    await syncLicenseArtifacts({ paths: context.paths });
 
     await markRuntimeReady({ paths: context.paths, summary: current });
     previous = current;
