@@ -7,6 +7,7 @@ import { fileURLToPath } from 'node:url';
 
 const repositoryRoot = fileURLToPath(new URL('../../', import.meta.url));
 const packageRoot = path.join(repositoryRoot, 'packages/oxiquill');
+const packageReadme = await readFile(path.join(packageRoot, 'README.md'), 'utf8');
 const temporaryRoot = await mkdtemp(path.join(tmpdir(), 'oxiquill-package-'));
 
 try {
@@ -32,6 +33,17 @@ try {
     )
   );
   assert.ok(actualFiles.every((filePath) => !filePath.endsWith('.tsx')));
+
+  for (const requiredText of [
+    'pnpm dlx oxiquill init',
+    'npm install oxiquill',
+    'oxiquill preview',
+    'https://kakune.github.io/oxiquill/reference/package-api/',
+    'https://github.com/kakune/oxiquill/security/policy',
+    'MIT License or the Apache License, Version 2.0'
+  ]) {
+    assert.ok(packageReadme.includes(requiredText), `npm package README is missing ${requiredText}`);
+  }
 
   const cliPath = path.join(packageRoot, 'dist/cli/index.mjs');
   assert.ok((await readFile(cliPath, 'utf8')).startsWith('#!/usr/bin/env node\n'));

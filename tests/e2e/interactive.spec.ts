@@ -298,6 +298,15 @@ test('localized pages and media examples are available', async ({ page }) => {
   await expect(localizedCell.getByRole('button', { name: 'コードを隠す' })).toBeVisible();
 });
 
+test('the production site serves the custom 404 page', async ({ page }) => {
+  const response = await page.goto('/this-route-does-not-exist/');
+
+  expect(response?.status()).toBe(404);
+  await expect(page.getByRole('heading', { name: 'Page Not Found', exact: true })).toBeVisible();
+  await expect(page.getByRole('link', { name: 'Go to the English documentation home' })).toHaveAttribute('href', '/');
+  await expect(page.getByRole('link', { name: '日本語ドキュメントのトップへ' })).toHaveAttribute('href', '/ja/');
+});
+
 async function sidebarPadding(mainFrame: Locator): Promise<number> {
   return mainFrame.evaluate((element) => parseFloat(getComputedStyle(element).paddingInlineStart));
 }
