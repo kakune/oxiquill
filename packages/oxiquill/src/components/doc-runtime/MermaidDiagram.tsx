@@ -1,5 +1,6 @@
 import type { MermaidConfig } from 'mermaid';
 import { useEffect, useMemo, useRef, useState } from 'preact/hooks';
+import { labelsForLanguage, type MermaidDiagramKind } from '../../lib/doc-runtime/runtime-localization.js';
 
 interface MermaidDiagramProps {
   diagramId: string;
@@ -19,6 +20,8 @@ export default function MermaidDiagram({ diagramId, source }: MermaidDiagramProp
   const [state, setState] = useState<RenderState>('idle');
   const [colorScheme, setColorScheme] = useState<MermaidColorScheme>(() => getMermaidColorScheme());
   const renderId = useMemo(() => `doc-${diagramId}`, [diagramId]);
+  const labels = useMemo(() => labelsForLanguage(globalThis.document?.documentElement.lang), []);
+  const ids = mermaidIds(diagramId);
 
   useEffect(() => {
     setColorScheme(getMermaidColorScheme());
@@ -55,13 +58,13 @@ export default function MermaidDiagram({ diagramId, source }: MermaidDiagramProp
         if (cancelled) return;
 
         renderElement.innerHTML = svg;
+        hideRenderedSvgFromAccessibility(renderElement);
         bindFunctions?.(renderElement);
         setState('ready');
       } catch (caught) {
         if (cancelled) return;
 
         const message = caught instanceof Error ? caught.message : String(caught);
-        renderElement.textContent = 'Mermaid diagram could not be rendered.';
         setError(message);
         setState('error');
       }
@@ -76,19 +79,65 @@ export default function MermaidDiagram({ diagramId, source }: MermaidDiagramProp
   }, [colorScheme, renderId, source]);
 
   return (
-    <figure class="mermaid-diagram" data-state={state} data-testid="mermaid-diagram">
-      <div ref={container} class="mermaid-diagram__surface" aria-label="Mermaid diagram" />
+    <figure
+      class="mermaid-diagram"
+      aria-labelledby={ids.title}
+      aria-describedby={ids.description}
+      data-state={state}
+      data-testid="mermaid-diagram"
+    >
+      <span id={ids.title} class="doc-visually-hidden">
+        {labels.mermaidTitle(mermaidDiagramKind(source))}
+      </span>
+      <span id={ids.description} class="doc-visually-hidden">
+        {labels.mermaidDescription(source)}
+      </span>
+      <div
+        ref={container}
+        class="mermaid-diagram__surface"
+        aria-describedby={ids.description}
+        aria-labelledby={ids.title}
+        role="img"
+      />
       {state === 'idle' || state === 'rendering' ? (
         <figcaption class="empty-state" role="status">
-          Rendering diagram...
+          {labels.mermaidLoading}
         </figcaption>
       ) : error ? (
         <figcaption class="error-state" role="alert">
-          {error}
+          {labels.mermaidError(error)}
         </figcaption>
       ) : null}
     </figure>
   );
+}
+
+export function mermaidDiagramKind(source: string): MermaidDiagramKind {
+  const firstLine = source
+    .split('\n')
+    .map((line) => line.trim())
+    .find((line) => line !== '' && !line.startsWith('%%'))
+    ?.toLowerCase();
+  if (!firstLine) return 'diagram';
+  if (firstLine.startsWith('flowchart') || firstLine.startsWith('graph')) return 'flowchart';
+  if (firstLine.startsWith('sequencediagram')) return 'sequence';
+  if (firstLine.startsWith('statediagram')) return 'state';
+  if (firstLine.startsWith('classdiagram')) return 'class';
+  if (firstLine.startsWith('erdiagram')) return 'entityRelationship';
+  if (firstLine.startsWith('journey')) return 'journey';
+  if (firstLine.startsWith('timeline')) return 'timeline';
+  return 'diagram';
+}
+
+function mermaidIds(diagramId: string) {
+  const root = `doc-mermaid-${diagramId}`;
+  return { description: `${root}-description`, title: `${root}-title` };
+}
+
+function hideRenderedSvgFromAccessibility(container: HTMLDivElement): void {
+  const svg = container.querySelector('svg');
+  svg?.setAttribute('aria-hidden', 'true');
+  svg?.setAttribute('focusable', 'false');
 }
 
 export function getMermaidColorScheme(): MermaidColorScheme {

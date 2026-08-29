@@ -28,7 +28,7 @@ export const supportedPyodidePackages = [
 ];
 
 const cellFields = new Set(['id', 'title', 'run', 'inputs', 'packages', 'crates', 'timeoutMs', 'showSource']);
-const inputFields = new Set(['type', 'label', 'value', 'min', 'max', 'step', 'integer', 'options']);
+const inputFields = new Set(['type', 'label', 'description', 'value', 'min', 'max', 'step', 'integer', 'options']);
 const optionFields = new Set(['label', 'value']);
 const localIdPattern = /^[a-z][a-z0-9]*(?:-[a-z0-9]+)*$/u;
 const inputNamePattern = /^[a-z][a-z0-9_]*$/u;
@@ -320,6 +320,7 @@ function normalizeInput(name, value, context, diagnostics) {
   diagnostics.push(...unknownFieldDiagnostics(value, inputFields, context, `${inputPath}.`));
   const type = normalizeInputType(value, inputPath, context, diagnostics);
   const label = normalizeInputLabel(value, name, inputPath, context, diagnostics);
+  const description = normalizeInputDescription(value, inputPath, context, diagnostics);
   const integer = normalizeInputInteger(value, type, inputPath, context, diagnostics);
   const inputValue = normalizeInputValue(value, type, inputPath, context, diagnostics);
   const min = normalizeInputNumber(value, 'min', type, inputPath, context, diagnostics);
@@ -330,7 +331,18 @@ function normalizeInput(name, value, context, diagnostics) {
   validateNumericConstraints({ integer, max, min, step, type, value: inputValue }, inputPath, context, diagnostics);
   validateOptionDefault(type, inputValue, options, inputPath, context, diagnostics);
 
-  return { name, type, label, value: inputValue, min, max, step, integer, options };
+  return {
+    name,
+    type,
+    label,
+    ...(description ? { description } : {}),
+    value: inputValue,
+    min,
+    max,
+    step,
+    integer,
+    options
+  };
 }
 
 function normalizeInputType(value, inputPath, context, diagnostics) {
@@ -342,9 +354,16 @@ function normalizeInputType(value, inputPath, context, diagnostics) {
 
 function normalizeInputLabel(value, name, inputPath, context, diagnostics) {
   if (!hasOwn(value, 'label')) return name;
-  if (typeof value.label === 'string') return value.label;
-  diagnostics.push(diagnostic(context, `${inputPath}.label`, 'Expected a string.'));
+  if (typeof value.label === 'string' && value.label.trim() !== '') return value.label.trim();
+  diagnostics.push(diagnostic(context, `${inputPath}.label`, 'Expected a non-empty string.'));
   return name;
+}
+
+function normalizeInputDescription(value, inputPath, context, diagnostics) {
+  if (!hasOwn(value, 'description')) return undefined;
+  if (typeof value.description === 'string' && value.description.trim() !== '') return value.description.trim();
+  diagnostics.push(diagnostic(context, `${inputPath}.description`, 'Expected a non-empty string.'));
+  return undefined;
 }
 
 function normalizeInputInteger(value, type, inputPath, context, diagnostics) {

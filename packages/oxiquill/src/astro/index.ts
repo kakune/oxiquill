@@ -29,12 +29,10 @@ import {
   collectBundleModuleIds,
   createBundledModuleCollector,
   createDocRuntimeContext,
-  markRuntimeReady,
   syncDocRuntime,
   syncLicenseArtifacts
 } from '../generator/doc-runtime-service.mjs';
 import { createBrowserBundleCollector, syncBrowserBundleReport } from '../generator/browser-bundle-report.mjs';
-import { buildHaskellWasm, buildRustWasm } from '../generator/doc-runtime/wasm-build.mjs';
 import remarkInteractiveCells from '../lib/doc-runtime/remark-interactive-cells.mjs';
 import remarkMermaidDiagrams from '../lib/doc-runtime/remark-mermaid-diagrams.mjs';
 import remarkPublicAssetBase from '../lib/doc-runtime/remark-public-asset-base.mjs';
@@ -134,6 +132,9 @@ export interface OxiquillIntegrationOptions {
 const createDocRuntimeContextForPaths = createDocRuntimeContext as unknown as (options: {
   paths: OxiquillPaths;
 }) => Promise<DocRuntimeContext>;
+const syncDocRuntimeForBuild = syncDocRuntime as unknown as (
+  options: DocRuntimeContext & { mode: 'build' }
+) => Promise<unknown>;
 
 export function defineOxiquillConfig<StarlightOptions extends object>(
   options: OxiquillConfig<StarlightOptions>
@@ -288,14 +289,10 @@ function createOxiquillIntegration(
 
         bundledModules.reset();
         browserBundle.reset();
+        if (process.env.OXIQUILL_RUNTIME_OWNER === 'cli') return;
+
         const context = await createDocRuntimeContextForPaths({ paths });
-        const summary = await syncDocRuntime(context);
-        await buildRustWasm({ mode: 'build', paths });
-        if (summary.haskellCellCount > 0) {
-          await buildHaskellWasm({ haskellFingerprint: summary.haskellFingerprint, mode: 'build', paths });
-        }
-        await syncLicenseArtifacts({ outputDirectory: undefined, paths });
-        await markRuntimeReady({ paths, summary });
+        await syncDocRuntimeForBuild({ ...context, mode: 'build' });
       },
       'astro:build:done': async ({ dir }) => {
         if (!paths) return;

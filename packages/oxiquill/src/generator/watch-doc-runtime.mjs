@@ -3,16 +3,7 @@ import { pathToFileURL } from 'node:url';
 import { parseConfigOption } from '../cli/config-option.mjs';
 import { pathFromUrl } from '../config/paths.mjs';
 import { loadOxiquillProjectConfig } from '../config/project-config.mjs';
-import {
-  buildHaskellWasm,
-  buildRustWasm,
-  createDocRuntimeContext,
-  markRuntimeReady,
-  shouldBuildHaskellWasm,
-  shouldBuildWasm,
-  syncLicenseArtifacts,
-  syncDocRuntime
-} from './doc-runtime-service.mjs';
+import { createDocRuntimeContext, syncDocRuntime } from './doc-runtime-service.mjs';
 import {
   classifyChangedPath,
   createRuntimeWatchPaths,
@@ -24,15 +15,9 @@ import {
 } from './doc-runtime-watch-core.mjs';
 
 const defaultServices = {
-  buildHaskellWasm,
-  buildRustWasm,
   createDocRuntimeContext,
   loadProjectConfig: loadOxiquillProjectConfig,
-  markRuntimeReady,
-  shouldBuildHaskellWasm,
-  shouldBuildWasm,
   syncDocRuntime,
-  syncLicenseArtifacts,
   watch: chokidar.watch
 };
 
@@ -56,12 +41,15 @@ export async function watchDocRuntime({ projectConfig, serviceOverrides = {}, sk
   const { paths } = projectConfig;
   const initialContext = await services.createDocRuntimeContext({ paths });
   const workspaceRoot = pathFromUrl(initialContext.paths.workspaceRoot);
-  let previous;
   let changeKinds = skipInitial ? new Set() : new Set(['docs']);
 
   if (skipInitial) {
-    previous = await services.syncDocRuntime(initialContext);
-    console.log(`[runtime] baseline ready: ${previous.cellCount} interactive cell(s)`);
+    const baseline = await services.syncDocRuntime({
+      ...initialContext,
+      mode: 'dev',
+      tolerateHaskellBuildFailure: true
+    });
+    console.log(`[runtime] baseline ready: ${baseline.cellCount} interactive cell(s)`);
   }
 
   async function syncRuntime() {
@@ -72,29 +60,23 @@ export async function watchDocRuntime({ projectConfig, serviceOverrides = {}, sk
     const context = await services.createDocRuntimeContext({ paths, highlighter: initialContext.highlighter });
 
     console.log(`[runtime] syncing after ${describeChangeKinds(currentKinds)}`);
-    const current = await services.syncDocRuntime(context);
+    const current = await services.syncDocRuntime({
+      ...context,
+      forceRustBuild: currentKinds.has('crate'),
+      mode: 'dev',
+      tolerateHaskellBuildFailure: true
+    });
 
-    if (services.shouldBuildWasm({ changeKinds: currentKinds, current, previous })) {
-      console.log('[runtime] rebuilding Rust/Wasm cells');
-      await services.buildRustWasm({ mode: 'dev', paths: context.paths });
+    if (current.plan.languages.rust.public === 'build') {
+      console.log('[runtime] rebuilt Rust/Wasm cells');
     }
-    if (services.shouldBuildHaskellWasm({ current, previous })) {
-      console.log('[runtime] rebuilding Haskell/WASI cells');
-      const result = await services.buildHaskellWasm({
-        haskellFingerprint: current.haskellFingerprint,
-        mode: 'dev',
-        paths: context.paths,
-        tolerateFailure: true
-      });
-      if (!result.ok) {
-        console.warn(`[runtime] Haskell/WASI runtime unavailable: ${result.error.message}`);
-      }
+    if (current.plan.languages.haskell.public === 'build') {
+      console.log('[runtime] rebuilt Haskell/WASI cells');
+    }
+    if (current.haskellBuildResult && !current.haskellBuildResult.ok) {
+      console.warn(`[runtime] Haskell/WASI runtime unavailable: ${current.haskellBuildResult.error.message}`);
     }
 
-    await services.syncLicenseArtifacts({ paths: context.paths });
-
-    await services.markRuntimeReady({ paths: context.paths, summary: current });
-    previous = current;
     console.log(`[runtime] ready: ${current.cellCount} interactive cell(s)`);
   }
 

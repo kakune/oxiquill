@@ -5,6 +5,7 @@ import {
   validateOutputArtifacts,
   type ValidatedImageArtifact
 } from '../../packages/oxiquill/src/lib/doc-runtime/output-artifact-validation';
+import { labelsForLanguage } from '../../packages/oxiquill/src/lib/doc-runtime/runtime-localization';
 import { chart, echartsInit, echartsUse, mermaidInitialize, mermaidRender } from './mocks/external-runtime';
 
 type ManifestSnapshot = {
@@ -41,16 +42,20 @@ vi.mock('../../packages/oxiquill/src/lib/doc-runtime/runtime-client', () => ({
   runInteractiveCell: runtimeMocks.runInteractiveCell
 }));
 
+await import('./mocks/mermaid');
 const { default: InteractiveCell } = await import('../../packages/oxiquill/src/components/doc-runtime/InteractiveCell');
-const { default: MermaidDiagram, getMermaidColorScheme } =
-  await import('../../packages/oxiquill/src/components/doc-runtime/MermaidDiagram');
+const {
+  default: MermaidDiagram,
+  getMermaidColorScheme,
+  mermaidDiagramKind
+} = await import('../../packages/oxiquill/src/components/doc-runtime/MermaidDiagram');
 const {
   default: OutputRenderer,
   imageArtifactSource,
   LazyChartOutput
 } = await import('../../packages/oxiquill/src/components/doc-runtime/OutputRenderer');
 const chartOutputModule = await import('../../packages/oxiquill/src/components/doc-runtime/ChartOutput');
-const { chartSpecToEChartsOptions } = chartOutputModule;
+const { chartDataSummary, chartSpecToEChartsOptions } = chartOutputModule;
 const {
   default: TableOutput,
   formatTableCell,
@@ -268,15 +273,126 @@ describe('InteractiveCell', () => {
     expect(secondCompact).toBeChecked();
   });
 
+  it('uses visible input labels as accessible names and associates optional descriptions', () => {
+    setManifestCells([
+      makeCell({
+        inputs: [
+          {
+            name: 'internal_value',
+            type: 'number',
+            label: 'Visible value',
+            description: 'Choose a value from zero through ten.',
+            value: 2,
+            min: 0,
+            max: 10,
+            step: 1,
+            options: []
+          },
+          {
+            name: 'internal_range',
+            type: 'range',
+            label: 'Visible range',
+            description: 'Adjust the sample range.',
+            value: 1.5,
+            min: 0,
+            max: 4,
+            step: 0.5,
+            options: []
+          }
+        ]
+      })
+    ]);
+
+    render(<InteractiveCell cellId="cell-one" />);
+
+    const number = screen.getByRole('spinbutton', { name: 'Visible value' });
+    expect(number).toHaveAttribute('id', 'doc-input-cell-one-internal_value');
+    expect(number).toHaveAccessibleDescription('Choose a value from zero through ten.');
+    expect(screen.queryByRole('spinbutton', { name: 'internal_value' })).not.toBeInTheDocument();
+
+    const range = screen.getByRole('slider', { name: 'Visible range' });
+    expect(range).toHaveAttribute('id', 'doc-input-cell-one-internal_range');
+    expect(range).toHaveAttribute(
+      'aria-describedby',
+      'doc-input-cell-one-internal_range-description doc-input-cell-one-internal_range-value'
+    );
+    expect(screen.getByTestId('internal_range-value')).toHaveAttribute('for', 'doc-input-cell-one-internal_range');
+  });
+
+  it('reports numeric validation with localized error semantics', () => {
+    document.documentElement.lang = 'ja';
+    setManifestCells([
+      makeCell({
+        inputs: [
+          {
+            name: 'count',
+            type: 'number',
+            label: '回数',
+            value: 2,
+            min: 1,
+            max: 10,
+            step: 1,
+            options: []
+          }
+        ]
+      })
+    ]);
+
+    render(<InteractiveCell cellId="cell-one" />);
+    const input = screen.getByRole('spinbutton', { name: '回数' });
+    fireEvent.input(input, { target: { value: '0' } });
+
+    expect(input).toHaveAttribute('aria-invalid', 'true');
+    expect(input).toHaveAttribute('aria-errormessage', 'doc-input-cell-one-count-validation');
+    expect(screen.getByRole('alert')).toHaveTextContent('1 以上の値を入力してください。');
+  });
+
   it('shows running and error states', async () => {
     setManifestCells([makeCell()]);
     mocks.runInteractiveCell.mockRejectedValue(new Error('failed'));
 
     render(<InteractiveCell cellId="cell-one" />);
-    fireEvent.click(screen.getByRole('button', { name: 'Run' }));
+    const runButton = screen.getByRole('button', { name: 'Run' });
+    runButton.focus();
+    fireEvent.click(runButton);
 
     expect(screen.getByText('Running cell...')).toBeVisible();
-    await waitFor(() => expect(screen.getByText('failed')).toBeVisible());
+    expect(within(screen.getByRole('region', { name: 'Output for Cell one' })).getByRole('status')).toHaveTextContent(
+      'Cell execution started.'
+    );
+    expect(screen.getByRole('button', { name: 'Running' })).toHaveAttribute('aria-disabled', 'true');
+    expect(screen.getByRole('button', { name: 'Running' })).toHaveAttribute('aria-busy', 'true');
+    expect(screen.getByRole('button', { name: 'Running' })).toHaveFocus();
+    await waitFor(() => expect(screen.getByRole('alert')).toHaveTextContent('Cell execution failed: failed'));
+    expect(screen.getByRole('button', { name: 'Run' })).toHaveFocus();
+  });
+
+  it('announces successful completion politely without moving focus', async () => {
+    const execution = createDeferredResult();
+    mocks.runInteractiveCell.mockReturnValue(execution.promise);
+    setManifestCells([makeCell()]);
+
+    render(<InteractiveCell cellId="cell-one" />);
+    const runButton = screen.getByRole('button', { name: 'Run' });
+    runButton.focus();
+    fireEvent.click(runButton);
+
+    await act(async () => {
+      execution.resolve({
+        stdout: 'done',
+        plots: [],
+        outputs: [{ kind: 'text', stream: 'stdout', content: 'done' }]
+      });
+      await execution.promise;
+    });
+
+    await waitFor(() =>
+      expect(within(screen.getByRole('region', { name: 'Output for Cell one' })).getByRole('status')).toHaveTextContent(
+        'Cell completed.'
+      )
+    );
+    expect(screen.getByRole('button', { name: 'Run' })).toHaveFocus();
+    expect(screen.getByTestId('run-output')).toHaveTextContent('done');
   });
 
   it('coerces non-Error failures to strings', async () => {
@@ -287,6 +403,23 @@ describe('InteractiveCell', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Run' }));
 
     await waitFor(() => expect(screen.getByText('string failure')).toBeVisible());
+  });
+
+  it('announces localized timeout failures as an alert', async () => {
+    document.documentElement.lang = 'ja';
+    setManifestCells([makeCell()]);
+    mocks.runInteractiveCell.mockRejectedValue(new Error('Cell one timed out after 1000ms'));
+
+    render(<InteractiveCell cellId="cell-one" />);
+    await waitFor(() => expect(screen.getByRole('button', { name: '実行' })).toBeVisible());
+    fireEvent.click(screen.getByRole('button', { name: '実行' }));
+
+    await waitFor(() =>
+      expect(screen.getByRole('alert')).toHaveTextContent(
+        'セルの実行に失敗しました: Cell one は 1000 ミリ秒でタイムアウトしました。'
+      )
+    );
+    expect(screen.getAllByRole('alert')).toHaveLength(1);
   });
 
   it('runs autorun exactly once per cell and runtime version without rendering execution controls', async () => {
@@ -514,10 +647,14 @@ describe('MermaidDiagram', () => {
       bindFunctions: vi.fn()
     });
 
-    const { rerender } = render(<MermaidDiagram diagramId="one" source="flowchart LR\nA-->B" />);
+    const { rerender } = render(<MermaidDiagram diagramId="one" source={'flowchart LR\nA-->B'} />);
 
     await waitFor(() => expect(screen.getByTestId('mermaid-diagram')).toHaveAttribute('data-state', 'ready'));
     expect(screen.getByText('diagram')).toBeVisible();
+    const graphic = screen.getByRole('img', { name: 'Mermaid flowchart' });
+    expect(graphic).toHaveAccessibleDescription('Diagram source: flowchart LR A-->B');
+    expect(graphic.querySelector('svg')).toHaveAttribute('aria-hidden', 'true');
+    expect(graphic.querySelector('svg')).toHaveAttribute('focusable', 'false');
     expect(mocks.mermaidInitialize).toHaveBeenCalledTimes(1);
     expect(mocks.mermaidInitialize).toHaveBeenCalledWith(
       expect.objectContaining({
@@ -528,9 +665,27 @@ describe('MermaidDiagram', () => {
       })
     );
 
-    rerender(<MermaidDiagram diagramId="one" source="flowchart LR\nA-->C" />);
+    rerender(<MermaidDiagram diagramId="one" source={'flowchart LR\nA-->C'} />);
     await waitFor(() => expect(mocks.mermaidRender).toHaveBeenCalledTimes(2));
     expect(mocks.mermaidInitialize).toHaveBeenCalledTimes(1);
+  });
+
+  it('localizes Mermaid semantics and identifies supported diagram kinds', async () => {
+    document.documentElement.lang = 'ja-JP';
+    mocks.mermaidRender.mockResolvedValue({ svg: '<svg><text>sequence</text></svg>' });
+
+    render(<MermaidDiagram diagramId="sequence" source={'sequenceDiagram\nAlice->>Bob: Hello'} />);
+
+    await waitFor(() => expect(screen.getByTestId('mermaid-diagram')).toHaveAttribute('data-state', 'ready'));
+    expect(screen.getByRole('img', { name: 'Mermaid シーケンス図' })).toHaveAccessibleDescription(
+      '図のソース: sequenceDiagram Alice->>Bob: Hello'
+    );
+    expect(mermaidDiagramKind('%% comment\nstateDiagram-v2')).toBe('state');
+    expect(mermaidDiagramKind('classDiagram')).toBe('class');
+    expect(mermaidDiagramKind('erDiagram')).toBe('entityRelationship');
+    expect(mermaidDiagramKind('journey')).toBe('journey');
+    expect(mermaidDiagramKind('timeline')).toBe('timeline');
+    expect(mermaidDiagramKind('unknown')).toBe('diagram');
   });
 
   it('renders when theme observation is unavailable', async () => {
@@ -808,6 +963,32 @@ describe('ChartOutput options', () => {
       legend: { top: 4 }
     });
   });
+
+  it('summarizes chart series and ranges in the selected locale', () => {
+    const spec = {
+      kind: 'line' as const,
+      series: [
+        { name: 'alpha', points: [[0, 2]] as const },
+        {
+          name: 'beta',
+          points: [
+            [1, -3],
+            [2, 7]
+          ] as const
+        }
+      ]
+    };
+
+    expect(chartDataSummary(spec, labelsForLanguage('en'))).toBe(
+      'Series: 2 (alpha, beta). Data items: 3. X range: 0–2. Y range: -3–7.'
+    );
+    expect(chartDataSummary(spec, labelsForLanguage('ja'))).toBe(
+      '系列数: 2（alpha, beta）。データ数: 3。X の範囲: 0–2。Y の範囲: -3–7。'
+    );
+    expect(chartDataSummary({ kind: 'bar', categories: [], series: [] }, labelsForLanguage('en'))).toBe(
+      'The chart contains no data.'
+    );
+  });
 });
 
 describe('OutputRenderer', () => {
@@ -930,6 +1111,39 @@ describe('OutputRenderer', () => {
     expect(screen.getByTestId('run-output')).toBeVisible();
     expect(screen.getByTestId('artifact-truncated')).toHaveTextContent('Output truncated.');
   });
+
+  it('renders a textual chart equivalent and hides the canvas surface from accessibility APIs', async () => {
+    render(
+      <OutputRenderer
+        idPrefix="semantic-output"
+        outputs={validateOutputArtifacts([
+          {
+            kind: 'chart',
+            title: 'Response time',
+            caption: 'Measured during the sample run.',
+            spec: {
+              kind: 'line',
+              series: [
+                {
+                  name: 'milliseconds',
+                  points: [
+                    [0, 12],
+                    [1, 18]
+                  ]
+                }
+              ]
+            }
+          }
+        ])}
+      />
+    );
+
+    await waitFor(() => expect(screen.getByTestId('doc-plot')).toBeVisible());
+    const figure = screen.getByRole('figure', { name: 'Response time' });
+    expect(figure).toHaveAccessibleDescription(/Series: 1 \(milliseconds\)\. Data items: 2\./u);
+    expect(screen.getByText('Measured during the sample run.')).toBeVisible();
+    expect(screen.getByTestId('doc-plot')).toHaveAttribute('aria-hidden', 'true');
+  });
 });
 
 describe('TableOutput', () => {
@@ -1034,6 +1248,69 @@ describe('TableOutput', () => {
     expect(screen.getByRole('alert')).toHaveTextContent('Clipboard access is unavailable.');
   });
 
+  it('keeps asynchronous copy state perceivable and preserves the copy button focus', async () => {
+    let resolveCopy: () => void = () => undefined;
+    const copy = new Promise<void>((resolve) => {
+      resolveCopy = resolve;
+    });
+    const writeText = vi.fn(() => copy);
+    Object.defineProperty(globalThis.navigator, 'clipboard', {
+      configurable: true,
+      value: { writeText }
+    });
+    render(
+      <TableOutput
+        table={{
+          kind: 'table',
+          columns: [{ key: 'value', label: 'Value' }],
+          rows: [['safe']]
+        }}
+      />
+    );
+
+    const copyButton = screen.getByTestId('table-copy-csv');
+    copyButton.focus();
+    fireEvent.click(copyButton);
+    fireEvent.click(copyButton);
+
+    expect(copyButton).toHaveAttribute('aria-busy', 'true');
+    expect(copyButton).toHaveAttribute('aria-disabled', 'true');
+    expect(copyButton).toHaveFocus();
+    expect(screen.getByRole('status')).toHaveTextContent('Copying CSV…');
+    expect(writeText).toHaveBeenCalledOnce();
+
+    resolveCopy();
+    await waitFor(() => expect(screen.getByRole('status')).toHaveTextContent('Copied visible rows as CSV.'));
+    expect(copyButton).toHaveFocus();
+  });
+
+  it('uses Japanese table controls, ranges, missing values, and copy feedback', async () => {
+    const writeText = vi.fn();
+    Object.defineProperty(globalThis.navigator, 'clipboard', {
+      configurable: true,
+      value: { writeText }
+    });
+    render(
+      <TableOutput
+        labels={labelsForLanguage('ja')}
+        table={{
+          kind: 'table',
+          columns: [{ key: 'value', label: '値' }],
+          rows: [[undefined]]
+        }}
+      />
+    );
+
+    expect(screen.getByRole('table', { name: 'データ表' })).toBeVisible();
+    expect(screen.getByText('1 行中 1–1 行')).toBeVisible();
+    expect(screen.getByText('値なし')).toBeVisible();
+    expect(screen.getByLabelText('1ページあたりの行数')).toBeVisible();
+    fireEvent.click(screen.getByRole('button', { name: '表示中の行を CSV としてコピー' }));
+    await waitFor(() =>
+      expect(screen.getByRole('status')).toHaveTextContent('表示中の行を CSV としてコピーしました。')
+    );
+  });
+
   it('renders empty tables with a stable row range', () => {
     render(
       <TableOutput
@@ -1115,6 +1392,10 @@ describe('TableOutput', () => {
     expect(tableToCsv([{ key: 'a', label: 'A' }], [[1, 2]])).toEqual({
       ok: false,
       error: 'Row 1 has 2 cells; expected 1.'
+    });
+    expect(tableToCsv([{ key: 'a', label: 'A' }], [[1, 2]], labelsForLanguage('ja'))).toEqual({
+      ok: false,
+      error: '1 行目のセルは 2 個ですが、1 個である必要があります。'
     });
   });
 });

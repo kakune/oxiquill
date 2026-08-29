@@ -2,6 +2,7 @@ import { hashText, stableFingerprint } from './hashing.mjs';
 
 export function summarizeCells(cells) {
   const rustCells = cells.filter((cell) => cell.language === 'rust');
+  const pythonCells = cells.filter((cell) => cell.language === 'python');
   const haskellCells = cells.filter((cell) => cell.language === 'haskell');
 
   return {
@@ -15,6 +16,14 @@ export function summarizeCells(cells) {
       }))
     ),
     manifestFingerprint: stableFingerprint(cells),
+    pythonCellCount: pythonCells.length,
+    pythonFingerprint: stableFingerprint(
+      pythonCells.map((cell) => ({
+        id: cell.id,
+        packages: cell.packages,
+        source: cell.source
+      }))
+    ),
     rustCellCount: rustCells.length,
     rustFingerprint: stableFingerprint(
       rustCells.map((cell) => ({
@@ -42,7 +51,6 @@ export function shouldBuildHaskellWasm({ current, force = false, previous }) {
 
 export function createRuntimeVersion(summary) {
   return stableFingerprint({
-    readyAt: Date.now(),
     haskell: hashText(summary?.haskellFingerprint ?? ''),
     manifest: hashText(summary?.manifestFingerprint ?? ''),
     rust: hashText(summary?.rustFingerprint ?? '')

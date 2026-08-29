@@ -214,6 +214,7 @@ export function generateThirdPartyLicenseReport(notices) {
 
 export async function syncLicenseArtifacts({
   fileSystem = defaultFileSystem,
+  includeRustBuildFiles = true,
   licenseDataDir = defaultLicenseDataDir,
   moduleGroups = new Map(),
   outputDirectory = /** @type {string | undefined} */ (undefined),
@@ -230,20 +231,8 @@ export async function syncLicenseArtifacts({
     )
   );
 
-  if (!outputDirectory) {
-    copied.push(
-      ...(await Promise.all(
-        ownLicenseCopies.map(([fileName, sourcePath]) =>
-          copyFileIfChanged(sourcePath, pathInUrl(paths.rustCellsDir, fileName), { fileSystem })
-        )
-      ))
-    );
-    const rustLockPath = pathInUrl(paths.rustCellsDir, 'Cargo.lock');
-    if (!fileSystem.existsSync(rustLockPath)) {
-      copied.push(
-        await copyFileIfChanged(path.join(licenseDataDir, 'rust/runtime-Cargo.lock'), rustLockPath, { fileSystem })
-      );
-    }
+  if (!outputDirectory && includeRustBuildFiles) {
+    copied.push(...(await syncRustBuildSupportFiles({ fileSystem, licenseDataDir, paths })));
   }
 
   const [runtimeNotices, bundleNotices] = await Promise.all([
@@ -261,6 +250,29 @@ export async function syncLicenseArtifacts({
   );
 
   return copied.some(Boolean) || reportChanged;
+}
+
+export async function syncRustBuildSupportFiles({
+  fileSystem = defaultFileSystem,
+  licenseDataDir = defaultLicenseDataDir,
+  paths
+}) {
+  const copies = await Promise.all([
+    copyFileIfChanged(pathInUrl(paths.frameworkRoot, 'LICENSE-MIT'), pathInUrl(paths.rustCellsDir, 'LICENSE-MIT'), {
+      fileSystem
+    }),
+    copyFileIfChanged(
+      pathInUrl(paths.frameworkRoot, 'LICENSE-APACHE'),
+      pathInUrl(paths.rustCellsDir, 'LICENSE-APACHE'),
+      { fileSystem }
+    ),
+    copyFileIfChanged(
+      path.join(licenseDataDir, 'rust/runtime-Cargo.lock'),
+      pathInUrl(paths.rustCellsDir, 'Cargo.lock'),
+      { fileSystem }
+    )
+  ]);
+  return copies;
 }
 
 async function readPackageLicenseText(packageRoot, license, { fileSystem, licenseDataDir, name, version }) {

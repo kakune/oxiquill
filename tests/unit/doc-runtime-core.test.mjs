@@ -163,6 +163,17 @@ describe('doc runtime core', () => {
       '//| id: bad\n//| inputs:\n//|   count: { label: 2, value: text }',
       'inputs.count.label'
     ],
+    ['empty input label', '//| id: bad\n//| inputs:\n//|   count: { label: "  ", value: text }', 'inputs.count.label'],
+    [
+      'wrong input description type',
+      '//| id: bad\n//| inputs:\n//|   count: { description: 2, value: text }',
+      'inputs.count.description'
+    ],
+    [
+      'empty input description',
+      '//| id: bad\n//| inputs:\n//|   count: { description: "  ", value: text }',
+      'inputs.count.description'
+    ],
     [
       'wrong integer flag type',
       '//| id: bad\n//| inputs:\n//|   count: { type: number, integer: yes, value: 1 }',
@@ -250,7 +261,7 @@ describe('doc runtime core', () => {
       '#| id: inputs',
       '#| packages: [pandas, matplotlib]',
       '#| inputs:',
-      '#|   plain: {}',
+      '#|   plain: { label: Plain value, description: A public input description. }',
       '#|   enabled: { type: checkbox }',
       '#|   count: { type: number, integer: true, value: 2, min: 1, max: 3, step: 1 }',
       '#|   mode: { type: select, value: b, options: [a, { label: Bee, value: b }] }',
@@ -265,7 +276,8 @@ describe('doc runtime core', () => {
       {
         name: 'plain',
         type: 'text',
-        label: 'plain',
+        label: 'Plain value',
+        description: 'A public input description.',
         value: '',
         min: undefined,
         max: undefined,

@@ -11,6 +11,7 @@ export interface InputSpec {
   name: string;
   type: InputType;
   label: string;
+  description?: string;
   value: string | number | boolean;
   min?: number;
   max?: number;

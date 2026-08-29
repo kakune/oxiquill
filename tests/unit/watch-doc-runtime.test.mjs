@@ -22,18 +22,19 @@ describe('runtime watcher entrypoint', () => {
         return watcher;
       })
     };
-    const initial = { cellCount: 1, haskellFingerprint: 'old', rustFingerprint: 'old' };
-    const current = { cellCount: 2, haskellFingerprint: 'new', rustFingerprint: 'new' };
+    const initial = {
+      cellCount: 1,
+      plan: { languages: { haskell: { public: 'keep' }, rust: { public: 'keep' } } }
+    };
+    const current = {
+      cellCount: 2,
+      haskellBuildResult: { ok: false, error: new Error('compiler failed') },
+      plan: { languages: { haskell: { public: 'build' }, rust: { public: 'build' } } }
+    };
     const services = {
-      buildHaskellWasm: vi.fn(async () => ({ ok: false, error: new Error('compiler failed') })),
-      buildRustWasm: vi.fn(async () => undefined),
       createDocRuntimeContext: vi.fn(async () => ({ highlighter: {}, paths })),
       loadProjectConfig: vi.fn(async () => ({ paths })),
-      markRuntimeReady: vi.fn(async () => undefined),
-      shouldBuildHaskellWasm: vi.fn(() => true),
-      shouldBuildWasm: vi.fn(() => true),
       syncDocRuntime: vi.fn().mockResolvedValueOnce(initial).mockResolvedValueOnce(current),
-      syncLicenseArtifacts: vi.fn(async () => undefined),
       watch: vi.fn(() => watcher)
     };
     const log = vi.spyOn(console, 'log').mockImplementation(() => undefined);
@@ -52,15 +53,14 @@ describe('runtime watcher entrypoint', () => {
     handlers.get('all')('change', path.join(root, 'examples/docs-site/content/docs/index.mdx'));
     await flushMicrotasks();
 
-    expect(services.buildRustWasm).toHaveBeenCalledWith({ mode: 'dev', paths });
-    expect(services.buildHaskellWasm).toHaveBeenCalledWith({
-      haskellFingerprint: 'new',
-      mode: 'dev',
-      paths,
-      tolerateFailure: true
-    });
-    expect(services.syncLicenseArtifacts).toHaveBeenCalledWith({ paths });
-    expect(services.markRuntimeReady).toHaveBeenCalledWith({ paths, summary: current });
+    expect(services.syncDocRuntime).toHaveBeenLastCalledWith(
+      expect.objectContaining({
+        forceRustBuild: false,
+        mode: 'dev',
+        paths,
+        tolerateHaskellBuildFailure: true
+      })
+    );
     expect(warning).toHaveBeenCalledWith('[runtime] Haskell/WASI runtime unavailable: compiler failed');
     expect(log).toHaveBeenCalledWith('[runtime] watching MDX, Rust, and Haskell cell sources');
   });
@@ -68,15 +68,12 @@ describe('runtime watcher entrypoint', () => {
   it('queues an initial documentation sync when no baseline is requested', async () => {
     const watcher = { on: vi.fn(() => watcher) };
     const services = {
-      buildHaskellWasm: vi.fn(),
-      buildRustWasm: vi.fn(),
       createDocRuntimeContext: vi.fn(async () => ({ highlighter: {}, paths })),
       loadProjectConfig: vi.fn(async () => ({ paths })),
-      markRuntimeReady: vi.fn(async () => undefined),
-      shouldBuildHaskellWasm: vi.fn(() => false),
-      shouldBuildWasm: vi.fn(() => false),
-      syncDocRuntime: vi.fn(async () => ({ cellCount: 0, haskellFingerprint: '', rustFingerprint: '' })),
-      syncLicenseArtifacts: vi.fn(async () => undefined),
+      syncDocRuntime: vi.fn(async () => ({
+        cellCount: 0,
+        plan: { languages: { haskell: { public: 'keep' }, rust: { public: 'keep' } } }
+      })),
       watch: vi.fn(() => watcher)
     };
     vi.spyOn(console, 'log').mockImplementation(() => undefined);
@@ -85,9 +82,9 @@ describe('runtime watcher entrypoint', () => {
     await flushMicrotasks();
 
     expect(services.syncDocRuntime).toHaveBeenCalledTimes(1);
-    expect(services.buildRustWasm).not.toHaveBeenCalled();
-    expect(services.buildHaskellWasm).not.toHaveBeenCalled();
-    expect(services.markRuntimeReady).toHaveBeenCalled();
+    expect(services.syncDocRuntime).toHaveBeenCalledWith(
+      expect.objectContaining({ mode: 'dev', tolerateHaskellBuildFailure: true })
+    );
   });
 });
 

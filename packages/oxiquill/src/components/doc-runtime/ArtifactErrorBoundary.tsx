@@ -1,8 +1,10 @@
 import { Component, type ComponentChildren } from 'preact';
+import type { RuntimeLabels } from '../../lib/doc-runtime/runtime-localization.js';
 
 interface ArtifactErrorBoundaryProps {
   children: ComponentChildren;
   index: number;
+  labels: RuntimeLabels;
   resetKey: object;
 }
 
@@ -23,9 +25,9 @@ export default class ArtifactErrorBoundary extends Component<ArtifactErrorBounda
     }
   }
 
-  render({ children, index }: ArtifactErrorBoundaryProps, { error }: ArtifactErrorBoundaryState) {
+  render({ children, index, labels }: ArtifactErrorBoundaryProps, { error }: ArtifactErrorBoundaryState) {
     if (error) {
-      return <ArtifactError message={`Artifact ${index + 1} failed to render: ${error}`} />;
+      return <ArtifactError message={labels.artifactRenderError(index + 1, error)} />;
     }
     return children;
   }

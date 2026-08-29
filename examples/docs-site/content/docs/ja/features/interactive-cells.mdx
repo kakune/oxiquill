@@ -42,7 +42,7 @@ Haskell cell は standard-library code のみで `packages`/`crates` を受け�
 //| run: button
 //| crates: []
 //| inputs:
-//|   value: { type: integer, label: value, min: 1, max: 10, step: 1, value: 3 }
+//|   value: { type: integer, label: Input value, description: Choose an integer from 1 through 10., min: 1, max: 10, step: 1, value: 3 }
 println!("button value = {value}");
 ```
 
@@ -60,7 +60,7 @@ superseded queued work は破棄され、stale result が新しい state を上�
 
 ## Input schema
 
-各 input が受け取るのは type に関係する field だけです。共通 field は `type`、`label`、`value`。numeric input は `min`、`max`、`step`、`integer`、`select`/`radio` は `options` も使います。
+各 input が受け取るのは type に関係する field だけです。共通 field は `type`、`label`、`description`、`value`。numeric input は `min`、`max`、`step`、`integer`、`select`/`radio` は `options` も使います。
 
 | Type               | Value と constraint                                                                               |
 | ------------------ | ------------------------------------------------------------------------------------------------- |
@@ -70,7 +70,7 @@ superseded queued work は破棄され、stale result が新しい state を上�
 | `checkbox`         | boolean value。                                                                                   |
 | `select`, `radio`  | non-empty unique string option または `{ label, value }` object。default は option value と一致。 |
 
-`type` の default は `text`、`label` の default は input name です。default value は checkbox が `false`、numeric input が `0`、text input が空 string です。numeric 専用 field は non-numeric control で拒否され、`options` は `select`/`radio` 以外では使えません。
+`type` の default は `text`、`label` の default は input name です。`description` は control と assistive technology 向けに関連付ける optional non-empty string です。default value は checkbox が `false`、numeric input が `0`、text input が空 string です。numeric 専用 field は non-numeric control で拒否され、`options` は `select`/`radio` 以外では使えません。
 
 visible `label` が control の accessible name で、input key は generated language binding にだけ使います。normalization で二つの Rust/Haskell binding が衝突してはなりません。label、description、current value、validation message、grouped control は stable ID で関連付けられ、keyboard focus を表示し、run/error status は focus を奪わず announce されます。
 

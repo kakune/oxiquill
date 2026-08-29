@@ -1,5 +1,5 @@
 import path from 'node:path';
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import {
   postprocessRustWasm,
   removeUnusedWasmPackState,
@@ -124,10 +124,33 @@ function createMemoryFileSystem(initialFiles = {}) {
         };
       });
     },
-    rm: async (filePath) => {
+    rename: async (sourcePath, targetPath) => {
+      const normalizedSource = memoryPath(sourcePath);
+      const normalizedTarget = memoryPath(targetPath);
+      ensureParents(normalizedTarget);
+      for (const [filePath, content] of Array.from(files)) {
+        if (filePath !== normalizedSource && !filePath.startsWith(`${normalizedSource}/`)) continue;
+        files.delete(filePath);
+        files.set(`${normalizedTarget}${filePath.slice(normalizedSource.length)}`, content);
+      }
+      for (const directory of Array.from(directories)) {
+        if (directory !== normalizedSource && !directory.startsWith(`${normalizedSource}/`)) continue;
+        directories.delete(directory);
+        directories.add(`${normalizedTarget}${directory.slice(normalizedSource.length)}`);
+      }
+    },
+    rm: async (filePath, options = {}) => {
       const normalizedPath = memoryPath(filePath);
       files.delete(normalizedPath);
       directories.delete(normalizedPath);
+      if (options.recursive) {
+        for (const candidate of Array.from(files.keys())) {
+          if (candidate.startsWith(`${normalizedPath}/`)) files.delete(candidate);
+        }
+        for (const candidate of Array.from(directories)) {
+          if (candidate.startsWith(`${normalizedPath}/`)) directories.delete(candidate);
+        }
+      }
       removals.push(normalizedPath);
     },
     writeFile: async (filePath, content) => {
@@ -194,7 +217,12 @@ describe('doc runtime service', () => {
 
     await postprocessRustWasm({ fileSystem, rustWasmDir: '/repo/pkg' });
 
-    expect(removals).toEqual([['/repo/pkg/.gitignore', { force: true }]]);
+    expect(removals).toEqual(
+      ['.gitignore', 'doc_rust_cells.d.ts', 'doc_rust_cells_bg.wasm.d.ts', 'package.json'].map((fileName) => [
+        memoryPath(repoPath('pkg', fileName)),
+        { force: true }
+      ])
+    );
     expect(writes).toHaveLength(1);
     expect(files.get('/repo/pkg/doc_rust_cells.js')).not.toContain('wasmInstance');
 
@@ -707,6 +735,13 @@ describe('doc runtime service', () => {
       paths,
       root: '/repo'
     });
+    const syncRustSupport = async ({ fileSystem: runtimeFileSystem, paths: runtimePaths }) => {
+      await Promise.all(
+        ['Cargo.lock', 'LICENSE-MIT', 'LICENSE-APACHE'].map((fileName) =>
+          runtimeFileSystem.writeFile(path.join(runtimePaths.rustCellsDir, fileName), fileName)
+        )
+      );
+    };
 
     const first = await syncDocRuntime({
       fileSystem,
@@ -715,7 +750,8 @@ describe('doc runtime service', () => {
       paths,
       root: '/repo',
       syncLicenses: async () => false,
-      syncPyodide: async () => false
+      syncPyodide: async () => false,
+      syncRustSupport
     });
 
     expect(first).toMatchObject({
@@ -727,14 +763,15 @@ describe('doc runtime service', () => {
       rustCellCount: 1,
       rustChanged: true
     });
-    expect(fileSystem.writes.sort()).toEqual(
-      [
+    expect(Array.from(fileSystem.files.keys())).toEqual(
+      expect.arrayContaining([
         '/repo/.oxiquill/generated/cells.ts',
-        '/repo/.oxiquill/haskell-cells/Main.hs',
         '/repo/.oxiquill/generated/cells.json',
+        '/repo/.oxiquill/generated/runtime-ownership.json',
         '/repo/.oxiquill/rust-cells/Cargo.toml',
-        '/repo/.oxiquill/rust-cells/src/lib.rs'
-      ].sort()
+        '/repo/.oxiquill/rust-cells/src/lib.rs',
+        '/repo/.oxiquill/haskell-cells/Main.hs'
+      ])
     );
 
     await expect(markRuntimeReady({ fileSystem, paths, summary: first, version: 'ready-1' })).resolves.toBe(true);
@@ -765,13 +802,162 @@ describe('doc runtime service', () => {
         paths,
         root: '/repo',
         syncLicenses: async () => false,
-        syncPyodide: async () => false
+        syncPyodide: async () => false,
+        syncRustSupport
       })
     ).resolves.toMatchObject({
       cellsChanged: false,
       rustChanged: false
     });
     expect(fileSystem.writes).toEqual([]);
+  });
+
+  it('keeps a zero-cell project free of language runtimes and tool invocations', async () => {
+    const paths = createDocRuntimePaths('/repo');
+    const fileSystem = createMemoryFileSystem({
+      '/repo/content/docs/index.mdx': '# Static documentation'
+    });
+    const buildRust = vi.fn();
+    const buildHaskell = vi.fn();
+    const syncPyodide = vi.fn();
+
+    const result = await syncDocRuntime({
+      buildHaskell,
+      buildRust,
+      fileSystem,
+      helperCrates: new Map(),
+      highlighter,
+      mode: 'build',
+      paths,
+      syncLicenses: async () => false,
+      syncPyodide
+    });
+
+    expect(result).toMatchObject({ cellCount: 0, haskellCellCount: 0, pythonCellCount: 0, rustCellCount: 0 });
+    expect(buildRust).not.toHaveBeenCalled();
+    expect(buildHaskell).not.toHaveBeenCalled();
+    expect(syncPyodide).not.toHaveBeenCalled();
+    expect(fileSystem.existsSync('/repo/.oxiquill/rust-cells')).toBe(false);
+    expect(fileSystem.existsSync('/repo/public/oxiquill/pyodide')).toBe(false);
+    expect(fileSystem.existsSync('/repo/.oxiquill/haskell-cells')).toBe(false);
+    expect(fileSystem.existsSync('/repo/.oxiquill/generated/runtime-version.ts')).toBe(true);
+  });
+
+  it('copies only Python assets, skips an unchanged rerun, and removes stale Python output safely', async () => {
+    const paths = createDocRuntimePaths({ frameworkRoot: '/repo/framework', workspaceRoot: '/repo' });
+    const fileSystem = createMemoryFileSystem({
+      '/repo/framework/package.json': '{"dependencies":{"pyodide":"314.0.6"}}',
+      '/repo/content/docs/index.mdx': '```python\n#| id: py\nprint("python")\n```',
+      '/repo/public/oxiquill/licenses/keep.txt': 'notice'
+    });
+    const buildRust = vi.fn();
+    const buildHaskell = vi.fn();
+    const syncPyodide = vi.fn(async ({ fileSystem: runtimeFileSystem, paths: runtimePaths }) => {
+      await runtimeFileSystem.writeFile(path.join(runtimePaths.pyodidePublicDir, 'pyodide.mjs'), 'python');
+    });
+    const options = {
+      buildHaskell,
+      buildRust,
+      fileSystem,
+      helperCrates: new Map(),
+      highlighter,
+      mode: 'build',
+      paths,
+      syncLicenses: async () => false,
+      syncPyodide
+    };
+
+    await syncDocRuntime(options);
+    expect(syncPyodide).toHaveBeenCalledOnce();
+    expect(buildRust).not.toHaveBeenCalled();
+    expect(buildHaskell).not.toHaveBeenCalled();
+
+    fileSystem.writes.length = 0;
+    await syncDocRuntime(options);
+    expect(syncPyodide).toHaveBeenCalledOnce();
+    expect(fileSystem.writes).toEqual([]);
+
+    await fileSystem.writeFile('/repo/content/docs/index.mdx', '# Python removed');
+    await syncDocRuntime(options);
+    expect(fileSystem.existsSync('/repo/public/oxiquill/pyodide')).toBe(false);
+    expect(fileSystem.existsSync('/repo/public/oxiquill/licenses/keep.txt')).toBe(true);
+  });
+
+  it('builds Rust once for unchanged inputs and preserves old output without a ready marker on failure', async () => {
+    const paths = createDocRuntimePaths('/repo');
+    const fileSystem = createMemoryFileSystem({
+      '/repo/content/docs/index.mdx': '```rust\n//| id: rust\n//| crates: []\nprintln!("one");\n```'
+    });
+    const syncRustSupport = async ({ fileSystem: runtimeFileSystem, paths: runtimePaths }) => {
+      await Promise.all(
+        ['Cargo.lock', 'LICENSE-MIT', 'LICENSE-APACHE'].map((fileName) =>
+          runtimeFileSystem.writeFile(path.join(runtimePaths.rustCellsDir, fileName), fileName)
+        )
+      );
+    };
+    const buildRust = vi.fn(async ({ paths: runtimePaths }) => {
+      await Promise.all([
+        fileSystem.writeFile(path.join(runtimePaths.rustWasmPublicDir, 'doc_rust_cells.js'), 'old js'),
+        fileSystem.writeFile(path.join(runtimePaths.rustWasmPublicDir, 'doc_rust_cells_bg.wasm'), 'old wasm')
+      ]);
+    });
+    const options = {
+      buildHaskell: vi.fn(),
+      buildRust,
+      fileSystem,
+      helperCrates: new Map(),
+      highlighter,
+      mode: 'build',
+      paths,
+      syncLicenses: async () => false,
+      syncPyodide: vi.fn(),
+      syncRustSupport
+    };
+
+    await syncDocRuntime(options);
+    await syncDocRuntime(options);
+    expect(buildRust).toHaveBeenCalledOnce();
+
+    await fileSystem.writeFile(
+      '/repo/content/docs/index.mdx',
+      '```rust\n//| id: rust\n//| crates: []\nprintln!("two");\n```'
+    );
+    buildRust.mockImplementationOnce(async () => {
+      throw new Error('wasm-pack failed');
+    });
+
+    await expect(syncDocRuntime(options)).rejects.toThrow('wasm-pack failed');
+    expect(fileSystem.files.get('/repo/public/oxiquill/rust-wasm/doc_rust_cells.js').toString()).toBe('old js');
+    expect(fileSystem.existsSync('/repo/.oxiquill/generated/runtime-version.ts')).toBe(false);
+  });
+
+  it('publishes Haskell output only for Haskell cells and withholds readiness after a tolerated failure', async () => {
+    const paths = createDocRuntimePaths('/repo');
+    const fileSystem = createMemoryFileSystem({
+      '/repo/content/docs/index.mdx': '```haskell\n--| id: hs\nputStrLn "haskell"\n```'
+    });
+    const buildHaskell = vi.fn(async ({ fileSystem: runtimeFileSystem, paths: runtimePaths }) => {
+      await runtimeFileSystem.writeFile(path.join(runtimePaths.haskellWasmPublicDir, 'status.json'), 'unavailable');
+      return { error: new Error('compiler failed'), ok: false };
+    });
+
+    const result = await syncDocRuntime({
+      buildHaskell,
+      buildRust: vi.fn(),
+      fileSystem,
+      helperCrates: new Map(),
+      highlighter,
+      mode: 'dev',
+      paths,
+      syncLicenses: async () => false,
+      syncPyodide: vi.fn(),
+      tolerateHaskellBuildFailure: true
+    });
+
+    expect(buildHaskell).toHaveBeenCalledOnce();
+    expect(result.haskellBuildResult).toMatchObject({ ok: false });
+    expect(fileSystem.existsSync('/repo/public/oxiquill/haskell-wasm/status.json')).toBe(true);
+    expect(fileSystem.existsSync('/repo/.oxiquill/generated/runtime-version.ts')).toBe(false);
   });
 
   it('summarizes cells, decides when Wasm is needed, and builds with injected commands', async () => {

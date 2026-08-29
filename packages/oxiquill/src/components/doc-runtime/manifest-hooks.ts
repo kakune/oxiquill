@@ -24,5 +24,11 @@ export function useManifestSnapshot() {
 }
 
 export function useRuntimeLabels() {
-  return useMemo(() => labelsForLanguage(globalThis.document?.documentElement.lang), []);
+  const [languageTag, setLanguageTag] = useState<string>();
+
+  useEffect(() => {
+    setLanguageTag(globalThis.document?.documentElement.lang);
+  }, []);
+
+  return useMemo(() => labelsForLanguage(languageTag), [languageTag]);
 }

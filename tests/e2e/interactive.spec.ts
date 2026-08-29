@@ -107,7 +107,7 @@ test('button, reactive, and autorun cells follow their execution contracts', asy
 
   const button = page.getByTestId('cell-features__interactive-cells__run-mode-button');
   await hydrateCell(button);
-  await expect(button.getByLabel('value')).toBeVisible();
+  await expect(button.getByLabel('Input value')).toBeVisible();
   await expect(button.getByRole('button', { name: 'Run' })).toBeVisible();
   await page.waitForTimeout(200);
   expect(await workerMessagesForCell(page, 'features__interactive-cells__run-mode-button')).toHaveLength(0);

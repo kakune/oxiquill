@@ -1,6 +1,6 @@
 export const sourceThemes = {
-  light: 'github-light',
-  dark: 'github-dark'
+  light: 'github-light-high-contrast',
+  dark: 'github-dark-high-contrast'
 };
 
 export const vendoredPyodidePackageRoots = ['matplotlib', 'pandas'];

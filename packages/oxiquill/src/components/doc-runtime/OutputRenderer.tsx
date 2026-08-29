@@ -4,6 +4,8 @@ import type {
   ValidatedJsonArtifact,
   ValidatedOutputArtifact
 } from '../../lib/doc-runtime/output-artifact-validation.js';
+import type { RuntimeLabels } from '../../lib/doc-runtime/runtime-localization.js';
+import { labelsForLanguage } from '../../lib/doc-runtime/runtime-localization.js';
 import type { ComponentChildren } from 'preact';
 import { useEffect, useState } from 'preact/hooks';
 import type { ChartSpec, TextArtifact } from '../../lib/doc-runtime/types.js';
@@ -18,43 +20,71 @@ type ChartRendererState =
 let chartOutputModuleReady: Promise<ChartOutputModule> | undefined;
 
 interface OutputRendererProps {
+  idPrefix?: string;
+  labels?: RuntimeLabels;
   outputs: readonly ValidatedArtifactResult[];
 }
 
-export default function OutputRenderer({ outputs }: OutputRendererProps) {
+export default function OutputRenderer({
+  idPrefix = 'doc-output',
+  labels = labelsForLanguage(globalThis.document?.documentElement.lang),
+  outputs
+}: OutputRendererProps) {
   return (
     <>
       {outputs.map((output, index) => (
-        <ArtifactErrorBoundary key={artifactKey(output, index)} index={output.index} resetKey={output}>
-          <ArtifactOutput output={output} />
+        <ArtifactErrorBoundary key={artifactKey(output, index)} index={output.index} labels={labels} resetKey={output}>
+          <ArtifactOutput idPrefix={`${idPrefix}-artifact-${output.index}`} labels={labels} output={output} />
         </ArtifactErrorBoundary>
       ))}
     </>
   );
 }
 
-function ArtifactOutput({ output }: { output: ValidatedArtifactResult }) {
+function ArtifactOutput({
+  idPrefix,
+  labels,
+  output
+}: {
+  idPrefix: string;
+  labels: RuntimeLabels;
+  output: ValidatedArtifactResult;
+}) {
   if (output.status === 'error') {
-    return <ArtifactError message={`Artifact ${output.index + 1}: ${output.message}`} />;
+    return <ArtifactError message={labels.artifactError(output.index + 1, labels.diagnosticDetail(output.message))} />;
   }
 
   switch (output.artifact.kind) {
     case 'text':
-      return <TextOutput output={output.artifact} />;
+      return <TextOutput labels={labels} output={output.artifact} />;
     case 'json':
-      return <JsonOutput output={output.artifact} />;
+      return <JsonOutput labels={labels} output={output.artifact} />;
     case 'html':
-      return <HtmlOutput output={output.artifact} />;
+      return <HtmlOutput labels={labels} output={output.artifact} />;
     case 'chart':
-      return <LazyChartOutput spec={output.artifact.spec} />;
+      return <LazyChartOutput artifact={output.artifact} idPrefix={idPrefix} labels={labels} />;
     case 'table':
-      return <TableOutput table={output.artifact} />;
+      return <TableOutput idPrefix={idPrefix} labels={labels} table={output.artifact} />;
     case 'image':
-      return <ImageOutput output={output.artifact} />;
+      return <ImageOutput labels={labels} output={output.artifact} />;
   }
 }
 
-export function LazyChartOutput({ load = loadChartOutput, spec }: { load?: LoadChartOutput; spec: ChartSpec }) {
+export function LazyChartOutput({
+  artifact,
+  idPrefix = 'doc-chart',
+  labels = labelsForLanguage(globalThis.document?.documentElement.lang),
+  load = loadChartOutput,
+  spec
+}: {
+  artifact?: Extract<ValidatedOutputArtifact, { kind: 'chart' }>;
+  spec?: ChartSpec;
+} & {
+  idPrefix?: string;
+  labels?: RuntimeLabels;
+  load?: LoadChartOutput;
+}) {
+  const chartArtifact = artifact ?? { kind: 'chart' as const, spec: spec as ChartSpec };
   const [state, setState] = useState<ChartRendererState>({ status: 'loading' });
 
   useEffect(() => {
@@ -83,7 +113,7 @@ export function LazyChartOutput({ load = loadChartOutput, spec }: { load?: LoadC
   if (state.status === 'loading') {
     return (
       <p class="empty-state" data-testid="chart-loading" role="status">
-        Loading chart renderer...
+        {labels.chartLoading}
       </p>
     );
   }
@@ -91,21 +121,21 @@ export function LazyChartOutput({ load = loadChartOutput, spec }: { load?: LoadC
   if (state.status === 'error') {
     return (
       <p class="error-state" data-testid="artifact-error" role="alert">
-        Chart renderer could not be loaded: {state.message}
+        {labels.chartLoadError(state.message)}
       </p>
     );
   }
 
   const ChartOutput = state.module.default;
-  return <ChartOutput spec={spec} />;
+  return <ChartOutput artifact={chartArtifact} idPrefix={idPrefix} labels={labels} />;
 }
 
-function TextOutput({ output }: { output: TextArtifact }) {
+function TextOutput({ labels, output }: { labels: RuntimeLabels; output: TextArtifact }) {
   const isError = output.stream === 'stderr';
   const className = isError ? 'error-output' : 'run-output';
 
   return (
-    <OutputWithTruncation truncated={output.truncated}>
+    <OutputWithTruncation labels={labels} truncated={output.truncated}>
       <pre class={className} data-testid={isError ? undefined : 'run-output'}>
         <code>{output.content}</code>
       </pre>
@@ -113,9 +143,9 @@ function TextOutput({ output }: { output: TextArtifact }) {
   );
 }
 
-function JsonOutput({ output }: { output: ValidatedJsonArtifact }) {
+function JsonOutput({ labels, output }: { labels: RuntimeLabels; output: ValidatedJsonArtifact }) {
   return (
-    <OutputWithTruncation truncated={output.truncated}>
+    <OutputWithTruncation labels={labels} truncated={output.truncated}>
       <pre class="run-output" data-testid="value-output">
         <code>{output.formattedValue}</code>
       </pre>
@@ -123,11 +153,11 @@ function JsonOutput({ output }: { output: ValidatedJsonArtifact }) {
   );
 }
 
-function ImageOutput({ output }: { output: ValidatedImageArtifact }) {
+function ImageOutput({ labels, output }: { labels: RuntimeLabels; output: ValidatedImageArtifact }) {
   return (
     <figure class="doc-image-output">
       <img
-        alt={output.alt ?? output.title ?? 'Image output'}
+        alt={output.alt ?? output.title ?? labels.imageOutput}
         data-testid="image-output"
         src={imageArtifactSource(output)}
       />
@@ -142,25 +172,39 @@ function ImageOutput({ output }: { output: ValidatedImageArtifact }) {
   );
 }
 
-function HtmlOutput({ output }: { output: Extract<ValidatedOutputArtifact, { kind: 'html' }> }) {
+function HtmlOutput({
+  labels,
+  output
+}: {
+  labels: RuntimeLabels;
+  output: Extract<ValidatedOutputArtifact, { kind: 'html' }>;
+}) {
   return (
     <iframe
       class="doc-html-output"
       data-testid="html-output"
       sandbox=""
       srcdoc={output.html}
-      title={output.title ?? 'HTML output'}
+      title={output.title ?? labels.htmlOutput}
     />
   );
 }
 
-function OutputWithTruncation({ children, truncated }: { children: ComponentChildren; truncated?: boolean }) {
+function OutputWithTruncation({
+  children,
+  labels,
+  truncated
+}: {
+  children: ComponentChildren;
+  labels: RuntimeLabels;
+  truncated?: boolean;
+}) {
   return (
     <div class="doc-output-artifact">
       {children}
       {truncated ? (
         <p class="doc-output-artifact__notice" data-testid="artifact-truncated">
-          Output truncated.
+          {labels.outputTruncated}
         </p>
       ) : null}
     </div>

@@ -49,9 +49,23 @@ describe('interactive cell model', () => {
   it('resolves localized runtime labels', () => {
     expect(localeFromLanguage('en-US')).toBe('en');
     expect(localeFromLanguage('ja-JP')).toBe('ja');
+    expect(localeFromLanguage(' JA-jpan-JP ')).toBe('ja');
+    expect(localeFromLanguage('javanese')).toBe('en');
+    expect(localeFromLanguage('fr-FR')).toBe('en');
+    expect(localeFromLanguage('')).toBe('en');
+    expect(localeFromLanguage()).toBe('en');
     expect(labelsForLanguage('ja').run).toBe('実行');
     expect(idleOutputMessage('reactive', labelsForLanguage('ja'))).toBe('ランタイムの起動を待っています。');
     expect(labelsForLanguage('ja').unknownCell('missing')).toBe('不明な実行可能セル: missing');
+    expect(labelsForLanguage('fr').run).toBe('Run');
+    expect(labelsForLanguage('fr')).toBe(labelsForLanguage('en'));
+    expect(Object.values(labelsForLanguage('unknown')).every((label) => label !== undefined)).toBe(true);
+    expect(labelsForLanguage('ja').diagnosticDetail('Artifact limit exceeded: received 17, maximum 16.')).toBe(
+      '成果物の上限を超えました。17 件を受け取りましたが、上限は 16 件です。'
+    );
+    expect(labelsForLanguage('ja').diagnosticDetail('Sample cell timed out after 1000ms')).toBe(
+      'Sample cell は 1000 ミリ秒でタイムアウトしました。'
+    );
   });
 
   it('coerces numeric input values and keeps text values', () => {

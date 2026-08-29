@@ -5,14 +5,7 @@ import path from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import { pathFromUrl, pathInUrl } from '../config/paths.mjs';
 import { loadOxiquillProjectConfig } from '../config/project-config.mjs';
-import {
-  buildHaskellWasm,
-  buildRustWasm,
-  createDocRuntimeContext,
-  markRuntimeReady,
-  syncLicenseArtifacts,
-  syncDocRuntime
-} from '../generator/doc-runtime-service.mjs';
+import { createDocRuntimeContext, syncDocRuntime } from '../generator/doc-runtime-service.mjs';
 import { cleanOxiquillWorkspace } from '../generator/clean.mjs';
 import { runHelperCargo } from '../generator/run-helper-cargo.mjs';
 import { parseConfigOption } from './config-option.mjs';
@@ -78,7 +71,7 @@ export async function runCli(
     case 'build':
       await generateRuntime({ projectConfig, wasmMode: 'build' });
       await runOxiquillCheck(projectConfig, [], { runCommand, selectNode });
-      await runAstro(projectConfig, ['build', ...astroArgs], { runCommand, selectNode });
+      await runAstro(projectConfig, ['build', ...astroArgs], { runCommand, runtimeOwner: 'cli', selectNode });
       return;
     case 'check':
       await generateRuntime({ projectConfig, wasmMode: 'dev' });
@@ -116,7 +109,10 @@ export async function runCli(
       await runHelperCargo({ argv: ['doc', '--no-deps'], paths });
       return;
     case 'test-wasm':
-      await generateRuntime({ projectConfig, wasmMode: 'dev' });
+      if ((await generateRuntime({ projectConfig, wasmMode: 'dev' })).rustCellCount === 0) {
+        console.log('[runtime] no Rust cells; skipping wasm-pack test');
+        return;
+      }
       await runCommand('wasm-pack', ['test', '--node', pathFromUrl(paths.rustCellsDir)], {
         cwd: pathFromUrl(paths.workspaceRoot)
       });
@@ -127,24 +123,14 @@ export async function runCli(
 async function generateRuntime({ projectConfig, tolerateHaskellBuildFailure = false, wasmMode }) {
   const { paths } = projectConfig;
   const context = await createDocRuntimeContext({ paths });
-  const summary = await syncDocRuntime(context);
+  const summary = await syncDocRuntime({
+    ...context,
+    mode: wasmMode,
+    tolerateHaskellBuildFailure
+  });
   console.log(`Generated ${summary.cellCount} interactive cell(s).`);
-
-  if (wasmMode) {
-    await buildRustWasm({ mode: wasmMode, paths });
-    if (summary.haskellCellCount > 0) {
-      const result = await buildHaskellWasm({
-        haskellFingerprint: summary.haskellFingerprint,
-        mode: wasmMode,
-        paths,
-        tolerateFailure: tolerateHaskellBuildFailure
-      });
-      warnToleratedHaskellBuildFailure(result);
-    }
-    await syncLicenseArtifacts({ paths });
-  }
-
-  await markRuntimeReady({ paths, summary });
+  if (summary.haskellBuildResult) warnToleratedHaskellBuildFailure(summary.haskellBuildResult);
+  return summary;
 }
 
 function warnToleratedHaskellBuildFailure(result) {
@@ -181,13 +167,13 @@ async function runDevServer({ args, projectConfig, selectNode }) {
   }
 }
 
-async function runAstro(projectConfig, args, { runCommand, selectNode }) {
+async function runAstro(projectConfig, args, { runCommand, runtimeOwner, selectNode }) {
   const { paths } = projectConfig;
   const nodePath = selectNode(paths);
 
   await runCommand(nodePath, [frameworkBinScript(paths, 'astro'), ...args], {
     cwd: projectConfig.cwd,
-    env: frameworkEnv(paths, { nodePath })
+    env: frameworkEnv(paths, { nodePath, runtimeOwner })
   });
 }
 
@@ -313,7 +299,7 @@ function frameworkBinScript(paths, packageName, binName = packageName) {
   return path.resolve(path.dirname(packageJsonPath), binPath);
 }
 
-export function frameworkEnv(paths, { env = process.env, nodePath } = {}) {
+export function frameworkEnv(paths, { env = process.env, nodePath, runtimeOwner } = {}) {
   const frameworkNodePath = pathInUrl(paths.frameworkRoot, 'node_modules');
   const currentNodePath = env.NODE_PATH;
   const nextEnv = {
@@ -328,6 +314,8 @@ export function frameworkEnv(paths, { env = process.env, nodePath } = {}) {
       ? `${path.dirname(nodePath)}${path.delimiter}${currentPath}`
       : path.dirname(nodePath);
   }
+
+  if (runtimeOwner) nextEnv.OXIQUILL_RUNTIME_OWNER = runtimeOwner;
 
   return nextEnv;
 }

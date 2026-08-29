@@ -8,8 +8,10 @@ This runbook covers the one-time npm package bootstrap and every later stable re
 - The `npm release readiness` milestone has no open `release-blocker` issue.
 - Required CI is green on the latest `main`.
 - The release version is stable `MAJOR.MINOR.PATCH`; prereleases require a separately reviewed runbook change.
-- Node.js 24+, the repository's pinned pnpm/Rust tools, `wasm-pack`, `cargo-llvm-cov`, `wasm32-wasi-ghc`, Playwright, GitHub CLI, and current npm CLI are available.
+- Node.js 24+, npm 11.15.0+, the repository's pinned pnpm/Rust tools, `wasm-pack`, `cargo-llvm-cov`, `wasm32-wasi-ghc`, Playwright, and GitHub CLI are available.
 - The protected publish environment and npm staged trusted publisher are configured for normal releases.
+
+The GitHub environment is named `npm-publish`. It has `kakune` as a required reviewer, permits only tags matching `v*`, allows self-review for the sole maintainer, and contains no npm credential. The npm Trusted Publisher must match repository `kakune/oxiquill`, workflow filename `npm-publish.yml`, environment `npm-publish`, and only the `npm stage publish` action.
 
 Never reuse, move, or replace a published tag. npm versions are immutable; recover from a bad release with deprecation and a patch release.
 
@@ -20,7 +22,7 @@ Never reuse, move, or replace a published tag. npm versions are immutable; recov
 3. Move releasable entries from `CHANGELOG.md`'s Unreleased section into `## [X.Y.Z] - YYYY-MM-DD`, restore empty Unreleased categories, and update comparison links.
 4. Update `SECURITY.md` if the supported minor line changes.
 5. Regenerate required runtime/package artifacts through existing commands; never edit generated output directly.
-6. Run the release validation documented below and inspect the packed archive.
+6. Run the local release validation documented below.
 7. Commit focused version/changelog and generated-metadata changes on the protected release branch.
 
 Retain the protected `release/vX.Y.Z` branch after release. Do not add later commits to it.
@@ -40,51 +42,72 @@ pnpm test:package
 pnpm test:consumer
 ```
 
-Run the release workflow's manual dry-run path from the release-shaped ref. It must verify:
+The package and consumer tests inspect temporary packs locally. The immutable release archive is produced later by the workflow from the tag on `main`.
 
-- tag/version shape and equality for root and package metadata;
-- candidate ancestry from `main`;
-- zero open release blockers and zero production advisories;
-- all required checks and language/browser/consumer fixtures;
-- the complete npm tarball allowlist and README/licenses;
-- one tarball built exactly once, with its SHA-256 and file manifest recorded.
-
-Download that workflow artifact, verify the recorded SHA-256 locally, and inspect the archive contents before approval. The publish job must consume the same archive and must not rebuild it.
-
-## Merge and Tag
+## Merge, Tag, and Dry Run
 
 1. Open an English pull request from `release/vX.Y.Z` to `main` with the validation results and release checklist.
 2. Bring the branch up to date with `main`, resolve every review conversation, and wait for all required checks.
 3. Squash-merge the release pull request. Do not merge, rebase-merge, or push directly to `main`.
 4. Record the resulting squash commit on `main` and confirm its tree contains the reviewed release state.
-5. Create annotated tag `vX.Y.Z` on that resulting `main` commit and push the tag.
-6. Create the GitHub Release from the exact tag, using the changelog entry as release notes. Do not mark a stable release as a prerelease.
+5. Create annotated tag `vX.Y.Z` on that resulting `main` commit and push the tag. Do not tag the release branch commit.
+6. Dispatch `npm-publish.yml` against that exact tag with `release_tag` set to the same `vX.Y.Z` value.
 
-Publishing the GitHub Release starts the stable verification/staging workflow. The workflow must reject a tag not contained in `main`, a mismatched version, an open release blocker, a changed archive, or missing OIDC.
+The manual path never contacts an npm publish endpoint. It must verify:
+
+- tag/version shape and equality for root and package metadata;
+- the checked-out tag commit and its ancestry from `main`;
+- zero open release blockers and zero production advisories;
+- all required checks and language/browser/consumer fixtures;
+- the complete npm tarball allowlist and README/licenses;
+- one tarball built exactly once, with its SHA-256 and file manifest recorded.
+
+Download artifact `oxiquill-X.Y.Z`. It contains only `oxiquill-X.Y.Z.tgz`, `SHA256SUMS`, and `release-manifest.json`. Verify and inspect it from an isolated directory:
+
+```sh
+sha256sum --check SHA256SUMS
+tar -tzf oxiquill-X.Y.Z.tgz
+npm pack --dry-run --json ./oxiquill-X.Y.Z.tgz
+```
+
+On macOS, use `shasum -a 256 -c SHA256SUMS` if `sha256sum` is unavailable. Confirm the manifest records every tarball path, the expected package/version, npm integrity, and the same SHA-256. Do not rebuild or rename the archive.
 
 ## One-Time npm Bootstrap
 
 Use this section only for the first publication of the unscoped `oxiquill` package, before package-scoped trusted publishing can be configured.
 
-1. Recheck that `oxiquill` is available and that the maintainer controls the intended npm account and organization settings.
-2. Run the complete release dry run and download the exact verified tarball, SHA-256, and manifest.
-3. Recompute the hash locally and inspect both the recorded manifest and `npm pack --dry-run` output.
-4. Sign in with an interactive npm session protected by 2FA. Publish that exact archive once with public access and provenance; do not rebuild it.
-5. Immediately configure the GitHub trusted publisher for this repository and the stable workflow filename with stage-only permission.
-6. Configure publishing access to require 2FA and disallow token-based publication.
-7. Remove or revoke every bootstrap write credential. Do not add `NPM_TOKEN`, `NODE_AUTH_TOKEN`, or a permanent token fallback to GitHub.
-8. Verify the installed package, tarball hash/contents, public provenance attestation, package README, and generated license files.
+1. Recheck that `oxiquill` returns npm E404 and that `kakune` controls the intended npm account and organization settings.
+2. Complete the tagged manual dry run above for `v0.3.0`, then download and inspect its exact three-file artifact.
+3. Sign in with an interactive npm session protected by 2FA. Publish that exact archive once with public access; do not rebuild it. Local interactive publishing cannot use trusted OIDC provenance, so override the package default only for this bootstrap command:
+
+   ```sh
+   npm publish ./oxiquill-0.3.0.tgz --access public --provenance=false
+   ```
+
+4. Immediately configure the GitHub Trusted Publisher with the repository, workflow, environment, and stage-only permission listed in Preconditions.
+5. Configure publishing access to require 2FA and disallow token-based publication.
+6. Remove or revoke every bootstrap credential and end the interactive session. Do not add `NPM_TOKEN`, `NODE_AUTH_TOKEN`, or a permanent token fallback to GitHub.
+7. Create the stable GitHub Release for `v0.3.0` from the exact tag and changelog entry. The workflow re-verifies and archives this release, but deliberately skips the staged publish job for the one-time bootstrap version.
+8. Verify the installed package, tarball hash/contents, package README, and generated license files. Record that provenance begins with subsequent OIDC-published versions.
 
 Record completion in the GitHub Release without exposing credentials or private account data. This exception is never used again.
 
 ## Normal Staged Publication
 
-1. The least-privilege verify job builds and validates the archive without publish permission.
-2. The protected publish job obtains only `contents: read` and `id-token: write`, downloads the verified artifact, checks its SHA-256, and submits it with `npm stage publish` through the configured trusted publisher.
-3. A required reviewer downloads/inspects the staged archive and compares its hash and manifest with the verify job.
-4. The maintainer approves the staged release with npm 2FA.
-5. Confirm the exact version is public, installable with npm and pnpm, and shows npm provenance/publish attestations tied to this repository/workflow.
-6. Verify the package exports, README, licenses, static starter, check, build, preview, and language fixtures from the published package rather than a workspace link.
+1. Create the stable GitHub Release from the exact `vX.Y.Z` tag and changelog entry. Do not mark a stable release as a prerelease.
+2. Wait for the least-privilege verify job to finish, then download that release run's `oxiquill-X.Y.Z` artifact and repeat the hash/manifest/archive inspection. The workflow rejects a non-main tag, version mismatch, open release blocker, advisory, failed validation, or changed archive.
+3. Approve the waiting `npm-publish` environment only after inspecting that exact artifact. The publish job obtains only `contents: read` and `id-token: write`, downloads the same artifact, verifies it without rebuilding, and submits the tarball with `npm stage publish` through OIDC.
+4. Inspect the staged package through npmjs.com or the current npm CLI. Download it and compare its hash and contents with the GitHub artifact before approval:
+
+   ```sh
+   npm stage list oxiquill
+   npm stage view <stage-id>
+   npm stage download <stage-id>
+   ```
+
+5. Approve the stage through npmjs.com or run `npm stage approve <stage-id>` and complete the required npm 2FA challenge.
+6. Confirm the exact version is public, installable with npm and pnpm, and shows npm provenance/publish attestations tied to this repository, workflow, tag, and protected environment.
+7. Verify the package exports, README, licenses, static starter, check, build, preview, and language fixtures from the published package rather than a workspace link.
 
 No normal release uses a long-lived npm write token.
 

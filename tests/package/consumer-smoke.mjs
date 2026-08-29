@@ -95,6 +95,29 @@ try {
   packageJson.scripts['wasm:dev'] = 'oxiquill docgen --wasm dev';
   await writeFile(packageJsonPath, `${JSON.stringify(packageJson, null, 2)}\n`);
   await writeFile(path.join(projectRoot, 'package-api.ts'), packageApiSource);
+  run(packageManager, ['install'], consumerRoot);
+  run(
+    packageManager,
+    packageManager === 'npm' ? ['exec', '--', 'oxiquill', 'help'] : ['exec', 'oxiquill', 'help'],
+    consumerRoot
+  );
+  run(
+    'node',
+    ['--input-type=module', '--eval', "await import('oxiquill'); await import('oxiquill/astro');"],
+    consumerRoot
+  );
+  const packedCliPath = path.join(consumerRoot, 'node_modules/oxiquill/dist/cli/index.mjs');
+  const nodeOnlyEnvironment = createNodeOnlyEnvironment();
+  run(process.execPath, [packedCliPath, 'check'], consumerRoot, false, nodeOnlyEnvironment);
+  run(process.execPath, [packedCliPath, 'build'], consumerRoot, false, nodeOnlyEnvironment);
+
+  await assertFile(path.join(projectRoot, 'state cache/generated runtime/cells.json'));
+  await assertMissing(path.join(projectRoot, 'state cache/rust-cells'));
+  await assertMissing(path.join(projectRoot, 'state cache/haskell-cells'));
+  await assertMissing(path.join(projectRoot, 'static files/oxiquill assets/python runtime'));
+  await assertMissing(path.join(projectRoot, 'static files/oxiquill assets/rust runtime'));
+  await assertMissing(path.join(projectRoot, 'static files/oxiquill assets/haskell runtime'));
+
   await appendFile(
     path.join(projectRoot, 'written docs/index.mdx'),
     [
@@ -114,17 +137,6 @@ try {
     ].join('\n')
   );
 
-  run(packageManager, ['install'], consumerRoot);
-  run(
-    packageManager,
-    packageManager === 'npm' ? ['exec', '--', 'oxiquill', 'help'] : ['exec', 'oxiquill', 'help'],
-    consumerRoot
-  );
-  run(
-    'node',
-    ['--input-type=module', '--eval', "await import('oxiquill'); await import('oxiquill/astro');"],
-    consumerRoot
-  );
   run(packageManager, ['run', 'check'], consumerRoot);
   run(packageManager, ['run', 'wasm:dev'], consumerRoot);
   run(packageManager, ['run', 'build'], consumerRoot);
@@ -162,6 +174,10 @@ try {
     'packed consumer emitted an oversized client chunk'
   );
   await assertFile(path.join(projectRoot, 'static files/oxiquill assets/rust runtime/doc_rust_cells_bg.wasm'));
+  for (const fileName of ['doc_rust_cells.d.ts', 'doc_rust_cells_bg.wasm.d.ts', 'package.json']) {
+    await assertMissing(path.join(projectRoot, 'static files/oxiquill assets/rust runtime', fileName));
+    await assertMissing(path.join(projectRoot, 'built site/oxiquill assets/rust runtime', fileName));
+  }
   await assertFile(path.join(projectRoot, 'state cache/generated runtime/cells.json'));
 
   run(packageManager, ['run', 'clean'], consumerRoot);
@@ -175,19 +191,28 @@ try {
   await rm(temporaryRoot, { force: true, recursive: true });
 }
 
-function run(command, args, cwd, capture = false) {
+function run(command, args, cwd, capture = false, environment = process.env) {
   const isWindowsPackageManager = process.platform === 'win32' && (command === 'npm' || command === 'pnpm');
   const executable = isWindowsPackageManager ? (process.env.ComSpec ?? 'cmd.exe') : command;
   const commandArgs = isWindowsPackageManager ? ['/d', '/s', '/c', `${command}.cmd`, ...args] : args;
   const result = spawnSync(executable, commandArgs, {
     cwd,
     encoding: 'utf8',
-    env: process.env,
+    env: environment,
     stdio: capture ? ['ignore', 'pipe', 'pipe'] : 'inherit'
   });
   assert.ifError(result.error);
   assert.equal(result.status, 0, capture ? result.stderr || result.stdout : `${command} failed`);
   return result;
+}
+
+function createNodeOnlyEnvironment() {
+  const environment = { ...process.env };
+  const pathKey = Object.keys(environment).find((key) => key.toUpperCase() === 'PATH') ?? 'PATH';
+  environment[pathKey] = path.dirname(process.execPath);
+  environment.OXIQUILL_NODE = process.execPath;
+  delete environment.OXIQUILL_HASKELL_GHC;
+  return environment;
 }
 
 async function assertFile(filePath) {

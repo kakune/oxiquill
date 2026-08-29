@@ -30,6 +30,7 @@ export function createOxiquillPaths(options = {}) {
     rustWasmPublicDir: directoryPath(options.rustWasmPublicDir ?? 'rust-wasm', publicAssetsDir),
     cellsModulePath: filePath('cells.ts', generatedDir),
     cellsJsonPath: filePath('cells.json', generatedDir),
+    runtimeOwnershipPath: filePath('runtime-ownership.json', generatedDir),
     runtimeVersionPath: filePath('runtime-version.ts', generatedDir)
   });
 }
