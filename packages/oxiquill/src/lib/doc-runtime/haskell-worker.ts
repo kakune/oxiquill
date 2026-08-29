@@ -1,4 +1,5 @@
 import { ConsoleStdout, File, OpenFile, WASI } from '@bjorn3/browser_wasi_shim';
+import { haskellWasmPath } from 'virtual:oxiquill/runtime-paths';
 import type { RawCellExecutionResult, RuntimeWorkerRequest, RuntimeWorkerResponse, TextArtifact } from './types.js';
 
 type WorkerScope = {
@@ -97,14 +98,22 @@ export function createHaskellCellResult({
   };
 }
 
-export function resolveHaskellWasmUrl(baseUrl = import.meta.env.BASE_URL): string {
+export function resolveHaskellWasmUrl(
+  baseUrl = import.meta.env.BASE_URL,
+  runtimePath = haskellWasmPath
+): string {
   const base = baseUrl.endsWith('/') ? baseUrl : `${baseUrl}/`;
-  return `${base}oxiquill/haskell-wasm/doc_haskell_cells.wasm`;
+  const normalizedRuntimePath = runtimePath.replace(/^\/+|\/+$/gu, '');
+  return `${base}${normalizedRuntimePath}/doc_haskell_cells.wasm`;
 }
 
-export function resolveHaskellRuntimeStatusUrl(baseUrl = import.meta.env.BASE_URL): string {
+export function resolveHaskellRuntimeStatusUrl(
+  baseUrl = import.meta.env.BASE_URL,
+  runtimePath = haskellWasmPath
+): string {
   const base = baseUrl.endsWith('/') ? baseUrl : `${baseUrl}/`;
-  return `${base}oxiquill/haskell-wasm/status.json`;
+  const normalizedRuntimePath = runtimePath.replace(/^\/+|\/+$/gu, '');
+  return `${base}${normalizedRuntimePath}/status.json`;
 }
 
 function ensureHaskellModule(expectedFingerprintHash: string | undefined): Promise<WebAssembly.Module> {

@@ -1,9 +1,10 @@
 import { existsSync, readFileSync } from 'node:fs';
-import { normalizePath, pathFromUrl } from '../config/paths.mjs';
+import { normalizePath, pathFromUrl, pathInUrl, relativePathFromUrl } from '../config/paths.mjs';
 
 const moduleIds = new Map([
   ['virtual:oxiquill/cells', '\0virtual:oxiquill/cells'],
   ['virtual:oxiquill/runtime-version', '\0virtual:oxiquill/runtime-version'],
+  ['virtual:oxiquill/runtime-paths', '\0virtual:oxiquill/runtime-paths'],
   ['virtual:oxiquill/rust-wasm', '\0virtual:oxiquill/rust-wasm']
 ]);
 
@@ -25,8 +26,11 @@ export function oxiquillVirtualModulesPlugin(paths) {
       }
     ]
   ]);
-  const rustWasmFile = pathFromUrl(new URL('doc_rust_cells.js', paths.rustWasmPublicDir));
-  const watchedFiles = [...Array.from(generatedModules.values()).map(({ file }) => file), rustWasmFile];
+  const rustWasmFile = pathInUrl(paths.rustWasmPublicDir, 'doc_rust_cells.js');
+  const watchedFiles = [
+    ...Array.from(generatedModules.values()).map(({ file }) => file),
+    rustWasmFile
+  ];
   const changedFileModuleIds = new Map([
     [normalizePath(pathFromUrl(paths.cellsModulePath)), '\0virtual:oxiquill/cells'],
     [normalizePath(pathFromUrl(paths.runtimeVersionPath)), '\0virtual:oxiquill/runtime-version'],
@@ -60,6 +64,12 @@ export function oxiquillVirtualModulesPlugin(paths) {
         }
 
         return `export { default, run_rust_cell } from "/@fs/${normalizePath(rustWasmFile)}";\n`;
+      }
+      if (baseId === '\0virtual:oxiquill/runtime-paths') {
+        return [
+          `export const haskellWasmPath = ${JSON.stringify(publicUrlPath(paths, paths.haskellWasmPublicDir))};`,
+          `export const pyodidePath = ${JSON.stringify(publicUrlPath(paths, paths.pyodidePublicDir))};`
+        ].join('\n');
       }
 
       return undefined;
@@ -100,6 +110,11 @@ export function oxiquillVirtualModulesPlugin(paths) {
       });
     }
   };
+}
+
+function publicUrlPath(paths, directory) {
+  const relativePath = relativePathFromUrl(paths.publicDir, directory);
+  return `${relativePath.split('/').map(encodeURIComponent).join('/')}/`;
 }
 
 function resolveVirtualModuleId(id) {

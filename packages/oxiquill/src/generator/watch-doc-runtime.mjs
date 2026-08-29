@@ -1,6 +1,8 @@
 import chokidar from 'chokidar';
 import { pathToFileURL } from 'node:url';
+import { parseConfigOption } from '../cli/config-option.mjs';
 import { pathFromUrl } from '../config/paths.mjs';
+import { loadOxiquillProjectConfig } from '../config/project-config.mjs';
 import {
   buildHaskellWasm,
   buildRustWasm,
@@ -25,6 +27,7 @@ const defaultServices = {
   buildHaskellWasm,
   buildRustWasm,
   createDocRuntimeContext,
+  loadProjectConfig: loadOxiquillProjectConfig,
   markRuntimeReady,
   shouldBuildHaskellWasm,
   shouldBuildWasm,
@@ -35,9 +38,23 @@ const defaultServices = {
 
 export async function main(argv = process.argv.slice(2), serviceOverrides = {}) {
   const services = { ...defaultServices, ...serviceOverrides };
-  const root = process.cwd();
-  const skipInitial = argv.includes('--skip-initial');
-  const initialContext = await services.createDocRuntimeContext({ root });
+  const { commandArgs, configFile } = parseConfigOption(argv);
+  const unexpectedArgs = commandArgs.filter((argument) => argument !== '--skip-initial');
+  if (unexpectedArgs.length > 0) {
+    throw new Error(`Unknown runtime watcher option: ${unexpectedArgs[0]}.`);
+  }
+  const projectConfig = await services.loadProjectConfig({ cwd: process.cwd(), configFile });
+  return watchDocRuntime({
+    projectConfig,
+    serviceOverrides: services,
+    skipInitial: commandArgs.includes('--skip-initial')
+  });
+}
+
+export async function watchDocRuntime({ projectConfig, serviceOverrides = {}, skipInitial = false }) {
+  const services = { ...defaultServices, ...serviceOverrides };
+  const { paths } = projectConfig;
+  const initialContext = await services.createDocRuntimeContext({ paths });
   const workspaceRoot = pathFromUrl(initialContext.paths.workspaceRoot);
   let previous;
   let changeKinds = skipInitial ? new Set() : new Set(['docs']);
@@ -52,7 +69,7 @@ export async function main(argv = process.argv.slice(2), serviceOverrides = {}) 
 
     const currentKinds = changeKinds;
     changeKinds = new Set();
-    const context = await services.createDocRuntimeContext({ root, highlighter: initialContext.highlighter });
+    const context = await services.createDocRuntimeContext({ paths, highlighter: initialContext.highlighter });
 
     console.log(`[runtime] syncing after ${describeChangeKinds(currentKinds)}`);
     const current = await services.syncDocRuntime(context);
@@ -109,6 +126,8 @@ export async function main(argv = process.argv.slice(2), serviceOverrides = {}) 
   watcher.on('ready', () => {
     console.log('[runtime] watching MDX, Rust, and Haskell cell sources');
   });
+
+  return watcher;
 }
 
 if (import.meta.url === pathToFileURL(process.argv[1] ?? '').href) {
