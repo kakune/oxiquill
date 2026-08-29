@@ -101,6 +101,57 @@ test('off-screen reactive cells wait for visible hydration', async ({ page }) =>
   expect(requests.some((request) => request.includes('/haskell-worker-'))).toBe(false);
 });
 
+test('button, reactive, and autorun cells follow their execution contracts', async ({ page }) => {
+  await captureWorkerMessages(page);
+  await page.goto('/features/interactive-cells/');
+
+  const button = page.getByTestId('cell-features__interactive-cells__run-mode-button');
+  await hydrateCell(button);
+  await expect(button.getByLabel('value')).toBeVisible();
+  await expect(button.getByRole('button', { name: 'Run' })).toBeVisible();
+  await page.waitForTimeout(200);
+  expect(await workerMessagesForCell(page, 'features__interactive-cells__run-mode-button')).toHaveLength(0);
+
+  await button.getByRole('button', { name: 'Run' }).click();
+  await expect(button.getByTestId('run-output')).toContainText('button value = 3');
+
+  const reactive = page.getByTestId('cell-features__interactive-cells__rust-controls');
+  await hydrateCell(reactive);
+  await expect(reactive.getByLabel('operation')).toBeVisible();
+  await expect(reactive.getByRole('button', { name: 'Run' })).toHaveCount(0);
+  await expect(reactive.getByTestId('run-output')).toContainText('score = 19');
+
+  const autorun = page.getByTestId('cell-features__interactive-cells__run-mode-autorun');
+  await hydrateCell(autorun);
+  await expect(autorun.locator('input, select, textarea')).toHaveCount(0);
+  await expect(autorun.getByRole('button', { name: 'Run' })).toHaveCount(0);
+  await expect(autorun.getByTestId('run-output')).toContainText('autorun ready');
+  expect(await workerMessagesForCell(page, 'features__interactive-cells__run-mode-autorun')).toHaveLength(1);
+});
+
+test('rapid reactive input keeps only the final replacement request', async ({ page }) => {
+  test.setTimeout(120_000);
+  await captureWorkerMessages(page);
+  await page.goto('/features/interactive-cells/');
+
+  const python = page.getByTestId('cell-features__interactive-cells__python-controls');
+  await hydrateCell(python);
+  await expect.poll(() => workerMessagesForCell(page, 'features__interactive-cells__python-controls')).toHaveLength(1);
+
+  await python.getByLabel('label').evaluate((element) => {
+    const input = element as HTMLInputElement;
+    for (let index = 0; index < 10; index += 1) {
+      input.value = `rapid-${index}`;
+      input.dispatchEvent(new Event('input', { bubbles: true }));
+    }
+  });
+
+  await expect(python.getByTestId('run-output')).toContainText('RAPID-9: mean = 7.5', { timeout: 90_000 });
+  const requests = await workerMessagesForCell(page, 'features__interactive-cells__python-controls');
+  expect(requests).toHaveLength(2);
+  expect(requests[1]?.inputs).toMatchObject({ label: 'rapid-9' });
+});
+
 test('text-only Haskell cells do not load chart or unrelated runtimes', async ({ page }) => {
   const requests = captureRequestPaths(page);
 
@@ -370,4 +421,28 @@ async function hydrateCell(cell: Locator): Promise<void> {
   await cell.scrollIntoViewIfNeeded();
   const island = cell.locator('xpath=ancestor::astro-island');
   await expect.poll(() => island.getAttribute('ssr')).toBeNull();
+}
+
+async function captureWorkerMessages(page: Page): Promise<void> {
+  await page.addInitScript(`
+    globalThis.__oxiquillWorkerMessages = [];
+    const originalPostMessage = Worker.prototype.postMessage;
+    Worker.prototype.postMessage = function (message, ...rest) {
+      globalThis.__oxiquillWorkerMessages.push(structuredClone(message));
+      return Reflect.apply(originalPostMessage, this, [message, ...rest]);
+    };
+  `);
+}
+
+async function workerMessagesForCell(
+  page: Page,
+  cellId: string
+): Promise<Array<{ cellId?: string; inputs?: Record<string, unknown> }>> {
+  return page.evaluate((requestedCellId) => {
+    const messages = Reflect.get(globalThis, '__oxiquillWorkerMessages') as Array<{
+      cellId?: string;
+      inputs?: Record<string, unknown>;
+    }>;
+    return messages.filter((message) => message.cellId === requestedCellId);
+  }, cellId);
 }

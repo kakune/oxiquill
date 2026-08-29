@@ -45,7 +45,11 @@ export function formatInputValue(value: string | number | boolean): string {
 }
 
 export function shouldShowRunButton(runMode: RunMode): boolean {
-  return runMode === 'button' || runMode === 'autorun';
+  return runMode === 'button';
+}
+
+export function shouldShowInputControls(runMode: RunMode): boolean {
+  return runMode !== 'autorun';
 }
 
 export function labelsForLanguage(languageTag?: string): RuntimeLabels {

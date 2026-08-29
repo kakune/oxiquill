@@ -34,6 +34,28 @@ Haskell cell は standard-library code のみで `packages`/`crates` を受け�
 - `reactive`: input を表示して Run button を隠し、mount 時に一度実行します。その後は 150 ms trailing debounce を使い、active execution 一つと最新 replacement 一つだけを保持します。
 - `autorun`: input/Run button を表示せず、各 `cell.id + runtimeVersion` について正確に一度だけ実行します。
 
+次の button cell は、input を変更しても明示的に実行するまで待機します。
+
+```rust
+//| id: run-mode-button
+//| title: Explicit button execution
+//| run: button
+//| crates: []
+//| inputs:
+//|   value: { type: integer, label: value, min: 1, max: 10, step: 1, value: 3 }
+println!("button value = {value}");
+```
+
+次の autorun cell には実行 control がなく、現在の生成 runtime に対して1回だけ実行されます。
+
+```rust
+//| id: run-mode-autorun
+//| title: One-time autorun execution
+//| run: autorun
+//| crates: []
+println!("autorun ready");
+```
+
 superseded queued work は破棄され、stale result が新しい state を上書きしません。通常の reactive update は shared language worker を維持します。timeout/worker fault はその worker 所有 request を reject し timer を除去して、次回用 fresh worker を作ります。unmount は pending UI work を cancel し、late state update を防ぎます。
 
 ## Input schema

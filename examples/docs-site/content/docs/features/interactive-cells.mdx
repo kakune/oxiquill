@@ -34,6 +34,28 @@ Haskell cells use standard-library code only and accept neither `packages` nor `
 - `reactive`: show inputs, hide the Run button, execute once on mount, then use a 150 ms trailing debounce. At most one execution and one newest replacement are retained.
 - `autorun`: show neither inputs nor Run button and execute exactly once for each `cell.id + runtimeVersion`.
 
+This button cell waits for an explicit run even when its input changes.
+
+```rust
+//| id: run-mode-button
+//| title: Explicit button execution
+//| run: button
+//| crates: []
+//| inputs:
+//|   value: { type: integer, label: value, min: 1, max: 10, step: 1, value: 3 }
+println!("button value = {value}");
+```
+
+This autorun cell has no execution controls and runs once for the current generated runtime.
+
+```rust
+//| id: run-mode-autorun
+//| title: One-time autorun execution
+//| run: autorun
+//| crates: []
+println!("autorun ready");
+```
+
 Superseded queued work is discarded, stale results cannot replace newer state, and ordinary reactive updates keep the shared language worker alive. A timeout or worker fault rejects requests owned by that worker, clears their timers, and creates a fresh worker for future runs. Unmounting cancels pending UI work and prevents late state updates.
 
 ## Input Schema

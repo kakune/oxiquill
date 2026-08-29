@@ -1,5 +1,9 @@
 import { useState } from 'preact/hooks';
-import { labelsForLanguage, shouldShowRunButton } from '../../lib/doc-runtime/interactive-cell-model.js';
+import {
+  labelsForLanguage,
+  shouldShowInputControls,
+  shouldShowRunButton
+} from '../../lib/doc-runtime/interactive-cell-model.js';
 import type { CellManifest } from '../../lib/doc-runtime/types.js';
 import { CellOutput } from './CellOutput.js';
 import { InputControl } from './InputControl.js';
@@ -7,12 +11,14 @@ import { useManifestSnapshot, useRuntimeLabels } from './manifest-hooks.js';
 import { useInteractiveCellRun } from './useInteractiveCellRun.js';
 
 interface InteractiveCellProps {
+  cell?: CellManifest;
   cellId: string;
 }
 
-export default function InteractiveCell({ cellId }: InteractiveCellProps) {
+export default function InteractiveCell({ cell: initialCell, cellId }: InteractiveCellProps) {
   const { cells, version } = useManifestSnapshot();
-  const cell = cells.find((candidate) => candidate.id === cellId);
+  const cell =
+    cells.find((candidate) => candidate.id === cellId) ?? (initialCell?.id === cellId ? initialCell : undefined);
   const labels = useRuntimeLabels();
 
   if (!cell) {
@@ -62,7 +68,7 @@ function InteractiveCellPanel({
         </div>
       </div>
 
-      {cell.inputs.length > 0 ? (
+      {shouldShowInputControls(cell.run) && cell.inputs.length > 0 ? (
         <div class="doc-input-grid">
           {cell.inputs.map((input) => (
             <InputControl

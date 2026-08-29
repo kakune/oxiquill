@@ -159,6 +159,7 @@ beforeEach(() => {
 
 afterEach(() => {
   cleanup();
+  vi.useRealTimers();
   vi.unstubAllGlobals();
 });
 
@@ -169,6 +170,15 @@ describe('InteractiveCell', () => {
     render(<InteractiveCell cellId="missing" />);
 
     expect(screen.getByText('Unknown interactive cell: missing')).toBeVisible();
+  });
+
+  it('hydrates from its page-local cell prop without loading the global manifest', () => {
+    setManifestCells([]);
+
+    render(<InteractiveCell cellId="cell-one" cell={makeCell()} />);
+
+    expect(screen.getByTestId('cell-cell-one')).toBeVisible();
+    expect(screen.getByText('Cell one')).toBeVisible();
   });
 
   it('renders controls, toggles source, runs button cells, and displays all output types', async () => {
@@ -279,26 +289,48 @@ describe('InteractiveCell', () => {
     await waitFor(() => expect(screen.getByText('string failure')).toBeVisible());
   });
 
-  it('runs autorun and reactive cells automatically', async () => {
+  it('runs autorun exactly once per cell and runtime version without rendering execution controls', async () => {
     mocks.runInteractiveCell.mockResolvedValue({ stdout: 'auto', plots: [] });
-    setManifestCells([makeCell({ run: 'autorun' })]);
+    setManifestCells([makeCell({ run: 'autorun' })], 'autorun-v1');
 
-    const { rerender } = render(<InteractiveCell cellId="cell-one" />);
+    const first = render(<InteractiveCell cellId="cell-one" />);
     await waitFor(() => expect(mocks.runInteractiveCell).toHaveBeenCalledTimes(1));
-    expect(screen.getByRole('button', { name: 'Run' })).toBeVisible();
+    expect(screen.queryByRole('button', { name: 'Run' })).not.toBeInTheDocument();
+    expect(screen.queryByLabelText('label')).not.toBeInTheDocument();
 
-    act(() => {
-      setManifestCells([makeCell({ id: 'cell-two', run: 'reactive' })]);
-      mocks.manifestListeners[0]();
-    });
-    rerender(<InteractiveCell cellId="cell-two" />);
+    first.unmount();
+    const second = render(<InteractiveCell cellId="cell-one" />);
+    await waitFor(() => expect(screen.getByTestId('run-output')).toHaveTextContent('auto'));
+    expect(mocks.runInteractiveCell).toHaveBeenCalledTimes(1);
+
+    second.unmount();
+    setManifestCells([makeCell({ run: 'autorun' })], 'autorun-v2');
+    render(<InteractiveCell cellId="cell-one" />);
     await waitFor(() => expect(mocks.runInteractiveCell).toHaveBeenCalledTimes(2));
-
-    fireEvent.input(screen.getByRole('slider', { name: 'ratio' }), { target: { value: '3' } });
-    await waitFor(() => expect(mocks.runInteractiveCell).toHaveBeenCalledTimes(3));
   });
 
-  it('ignores stale async results from superseded reactive runs', async () => {
+  it('runs reactive cells initially and debounces later input changes', async () => {
+    mocks.runInteractiveCell.mockResolvedValue({ stdout: 'auto', plots: [] });
+    setManifestCells([makeCell({ run: 'reactive' })]);
+
+    render(<InteractiveCell cellId="cell-one" />);
+    await waitFor(() => expect(mocks.runInteractiveCell).toHaveBeenCalledTimes(1));
+    expect(screen.queryByRole('button', { name: 'Run' })).not.toBeInTheDocument();
+
+    for (let value = 1; value <= 10; value += 1) {
+      fireEvent.input(screen.getByRole('slider', { name: 'ratio' }), { target: { value: String(value / 4) } });
+    }
+
+    expect(mocks.runInteractiveCell).toHaveBeenCalledTimes(1);
+    await waitFor(() => expect(mocks.runInteractiveCell).toHaveBeenCalledTimes(2));
+    expect(mocks.runInteractiveCell).toHaveBeenLastCalledWith(
+      expect.objectContaining({ id: 'cell-one' }),
+      expect.objectContaining({ ratio: 2.5 }),
+      'v1'
+    );
+  });
+
+  it('runs at most one active reactive request and one final replacement', async () => {
     const pending: Array<ReturnType<typeof createDeferredResult>> = [];
     mocks.runInteractiveCell.mockImplementation(() => {
       const deferred = createDeferredResult();
@@ -315,8 +347,28 @@ describe('InteractiveCell', () => {
     render(<InteractiveCell cellId="cell-one" />);
     await waitFor(() => expect(pending).toHaveLength(1));
 
-    fireEvent.input(screen.getByLabelText('label'), { target: { value: 'newer input' } });
+    for (let index = 0; index < 10; index += 1) {
+      fireEvent.input(screen.getByLabelText('label'), { target: { value: `newer input ${index}` } });
+    }
+    await new Promise((resolve) => globalThis.setTimeout(resolve, 200));
+
+    expect(pending).toHaveLength(1);
+    expect(screen.getByText('Running cell...')).toBeVisible();
+
+    await act(async () => {
+      pending[0].resolve({
+        stdout: 'obsolete result',
+        stderr: '',
+        value: null,
+        plots: [],
+        outputs: [{ kind: 'text', stream: 'stdout', content: 'obsolete result' }]
+      });
+      await pending[0].promise;
+    });
+
     await waitFor(() => expect(pending).toHaveLength(2));
+    expect(mocks.runInteractiveCell).toHaveBeenLastCalledWith(expect.anything(), { label: 'newer input 9' }, 'v1');
+    expect(screen.queryByText('obsolete result')).not.toBeInTheDocument();
 
     await act(async () => {
       pending[1].resolve({
@@ -327,18 +379,6 @@ describe('InteractiveCell', () => {
         outputs: [{ kind: 'text', stream: 'stdout', content: 'newer result' }]
       });
       await pending[1].promise;
-    });
-    await waitFor(() => expect(screen.getByTestId('run-output')).toHaveTextContent('newer result'));
-
-    await act(async () => {
-      pending[0].resolve({
-        stdout: 'older result',
-        stderr: '',
-        value: null,
-        plots: [],
-        outputs: [{ kind: 'text', stream: 'stdout', content: 'older result' }]
-      });
-      await pending[0].promise;
     });
 
     expect(screen.getByTestId('run-output')).toHaveTextContent('newer result');
@@ -362,7 +402,15 @@ describe('InteractiveCell', () => {
     await waitFor(() => expect(pending).toHaveLength(1));
 
     fireEvent.input(screen.getByLabelText('label'), { target: { value: 'newer input' } });
+    await new Promise((resolve) => globalThis.setTimeout(resolve, 200));
+
+    await act(async () => {
+      pending[0].reject(new Error('older failure'));
+      await pending[0].promise.catch(() => undefined);
+    });
+
     await waitFor(() => expect(pending).toHaveLength(2));
+    expect(screen.queryByText('older failure')).not.toBeInTheDocument();
 
     await act(async () => {
       pending[1].resolve({
@@ -374,15 +422,36 @@ describe('InteractiveCell', () => {
       });
       await pending[1].promise;
     });
-    await waitFor(() => expect(screen.getByTestId('run-output')).toHaveTextContent('newer result'));
 
-    await act(async () => {
-      pending[0].reject(new Error('older failure'));
-      await pending[0].promise.catch(() => undefined);
-    });
-
-    expect(screen.queryByText('older failure')).not.toBeInTheDocument();
     expect(screen.getByTestId('run-output')).toHaveTextContent('newer result');
+  });
+
+  it('drops debounced and active callbacks when a reactive cell unmounts', async () => {
+    const active = createDeferredResult();
+    const consoleError = vi.spyOn(console, 'error').mockImplementation(() => undefined);
+    const unhandledRejection = vi.fn();
+    window.addEventListener('unhandledrejection', unhandledRejection);
+    mocks.runInteractiveCell.mockReturnValue(active.promise);
+    setManifestCells([
+      makeCell({
+        run: 'reactive',
+        inputs: [inputs.find((input) => input.name === 'label') as InputSpec]
+      })
+    ]);
+
+    const rendered = render(<InteractiveCell cellId="cell-one" />);
+    await waitFor(() => expect(mocks.runInteractiveCell).toHaveBeenCalledOnce());
+    fireEvent.input(screen.getByLabelText('label'), { target: { value: 'discarded' } });
+    rendered.unmount();
+
+    active.reject(new Error('failure after unmount'));
+    await active.promise.catch(() => undefined);
+    await new Promise((resolve) => globalThis.setTimeout(resolve, 200));
+
+    expect(mocks.runInteractiveCell).toHaveBeenCalledOnce();
+    expect(unhandledRejection).not.toHaveBeenCalled();
+    expect(consoleError).not.toHaveBeenCalled();
+    window.removeEventListener('unhandledrejection', unhandledRejection);
   });
 
   it('supports reactive cells without inputs and with hidden source', () => {
