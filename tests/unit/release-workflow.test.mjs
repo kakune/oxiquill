@@ -173,6 +173,7 @@ describe('workflow supply-chain policy', () => {
     expect(publishSource).toContain('id-token: write');
     expect(source.match(/id-token: write/gu)).toHaveLength(1);
     expect(publishSource).toContain('name: npm-publish');
+    expect(publishSource).toContain("needs.verify.outputs.release_version != '0.3.0'");
     expect(publishSource).toContain('npm stage publish');
     expect(source).not.toMatch(/\bNPM_TOKEN\b|\bNODE_AUTH_TOKEN\b/u);
     expect(source).not.toMatch(/run:\s+npm publish/u);

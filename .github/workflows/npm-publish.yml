@@ -142,7 +142,7 @@ jobs:
 
   publish:
     name: Stage npm package
-    if: github.event_name == 'release'
+    if: github.event_name == 'release' && needs.verify.outputs.release_version != '0.3.0'
     needs: verify
     runs-on: ubuntu-latest
     timeout-minutes: 15
