@@ -26,37 +26,37 @@ export { collections } from 'oxiquill/content';
 
 ## 設定 field
 
-| Field | 意味 |
-| --- | --- |
-| `title`, `description`, `sidebar` | 対応する Starlight setting の shorthand。 |
-| `starlight` | その他の Starlight option。同じ setting はこちらが shorthand より優先されます。 |
-| `framework.preact`, `framework.starlight` | 組み込み用途向けの高度な integration-factory override。 |
-| `integrations` | Oxiquill、Preact、Starlight の後に追加する Astro integration。 |
-| `markdown` | 追加の Astro Markdown setting/plugin。Oxiquill 必須 plugin が先に動きます。 |
-| `vite` | 追加の Vite setting。必須 alias、dedupe、worker plugin、filesystem access は保持されます。 |
-| `paths` | 下記の source/cache/generated/public path。 |
-| その他の Astro field | Astro に渡されます。Oxiquill の output は常に static です。 |
+| Field                                     | 意味                                                                                       |
+| ----------------------------------------- | ------------------------------------------------------------------------------------------ |
+| `title`, `description`, `sidebar`         | 対応する Starlight setting の shorthand。                                                  |
+| `starlight`                               | その他の Starlight option。同じ setting はこちらが shorthand より優先されます。            |
+| `framework.preact`, `framework.starlight` | 組み込み用途向けの高度な integration-factory override。                                    |
+| `integrations`                            | Oxiquill、Preact、Starlight の後に追加する Astro integration。                             |
+| `markdown`                                | 追加の Astro Markdown setting/plugin。Oxiquill 必須 plugin が先に動きます。                |
+| `vite`                                    | 追加の Vite setting。必須 alias、dedupe、worker plugin、filesystem access は保持されます。 |
+| `paths`                                   | 下記の source/cache/generated/public path。                                                |
+| その他の Astro field                      | Astro に渡されます。Oxiquill の output は常に static です。                                |
 
 Astro config を手動で組み立てる場合だけ `oxiquillIntegration()` を使います。受け取る option は `base`、`markdown`、`paths`、`vite` で、Preact と Starlight は caller が追加します。
 
 ## Path field
 
-| Field | Default | 解決基準 |
-| --- | --- | --- |
-| `workspaceRoot` | project root | current project/config root |
-| `frameworkRoot` | install 済み `oxiquill` package | absolute/package location |
-| `docsDir` | `content/docs` | `workspaceRoot` |
-| `cratesDir` | `crates` | `workspaceRoot` |
-| `publicDir` | `public` | `workspaceRoot` |
-| `cacheDir` | `.oxiquill` | `workspaceRoot` |
-| `generatedDir` | `generated` | `cacheDir` |
-| `rustCellsDir` | `rust-cells` | `cacheDir` |
-| `haskellCellsDir` | `haskell-cells` | `cacheDir` |
-| `publicAssetsDir` | `oxiquill` | `publicDir` |
-| `rustWasmPublicDir` | `rust-wasm` | `publicAssetsDir` |
-| `haskellWasmPublicDir` | `haskell-wasm` | `publicAssetsDir` |
-| `pyodidePublicDir` | `pyodide` | `publicAssetsDir` |
-| `licensesPublicDir` | `licenses` | `publicAssetsDir` |
+| Field                  | Default                         | 解決基準                    |
+| ---------------------- | ------------------------------- | --------------------------- |
+| `workspaceRoot`        | project root                    | current project/config root |
+| `frameworkRoot`        | install 済み `oxiquill` package | absolute/package location   |
+| `docsDir`              | `content/docs`                  | `workspaceRoot`             |
+| `cratesDir`            | `crates`                        | `workspaceRoot`             |
+| `publicDir`            | `public`                        | `workspaceRoot`             |
+| `cacheDir`             | `.oxiquill`                     | `workspaceRoot`             |
+| `generatedDir`         | `generated`                     | `cacheDir`                  |
+| `rustCellsDir`         | `rust-cells`                    | `cacheDir`                  |
+| `haskellCellsDir`      | `haskell-cells`                 | `cacheDir`                  |
+| `publicAssetsDir`      | `oxiquill`                      | `publicDir`                 |
+| `rustWasmPublicDir`    | `rust-wasm`                     | `publicAssetsDir`           |
+| `haskellWasmPublicDir` | `haskell-wasm`                  | `publicAssetsDir`           |
+| `pyodidePublicDir`     | `pyodide`                       | `publicAssetsDir`           |
+| `licensesPublicDir`    | `licenses`                      | `publicAssetsDir`           |
 
 各 path は relative string、absolute string、`file:` URL を受け取ります。nested relative path は偶然の working directory ではなく、表に示した parent から解決されます。
 
@@ -77,3 +77,5 @@ Oxiquill-owned output に project root や広すぎる directory を指定しな
 subpath 配下へ公開するときは Astro の `base` を設定します。Oxiquill は interactive-cell manifest、language runtime、diagram、`/media/...` reference に適用します。authoring では public URL を root-relative のまま記述し、Markdown transform が base を一度だけ追加します。
 
 生成 runtime は `.oxiquill` と `public/oxiquill`、最終 static site は Astro の `outDir`（通常 `dist`）に置かれます。生成 directory を直接編集しないでください。
+
+生成 directory を変更するときは、resolved cache、helper-crate target、output、public-asset path に合わせて `tsconfig.json` の exclusion も更新します。そうしないと `**/*` のような広い include により、Astro/TypeScript が Pyodide などの生成 JavaScript を output ではなく source として解析することがあります。

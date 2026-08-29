@@ -1,15 +1,6 @@
 import assert from 'node:assert/strict';
 import { spawnSync } from 'node:child_process';
-import {
-  appendFile,
-  cp,
-  mkdir,
-  mkdtemp,
-  readFile,
-  rename,
-  rm,
-  writeFile
-} from 'node:fs/promises';
+import { appendFile, cp, mkdir, mkdtemp, readFile, rename, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -60,36 +51,43 @@ try {
   await rename(path.join(consumerRoot, 'crates'), path.join(projectRoot, 'helper crates'));
   await rename(path.join(consumerRoot, 'public'), path.join(projectRoot, 'static files'));
   await rename(path.join(consumerRoot, 'content.config.ts'), path.join(projectRoot, 'content.config.ts'));
-  await rename(path.join(consumerRoot, 'tsconfig.json'), path.join(projectRoot, 'tsconfig.json'));
-  await writeFile(path.join(consumerRoot, 'astro.config.mjs'), [
-    "import starlight from '@astrojs/starlight';",
-    "import { defineOxiquillConfig } from 'oxiquill/astro';",
-    "import { fileURLToPath } from 'node:url';",
-    '',
-    "const projectRoot = fileURLToPath(new URL('./site root/', import.meta.url));",
-    '',
-    'export default defineOxiquillConfig({',
-    '  framework: { starlight },',
-    '  root: projectRoot,',
-    "  publicDir: 'static files',",
-    "  cacheDir: 'state cache',",
-    "  outDir: 'built site',",
-    '  paths: {',
-    "    docsDir: new URL('./site root/written docs/', import.meta.url),",
-    "    cratesDir: 'helper crates',",
-    "    generatedDir: 'generated runtime',",
-    "    publicAssetsDir: 'oxiquill assets',",
-    "    haskellWasmPublicDir: 'haskell runtime',",
-    "    licensesPublicDir: 'legal notices',",
-    "    pyodidePublicDir: 'python runtime',",
-    "    rustWasmPublicDir: 'rust runtime'",
-    '  },',
-    "  site: 'https://example.com',",
-    "  title: 'My Docs',",
-    "  sidebar: [{ label: 'Overview', items: [{ label: 'Home', slug: 'index' }] }]",
-    '});',
-    ''
-  ].join('\n'));
+  const tsconfigPath = path.join(projectRoot, 'tsconfig.json');
+  await rename(path.join(consumerRoot, 'tsconfig.json'), tsconfigPath);
+  const tsconfig = JSON.parse(await readFile(tsconfigPath, 'utf8'));
+  tsconfig.exclude = ['state cache', 'helper crates/target', 'built site', 'static files/oxiquill assets'];
+  await writeFile(tsconfigPath, `${JSON.stringify(tsconfig, null, 2)}\n`);
+  await writeFile(
+    path.join(consumerRoot, 'astro.config.mjs'),
+    [
+      "import starlight from '@astrojs/starlight';",
+      "import { defineOxiquillConfig } from 'oxiquill/astro';",
+      "import { fileURLToPath } from 'node:url';",
+      '',
+      "const projectRoot = fileURLToPath(new URL('./site root/', import.meta.url));",
+      '',
+      'export default defineOxiquillConfig({',
+      '  framework: { starlight },',
+      '  root: projectRoot,',
+      "  publicDir: 'static files',",
+      "  cacheDir: 'state cache',",
+      "  outDir: 'built site',",
+      '  paths: {',
+      "    docsDir: new URL('./site root/written docs/', import.meta.url),",
+      "    cratesDir: 'helper crates',",
+      "    generatedDir: 'generated runtime',",
+      "    publicAssetsDir: 'oxiquill assets',",
+      "    haskellWasmPublicDir: 'haskell runtime',",
+      "    licensesPublicDir: 'legal notices',",
+      "    pyodidePublicDir: 'python runtime',",
+      "    rustWasmPublicDir: 'rust runtime'",
+      '  },',
+      "  site: 'https://example.com',",
+      "  title: 'My Docs',",
+      "  sidebar: [{ label: 'Overview', items: [{ label: 'Home', slug: 'index' }] }]",
+      '});',
+      ''
+    ].join('\n')
+  );
   const packageJsonPath = path.join(consumerRoot, 'package.json');
   const packageJson = JSON.parse(await readFile(packageJsonPath, 'utf8'));
   const tarballReference = path.relative(consumerRoot, tarballPath).split(path.sep).join('/');

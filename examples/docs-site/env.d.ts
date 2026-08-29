@@ -10,7 +10,7 @@ declare global {
     interface ElementChildrenAttribute {
       children: unknown;
     }
-    interface IntrinsicAttributes extends AstroJSX.IntrinsicAttributes {}
+    type IntrinsicAttributes = AstroJSX.IntrinsicAttributes;
     interface IntrinsicElements {
       a: AstroJSX.IntrinsicElements['a'];
       body: AstroJSX.IntrinsicElements['body'];

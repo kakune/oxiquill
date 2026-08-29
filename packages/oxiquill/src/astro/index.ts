@@ -8,14 +8,7 @@ import preact from '@astrojs/preact';
 import rehypeKatex from 'rehype-katex';
 import remarkMath from 'remark-math';
 import { mergeAlias } from 'vite';
-import type {
-  AstroConfig,
-  AstroIntegration,
-  AstroUserConfig,
-  FontProvider,
-  Locales,
-  SessionDriverConfig
-} from 'astro';
+import type { AstroConfig, AstroIntegration, AstroUserConfig, FontProvider, Locales, SessionDriverConfig } from 'astro';
 import type { Options as PreactIntegrationOptions } from '@astrojs/preact';
 import type { Alias, Plugin, PluginOption, UserConfig as ViteUserConfig } from 'vite';
 import { directoryPath, pathFromUrl, pathInUrl, relativePathFromUrl } from '../config/paths.mjs';
@@ -166,10 +159,7 @@ export function defineOxiquillConfig<StarlightOptions extends object>(
     ...starlightOptions
   } as OxiquillStarlightOptions;
 
-  const integration = createOxiquillIntegration(
-    { base, markdown, paths, vite },
-    explicitAstroPaths
-  );
+  const integration = createOxiquillIntegration({ base, markdown, paths, vite }, explicitAstroPaths);
   const effectiveRoot = explicitAstroPaths.root ?? paths?.workspaceRoot;
   const effectivePublicDir = explicitAstroPaths.publicDir ?? paths?.publicDir ?? 'public';
   const effectiveCacheDir = explicitAstroPaths.cacheDir ?? paths?.cacheDir ?? '.oxiquill';
@@ -229,12 +219,7 @@ export function oxiquillIntegration({
 }
 
 function createOxiquillIntegration(
-  {
-    base,
-    markdown = {},
-    paths: pathOptions,
-    vite = {}
-  }: OxiquillIntegrationOptions = {},
+  { base, markdown = {}, paths: pathOptions, vite = {} }: OxiquillIntegrationOptions = {},
   astroOptions: Record<string, string | URL> = {}
 ): AstroIntegration {
   const metadata = createOxiquillIntegrationMetadata({ astro: astroOptions, paths: pathOptions });
@@ -307,10 +292,7 @@ function createOxiquillIntegration(
 
         await syncLicenseArtifacts({
           moduleGroups: bundledModules.snapshot(),
-          outputDirectory: pathInUrl(
-            dir,
-            relativePathFromUrl(paths.publicDir, paths.licensesPublicDir)
-          ),
+          outputDirectory: pathInUrl(dir, relativePathFromUrl(paths.publicDir, paths.licensesPublicDir)),
           paths
         });
         await syncBrowserBundleReport({
@@ -326,7 +308,9 @@ function createOxiquillIntegration(
   return attachOxiquillMetadata(integration, metadata) as AstroIntegration;
 }
 
-function selectedAstroDirectoryOptions(options: OxiquillConfig): Record<string, string | URL> {
+function selectedAstroDirectoryOptions<StarlightOptions extends object>(
+  options: OxiquillConfig<StarlightOptions>
+): Record<string, string | URL> {
   const optionNames = ['root', 'publicDir', 'cacheDir', 'outDir'] as const;
   return Object.fromEntries(
     optionNames
@@ -345,12 +329,12 @@ function astroDirectoryUrl(value: string): URL {
 
 function inferAstroDirectoryFields(config: AstroConfig): string[] {
   const root = pathFromUrl(config.root);
-  const defaults: Array<[
-    'publicDir' | 'cacheDir' | 'outDir',
-    string[]
-  ]> = [
+  const defaults: Array<['publicDir' | 'cacheDir' | 'outDir', string[]]> = [
     ['publicDir', [directoryPath('public', root)]],
-    ['cacheDir', [directoryPath('.oxiquill', root), directoryPath('.astro', root), directoryPath('node_modules/.astro', root)]],
+    [
+      'cacheDir',
+      [directoryPath('.oxiquill', root), directoryPath('.astro', root), directoryPath('node_modules/.astro', root)]
+    ],
     ['outDir', [directoryPath('dist', root)]]
   ];
 
