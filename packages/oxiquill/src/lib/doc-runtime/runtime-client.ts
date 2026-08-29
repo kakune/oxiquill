@@ -45,18 +45,32 @@ export function createInteractiveCellRunner(dependencies: RuntimeClientDependenc
     runtimeVersion?: string
   ): Promise<NormalizedCellExecutionResult> {
     const requestId = nextRequestId++;
-    const worker = getWorker(cell.language);
     const request = createWorkerRequest(requestId, cell, inputs, runtimeVersion);
 
     return new Promise((resolve, reject) => {
-      const timeout = dependencies.setTimeout(() => {
-        pending.delete(requestId);
-        resetWorker(cell.language);
-        reject(new Error(`${cell.title} timed out after ${cell.timeoutMs}ms`));
-      }, cell.timeoutMs);
+      let worker: Worker | undefined;
 
-      pending.set(requestId, { resolve, reject, timeout, worker });
-      worker.postMessage(request);
+      try {
+        worker = getWorker(cell.language);
+        const ownedWorker = worker;
+        const timeout = dependencies.setTimeout(() => {
+          failWorker(ownedWorker, new Error(`${cell.title} timed out after ${cell.timeoutMs}ms`));
+        }, cell.timeoutMs);
+
+        pending.set(requestId, { resolve, reject, timeout, worker });
+
+        try {
+          worker.postMessage(request);
+        } catch (error) {
+          failWorker(worker, toError(error));
+        }
+      } catch (error) {
+        if (worker && pending.has(requestId)) {
+          failWorker(worker, toError(error));
+        } else {
+          reject(toError(error));
+        }
+      }
     });
   }
 
@@ -66,23 +80,36 @@ export function createInteractiveCellRunner(dependencies: RuntimeClientDependenc
 
     const worker = dependencies.createWorker(language);
 
-    worker.addEventListener('message', (event: MessageEvent<RuntimeWorkerResponse>) => {
-      const request = pending.get(event.data.requestId);
-      if (!request) return;
+    try {
+      worker.addEventListener('message', (event: MessageEvent<RuntimeWorkerResponse>) => {
+        const request = pending.get(event.data.requestId);
+        if (!request || request.worker !== worker) return;
 
-      pending.delete(event.data.requestId);
-      dependencies.clearTimeout(request.timeout);
+        pending.delete(event.data.requestId);
+        dependencies.clearTimeout(request.timeout);
 
-      if (event.data.ok) {
-        request.resolve(normalizeCellExecutionResult(event.data.result));
-      } else {
-        request.reject(new Error(event.data.error));
-      }
-    });
+        if (!event.data.ok) {
+          request.reject(new Error(event.data.error));
+          return;
+        }
 
-    worker.addEventListener('error', (event) => {
-      rejectAllForWorker(worker, new Error(event.message));
-    });
+        try {
+          request.resolve(normalizeCellExecutionResult(event.data.result));
+        } catch (error) {
+          request.reject(toError(error));
+        }
+      });
+
+      worker.addEventListener('error', (event) => {
+        failWorker(worker, new Error(event.message || `${language} worker failed`));
+      });
+      worker.addEventListener('messageerror', () => {
+        failWorker(worker, new Error(`${language} worker sent an unreadable message`));
+      });
+    } catch (error) {
+      worker.terminate();
+      throw error;
+    }
 
     workers.set(language, worker);
     return worker;
@@ -92,24 +119,28 @@ export function createInteractiveCellRunner(dependencies: RuntimeClientDependenc
     const worker = workers.get(language);
     if (!worker) return;
 
-    worker.terminate();
-    workers.delete(language);
-    rejectAllForWorker(worker, new Error(`${language} worker was reset`));
+    failWorker(worker, new Error(`${language} worker was reset`));
   }
 
-  function rejectAllForWorker(worker: Worker, error: Error): void {
-    for (const [requestId, request] of pending) {
-      if (request.worker !== worker) continue;
+  function failWorker(worker: Worker, error: Error): void {
+    let ownsWorker = false;
 
+    for (const [language, current] of workers) {
+      if (current !== worker) continue;
+
+      ownsWorker = true;
+      workers.delete(language);
+    }
+
+    const ownedRequests = Array.from(pending.entries()).filter(([, request]) => request.worker === worker);
+    if (!ownsWorker && ownedRequests.length === 0) return;
+
+    worker.terminate();
+
+    for (const [requestId, request] of ownedRequests) {
       dependencies.clearTimeout(request.timeout);
       pending.delete(requestId);
       request.reject(error);
-    }
-
-    for (const [language, current] of workers) {
-      if (current === worker) {
-        workers.delete(language);
-      }
     }
   }
 
@@ -163,6 +194,10 @@ function createDefaultWorker(language: CellLanguage): Worker {
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null;
+}
+
+function toError(value: unknown): Error {
+  return value instanceof Error ? value : new Error(String(value));
 }
 
 function inputArgument(input: CellManifest['inputs'][number], inputs: InputValues): string {
