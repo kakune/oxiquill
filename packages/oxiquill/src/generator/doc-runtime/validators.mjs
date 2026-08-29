@@ -6,33 +6,35 @@ import {
   rustFunctionName,
   rustIdentifier
 } from './rust-identifiers.mjs';
+import {
+  throwInteractiveCellDiagnostics,
+  uniqueCellIdDiagnostics
+} from '../../lib/doc-runtime/cell-authoring.mjs';
 
 export function assertUniqueCellIds(cells) {
-  const seen = new Map();
-  for (const cell of cells) {
-    const previous = seen.get(cell.id);
-    if (previous) {
-      throw new Error(`Duplicate interactive cell id "${cell.id}" in ${previous} and ${cell.pagePath}.`);
-    }
-    seen.set(cell.id, cell.pagePath);
-  }
+  throwInteractiveCellDiagnostics(uniqueCellIdDiagnostics(cells));
 }
 
 export function assertUniqueRustInputBindings(rustCells) {
+  const diagnostics = [];
   for (const cell of rustCells) {
     const seen = new Map();
     for (const input of cell.inputs) {
       const binding = rustIdentifier(input.name);
       const previous = seen.get(binding);
       if (previous) {
-        throw new Error(
-          `Rust cell "${cell.id}" in ${cell.pagePath} has inputs "${previous}" and "${input.name}" ` +
-            `that both map to Rust binding "${binding}".`
+        diagnostics.push(
+          cellDiagnostic(
+            cell,
+            `inputs.${input.name}`,
+            `Inputs ${JSON.stringify(previous)} and ${JSON.stringify(input.name)} both map to Rust binding ${JSON.stringify(binding)}.`
+          )
         );
       }
       seen.set(binding, input.name);
     }
   }
+  throwInteractiveCellDiagnostics(diagnostics);
 }
 
 export function assertUniqueRustFunctionNames(rustCells) {
@@ -40,20 +42,25 @@ export function assertUniqueRustFunctionNames(rustCells) {
 }
 
 export function assertUniqueHaskellInputBindings(haskellCells) {
+  const diagnostics = [];
   for (const cell of haskellCells) {
     const seen = new Map();
     for (const input of cell.inputs) {
       const binding = haskellIdentifier(input.name);
       const previous = seen.get(binding);
       if (previous) {
-        throw new Error(
-          `Haskell cell "${cell.id}" in ${cell.pagePath} has inputs "${previous}" and "${input.name}" ` +
-            `that both map to Haskell binding "${binding}".`
+        diagnostics.push(
+          cellDiagnostic(
+            cell,
+            `inputs.${input.name}`,
+            `Inputs ${JSON.stringify(previous)} and ${JSON.stringify(input.name)} both map to Haskell binding ${JSON.stringify(binding)}.`
+          )
         );
       }
       seen.set(binding, input.name);
     }
   }
+  throwInteractiveCellDiagnostics(diagnostics);
 }
 
 export function assertUniqueHaskellFunctionNames(haskellCells) {
@@ -62,15 +69,34 @@ export function assertUniqueHaskellFunctionNames(haskellCells) {
 
 function assertUniqueGeneratedFunctionNames(cells, functionNameForCell, languageLabel) {
   const seen = new Map();
+  const diagnostics = [];
   for (const cell of cells) {
     const functionName = functionNameForCell(cell.id);
     const previous = seen.get(functionName);
     if (previous) {
-      throw new Error(
-        `${languageLabel} cells "${previous.id}" in ${previous.pagePath} and "${cell.id}" in ${cell.pagePath} ` +
-          `both map to generated function "${functionName}".`
+      diagnostics.push(
+        cellDiagnostic(
+          cell,
+          'id',
+          `${languageLabel} cells ${JSON.stringify(previous.id)} and ${JSON.stringify(cell.id)} both map to generated function ${JSON.stringify(functionName)}; first declared at ${cellLocation(previous)}.`
+        )
       );
     }
     seen.set(functionName, cell);
   }
+  throwInteractiveCellDiagnostics(diagnostics);
+}
+
+function cellDiagnostic(cell, fieldPath, message) {
+  return {
+    pagePath: cell.pagePath ?? '',
+    fenceStartLine: cell.fenceStartLine ?? 1,
+    cellId: cell.localId ?? cell.id,
+    fieldPath,
+    message
+  };
+}
+
+function cellLocation(cell) {
+  return `${cell.pagePath || '(unknown page)'}:${cell.fenceStartLine ?? 1}`;
 }

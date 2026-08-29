@@ -11,14 +11,19 @@ import {
   assertUniqueHaskellInputBindings,
   assertUniqueRustFunctionNames,
   assertUniqueRustInputBindings,
-  extractCellsFromMarkdown,
+  createCellManifest,
   generateCellsJson,
   generateCellsModule,
   generateHaskellMain,
   generateRustCargoToml,
   generateRustLib,
+  parseCellsFromMarkdown,
   sourceThemes
 } from './doc-runtime-core.mjs';
+import {
+  throwInteractiveCellDiagnostics,
+  validateCellDependencies
+} from '../lib/doc-runtime/cell-authoring.mjs';
 import {
   defaultFileSystem,
   listFiles,
@@ -128,12 +133,6 @@ export async function syncDocRuntime({
   const haskellCells = cells.filter((cell) => cell.language === 'haskell');
   const rustCells = cells.filter((cell) => cell.language === 'rust');
 
-  assertUniqueCellIds(cells);
-  assertUniqueHaskellFunctionNames(haskellCells);
-  assertUniqueHaskellInputBindings(haskellCells);
-  assertUniqueRustFunctionNames(rustCells);
-  assertUniqueRustInputBindings(rustCells);
-
   const writes = await Promise.all([
     writeIfChanged(pathFromUrl(paths.cellsModulePath), generateCellsModule(cells), { fileSystem }),
     writeIfChanged(pathFromUrl(paths.cellsJsonPath), generateCellsJson(cells), { fileSystem }),
@@ -162,15 +161,29 @@ export async function collectCells({ fileSystem = defaultFileSystem, helperCrate
   const workspaceRoot = pathFromUrl(paths.workspaceRoot);
   const files = await listFiles(docsDir, { fileSystem });
   const markdownFiles = files.filter((filePath) => filePath.endsWith('.mdx') || filePath.endsWith('.md'));
-  const nestedCells = await Promise.all(
+  const parsedPages = await Promise.all(
     markdownFiles.map(async (filePath) => {
       const pagePath = normalizePath(path.relative(workspaceRoot, filePath));
       const source = await fileSystem.readFile(filePath, 'utf8');
-      return extractCellsFromMarkdown(source, pagePath, { helperCrates, highlighter });
+      return parseCellsFromMarkdown(source, pagePath);
     })
   );
+  const authoringCells = parsedPages.flatMap((page) => page.cells);
+  const diagnostics = [
+    ...parsedPages.flatMap((page) => page.diagnostics),
+    ...authoringCells.flatMap((cell) => validateCellDependencies(cell, helperCrates))
+  ];
+  throwInteractiveCellDiagnostics(diagnostics);
 
-  return nestedCells.flat();
+  const haskellCells = authoringCells.filter((cell) => cell.language === 'haskell');
+  const rustCells = authoringCells.filter((cell) => cell.language === 'rust');
+  assertUniqueCellIds(authoringCells);
+  assertUniqueHaskellFunctionNames(haskellCells);
+  assertUniqueHaskellInputBindings(haskellCells);
+  assertUniqueRustFunctionNames(rustCells);
+  assertUniqueRustInputBindings(rustCells);
+
+  return Promise.all(authoringCells.map((cell) => createCellManifest(cell, highlighter)));
 }
 
 export async function markRuntimeReady({

@@ -4,6 +4,7 @@ import remarkMermaidDiagrams from '../../packages/oxiquill/src/lib/doc-runtime/r
 import remarkPublicAssetBase, {
   withPublicAssetBase
 } from '../../packages/oxiquill/src/lib/doc-runtime/remark-public-asset-base.mjs';
+import { parseCellsFromMarkdown } from '../../packages/oxiquill/src/generator/doc-runtime-core.mjs';
 
 describe('remark interactive cells', () => {
   it('turns Rust and Python cells with ids into client components', () => {
@@ -107,6 +108,60 @@ describe('remark interactive cells', () => {
     });
 
     expect(tree.children).toHaveLength(1);
+  });
+
+  it('renders the scoped id from the same parsed AST node and normalized cell', () => {
+    const parsed = parseCellsFromMarkdown(
+      '   ````{.rust}\n   //| id: shared-cell\n   //| crates: []\n   println!("ok");\n   `````',
+      'content/docs/nested/page.mdx'
+    );
+
+    remarkInteractiveCells({ root: '/repo' })(parsed.tree, {
+      path: '/repo/content/docs/nested/page.mdx'
+    });
+
+    expect(parsed.cells[0].id).toBe('nested__page__shared-cell');
+    expect(parsed.tree.children[1].attributes[1]).toEqual({
+      type: 'mdxJsxAttribute',
+      name: 'cellId',
+      value: parsed.cells[0].id
+    });
+  });
+
+  it('reports structured diagnostics before changing valid sibling nodes', () => {
+    const valid = {
+      type: 'code',
+      lang: 'rust',
+      value: '//| id: valid-cell\n//| crates: []\nprintln!("ok");',
+      position: { start: { line: 3 } }
+    };
+    const invalid = {
+      type: 'code',
+      lang: 'python',
+      value: '#| id: Bad.id\nprint("bad")',
+      position: { start: { line: 9 } }
+    };
+    const tree = { type: 'root', children: [valid, invalid] };
+
+    expect(() => remarkInteractiveCells({ root: '/repo' })(tree, {
+      path: '/repo/content/docs/page.mdx'
+    })).toThrow('content/docs/page.mdx:9 [cell "Bad.id"] id:');
+    expect(valid.type).toBe('code');
+  });
+
+  it('rejects duplicate local ids before changing the tree', () => {
+    const tree = {
+      type: 'root',
+      children: [
+        { type: 'code', lang: 'python', value: '#| id: repeated\nprint("one")', position: { start: { line: 1 } } },
+        { type: 'code', lang: 'python', value: '#| id: repeated\nprint("two")', position: { start: { line: 5 } } }
+      ]
+    };
+
+    expect(() => remarkInteractiveCells({ root: '/repo' })(tree, {
+      path: '/repo/content/docs/page.mdx'
+    })).toThrow('content/docs/page.mdx:5 [cell "repeated"] id: Duplicate page-local cell id');
+    expect(tree.children[0].type).toBe('code');
   });
 });
 

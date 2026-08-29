@@ -351,8 +351,8 @@ describe('InteractiveCell', () => {
     expect(screen.getByTestId('run-output')).toHaveTextContent('newer result');
   });
 
-  it('supports cells without inputs and hidden source', () => {
-    setManifestCells([makeCell({ inputs: [], showSource: false, run: 'hidden' })]);
+  it('supports reactive cells without inputs and with hidden source', () => {
+    setManifestCells([makeCell({ inputs: [], showSource: false, run: 'reactive' })]);
 
     render(<InteractiveCell cellId="cell-one" />);
 

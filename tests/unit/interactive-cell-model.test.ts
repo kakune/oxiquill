@@ -39,12 +39,10 @@ describe('interactive cell model', () => {
     expect(shouldShowRunButton('button')).toBe(true);
     expect(shouldShowRunButton('autorun')).toBe(true);
     expect(shouldShowRunButton('reactive')).toBe(false);
-    expect(shouldShowRunButton('hidden')).toBe(false);
 
     expect(idleOutputMessage('reactive')).toBe('Waiting for the runtime to start.');
     expect(idleOutputMessage('autorun')).toBe('Waiting for the runtime to start.');
     expect(idleOutputMessage('button')).toBe('Run the cell to show its output.');
-    expect(idleOutputMessage('hidden')).toBe('Run the cell to show its output.');
   });
 
   it('resolves localized runtime labels', () => {

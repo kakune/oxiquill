@@ -362,7 +362,7 @@ describe('doc runtime service', () => {
         root: '/repo'
       })
     ).rejects.toThrow(
-      'Rust cell "a" in content/docs/page.mdx references unknown crate "missing-helper"'
+      'content/docs/page.mdx:1 [cell "a"] crates[0]: Unknown Rust helper crate "missing-helper"'
     );
   });
 
@@ -380,7 +380,7 @@ describe('doc runtime service', () => {
         root: '/repo'
       })
     ).rejects.toThrow(
-      'Python cell "py" in content/docs/page.mdx specifies unsupported packages: scipy'
+      'content/docs/page.mdx:1 [cell "py"] packages[0]: Unsupported Pyodide package "scipy"'
     );
   });
 
@@ -398,8 +398,58 @@ describe('doc runtime service', () => {
         root: '/repo'
       })
     ).rejects.toThrow(
-      'Haskell cell "hs" in content/docs/page.mdx cannot specify packages'
+      'content/docs/page.mdx:1 [cell "hs"] packages: This field is not supported for Haskell cells'
     );
+  });
+
+  it('rejects local and scoped cell id duplicates before highlighting or writing output', async () => {
+    const localDuplicate = createMemoryFileSystem({
+      '/repo/content/docs/page.mdx': [
+        '```rust',
+        '//| id: repeated',
+        '//| crates: []',
+        'println!("one");',
+        '```',
+        '```rust',
+        '//| id: repeated',
+        '//| crates: []',
+        'println!("two");',
+        '```'
+      ].join('\n')
+    });
+    let highlights = 0;
+    const countingHighlighter = {
+      codeToHtml: async () => {
+        highlights += 1;
+        return '<pre></pre>';
+      }
+    };
+
+    await expect(syncDocRuntime({
+      fileSystem: localDuplicate,
+      helperCrates: new Map(),
+      highlighter: countingHighlighter,
+      paths: createDocRuntimePaths('/repo')
+    })).rejects.toThrow(
+      'content/docs/page.mdx:6 [cell "repeated"] id: Duplicate page-local cell id "repeated"'
+    );
+    expect(highlights).toBe(0);
+    expect(localDuplicate.writes).toEqual([]);
+
+    const scopedDuplicate = createMemoryFileSystem({
+      '/repo/content/docs/a-b.mdx': '```python\n#| id: repeated\nprint("one")\n```',
+      '/repo/content/docs/a.b.mdx': '```python\n#| id: repeated\nprint("two")\n```'
+    });
+    await expect(syncDocRuntime({
+      fileSystem: scopedDuplicate,
+      helperCrates: new Map(),
+      highlighter: countingHighlighter,
+      paths: createDocRuntimePaths('/repo')
+    })).rejects.toThrow(
+      'content/docs/a.b.mdx:1 [cell "repeated"] id: Scoped cell id "a-b__repeated" collides'
+    );
+    expect(highlights).toBe(0);
+    expect(scopedDuplicate.writes).toEqual([]);
   });
 
   it('writes and copies only when content changes', async () => {

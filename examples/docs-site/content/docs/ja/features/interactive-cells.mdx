@@ -9,37 +9,40 @@ Rust セルは build 時に WebAssembly に compile されます。Python セル
 
 ## セル metadata
 
-共通 field:
+metadata は code block の先頭に置いた、言語に対応する連続した option comment block でなければなりません。Rust は `//|` または `///|`、Python は `#|`、Haskell は `--|` を使います。source code が始まった後の option comment 風の行は source code のままです。
 
-- `id`: 必須のページ内 identifier。
-- `title`: cell header に表示する label。
-- `run`: `button`、`reactive`、`autorun`、`hidden`。
-- `inputs`: cell 内の変数になる入力 UI。
-- `timeoutMs`: millisecond の実行 timeout。
-- `showSource`: `false` にすると source を初期状態で隠します。
+top-level では次の field だけを指定できます。
 
-Rust 専用 field:
+- `id`: `^[a-z][a-z0-9]*(?:-[a-z0-9]+)*$` に一致する必須のページ内 ID。
+- `title`: cell header に表示する string。default は `id`。
+- `run`: `button`、`reactive`、`autorun`。default は `button`。
+- `inputs`: input name から input definition への mapping。default は省略で、`autorun` では指定できません。
+- `timeoutMs`: 正の integer で指定する millisecond の実行 timeout。default は `30000`。
+- `showSource`: source の初期表示を決める boolean。default は `true`。
+- `crates`: 重複のない空でない helper crate name。Rust 専用。
+- `packages`: 重複のない空でない vendored Pyodide package name。Python 専用。
 
-- `crates`: `crates/*` 配下の helper crate package name。helper が不要な場合は `crates: []`。
-
-Python 専用 field:
-
-- `packages`: `numpy`、`pandas`、`matplotlib` などの vendored Pyodide package name。
-
-Haskell セルは standard library の code のみ対応します。`packages` や外部 helper module は使いません。
+unknown field、dependency name の重複、scalar/collection type の誤り、未対応 package、存在しない helper crate があると、page、fence line、cell ID、field path を含む diagnostic で生成が停止します。Haskell セルは standard library の code のみ対応し、どちらの dependency field も使えません。
 
 ## run mode
 
 - `button`: 読者が明示的に実行します。
 - `reactive`: 初回表示時に実行し、input 変更時に再実行します。
-- `autorun`: run button を表示せず、1回自動実行します。
-- `hidden`: run button を表示しません。意図的に隠す例だけで使います。
+- `autorun`: 1回自動実行し、その後も run button から再実行できます。
 
 ## 入力
 
 対応 input type は `range`、`number`、`integer`、`text`、`textarea`、`checkbox`、`select`、`radio` です。
 
-input name は cell 内の変数として使えます。Rust と Haskell セルでは安全な identifier に変換されます。記号だけが違う name は同じ binding に変換される可能性があるため避けます。
+input name は cell 内の変数として使われ、`^[a-z][a-z0-9_]*$` に一致する必要があります。各 definition は `type`、`label`、`value`、`min`、`max`、`step`、`integer`、`options` だけを含む mapping です。
+
+- `type` の default は `text`、`label` の default は input name です。
+- default value は checkbox が `false`、数値 input が `0`、text input が空 string です。明示する value はその scalar type と完全に一致する必要があります。
+- 数値の `min`、`max`、`step` は有限値で、`step` は正、`min` は `max` 以下、default は bounds 内でなければなりません。`integer` input、または `integer: true` の数値 input では value と constraint も integer にします。
+- `select` と `radio` には string default と、value が一意な空でない option list が必要です。option は空でない string、または空でない string の `label` と `value` を持つ mapping です。default は option value のいずれかに一致させます。
+- 数値専用 field を数値以外の control で使うことや、`select`/`radio` 以外で `options` を使うことはできません。
+
+Rust または Haskell の予約語は安全な生成 binding に変換されます。変換後に衝突する name がある場合、生成は失敗します。
 
 ## Rust とグラフ
 
@@ -149,12 +152,12 @@ Haskell セルは `--|` metadata comment を使います。input value は Haske
 --| inputs:
 --|   factor: { type: integer, label: factor, min: 1, max: 5, step: 1, value: 3 }
 --|   label: { type: text, label: label, value: sample }
---|   includeSquares: { type: checkbox, label: include squares, value: true }
+--|   include_squares: { type: checkbox, label: include squares, value: true }
 import Data.List (intercalate)
 
 let base = [1 .. 4 :: Int]
 let scaled = map (* factor) base
-let displayed = if includeSquares then map (\value -> value * value) scaled else scaled
+let displayed = if include_squares then map (\value -> value * value) scaled else scaled
 
 putStrLn (label ++ ": " ++ intercalate ", " (map show displayed))
 putStrLn ("total = " ++ show (sum displayed))

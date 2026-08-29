@@ -34,7 +34,7 @@ Write the body here.
 
 ## Rust セルを書く
 
-Rust セルは `rust` の fenced code block で、先頭に `//|` または `///|` metadata comment を置きます。`id` はページ内で一意にします。英語版と日本語版は同じ local `id` を使えます。build が page-scoped internal ID を作ります。
+Rust セルは `rust` の fenced code block で、先頭に `//|` または `///|` metadata comment を置きます。metadata comment は cell の先頭から連続させ、source code が始まった後の option comment 風の行は source code のままにします。`id` は lowercase kebab-case でページ内一意にします。英語版と日本語版は同じ local `id` を使えます。build が page-scoped internal ID を作ります。
 
 ````md
 ```rust
@@ -90,16 +90,16 @@ standard library module だけを使います。Haskell セルでは外部 packa
 
 主な metadata field:
 
-- `id`: 必須のページ内 cell ID。
-- `title`: cell UI に表示される見出し。
-- `run`: `button`、`reactive`、`autorun`、`hidden`。default は `button`。
-- `inputs`: cell 内の変数として使える入力 UI。
+- `id`: 必須の lowercase kebab-case ページ内 cell ID。
+- `title`: cell UI に表示される string の見出し。default は `id`。
+- `run`: `button`、`reactive`、`autorun`。default は `button`。
+- `inputs`: lowercase cross-language identifier から input definition への mapping。`autorun` では指定できません。
 - `crates`: Rust helper crate。Rust のみ。
 - `packages`: Pyodide package。Python のみ。
-- `timeoutMs`: 正の millisecond timeout。default は `30000`。
-- `showSource`: `false` にすると source を初期状態で隠します。
+- `timeoutMs`: 正の integer で指定する millisecond timeout。default は `30000`。
+- `showSource`: source の初期表示を決める boolean。default は `true`。
 
-対応 input type は `range`、`number`、`integer`、`text`、`textarea`、`checkbox`、`select`、`radio` です。
+top-level ではこれらの field だけを指定できます。dependency array は重複のない空でない string で構成します。対応 input type は `range`、`number`、`integer`、`text`、`textarea`、`checkbox`、`select`、`radio` です。input field、default、constraint、option schema の正確な仕様は[実行可能セル](../../features/interactive-cells/)を参照してください。
 
 ## 数式を追加する
 

@@ -4,23 +4,20 @@ export {
   vendoredPyodidePackageRoots
 } from './doc-runtime/constants.mjs';
 export {
+  createCellManifest,
   extractCellsFromMarkdown,
-  parseCell,
-  parseLanguage,
-  splitCellSource
+  parseCellsFromMarkdown
 } from './doc-runtime/cell-parser.mjs';
 export {
-  normalizeCrates,
-  normalizeInputType,
-  normalizeInputValue,
-  normalizeInputs,
-  normalizeOptionalNumber,
-  normalizeOptions,
-  normalizePackages,
-  normalizeRunMode,
-  normalizeStringArray,
-  normalizeTimeout
-} from './doc-runtime/cell-metadata.mjs';
+  formatInteractiveCellDiagnostic,
+  InteractiveCellValidationError,
+  parseInteractiveCellNode,
+  parseLanguage,
+  splitCellSource,
+  throwInteractiveCellDiagnostics,
+  uniqueCellIdDiagnostics,
+  validateCellDependencies
+} from '../lib/doc-runtime/cell-authoring.mjs';
 export {
   assertUniqueCellIds,
   assertUniqueHaskellFunctionNames,

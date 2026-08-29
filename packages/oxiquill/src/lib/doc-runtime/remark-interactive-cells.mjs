@@ -1,27 +1,33 @@
-import { relativePagePath, scopedCellId } from './authoring-ids.mjs';
+import { relativePagePath } from './authoring-ids.mjs';
+import {
+  parseInteractiveCellNode,
+  throwInteractiveCellDiagnostics,
+  uniqueCellIdDiagnostics
+} from './cell-authoring.mjs';
 import { createDefaultImport, visit } from './remark-mdx-helpers.mjs';
-
-const optionPattern = /^\s*(?:(?:\/\/\/|\/\/|#|--)\|)\s?id:\s*([A-Za-z0-9_-]+)/m;
-const supportedLanguages = new Set(['rust', 'rs', 'python', 'py', 'haskell', 'hs']);
 
 export default function remarkInteractiveCells({ root = process.cwd() } = {}) {
   return (tree, file) => {
-    let needsImport = false;
     const pagePath = relativePagePath(root, file?.path);
+    const diagnostics = [];
+    const cells = [];
 
     visit(tree, (node) => {
-      if (!node || node.type !== 'code' || !supportedLanguages.has(node.lang)) return;
+      const result = parseInteractiveCellNode(node, pagePath);
+      if (result.kind === 'invalid') diagnostics.push(...result.diagnostics);
+      if (result.kind === 'cell') cells.push({ cell: result.cell, node });
+    });
 
-      const localId = node.value?.match(optionPattern)?.[1];
-      if (!localId) return;
+    throwInteractiveCellDiagnostics(diagnostics);
+    throwInteractiveCellDiagnostics(uniqueCellIdDiagnostics(cells.map(({ cell }) => cell)));
 
-      needsImport = true;
+    cells.forEach(({ cell, node }) => {
       Object.assign(node, {
         type: 'mdxJsxFlowElement',
         name: 'InteractiveCell',
         attributes: [
           { type: 'mdxJsxAttribute', name: 'client:load', value: null },
-          { type: 'mdxJsxAttribute', name: 'cellId', value: scopedCellId(pagePath, localId) }
+          { type: 'mdxJsxAttribute', name: 'cellId', value: cell.id }
         ],
         children: []
       });
@@ -31,7 +37,7 @@ export default function remarkInteractiveCells({ root = process.cwd() } = {}) {
       delete node.value;
     });
 
-    if (needsImport && Array.isArray(tree.children)) {
+    if (cells.length > 0 && Array.isArray(tree.children)) {
       tree.children.unshift(createDefaultImport('InteractiveCell', 'oxiquill/runtime/InteractiveCell'));
     }
   };
