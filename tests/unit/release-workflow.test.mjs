@@ -151,6 +151,13 @@ describe('release archive verification', () => {
 });
 
 describe('workflow supply-chain policy', () => {
+  it('selects packed consumer scripts without shell-specific expansion', async () => {
+    const source = await readFile(path.join(repositoryRoot, '.github/workflows/ci.yml'), 'utf8');
+
+    expect(source).toContain('pnpm "test:consumer:${{ matrix.package-manager }}"');
+    expect(source).not.toContain('${PACKAGE_MANAGER}');
+  });
+
   it('pins every remote action to a full commit SHA with a version comment', async () => {
     const workflowDirectory = path.join(repositoryRoot, '.github/workflows');
     const workflowNames = (await readdir(workflowDirectory)).filter((name) => /\.ya?ml$/u.test(name));

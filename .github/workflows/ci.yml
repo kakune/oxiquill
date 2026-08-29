@@ -179,9 +179,7 @@ jobs:
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
       - name: Test packed consumer
-        env:
-          PACKAGE_MANAGER: ${{ matrix.package-manager }}
-        run: pnpm "test:consumer:${PACKAGE_MANAGER}"
+        run: pnpm "test:consumer:${{ matrix.package-manager }}"
 
   runtime:
     name: Runtime (${{ matrix.label }})
