@@ -26,7 +26,7 @@ export default function remarkInteractiveCells({ root = process.cwd() } = {}) {
         type: 'mdxJsxFlowElement',
         name: 'InteractiveCell',
         attributes: [
-          { type: 'mdxJsxAttribute', name: 'client:load', value: null },
+          { type: 'mdxJsxAttribute', name: 'client:visible', value: null },
           { type: 'mdxJsxAttribute', name: 'cellId', value: cell.id }
         ],
         children: []

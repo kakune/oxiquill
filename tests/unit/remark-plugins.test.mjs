@@ -32,7 +32,7 @@ describe('remark interactive cells', () => {
       type: 'mdxJsxFlowElement',
       name: 'InteractiveCell',
       attributes: [
-        { type: 'mdxJsxAttribute', name: 'client:load', value: null },
+        { type: 'mdxJsxAttribute', name: 'client:visible', value: null },
         { type: 'mdxJsxAttribute', name: 'cellId', value: 'page__rust-one' }
       ],
       children: []

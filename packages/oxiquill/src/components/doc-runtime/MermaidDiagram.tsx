@@ -1,4 +1,4 @@
-import mermaid, { type MermaidConfig } from 'mermaid';
+import type { MermaidConfig } from 'mermaid';
 import { useEffect, useMemo, useRef, useState } from 'preact/hooks';
 
 interface MermaidDiagramProps {
@@ -8,8 +8,10 @@ interface MermaidDiagramProps {
 
 type RenderState = 'idle' | 'rendering' | 'ready' | 'error';
 type MermaidColorScheme = 'light' | 'dark';
+type MermaidApi = (typeof import('mermaid'))['default'];
 
 let configuredMermaidColorScheme: MermaidColorScheme | undefined;
+let mermaidReady: Promise<MermaidApi> | undefined;
 
 export default function MermaidDiagram({ diagramId, source }: MermaidDiagramProps) {
   const container = useRef<HTMLDivElement>(null);
@@ -45,7 +47,10 @@ export default function MermaidDiagram({ diagramId, source }: MermaidDiagramProp
       renderElement.replaceChildren();
 
       try {
-        initializeMermaid(colorScheme);
+        const mermaid = await loadMermaid();
+        if (cancelled) return;
+
+        initializeMermaid(mermaid, colorScheme);
         const { svg, bindFunctions } = await mermaid.render(renderId, source);
         if (cancelled) return;
 
@@ -73,7 +78,11 @@ export default function MermaidDiagram({ diagramId, source }: MermaidDiagramProp
   return (
     <figure class="mermaid-diagram" data-state={state} data-testid="mermaid-diagram">
       <div ref={container} class="mermaid-diagram__surface" aria-label="Mermaid diagram" />
-      {error ? (
+      {state === 'idle' || state === 'rendering' ? (
+        <figcaption class="empty-state" role="status">
+          Rendering diagram...
+        </figcaption>
+      ) : error ? (
         <figcaption class="error-state" role="alert">
           {error}
         </figcaption>
@@ -88,7 +97,7 @@ export function getMermaidColorScheme(): MermaidColorScheme {
   return document.documentElement.dataset.theme === 'dark' ? 'dark' : 'light';
 }
 
-function initializeMermaid(colorScheme: MermaidColorScheme): void {
+function initializeMermaid(mermaid: MermaidApi, colorScheme: MermaidColorScheme): void {
   if (configuredMermaidColorScheme === colorScheme) return;
 
   mermaid.initialize({
@@ -99,6 +108,16 @@ function initializeMermaid(colorScheme: MermaidColorScheme): void {
   });
 
   configuredMermaidColorScheme = colorScheme;
+}
+
+function loadMermaid(): Promise<MermaidApi> {
+  mermaidReady ??= import('mermaid')
+    .then((module) => module.default)
+    .catch((error: unknown) => {
+      mermaidReady = undefined;
+      throw error;
+    });
+  return mermaidReady;
 }
 
 const mermaidFontFamily = 'system-ui, sans-serif';
