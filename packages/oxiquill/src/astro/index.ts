@@ -465,20 +465,6 @@ function resolvePackageRoot(requires: NodeRequire[], packageName: string): strin
   return undefined;
 }
 
-function resolvePackageSpecifier(requires: NodeRequire[], specifier: string): string | undefined {
-  for (const require of requires) {
-    const packageRoot = resolveSpecifierPackageRoot(require, specifier);
-    const exported = packageRoot ? resolvePackageExport(packageRoot, specifier) : undefined;
-    if (exported) return exported;
-
-    try {
-      return require.resolve(specifier);
-    } catch {}
-  }
-
-  return undefined;
-}
-
 function resolvePackageExportAliases(requires: NodeRequire[], packageName: string): Alias[] {
   const packageRoot = resolvePackageRoot(requires, packageName);
   if (!packageRoot) return [];
@@ -541,19 +527,6 @@ function resolveSpecifierPackageRoot(require: NodeRequire, specifier: string): s
 
   const packageEntry = resolvePackageEntry(require, packageName);
   return packageEntry ? findPackageRoot(packageEntry, packageName) : undefined;
-}
-
-function resolvePackageExport(packageRoot: string, specifier: string): string | undefined {
-  const packageJson = readPackageJson(path.join(packageRoot, 'package.json'));
-  if (!packageJson || typeof packageJson.name !== 'string') return undefined;
-
-  const subpath = specifier.slice(packageJson.name.length).replace(/^\//, '');
-  const exportKey = subpath ? `./${subpath}` : '.';
-  const exportTarget = selectPackageExport(packageJson.exports, exportKey);
-  if (exportTarget) return path.join(packageRoot, exportTarget);
-
-  if (!subpath) return packageEntryPoint(packageRoot, packageJson);
-  return undefined;
 }
 
 function readPackageJson(packageJsonPath: string): Record<string, unknown> | undefined {

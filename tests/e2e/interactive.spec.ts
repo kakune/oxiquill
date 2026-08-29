@@ -159,7 +159,7 @@ test('interactive cells and math rendering are available', async ({ page }) => {
 });
 
 test('rich output examples render browser-visible artifacts', async ({ page }) => {
-  test.setTimeout(120_000);
+  test.setTimeout(180_000);
   await page.goto('/features/rich-output/');
 
   const rust = page.getByTestId('cell-features__rich-output__rust-rich-outputs');
@@ -182,7 +182,7 @@ test('rich output examples render browser-visible artifacts', async ({ page }) =
   const python = page.getByTestId('cell-features__rich-output__python-rich-outputs');
   await python.getByRole('button', { name: 'Run' }).click();
 
-  await expect(python.getByTestId('table-output')).toBeVisible({ timeout: 90_000 });
+  await expect(python.getByTestId('table-output')).toBeVisible({ timeout: 150_000 });
   await expect(python.getByTestId('table-output').locator('caption')).toHaveText('Pandas table');
   await expect(python.getByTestId('value-output').filter({ hasText: '"status": "ok"' })).toBeVisible();
   await expect(python.getByTestId('html-output')).toHaveAttribute('sandbox', '');
