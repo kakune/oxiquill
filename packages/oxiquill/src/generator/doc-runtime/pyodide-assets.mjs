@@ -1,26 +1,35 @@
 import path from 'node:path';
+import { createRequire } from 'node:module';
 import { pathInUrl } from '../../config/paths.mjs';
 import { vendoredPyodidePackageRoots } from './constants.mjs';
 import { copyFileIfChanged, defaultFileSystem, hasPackageContent } from './file-system.mjs';
 import { hashBytes } from './hashing.mjs';
 
-export async function copyPyodideAssets({ fetchPackage, fileSystem = defaultFileSystem, paths }) {
-  const packageDir = resolvePyodidePackageDir({ fileSystem, paths });
-  if (!fileSystem.existsSync(packageDir)) return false;
+const require = createRequire(import.meta.url);
+const requiredPyodideFiles = [
+  'pyodide.mjs',
+  'pyodide.mjs.map',
+  'pyodide.asm.mjs',
+  'pyodide.asm.wasm',
+  'python_stdlib.zip',
+  'pyodide-lock.json'
+];
+
+export async function copyPyodideAssets({
+  fetchPackage,
+  fileSystem = defaultFileSystem,
+  paths,
+  resolvePackageJson = resolvePyodidePackageJson
+}) {
+  const packageDir = resolvePyodidePackageDir(resolvePackageJson);
+  assertRequiredPyodideFiles(packageDir, { fileSystem });
 
   const [lockFile, pyodideVersion] = await Promise.all([
     readJsonFile(path.join(packageDir, 'pyodide-lock.json'), { fileSystem }),
     readPyodideVersion(packageDir, { fileSystem })
   ]);
   const coreChanged = await Promise.all(
-    [
-      'pyodide.mjs',
-      'pyodide.mjs.map',
-      'pyodide.asm.mjs',
-      'pyodide.asm.wasm',
-      'python_stdlib.zip',
-      'pyodide-lock.json'
-    ].map((file) =>
+    requiredPyodideFiles.map((file) =>
       copyFileIfChanged(path.join(packageDir, file), pathInUrl(paths.pyodidePublicDir, file), {
         fileSystem
       })
@@ -80,13 +89,32 @@ async function readJsonFile(filePath, { fileSystem }) {
   }
 }
 
-function resolvePyodidePackageDir({ fileSystem, paths }) {
-  const candidates = [
-    pathInUrl(paths.frameworkRoot, 'node_modules/pyodide'),
-    pathInUrl(paths.workspaceRoot, 'node_modules/pyodide')
-  ];
+function resolvePyodidePackageJson() {
+  return require.resolve('pyodide/package.json');
+}
 
-  return candidates.find((candidate) => fileSystem.existsSync(candidate)) ?? candidates[0];
+function resolvePyodidePackageDir(resolvePackageJson) {
+  try {
+    const packageJsonPath = resolvePackageJson();
+    if (typeof packageJsonPath !== 'string' || packageJsonPath.length === 0) {
+      throw new TypeError('The package resolver did not return a file path.');
+    }
+
+    return path.dirname(packageJsonPath);
+  } catch (error) {
+    throw new Error('Unable to resolve required Pyodide package "pyodide" from Oxiquill.', {
+      cause: error
+    });
+  }
+}
+
+function assertRequiredPyodideFiles(packageDir, { fileSystem }) {
+  requiredPyodideFiles.forEach((fileName) => {
+    const filePath = path.join(packageDir, fileName);
+    if (fileSystem.existsSync(filePath)) return;
+
+    throw new Error(`Required Pyodide asset "${fileName}" is missing from package "pyodide" at "${filePath}".`);
+  });
 }
 
 export function resolveVendoredPyodidePackages(lockFile, roots = vendoredPyodidePackageRoots) {

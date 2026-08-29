@@ -1,0 +1,60 @@
+---
+title: Troubleshooting
+description: Recover from installation, configuration, runtime generation, download, timeout, and stale-output failures.
+---
+
+Start with the first Oxiquill diagnostic. Generation errors include the relevant tool or path and, for authored cells, the page, fence line, cell ID when available, and exact metadata field.
+
+## Installation and Package Resolution
+
+| Symptom                                                  | Resolution                                                                                                                              |
+| -------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------- |
+| Node version or syntax error                             | Install Node.js 24 or newer and confirm `node --version` in the same shell that launches pnpm/npm.                                      |
+| `oxiquill` command not found                             | Install it in project dependencies, run it through a package script, or use `pnpm exec oxiquill`. Do not depend on a global install.    |
+| npm/pnpm resolves source or duplicate Preact incorrectly | Remove stale `node_modules`, reinstall from the lockfile, and import only documented package exports. Do not deep-import package files. |
+| Native Rollup/Vite addon cannot load                     | Use a normal Node build. If ghc-wasm put a static Node first in `PATH`, move the normal Node earlier or set `OXIQUILL_NODE`.            |
+
+## Rust and Wasm
+
+| Symptom                         | Resolution                                                                                                                      |
+| ------------------------------- | ------------------------------------------------------------------------------------------------------------------------------- |
+| Rust toolchain/target missing   | Install the pinned `rust-toolchain.toml` toolchain and `wasm32-unknown-unknown` target.                                         |
+| `wasm-pack` missing             | Install `wasm-pack`, then rerun `pnpm wasm:dev` or the failed strict command.                                                   |
+| Unknown helper crate            | Match `crates: [...]` to `package.name` in a direct child of the configured `cratesDir`. Use `crates: []` when none are needed. |
+| Stale Rust cell or missing Wasm | Regenerate with `pnpm wasm:dev`; do not edit `.oxiquill` or `public/oxiquill`.                                                  |
+
+## Haskell
+
+| Symptom                                  | Resolution                                                                                                                    |
+| ---------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------- |
+| `wasm32-wasi-ghc` missing                | Install ghc-wasm 9.14 on Linux/macOS or set `OXIQUILL_HASKELL_GHC` to the compiler. Native Windows generation is unsupported. |
+| Astro/Vite fails after sourcing ghc-wasm | Put a normal Node.js 24 runtime before ghc-wasm's static Node, or set `OXIQUILL_NODE`.                                        |
+| Runtime unavailable or stale             | Fix the compiler/cell error and rerun `pnpm wasm:dev`. Check the generated status diagnostic rather than editing it.          |
+
+## Python Downloads and Offline Builds
+
+| Symptom                                | Resolution                                                                                                                          |
+| -------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------- |
+| CDN or mirror request fails            | Confirm DNS/TLS/proxy access and the configured mirror base. The error identifies the effective URL and HTTP/connection cause.      |
+| Download times out or exhausts retries | Retry after connectivity recovers or use a complete verified cache; each attempt is limited to 30 seconds and three total attempts. |
+| SHA-256 mismatch                       | Do not bypass verification. Remove the named corrupt cache entry and fetch it from a trusted source/mirror.                         |
+| Offline cache miss                     | Populate the exact filename/hash on a connected machine using the same Oxiquill/Pyodide version, then transfer the verified cache.  |
+| Unsupported Python package             | Use a package listed by the installed Pyodide lockfile or remove it from `packages`.                                                |
+
+## Configuration and Paths
+
+If different commands appear to use different directories, pass the same `--config <path>` and inspect the conflicting field named by the diagnostic. Relative child paths resolve against their documented parent. Do not combine Astro and `paths` values that normalize to different locations.
+
+`clean` refuses broad or unsafe targets. Fix the configuration instead of deleting the workspace manually.
+
+## Worker Timeouts and Browser Failures
+
+A cell defaults to a 30,000 ms timeout unless `timeoutMs` specifies another positive integer. A timeout terminates the failed language worker, rejects requests owned by it, and creates a fresh worker for later runs. Reduce the workload or choose a justified larger timeout; do not use timeout as a security sandbox.
+
+For browser failures, verify the site was rebuilt, the expected files exist below `public/oxiquill`, the deployment preserves `.wasm` and JavaScript assets, and the configured base path matches the deployed URL. Test in a supported current Chromium, Firefox, or WebKit browser.
+
+## Stale Output
+
+Run `pnpm clean` followed by the required generation/build command when source and public output disagree. Generated ownership data removes stale language output when the final cell of that language disappears. Never repair generated manifests, Wasm, Pyodide files, licenses, or `dist` by hand.
+
+If the problem persists, open a [GitHub issue](https://github.com/kakune/oxiquill/issues) with the Oxiquill/Node/tool versions, operating system, command, complete concise diagnostic, and a minimal reproducer. Use private vulnerability reporting for security-sensitive details.

@@ -70,3 +70,26 @@ export function expressionAttribute(name, value) {
     }
   };
 }
+
+export function identifierAttribute(name, identifier) {
+  return {
+    type: 'mdxJsxAttribute',
+    name,
+    value: {
+      type: 'mdxJsxAttributeValueExpression',
+      value: identifier,
+      data: {
+        estree: {
+          type: 'Program',
+          sourceType: 'module',
+          body: [
+            {
+              type: 'ExpressionStatement',
+              expression: { type: 'Identifier', name: identifier }
+            }
+          ]
+        }
+      }
+    }
+  };
+}

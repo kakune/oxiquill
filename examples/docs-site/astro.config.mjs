@@ -1,14 +1,17 @@
+import starlight from '@astrojs/starlight';
 import { defineOxiquillConfig } from 'oxiquill/astro';
 
 const basePath = process.env.BASE_PATH;
 
 export default defineOxiquillConfig({
+  framework: { starlight },
   site: process.env.SITE ?? 'https://oxiquill.local',
   ...(basePath ? { base: basePath } : {}),
   starlight: {
     title: 'Oxiquill',
     description:
       'A static documentation workspace for Rust, Python, Haskell, math, diagrams, and media-rich MDX notes.',
+    disable404Route: true,
     defaultLocale: 'root',
     locales: {
       root: {
@@ -31,10 +34,34 @@ export default defineOxiquillConfig({
         translations: { ja: 'ガイド' },
         items: [
           { label: 'Getting Started', translations: { ja: 'はじめに' }, slug: 'guides/getting-started' },
+          {
+            label: 'Project Configuration',
+            translations: { ja: 'プロジェクト設定' },
+            slug: 'guides/project-configuration'
+          },
+          {
+            label: 'Python Runtime Assets',
+            translations: { ja: 'Python runtime asset' },
+            slug: 'guides/python-runtime'
+          },
+          {
+            label: 'Support and Security',
+            translations: { ja: 'サポートとセキュリティ' },
+            slug: 'guides/support-and-security'
+          },
+          { label: 'Troubleshooting', translations: { ja: 'トラブルシューティング' }, slug: 'guides/troubleshooting' },
           { label: 'Authoring Guide', translations: { ja: '執筆ガイド' }, slug: 'guides/authoring' },
           { label: 'Templates', translations: { ja: 'テンプレート' }, slug: 'guides/templates' },
           { label: 'Licensing', translations: { ja: 'ライセンス' }, slug: 'guides/licensing' },
           { label: 'Validation', translations: { ja: '検証' }, slug: 'guides/validation' }
+        ]
+      },
+      {
+        label: 'Reference',
+        translations: { ja: 'リファレンス' },
+        items: [
+          { label: 'Package API', translations: { ja: 'Package API' }, slug: 'reference/package-api' },
+          { label: 'CLI', translations: { ja: 'CLI' }, slug: 'reference/cli' }
         ]
       },
       {

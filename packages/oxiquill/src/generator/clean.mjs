@@ -1,22 +1,24 @@
 import { rm } from 'node:fs/promises';
 import { pathToFileURL } from 'node:url';
-import { createOxiquillPaths, pathFromUrl } from '../config/paths.mjs';
+import { assertPathWithin, canonicalPath } from '../config/paths.mjs';
 
-export async function cleanOxiquillWorkspace({ paths = createOxiquillPaths(), extraPaths = [] } = {}) {
-  const workspaceRoot = pathFromUrl(paths.workspaceRoot);
-  const ownedPaths = [
-    pathFromUrl(paths.cacheDir),
-    pathFromUrl(paths.publicAssetsDir),
-    `${workspaceRoot}/dist`,
-    `${workspaceRoot}/.astro`,
-    `${workspaceRoot}/playwright-report`,
-    `${workspaceRoot}/test-results`,
-    ...extraPaths
-  ];
+const defaultFileSystem = { rm };
 
-  await Promise.all(ownedPaths.map((targetPath) => rm(targetPath, { recursive: true, force: true })));
+export async function cleanOxiquillWorkspace({ fileSystem = defaultFileSystem, paths } = {}) {
+  if (!paths) throw new TypeError('cleanOxiquillWorkspace requires resolved project paths.');
+
+  assertPathWithin(paths.workspaceRoot, paths.cacheDir, 'cacheDir');
+  assertPathWithin(paths.workspaceRoot, paths.outDir, 'outDir');
+  assertPathWithin(paths.publicDir, paths.publicAssetsDir, 'paths.publicAssetsDir');
+  const ownedPaths = Array.from(
+    new Set([canonicalPath(paths.cacheDir), canonicalPath(paths.publicAssetsDir), canonicalPath(paths.outDir)])
+  );
+
+  await Promise.all(ownedPaths.map((targetPath) => fileSystem.rm(targetPath, { recursive: true, force: true })));
 }
 
 if (import.meta.url === pathToFileURL(process.argv[1] ?? '').href) {
-  await cleanOxiquillWorkspace();
+  const { loadOxiquillProjectConfig } = await import('../config/project-config.mjs');
+  const projectConfig = await loadOxiquillProjectConfig({ cwd: process.cwd() });
+  await cleanOxiquillWorkspace({ paths: projectConfig.paths });
 }

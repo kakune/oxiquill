@@ -4,23 +4,25 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "dev": "oxiquill dev",
-    "dev:astro": "oxiquill dev:astro",
-    "dev:runtime": "oxiquill dev:runtime",
-    "build": "oxiquill build",
-    "preview": "oxiquill preview",
-    "docgen": "oxiquill docgen",
-    "wasm:dev": "oxiquill docgen --wasm dev",
-    "wasm:build": "oxiquill docgen --wasm build",
-    "check": "oxiquill check",
-    "test:rust": "oxiquill test-rust",
-    "test:rust:coverage": "oxiquill test-rust-coverage",
-    "doc:rust": "oxiquill doc-rust",
-    "test:wasm": "oxiquill test-wasm",
-    "lint:rust": "oxiquill lint-rust",
-    "clean": "oxiquill clean"
+    "dev": "node ../../packages/oxiquill/dist/cli/index.mjs dev",
+    "dev:astro": "node ../../packages/oxiquill/dist/cli/index.mjs dev:astro",
+    "dev:runtime": "node ../../packages/oxiquill/dist/cli/index.mjs dev:runtime",
+    "build": "node ../../packages/oxiquill/dist/cli/index.mjs build",
+    "preview": "node ../../packages/oxiquill/dist/cli/index.mjs preview",
+    "docgen": "node ../../packages/oxiquill/dist/cli/index.mjs docgen",
+    "wasm:dev": "node ../../packages/oxiquill/dist/cli/index.mjs docgen --wasm dev",
+    "wasm:build": "node ../../packages/oxiquill/dist/cli/index.mjs docgen --wasm build",
+    "check": "node ../../packages/oxiquill/dist/cli/index.mjs check",
+    "test:rust": "node ../../packages/oxiquill/dist/cli/index.mjs test-rust",
+    "test:rust:coverage": "node ../../packages/oxiquill/dist/cli/index.mjs test-rust-coverage",
+    "doc:rust": "node ../../packages/oxiquill/dist/cli/index.mjs doc-rust",
+    "test:wasm": "node ../../packages/oxiquill/dist/cli/index.mjs test-wasm",
+    "lint:rust": "node ../../packages/oxiquill/dist/cli/index.mjs lint-rust",
+    "clean": "node ../../packages/oxiquill/dist/cli/index.mjs clean"
   },
   "dependencies": {
+    "@astrojs/starlight": "0.41.9",
+    "astro": "7.2.9",
     "oxiquill": "workspace:*"
   }
 }

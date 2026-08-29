@@ -1,0 +1,60 @@
+---
+title: トラブルシューティング
+description: install、config、runtime generation、download、timeout、stale output の問題から復旧します。
+---
+
+最初の Oxiquill diagnostic から確認します。generation error は relevant tool/path を示し、authored cell では page、fence line、可能なら cell ID、正確な metadata field を含みます。
+
+## Install と package resolution
+
+| 症状                                                | 対応                                                                                                                                 |
+| --------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------ |
+| Node version/syntax error                           | Node.js 24 以上を install し、pnpm/npm を起動する同じ shell で `node --version` を確認します。                                       |
+| `oxiquill` command not found                        | project dependency に追加し、package script または `pnpm exec oxiquill` から実行します。global install に依存しません。              |
+| npm/pnpm が source や duplicate Preact を誤解決する | stale `node_modules` を除去して lockfile から reinstall し、documented package export だけを import します。deep import はしません。 |
+| native Rollup/Vite addon を load できない           | normal Node build を使います。ghc-wasm static Node が `PATH` の先頭なら normal Node を前に置くか `OXIQUILL_NODE` を設定します。      |
+
+## Rust と Wasm
+
+| 症状                            | 対応                                                                                                               |
+| ------------------------------- | ------------------------------------------------------------------------------------------------------------------ |
+| Rust toolchain/target がない    | `rust-toolchain.toml` の pinned toolchain と `wasm32-unknown-unknown` target を install します。                   |
+| `wasm-pack` がない              | `wasm-pack` を install し、`pnpm wasm:dev` または失敗した strict command を再実行します。                          |
+| Unknown helper crate            | `crates: [...]` を configured `cratesDir` 直下の `package.name` と一致させます。不要なら `crates: []` を使います。 |
+| Rust cell が stale、Wasm がない | `pnpm wasm:dev` で再生成し、`.oxiquill`/`public/oxiquill` を直接編集しません。                                     |
+
+## Haskell
+
+| 症状                                          | 対応                                                                                                                                          |
+| --------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------- |
+| `wasm32-wasi-ghc` がない                      | Linux/macOS に ghc-wasm 9.14 を install するか `OXIQUILL_HASKELL_GHC` へ compiler path を指定します。native Windows generation は非対応です。 |
+| ghc-wasm を source 後に Astro/Vite が失敗する | normal Node.js 24 runtime を ghc-wasm static Node より前に置くか `OXIQUILL_NODE` を設定します。                                               |
+| runtime unavailable/stale                     | compiler/cell error を直して `pnpm wasm:dev` を再実行し、generated status を編集せず diagnostic を確認します。                                |
+
+## Python download と offline build
+
+| 症状                       | 対応                                                                                                                |
+| -------------------------- | ------------------------------------------------------------------------------------------------------------------- |
+| CDN/mirror request failure | DNS/TLS/proxy と mirror base を確認します。error は effective URL と HTTP/connection cause を示します。             |
+| timeout/retry exhaustion   | connectivity 回復後に retry するか complete verified cache を使います。各 attempt は30秒、合計3回までです。         |
+| SHA-256 mismatch           | 検証を bypass せず、named corrupt cache entry を削除して trusted source/mirror から取得します。                     |
+| offline cache miss         | 同じ Oxiquill/Pyodide version で exact filename/hash を connected machine 上に用意し、verified cache を転送します。 |
+| unsupported Python package | install 済み Pyodide lockfile にある package を使うか `packages` から除きます。                                     |
+
+## Config と path
+
+command ごとに別 directory を使うように見える場合、同じ `--config <path>` を渡し、diagnostic が示す conflicting field を確認します。relative child path は documented parent から解決されます。Astro と `paths` に正規化後の location が異なる値を組み合わせないでください。
+
+`clean` は broad/unsafe target を拒否します。workspace を手動削除せず config を修正してください。
+
+## Worker timeout と browser failure
+
+cell timeout の default は 30,000 ms で、`timeoutMs` には別の positive integer を指定できます。timeout 時は failed language worker を終了し、その worker が持つ request を reject して、次回用に fresh worker を作ります。workload を減らすか妥当な長い timeout を選び、security sandbox として使わないでください。
+
+browser failure では site rebuild、`public/oxiquill` 下の expected file、deployment が `.wasm`/JavaScript asset を保持すること、configured base path と deploy URL の一致を確認します。supported current Chromium、Firefox、WebKit で test してください。
+
+## Stale output
+
+source と public output が一致しない場合は `pnpm clean` 後に必要な generation/build command を実行します。generated ownership data は最後の cell が消えた language の stale output を除去します。manifest、Wasm、Pyodide file、license、`dist` を手動修正しないでください。
+
+解決しない場合は [GitHub issue](https://github.com/kakune/oxiquill/issues) に Oxiquill/Node/tool version、OS、command、完全で簡潔な diagnostic、minimal reproducer を添えてください。security-sensitive detail は private vulnerability reporting を使います。

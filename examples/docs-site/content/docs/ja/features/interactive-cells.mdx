@@ -7,42 +7,72 @@ description: 静的サイト上で動く Rust、Python、Haskell のセルを設
 
 Rust セルは build 時に WebAssembly に compile されます。Python セルは browser の Pyodide worker で動きます。Haskell セルは build 時に WASI WebAssembly module に compile されます。3つの言語は同じ input metadata と run mode model を使います。
 
-## セル metadata
+## Fence と metadata grammar
 
-metadata は code block の先頭に置いた、言語に対応する連続した option comment block でなければなりません。Rust は `//|` または `///|`、Python は `#|`、Haskell は `--|` を使います。source code が始まった後の option comment 風の行は source code のままです。
+interactive fence は `rust`、`python`、`haskell`（Markdown の `{.rust}` form を含む）を使い、legal backtick/tilde fence と indentation に対応します。metadata は fence 先頭の一つの contiguous な language-specific option-comment block です。Rust は `//|`/`///|`、Python は `#|`、Haskell は `--|` を使います。最初の source line より後にある option 風 comment は source code のままです。
 
-top-level では次の field だけを指定できます。
+許可される top-level field は次だけで、unknown field は error です。
 
-- `id`: `^[a-z][a-z0-9]*(?:-[a-z0-9]+)*$` に一致する必須のページ内 ID。
-- `title`: cell header に表示する string。default は `id`。
-- `run`: `button`、`reactive`、`autorun`。default は `button`。
-- `inputs`: input name から input definition への mapping。default は省略で、`autorun` では指定できません。
-- `timeoutMs`: 正の integer で指定する millisecond の実行 timeout。default は `30000`。
-- `showSource`: source の初期表示を決める boolean。default は `true`。
-- `crates`: 重複のない空でない helper crate name。Rust 専用。
-- `packages`: 重複のない空でない vendored Pyodide package name。Python 専用。
+| Field        | Type と rule                                                                                                          | Default  |
+| ------------ | --------------------------------------------------------------------------------------------------------------------- | -------- |
+| `id`         | 必須の lowercase kebab-case `^[a-z][a-z0-9]*(?:-[a-z0-9]+)*$`。page 内と route scope 後で unique。                    | —        |
+| `title`      | cell header に表示する string。                                                                                       | `id`     |
+| `run`        | `button`、`reactive`、`autorun`。                                                                                     | `button` |
+| `inputs`     | `^[a-z][a-z0-9_]*$` に一致する lowercase cross-language identifier から input spec への mapping。`autorun` では禁止。 | `{}`     |
+| `packages`   | unique non-empty Pyodide package name。Python 専用。                                                                  | `[]`     |
+| `crates`     | `cratesDir` 直下の helper package name の unique non-empty list。Rust 専用。                                          | `[]`     |
+| `timeoutMs`  | positive integer millisecond。                                                                                        | `30000`  |
+| `showSource` | initial source visibility を指定する boolean。                                                                        | `true`   |
 
-unknown field、dependency name の重複、scalar/collection type の誤り、未対応 package、存在しない helper crate があると、page、fence line、cell ID、field path を含む diagnostic で生成が停止します。Haskell セルは standard library の code のみ対応し、どちらの dependency field も使えません。
+source には metadata 以外の code が必要です。malformed YAML、wrong scalar/collection type、duplicate normalized ID/binding/function、unknown package/crate、language-mismatched dependency field は output を書く前に失敗します。diagnostic は page path、fence start line、可能なら cell ID、正確な field path を含みます。
 
-## run mode
+Haskell cell は standard-library code のみで `packages`/`crates` を受け付けません。helper 不要の Rust example では `crates: []` を明示します。package/crate list は strict validation 後に deduplicate/sort されます。
 
-- `button`: 読者が明示的に実行します。
-- `reactive`: 初回表示時に実行し、input 変更時に再実行します。
-- `autorun`: 1回自動実行し、その後も run button から再実行できます。
+## Run mode
 
-## 入力
+- `button`: input と Run button を表示し、mount 時は実行しません。
+- `reactive`: input を表示して Run button を隠し、mount 時に一度実行します。その後は 150 ms trailing debounce を使い、active execution 一つと最新 replacement 一つだけを保持します。
+- `autorun`: input/Run button を表示せず、各 `cell.id + runtimeVersion` について正確に一度だけ実行します。
 
-対応 input type は `range`、`number`、`integer`、`text`、`textarea`、`checkbox`、`select`、`radio` です。
+次の button cell は、input を変更しても明示的に実行するまで待機します。
 
-input name は cell 内の変数として使われ、`^[a-z][a-z0-9_]*$` に一致する必要があります。各 definition は `type`、`label`、`value`、`min`、`max`、`step`、`integer`、`options` だけを含む mapping です。
+```rust
+//| id: run-mode-button
+//| title: Explicit button execution
+//| run: button
+//| crates: []
+//| inputs:
+//|   value: { type: integer, label: value, min: 1, max: 10, step: 1, value: 3 }
+println!("button value = {value}");
+```
 
-- `type` の default は `text`、`label` の default は input name です。
-- default value は checkbox が `false`、数値 input が `0`、text input が空 string です。明示する value はその scalar type と完全に一致する必要があります。
-- 数値の `min`、`max`、`step` は有限値で、`step` は正、`min` は `max` 以下、default は bounds 内でなければなりません。`integer` input、または `integer: true` の数値 input では value と constraint も integer にします。
-- `select` と `radio` には string default と、value が一意な空でない option list が必要です。option は空でない string、または空でない string の `label` と `value` を持つ mapping です。default は option value のいずれかに一致させます。
-- 数値専用 field を数値以外の control で使うことや、`select`/`radio` 以外で `options` を使うことはできません。
+次の autorun cell には実行 control がなく、現在の生成 runtime に対して1回だけ実行されます。
 
-Rust または Haskell の予約語は安全な生成 binding に変換されます。変換後に衝突する name がある場合、生成は失敗します。
+```rust
+//| id: run-mode-autorun
+//| title: One-time autorun execution
+//| run: autorun
+//| crates: []
+println!("autorun ready");
+```
+
+superseded queued work は破棄され、stale result が新しい state を上書きしません。通常の reactive update は shared language worker を維持します。timeout/worker fault はその worker 所有 request を reject し timer を除去して、次回用 fresh worker を作ります。unmount は pending UI work を cancel し、late state update を防ぎます。
+
+## Input schema
+
+各 input が受け取るのは type に関係する field だけです。共通 field は `type`、`label`、`value`。numeric input は `min`、`max`、`step`、`integer`、`select`/`radio` は `options` も使います。
+
+| Type               | Value と constraint                                                                               |
+| ------------------ | ------------------------------------------------------------------------------------------------- |
+| `range`, `number`  | finite number。`step > 0`、`min <= max`、default が bound 内。                                    |
+| `integer`          | integer value と integer bound/step。同じ numeric constraint。                                    |
+| `text`, `textarea` | string value。                                                                                    |
+| `checkbox`         | boolean value。                                                                                   |
+| `select`, `radio`  | non-empty unique string option または `{ label, value }` object。default は option value と一致。 |
+
+`type` の default は `text`、`label` の default は input name です。default value は checkbox が `false`、numeric input が `0`、text input が空 string です。numeric 専用 field は non-numeric control で拒否され、`options` は `select`/`radio` 以外では使えません。
+
+visible `label` が control の accessible name で、input key は generated language binding にだけ使います。normalization で二つの Rust/Haskell binding が衝突してはなりません。label、description、current value、validation message、grouped control は stable ID で関連付けられ、keyboard focus を表示し、run/error status は focus を奪わず announce されます。
 
 ## Rust とグラフ
 

@@ -15,10 +15,10 @@ report.chunks.forEach((chunk) => {
   assert.ok(chunk.uncompressedBytes <= report.limitBytes, `${chunk.fileName} exceeds ${report.limitBytes} bytes`);
 });
 
-assertDynamicPackageBoundary('InteractiveCell.tsx', 'echarts/');
-assertDynamicPackageBoundary('MermaidDiagram.tsx', 'mermaid/');
+assertDynamicPackageBoundary('InteractiveCell.js', 'echarts/');
+assertDynamicPackageBoundary('MermaidDiagram.js', 'mermaid/');
 
-for (const worker of ['rust-worker.ts', 'python-worker.ts', 'haskell-worker.ts']) {
+for (const worker of ['rust-worker.js', 'python-worker.js', 'haskell-worker.js']) {
   const chunk = findEntryChunk(worker);
   assert.equal(chunk.source, 'worker', `${worker} is not isolated in a worker bundle`);
 }

@@ -12,6 +12,7 @@ export default defineConfig({
       'echarts/renderers': testFile('./tests/unit/mocks/echarts-modules.ts'),
       mermaid: testFile('./tests/unit/mocks/mermaid.ts'),
       'virtual:oxiquill/cells': testFile('./tests/unit/mocks/virtual-runtime.ts'),
+      'virtual:oxiquill/runtime-paths': testFile('./tests/unit/mocks/runtime-paths.ts'),
       'virtual:oxiquill/runtime-version': testFile('./tests/unit/mocks/virtual-runtime.ts'),
       'virtual:oxiquill/rust-wasm': testFile('./tests/unit/mocks/virtual-runtime.ts')
     }

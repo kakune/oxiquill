@@ -11,7 +11,9 @@ const defaultFileSystem = {
 
 /* v8 ignore start -- CLI entrypoint delegates to runHelperCargo, which is covered directly. */
 export async function main(argv = process.argv.slice(2)) {
-  await runHelperCargo({ argv, root: process.cwd() });
+  const { loadOxiquillProjectConfig } = await import('../config/project-config.mjs');
+  const projectConfig = await loadOxiquillProjectConfig({ cwd: process.cwd() });
+  await runHelperCargo({ argv, paths: projectConfig.paths });
 }
 /* v8 ignore stop */
 

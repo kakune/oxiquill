@@ -1,11 +1,12 @@
-import { pythonDisplaySupportCode } from './python-display-support';
-import { createPythonCellResult, toOutputArtifacts } from './python-cell-result';
-import { createSerialRequestQueue } from './python-worker-queue';
-import type { RuntimeWorkerRequest, RuntimeWorkerResponse } from './types';
+import { pyodidePath } from 'virtual:oxiquill/runtime-paths';
+import { pythonDisplaySupportCode } from './python-display-support.js';
+import { createPythonCellResult, toOutputArtifacts } from './python-cell-result.js';
+import { createSerialRequestQueue } from './python-worker-queue.js';
+import type { RuntimeWorkerRequest, RuntimeWorkerResponse } from './types.js';
 
-export { pythonDisplaySupportCode } from './python-display-support';
-export { createPythonCellResult } from './python-cell-result';
-export { createSerialRequestQueue } from './python-worker-queue';
+export { pythonDisplaySupportCode } from './python-display-support.js';
+export { createPythonCellResult } from './python-cell-result.js';
+export { createSerialRequestQueue } from './python-worker-queue.js';
 
 type LoadPyodide = typeof import('pyodide').loadPyodide;
 type PyodideRuntime = Awaited<ReturnType<LoadPyodide>>;
@@ -102,12 +103,16 @@ async function importPyodideModule(): Promise<{ loadPyodide: LoadPyodide }> {
   }
 }
 
-export function resolvePyodideUrls(baseUrl = import.meta.env.BASE_URL): {
+export function resolvePyodideUrls(
+  baseUrl = import.meta.env.BASE_URL,
+  runtimePath = pyodidePath
+): {
   indexUrl: string;
   moduleUrl: string;
 } {
   const base = baseUrl.endsWith('/') ? baseUrl : `${baseUrl}/`;
-  const indexUrl = `${base}oxiquill/pyodide/`;
+  const normalizedRuntimePath = runtimePath.replace(/^\/+|\/+$/gu, '');
+  const indexUrl = `${base}${normalizedRuntimePath}/`;
 
   return {
     indexUrl,

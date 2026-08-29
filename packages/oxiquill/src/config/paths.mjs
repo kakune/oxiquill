@@ -1,63 +1,62 @@
+import { existsSync, realpathSync } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 
 export const defaultFrameworkRoot = inferDefaultFrameworkRoot();
 
 export function createOxiquillPaths(options = {}) {
-  const workspaceRoot = directoryUrl(options.workspaceRoot ?? process.cwd());
-  const frameworkRoot = directoryUrl(options.frameworkRoot ?? defaultFrameworkRoot);
-  const publicDir = directoryUrl(options.publicDir ?? 'public', workspaceRoot);
-  const publicAssetsDir = directoryUrl(options.publicAssetsDir ?? 'oxiquill', publicDir);
-  const cacheDir = directoryUrl(options.cacheDir ?? '.oxiquill', workspaceRoot);
-  const generatedDir = directoryUrl(options.generatedDir ?? 'generated', cacheDir);
+  const workspaceRoot = directoryPath(options.workspaceRoot ?? process.cwd());
+  const frameworkRoot = directoryPath(options.frameworkRoot ?? defaultFrameworkRoot, workspaceRoot);
+  const publicDir = directoryPath(options.publicDir ?? 'public', workspaceRoot);
+  const publicAssetsDir = directoryPath(options.publicAssetsDir ?? 'oxiquill', publicDir);
+  const cacheDir = directoryPath(options.cacheDir ?? '.oxiquill', workspaceRoot);
+  const generatedDir = directoryPath(options.generatedDir ?? 'generated', cacheDir);
 
-  return {
+  return Object.freeze({
     workspaceRoot,
     frameworkRoot,
-    docsDir: directoryUrl(options.docsDir ?? 'content/docs', workspaceRoot),
-    cratesDir: directoryUrl(options.cratesDir ?? 'crates', workspaceRoot),
+    docsDir: directoryPath(options.docsDir ?? 'content/docs', workspaceRoot),
+    cratesDir: directoryPath(options.cratesDir ?? 'crates', workspaceRoot),
     cacheDir,
+    outDir: directoryPath(options.outDir ?? 'dist', workspaceRoot),
     generatedDir,
-    haskellCellsDir: directoryUrl(options.haskellCellsDir ?? 'haskell-cells', cacheDir),
-    rustCellsDir: directoryUrl(options.rustCellsDir ?? 'rust-cells', cacheDir),
+    haskellCellsDir: directoryPath(options.haskellCellsDir ?? 'haskell-cells', cacheDir),
+    rustCellsDir: directoryPath(options.rustCellsDir ?? 'rust-cells', cacheDir),
     publicDir,
     publicAssetsDir,
-    haskellWasmPublicDir: directoryUrl(options.haskellWasmPublicDir ?? 'haskell-wasm', publicAssetsDir),
-    licensesPublicDir: directoryUrl(options.licensesPublicDir ?? 'licenses', publicAssetsDir),
-    pyodidePublicDir: directoryUrl(options.pyodidePublicDir ?? 'pyodide', publicAssetsDir),
-    rustWasmPublicDir: directoryUrl(options.rustWasmPublicDir ?? 'rust-wasm', publicAssetsDir),
-    cellsModulePath: fileUrl('cells.ts', generatedDir),
-    cellsJsonPath: fileUrl('cells.json', generatedDir),
-    runtimeVersionPath: fileUrl('runtime-version.ts', generatedDir)
-  };
+    haskellWasmPublicDir: directoryPath(options.haskellWasmPublicDir ?? 'haskell-wasm', publicAssetsDir),
+    licensesPublicDir: directoryPath(options.licensesPublicDir ?? 'licenses', publicAssetsDir),
+    pyodidePublicDir: directoryPath(options.pyodidePublicDir ?? 'pyodide', publicAssetsDir),
+    rustWasmPublicDir: directoryPath(options.rustWasmPublicDir ?? 'rust-wasm', publicAssetsDir),
+    cellsModulePath: filePath('cells.ts', generatedDir),
+    cellsJsonPath: filePath('cells.json', generatedDir),
+    runtimeVersionPath: filePath('runtime-version.ts', generatedDir)
+  });
+}
+
+export function directoryPath(value, basePath = process.cwd()) {
+  return canonicalPath(resolvePathValue(value, basePath));
+}
+
+export function filePath(value, basePath = process.cwd()) {
+  return canonicalPath(resolvePathValue(value, basePath));
 }
 
 export function directoryUrl(value, baseUrl) {
-  if (value instanceof URL) return ensureDirectoryUrl(value);
-
-  if (typeof value !== 'string') {
-    throw new TypeError(`Expected a path string or file URL, received ${typeof value}.`);
-  }
-
-  if (value.startsWith('file:')) return ensureDirectoryUrl(new URL(value));
-
-  const basePath = baseUrl ? fileURLToPath(baseUrl) : process.cwd();
-  const absolutePath = path.isAbsolute(value) ? value : path.resolve(basePath, value);
-  return ensureDirectoryUrl(pathToFileURL(absolutePath));
+  return pathToFileURL(directoryPath(value, baseUrl));
 }
 
 export function fileUrl(value, baseUrl) {
-  if (value instanceof URL) return value;
-  const basePath = baseUrl ? fileURLToPath(baseUrl) : process.cwd();
-  const absolutePath = path.isAbsolute(value) ? value : path.resolve(basePath, value);
-  return pathToFileURL(absolutePath);
+  return pathToFileURL(filePath(value, baseUrl));
 }
 
 export function pathFromUrl(value) {
-  if (!(value instanceof URL)) return value;
+  if (value instanceof URL) return withoutTrailingSeparator(fileURLToPath(assertFileUrl(value)));
+  if (typeof value === 'string' && value.startsWith('file:')) {
+    return withoutTrailingSeparator(fileURLToPath(assertFileUrl(new URL(value))));
+  }
 
-  const filePath = fileURLToPath(value);
-  return filePath.length > 1 && filePath.endsWith(path.sep) ? filePath.slice(0, -1) : filePath;
+  return value;
 }
 
 export function pathInUrl(directory, ...segments) {
@@ -69,14 +68,70 @@ export function relativePathFromUrl(fromDirectory, toPath) {
 }
 
 export function normalizePath(value) {
-  return String(value).split(path.sep).join('/');
+  return String(value).replaceAll('\\', '/');
 }
 
-function ensureDirectoryUrl(url) {
-  return url.href.endsWith('/') ? url : new URL(`${url.href}/`);
+export function canonicalPath(value) {
+  const absolutePath = path.resolve(value);
+  const missingSegments = [];
+  let existingAncestor = absolutePath;
+
+  while (!existsSync(existingAncestor)) {
+    const parent = path.dirname(existingAncestor);
+    if (parent === existingAncestor) return absolutePath;
+
+    missingSegments.unshift(path.basename(existingAncestor));
+    existingAncestor = parent;
+  }
+
+  const realAncestor = realpathSync.native?.(existingAncestor) ?? realpathSync(existingAncestor);
+  return path.resolve(realAncestor, ...missingSegments);
+}
+
+export function isPathWithin(parentPath, candidatePath) {
+  const relativePath = path.relative(canonicalPath(parentPath), canonicalPath(candidatePath));
+  return (
+    relativePath !== '' &&
+    relativePath !== '..' &&
+    !relativePath.startsWith(`..${path.sep}`) &&
+    !path.isAbsolute(relativePath)
+  );
+}
+
+export function assertPathWithin(parentPath, candidatePath, fieldName) {
+  if (!isPathWithin(parentPath, candidatePath)) {
+    throw new Error(`${fieldName} must resolve to a directory inside ${parentPath}; received ${candidatePath}.`);
+  }
+}
+
+function resolvePathValue(value, basePath) {
+  const resolvedBasePath = pathFromUrl(basePath);
+
+  if (value instanceof URL) return fileURLToPath(assertFileUrl(value));
+  if (typeof value !== 'string') {
+    throw new TypeError(`Expected a path string or file URL, received ${typeof value}.`);
+  }
+  if (value.trim() === '') {
+    throw new TypeError('Expected a non-empty path string or file URL.');
+  }
+  if (value.startsWith('file:')) return fileURLToPath(assertFileUrl(new URL(value)));
+
+  return path.isAbsolute(value) ? value : path.resolve(resolvedBasePath, value);
+}
+
+function assertFileUrl(value) {
+  if (value.protocol !== 'file:') {
+    throw new TypeError(`Expected a file URL, received ${value.protocol} URL.`);
+  }
+
+  return value;
+}
+
+function withoutTrailingSeparator(value) {
+  return value.length > path.parse(value).root.length && value.endsWith(path.sep) ? value.slice(0, -1) : value;
 }
 
 function inferDefaultFrameworkRoot() {
   const rootUrl = new URL('../../', import.meta.url);
-  return rootUrl.protocol === 'file:' ? directoryUrl(rootUrl) : directoryUrl(process.cwd());
+  return rootUrl.protocol === 'file:' ? directoryPath(rootUrl) : directoryPath(process.cwd());
 }

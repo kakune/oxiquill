@@ -10,7 +10,7 @@ import type {
   TableColumn,
   TableColumnType,
   TextArtifact
-} from './types';
+} from './types.js';
 
 export const outputArtifactLimits = Object.freeze({
   artifactsPerRun: 100,

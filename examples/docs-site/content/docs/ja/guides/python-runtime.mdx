@@ -1,0 +1,47 @@
+---
+title: Python runtime asset
+description: Pyodide download、integrity check、cache、mirror、retry、offline generation を説明します。
+---
+
+Python cell は Pyodide を使う browser worker 内で実行されます。Oxiquill は generation 時に install 済み Pyodide release と lockfile を解決し、manifest が必要とする core file と declared package だけを download して `public/oxiquill/pyodide` に公開します。
+
+built site はこの local asset を読みます。site の生成・deploy 後、reader が public CDN に接続する必要はありません。
+
+## 検証付き download
+
+各 wheel の filename、release location、expected SHA-256 は install 済み `pyodide-lock.json` から取得します。mirror setting が変えるのは download base だけで、lockfile hash を弱めたり置き換えたりしません。
+
+download は次の順序で行います。
+
+1. versioned Oxiquill download cache を確認します。
+2. cached file を expected SHA-256 で検証します。
+3. missing/corrupt で offline mode が無効なら temporary file に download します。
+4. 30秒 timeout と bounded backoff を使い、試行は合計3回までです。
+5. completed temporary file を検証してから cache へ atomic に配置します。
+6. verified artifact を resolved public Pyodide directory へ copy します。
+
+hash mismatch は常にその source の fatal error です。未検証の partial response を publish/cache することはありません。
+
+## Cache の動作
+
+download cache は Pyodide/runtime input ごとに versioned で、互換性のない release の file を再利用しません。local/CI build 間で保持すると network work を省けます。generated `.oxiquill` state と `public/oxiquill/pyodide` は verified cache から再生成できます。
+
+cache entry が corrupt な場合はその filename の entry を削除するか、online generation を再実行します。Oxiquill は利用前に mismatch を検出し、diagnostic に filename、cache path、expected hash を含めます。
+
+## Mirror
+
+default CDN が使えない場合や internal source が必要な場合は Pyodide package mirror を設定します。mirror は同じ release filename を公開する必要があります。integrity の正本は常に install 済み lockfile で、mirror metadata ではありません。
+
+mirror failure は effective URL を示し、DNS/connection、HTTP status、timeout、retry exhaustion、SHA-256 mismatch を区別します。mirror の変更に cell の `packages` metadata 修正は不要です。
+
+## Offline mode
+
+offline generation は package download を一切行いません。必要な core asset と wheel がすべて verified cache に存在しなければなりません。cache miss は missing filename と expected SHA-256 を表示するため、connected machine で正しい cache を作って転送できます。
+
+同じ Oxiquill、Pyodide、manifest、package set で online generation が完了してから offline mode を使ってください。deploy site が copied asset を local 配信するため、browser execution は offline でも利用できます。
+
+## Declared package
+
+Python の `packages` は install 済み Pyodide release が vendor する name の non-empty unique list です。unknown name は download 前に reject されます。source import から runtime 内 package を load することもできますが、release build の deterministic preflight/cache のため non-core dependency は明示宣言してください。
+
+metadata は [実行可能セル](/ja/features/interactive-cells/)、復旧方法は [トラブルシューティング](/ja/guides/troubleshooting/) を参照してください。

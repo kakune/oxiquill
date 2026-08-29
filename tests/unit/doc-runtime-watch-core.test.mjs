@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import { createOxiquillPaths } from '../../packages/oxiquill/src/config/paths.mjs';
 import {
   classifyChangedPath,
   createRuntimeWatchPaths,
@@ -41,6 +42,19 @@ describe('doc runtime watch core', () => {
     expect(createRuntimeWatchPaths()).toEqual(['content/docs', 'crates']);
     expect(toWatchEventRelativePath('/repo', 'content/docs/index.mdx')).toBe('content/docs/index.mdx');
     expect(toWatchEventRelativePath('/repo', '/repo/crates/doc-rust/src/lib.rs')).toBe('crates/doc-rust/src/lib.rs');
+  });
+
+  it('classifies and watches the resolved custom docs and crates directories', () => {
+    const paths = createOxiquillPaths({
+      cratesDir: 'helper crates',
+      docsDir: 'written docs',
+      workspaceRoot: '/repo'
+    });
+
+    expect(createRuntimeWatchPaths(paths)).toEqual([paths.docsDir, paths.cratesDir]);
+    expect(classifyChangedPath('written docs/guide.mdx', paths)).toBe('docs');
+    expect(classifyChangedPath('helper crates/example/src/lib.rs', paths)).toBe('crate');
+    expect(classifyChangedPath('content/docs/guide.mdx', paths)).toBe('other');
   });
 
   it('serializes tasks and coalesces pending enqueues', async () => {

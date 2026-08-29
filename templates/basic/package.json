@@ -11,6 +11,8 @@
     "clean": "oxiquill clean"
   },
   "dependencies": {
+    "@astrojs/starlight": "0.41.9",
+    "astro": "7.2.9",
     "oxiquill": "^0.2.0"
   }
 }
