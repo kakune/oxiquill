@@ -1,0 +1,131 @@
+name: Publish npm package
+
+on:
+  release:
+    types:
+      - published
+
+permissions:
+  contents: read
+  id-token: write
+
+concurrency:
+  group: npm-publish-${{ github.event.release.tag_name }}
+  cancel-in-progress: false
+
+env:
+  CARGO_TERM_COLOR: always
+  NODE_VERSION: '24'
+  PNPM_VERSION: '11.2.2'
+  RUST_TOOLCHAIN: '1.95.0'
+
+jobs:
+  publish:
+    name: Validate and publish
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Check out the release tag
+        uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+          ref: ${{ github.event.release.tag_name }}
+
+      - name: Set up pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: ${{ env.PNPM_VERSION }}
+          run_install: false
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v6
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          package-manager-cache: false
+          registry-url: https://registry.npmjs.org
+
+      - name: Verify release identity and ancestry
+        shell: bash
+        env:
+          RELEASE_PRERELEASE: ${{ github.event.release.prerelease }}
+          RELEASE_TAG: ${{ github.event.release.tag_name }}
+        run: |
+          set -euo pipefail
+          package_version="$(node -p "require('./packages/oxiquill/package.json').version")"
+          if [[ "$package_version" == *-* ]]; then
+            echo "Refusing to publish prerelease package version $package_version" >&2
+            exit 1
+          fi
+          if [[ "$RELEASE_PRERELEASE" == "true" ]]; then
+            echo "Refusing to publish from a prerelease GitHub Release" >&2
+            exit 1
+          fi
+          if [[ "$RELEASE_TAG" != "v$package_version" ]]; then
+            echo "Release tag $RELEASE_TAG does not match package version v$package_version" >&2
+            exit 1
+          fi
+          git fetch origin main --no-tags
+          tag_commit="$(git rev-list -n 1 "$RELEASE_TAG")"
+          if ! git merge-base --is-ancestor "$tag_commit" origin/main; then
+            echo "Release tag $RELEASE_TAG is not based on main" >&2
+            exit 1
+          fi
+          legacy_license_pattern='AG''PL|Aff''ero'
+          if git grep -n -E "$legacy_license_pattern"; then
+            echo "Tracked current-license references must be removed before publishing" >&2
+            exit 1
+          fi
+
+      - name: Set up Rust
+        shell: bash
+        run: |
+          rustup toolchain install "$RUST_TOOLCHAIN" --profile minimal --component clippy --component rustfmt --target wasm32-unknown-unknown
+          rustup default "$RUST_TOOLCHAIN"
+
+      - name: Install Rust build tools
+        uses: taiki-e/install-action@v2
+        with:
+          tool: cargo-llvm-cov,wasm-pack
+
+      - name: Cache ghc-wasm
+        uses: actions/cache@v5
+        with:
+          path: ~/.ghc-wasm
+          key: ghc-wasm-${{ runner.os }}-9.14-v1
+
+      - name: Install ghc-wasm
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [ ! -x "$HOME/.ghc-wasm/wasm32-wasi-ghc/bin/wasm32-wasi-ghc" ]; then
+            sudo apt-get update
+            sudo apt-get install -y jq unzip zstd
+            curl -sS https://gitlab.haskell.org/haskell-wasm/ghc-wasm-meta/-/raw/master/bootstrap.sh | FLAVOUR=9.14 sh
+          fi
+          echo "OXIQUILL_HASKELL_GHC=$HOME/.ghc-wasm/wasm32-wasi-ghc/bin/wasm32-wasi-ghc" >> "$GITHUB_ENV"
+          "$HOME/.ghc-wasm/wasm32-wasi-ghc/bin/wasm32-wasi-ghc" --version
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Install Playwright browser
+        run: pnpm exec playwright install --with-deps chromium
+
+      - name: Run release validation
+        run: |
+          pnpm check
+          pnpm lint:rust
+          pnpm wasm:dev
+          pnpm test
+
+      - name: Verify package tarball
+        run: pnpm test:package
+
+      - name: Test packed consumer
+        run: pnpm test:consumer
+
+      - name: Publish package
+        working-directory: packages/oxiquill
+        run: npm publish --access public --provenance
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}

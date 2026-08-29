@@ -4,7 +4,7 @@
   "private": true,
   "type": "module",
   "packageManager": "pnpm@11.2.2",
-  "license": "AGPL-3.0-only",
+  "license": "MIT OR Apache-2.0",
   "overrides": {
     "vite": "7.3.3"
   },
@@ -18,7 +18,7 @@
     "wasm:dev": "pnpm --dir examples/docs-site wasm:dev",
     "wasm:build": "pnpm --dir examples/docs-site wasm:build",
     "check": "pnpm --dir examples/docs-site check",
-    "test": "pnpm test:coverage && pnpm doc:rust && pnpm test:wasm && pnpm build && pnpm test:e2e",
+    "test": "pnpm test:coverage && pnpm doc:rust && pnpm test:wasm && pnpm build && pnpm test:package && pnpm test:e2e",
     "test:coverage": "pnpm test:rust:coverage && pnpm test:unit:coverage",
     "test:rust": "pnpm --dir examples/docs-site test:rust",
     "test:rust:coverage": "pnpm --dir examples/docs-site test:rust:coverage",
@@ -27,6 +27,8 @@
     "doc:rust": "pnpm --dir examples/docs-site doc:rust",
     "test:wasm": "pnpm --dir examples/docs-site test:wasm",
     "test:e2e": "playwright test",
+    "test:package": "node tests/package/package-contents.mjs",
+    "test:consumer": "node tests/package/consumer-smoke.mjs",
     "lint:rust": "pnpm --dir examples/docs-site lint:rust",
     "clean": "pnpm --dir examples/docs-site clean"
   },

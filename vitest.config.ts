@@ -25,6 +25,7 @@ export default defineConfig({
         'packages/oxiquill/src/generator/doc-runtime-core.mjs',
         'packages/oxiquill/src/generator/doc-runtime-service.mjs',
         'packages/oxiquill/src/generator/doc-runtime-watch-core.mjs',
+        'packages/oxiquill/src/generator/license-notices.mjs',
         'packages/oxiquill/src/generator/run-helper-cargo.mjs',
         'packages/oxiquill/src/components/doc-runtime/**/*.tsx',
         'packages/oxiquill/src/lib/doc-runtime/**/*.ts',

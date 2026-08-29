@@ -9,6 +9,7 @@ import {
   buildRustWasm,
   createDocRuntimeContext,
   markRuntimeReady,
+  syncLicenseArtifacts,
   syncDocRuntime
 } from '../generator/doc-runtime-service.mjs';
 import { cleanOxiquillWorkspace } from '../generator/clean.mjs';
@@ -113,6 +114,7 @@ async function generateRuntime({ paths, tolerateHaskellBuildFailure = false, was
       });
       warnToleratedHaskellBuildFailure(result);
     }
+    await syncLicenseArtifacts({ paths });
   }
 
   await markRuntimeReady({ paths, summary });

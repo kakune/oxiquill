@@ -1,0 +1,293 @@
+{
+  "schemaVersion": 1,
+  "artifacts": [
+    {
+      "name": "bumpalo",
+      "version": "3.20.3",
+      "license": "MIT",
+      "licenseFiles": ["rust/bumpalo-3.20.3-LICENSE-MIT.txt"],
+      "files": ["rust-wasm/doc_rust_cells_bg.wasm"],
+      "source": "generated Rust/Wasm runtime"
+    },
+    {
+      "name": "cfg-if",
+      "version": "1.0.4",
+      "license": "MIT",
+      "licenseFiles": ["rust/cfg-if-1.0.4-LICENSE-MIT.txt"],
+      "files": ["rust-wasm/doc_rust_cells_bg.wasm"],
+      "source": "generated Rust/Wasm runtime"
+    },
+    {
+      "name": "console_error_panic_hook",
+      "version": "0.1.7",
+      "license": "MIT",
+      "licenseFiles": ["rust/console_error_panic_hook-0.1.7-LICENSE-MIT.txt"],
+      "files": ["rust-wasm/doc_rust_cells_bg.wasm"],
+      "source": "generated Rust/Wasm runtime"
+    },
+    {
+      "name": "GHC WASI runtime libraries",
+      "version": "9.14.1.20260330",
+      "license": "BSD-3-Clause",
+      "licenseFiles": ["haskell/GHC-9.14.1-LICENSE.txt"],
+      "files": ["haskell-wasm/doc_haskell_cells.wasm"],
+      "source": "generated Haskell/WASI runtime"
+    },
+    {
+      "name": "itoa",
+      "version": "1.0.18",
+      "license": "MIT",
+      "licenseFiles": ["rust/itoa-1.0.18-LICENSE-MIT.txt"],
+      "files": ["rust-wasm/doc_rust_cells_bg.wasm"],
+      "source": "generated Rust/Wasm runtime"
+    },
+    {
+      "name": "memchr",
+      "version": "2.8.1",
+      "license": "MIT",
+      "licenseFiles": ["rust/memchr-2.8.1-LICENSE-MIT.txt"],
+      "files": ["rust-wasm/doc_rust_cells_bg.wasm"],
+      "source": "generated Rust/Wasm runtime"
+    },
+    {
+      "name": "once_cell",
+      "version": "1.21.4",
+      "license": "MIT",
+      "licenseFiles": ["rust/itoa-1.0.18-LICENSE-MIT.txt"],
+      "files": ["rust-wasm/doc_rust_cells_bg.wasm"],
+      "source": "generated Rust/Wasm runtime"
+    },
+    {
+      "name": "proc-macro2",
+      "version": "1.0.106",
+      "license": "MIT",
+      "licenseFiles": ["rust/itoa-1.0.18-LICENSE-MIT.txt"],
+      "files": ["rust-wasm/doc_rust_cells_bg.wasm"],
+      "source": "generated Rust/Wasm runtime"
+    },
+    {
+      "name": "Pyodide",
+      "version": "0.29.4",
+      "license": "MPL-2.0",
+      "licenseFiles": ["MPL-2.0.json"],
+      "files": ["pyodide/pyodide.asm.wasm"],
+      "source": "copied Pyodide runtime"
+    },
+    {
+      "name": "Python standard library",
+      "version": "3.13.2",
+      "license": "PSF-2.0",
+      "licenseFiles": ["PSF-2.0.txt"],
+      "files": ["pyodide/python_stdlib.zip"],
+      "source": "copied Pyodide runtime"
+    },
+    {
+      "name": "quote",
+      "version": "1.0.45",
+      "license": "MIT",
+      "licenseFiles": ["rust/itoa-1.0.18-LICENSE-MIT.txt"],
+      "files": ["rust-wasm/doc_rust_cells_bg.wasm"],
+      "source": "generated Rust/Wasm runtime"
+    },
+    {
+      "name": "rustversion",
+      "version": "1.0.22",
+      "license": "MIT",
+      "licenseFiles": ["rust/itoa-1.0.18-LICENSE-MIT.txt"],
+      "files": ["rust-wasm/doc_rust_cells_bg.wasm"],
+      "source": "generated Rust/Wasm runtime build"
+    },
+    {
+      "name": "serde",
+      "version": "1.0.228",
+      "license": "MIT",
+      "licenseFiles": ["rust/itoa-1.0.18-LICENSE-MIT.txt"],
+      "files": ["rust-wasm/doc_rust_cells_bg.wasm"],
+      "source": "generated Rust/Wasm runtime"
+    },
+    {
+      "name": "serde_core",
+      "version": "1.0.228",
+      "license": "MIT",
+      "licenseFiles": ["rust/itoa-1.0.18-LICENSE-MIT.txt"],
+      "files": ["rust-wasm/doc_rust_cells_bg.wasm"],
+      "source": "generated Rust/Wasm runtime"
+    },
+    {
+      "name": "serde_derive",
+      "version": "1.0.228",
+      "license": "MIT",
+      "licenseFiles": ["rust/itoa-1.0.18-LICENSE-MIT.txt"],
+      "files": ["rust-wasm/doc_rust_cells_bg.wasm"],
+      "source": "generated Rust/Wasm runtime"
+    },
+    {
+      "name": "serde_json",
+      "version": "1.0.150",
+      "license": "MIT",
+      "licenseFiles": ["rust/itoa-1.0.18-LICENSE-MIT.txt"],
+      "files": ["rust-wasm/doc_rust_cells_bg.wasm"],
+      "source": "generated Rust/Wasm runtime"
+    },
+    {
+      "name": "syn",
+      "version": "2.0.117",
+      "license": "MIT",
+      "licenseFiles": ["rust/itoa-1.0.18-LICENSE-MIT.txt"],
+      "files": ["rust-wasm/doc_rust_cells_bg.wasm"],
+      "source": "generated Rust/Wasm runtime"
+    },
+    {
+      "name": "unicode-ident",
+      "version": "1.0.24",
+      "license": "MIT AND Unicode-3.0",
+      "licenseFiles": ["rust/itoa-1.0.18-LICENSE-MIT.txt", "rust/unicode-ident-1.0.24-LICENSE-UNICODE.txt"],
+      "files": ["rust-wasm/doc_rust_cells_bg.wasm"],
+      "source": "generated Rust/Wasm runtime"
+    },
+    {
+      "name": "wasm-bindgen",
+      "version": "0.2.122",
+      "license": "MIT",
+      "licenseFiles": ["rust/cfg-if-1.0.4-LICENSE-MIT.txt"],
+      "files": ["rust-wasm/doc_rust_cells_bg.wasm"],
+      "source": "generated Rust/Wasm runtime"
+    },
+    {
+      "name": "wasm-bindgen-macro",
+      "version": "0.2.122",
+      "license": "MIT",
+      "licenseFiles": ["rust/cfg-if-1.0.4-LICENSE-MIT.txt"],
+      "files": ["rust-wasm/doc_rust_cells_bg.wasm"],
+      "source": "generated Rust/Wasm runtime"
+    },
+    {
+      "name": "wasm-bindgen-macro-support",
+      "version": "0.2.122",
+      "license": "MIT",
+      "licenseFiles": ["rust/cfg-if-1.0.4-LICENSE-MIT.txt"],
+      "files": ["rust-wasm/doc_rust_cells_bg.wasm"],
+      "source": "generated Rust/Wasm runtime"
+    },
+    {
+      "name": "wasm-bindgen-shared",
+      "version": "0.2.122",
+      "license": "MIT",
+      "licenseFiles": ["rust/cfg-if-1.0.4-LICENSE-MIT.txt"],
+      "files": ["rust-wasm/doc_rust_cells_bg.wasm"],
+      "source": "generated Rust/Wasm runtime"
+    },
+    {
+      "name": "zmij",
+      "version": "1.0.21",
+      "license": "MIT",
+      "licenseFiles": ["rust/itoa-1.0.18-LICENSE-MIT.txt"],
+      "files": ["rust-wasm/doc_rust_cells_bg.wasm"],
+      "source": "generated Rust/Wasm runtime"
+    },
+    {
+      "name": "contourpy",
+      "version": "1.3.1",
+      "license": "BSD-3-Clause",
+      "licenseFiles": ["python/contourpy-1.3.1-LICENSES.txt"],
+      "files": ["pyodide/contourpy-1.3.1-cp313-cp313-pyemscripten_2025_0_wasm32.whl"],
+      "source": "copied Pyodide wheel; package-specific notices remain in the wheel archive"
+    },
+    {
+      "name": "cycler",
+      "version": "0.12.1",
+      "license": "BSD-3-Clause",
+      "licenseFiles": ["python/cycler-0.12.1-LICENSES.txt"],
+      "files": ["pyodide/cycler-0.12.1-py3-none-any.whl"],
+      "source": "copied Pyodide wheel; package-specific notices remain in the wheel archive"
+    },
+    {
+      "name": "fonttools",
+      "version": "4.56.0",
+      "license": "MIT",
+      "licenseFiles": ["python/fonttools-4.56.0-LICENSES.txt"],
+      "files": ["pyodide/fonttools-4.56.0-py3-none-any.whl"],
+      "source": "copied Pyodide wheel; package-specific notices remain in the wheel archive"
+    },
+    {
+      "name": "kiwisolver",
+      "version": "1.4.8",
+      "license": "BSD-3-Clause",
+      "licenseFiles": ["python/kiwisolver-1.4.8-LICENSES.txt"],
+      "files": ["pyodide/kiwisolver-1.4.8-cp313-cp313-pyemscripten_2025_0_wasm32.whl"],
+      "source": "copied Pyodide wheel; package-specific notices remain in the wheel archive"
+    },
+    {
+      "name": "matplotlib",
+      "version": "3.8.4",
+      "license": "PSF-2.0",
+      "licenseFiles": ["python/matplotlib-3.8.4-LICENSES.txt"],
+      "files": ["pyodide/matplotlib-3.8.4-cp313-cp313-pyemscripten_2025_0_wasm32.whl"],
+      "source": "copied Pyodide wheel; additional bundled notices remain in the wheel archive"
+    },
+    {
+      "name": "numpy",
+      "version": "2.2.5",
+      "license": "BSD-3-Clause",
+      "licenseFiles": ["python/numpy-2.2.5-LICENSES.txt"],
+      "files": ["pyodide/numpy-2.2.5-cp313-cp313-pyemscripten_2025_0_wasm32.whl"],
+      "source": "copied Pyodide wheel; package-specific notices remain in the wheel archive"
+    },
+    {
+      "name": "packaging",
+      "version": "26.2",
+      "license": "Apache-2.0 OR BSD-2-Clause",
+      "licenseFiles": ["python/packaging-26.2-LICENSES.txt"],
+      "files": ["pyodide/packaging-26.2-py3-none-any.whl"],
+      "source": "copied Pyodide wheel; package-specific notices remain in the wheel archive"
+    },
+    {
+      "name": "pandas",
+      "version": "2.3.3",
+      "license": "BSD-3-Clause",
+      "licenseFiles": ["python/pandas-2.3.3-LICENSES.txt"],
+      "files": ["pyodide/pandas-2.3.3-cp313-cp313-pyemscripten_2025_0_wasm32.whl"],
+      "source": "copied Pyodide wheel; package-specific notices remain in the wheel archive"
+    },
+    {
+      "name": "Pillow",
+      "version": "11.3.0",
+      "license": "HPND",
+      "licenseFiles": ["python/Pillow-11.3.0-LICENSES.txt"],
+      "files": ["pyodide/pillow-11.3.0-cp313-cp313-pyemscripten_2025_0_wasm32.whl"],
+      "source": "copied Pyodide wheel; package-specific notices remain in the wheel archive"
+    },
+    {
+      "name": "pyparsing",
+      "version": "3.2.1",
+      "license": "MIT",
+      "licenseFiles": ["python/pyparsing-3.2.1-LICENSES.txt"],
+      "files": ["pyodide/pyparsing-3.2.1-py3-none-any.whl"],
+      "source": "copied Pyodide wheel; package-specific notices remain in the wheel archive"
+    },
+    {
+      "name": "python-dateutil",
+      "version": "2.9.0.post0",
+      "license": "Apache-2.0 OR BSD-3-Clause",
+      "licenseFiles": ["python/python-dateutil-2.9.0.post0-LICENSES.txt"],
+      "files": ["pyodide/python_dateutil-2.9.0.post0-py2.py3-none-any.whl"],
+      "source": "copied Pyodide wheel; package-specific notices remain in the wheel archive"
+    },
+    {
+      "name": "pytz",
+      "version": "2025.2",
+      "license": "MIT",
+      "licenseFiles": ["python/pytz-2025.2-LICENSES.txt"],
+      "files": ["pyodide/pytz-2025.2-py2.py3-none-any.whl"],
+      "source": "copied Pyodide wheel; package-specific notices remain in the wheel archive"
+    },
+    {
+      "name": "six",
+      "version": "1.17.0",
+      "license": "MIT",
+      "licenseFiles": ["python/six-1.17.0-LICENSES.txt"],
+      "files": ["pyodide/six-1.17.0-py2.py3-none-any.whl"],
+      "source": "copied Pyodide wheel; package-specific notices remain in the wheel archive"
+    }
+  ]
+}

@@ -213,6 +213,7 @@ describe('doc runtime service', () => {
       generatedDir: pathFromUrl(paths.generatedDir),
       haskellCellsDir: pathFromUrl(paths.haskellCellsDir),
       haskellWasmPublicDir: pathFromUrl(paths.haskellWasmPublicDir),
+      licensesPublicDir: pathFromUrl(paths.licensesPublicDir),
       pyodidePublicDir: pathFromUrl(paths.pyodidePublicDir),
       rustCellsDir: pathFromUrl(paths.rustCellsDir),
       runtimeVersionPath: pathFromUrl(paths.runtimeVersionPath)
@@ -221,6 +222,7 @@ describe('doc runtime service', () => {
       generatedDir: repoPath('.oxiquill/generated'),
       haskellCellsDir: repoPath('.oxiquill/haskell-cells'),
       haskellWasmPublicDir: repoPath('public/oxiquill/haskell-wasm'),
+      licensesPublicDir: repoPath('public/oxiquill/licenses'),
       pyodidePublicDir: repoPath('public/oxiquill/pyodide'),
       rustCellsDir: repoPath('.oxiquill/rust-cells'),
       runtimeVersionPath: repoPath('.oxiquill/generated/runtime-version.ts')
@@ -618,7 +620,8 @@ describe('doc runtime service', () => {
       helperCrates,
       highlighter,
       paths,
-      root: '/repo'
+      root: '/repo',
+      syncLicenses: async () => false
     });
 
     expect(first).toMatchObject({
@@ -664,7 +667,8 @@ describe('doc runtime service', () => {
         helperCrates,
         highlighter,
         paths,
-        root: '/repo'
+        root: '/repo',
+        syncLicenses: async () => false
       })
     ).resolves.toMatchObject({
       cellsChanged: false,

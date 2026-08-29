@@ -6,7 +6,7 @@ import preact from '@astrojs/preact';
 import starlight from '@astrojs/starlight';
 import rehypeKatex from 'rehype-katex';
 import remarkMath from 'remark-math';
-import { mergeAlias } from 'vite';
+import { mergeAlias, transformWithEsbuild } from 'vite';
 import type {
   AstroIntegration,
   AstroUserConfig,
@@ -18,7 +18,14 @@ import type { Options as PreactIntegrationOptions } from '@astrojs/preact';
 import type { StarlightUserConfig } from '@astrojs/starlight/types';
 import type { Alias, Plugin, PluginOption, UserConfig as ViteUserConfig } from 'vite';
 import { pathFromUrl, pathInUrl } from '../config/paths.mjs';
-import { createDocRuntimeContext, markRuntimeReady, syncDocRuntime } from '../generator/doc-runtime-service.mjs';
+import {
+  collectBundleModuleIds,
+  createBundledModuleCollector,
+  createDocRuntimeContext,
+  markRuntimeReady,
+  syncDocRuntime,
+  syncLicenseArtifacts
+} from '../generator/doc-runtime-service.mjs';
 import { buildHaskellWasm, buildRustWasm } from '../generator/doc-runtime/wasm-build.mjs';
 import remarkInteractiveCells from '../lib/doc-runtime/remark-interactive-cells.mjs';
 import remarkMermaidDiagrams from '../lib/doc-runtime/remark-mermaid-diagrams.mjs';
@@ -51,6 +58,7 @@ type AstroMarkdownConfig = NonNullable<BaseAstroUserConfig['markdown']>;
 type SyntaxHighlightObject = Extract<AstroMarkdownConfig['syntaxHighlight'], object>;
 type ViteWorkerPlugins = PluginOption[] | (() => PluginOption[]);
 type DocRuntimeContext = Awaited<ReturnType<typeof createDocRuntimeContext>>;
+type BundledModuleCollector = ReturnType<typeof createBundledModuleCollector>;
 
 const frameworkPackageNames = ['astro', '@astrojs/preact', '@astrojs/starlight'];
 const viteManagedPackageNames = [
@@ -179,6 +187,7 @@ export function oxiquillIntegration({
   vite = {}
 }: OxiquillIntegrationOptions = {}): AstroIntegration {
   let paths: OxiquillPaths | undefined;
+  const bundledModules = createBundledModuleCollector();
 
   return {
     name: 'oxiquill',
@@ -190,7 +199,7 @@ export function oxiquillIntegration({
 
         const update = {
           markdown: mergeMarkdownConfig(base, paths, markdown),
-          vite: mergeViteConfig(paths, vite)
+          vite: mergeViteConfig(paths, vite, bundledModules)
         } as unknown as Parameters<typeof updateConfig>[0];
 
         updateConfig(update);
@@ -216,13 +225,24 @@ export function oxiquillIntegration({
       'astro:build:start': async () => {
         if (!paths) return;
 
+        bundledModules.reset();
         const context = await createDocRuntimeContextForPaths({ paths });
         const summary = await syncDocRuntime(context);
         await buildRustWasm({ mode: 'build', paths });
         if (summary.haskellCellCount > 0) {
           await buildHaskellWasm({ haskellFingerprint: summary.haskellFingerprint, mode: 'build', paths });
         }
+        await syncLicenseArtifacts({ paths });
         await markRuntimeReady({ paths, summary });
+      },
+      'astro:build:done': async ({ dir }) => {
+        if (!paths) return;
+
+        await syncLicenseArtifacts({
+          moduleGroups: bundledModules.snapshot(),
+          outputDirectory: pathInUrl(dir, 'oxiquill/licenses'),
+          paths
+        });
       }
     }
   };
@@ -291,7 +311,11 @@ function syntaxHighlightConfig(value: AstroMarkdownConfig['syntaxHighlight']): P
   return typeof value === 'object' && value !== null && !Array.isArray(value) ? value : {};
 }
 
-function mergeViteConfig(paths: OxiquillPaths, vite: ViteUserConfig): ViteUserConfig {
+function mergeViteConfig(
+  paths: OxiquillPaths,
+  vite: ViteUserConfig,
+  bundledModules: BundledModuleCollector
+): ViteUserConfig {
   const worker = vite.worker ?? {};
   const server = vite.server ?? {};
   const serverFs = server.fs ?? {};
@@ -323,6 +347,7 @@ function mergeViteConfig(paths: OxiquillPaths, vite: ViteUserConfig): ViteUserCo
       plugins: () => [
         oxiquillDependencyResolverPlugin(paths),
         oxiquillVirtualModulesPlugin(paths),
+        bundledModuleCollectorPlugin(bundledModules, 'worker'),
         ...resolveWorkerPlugins(worker.plugins as ViteWorkerPlugins | undefined)
       ]
     },
@@ -333,8 +358,47 @@ function mergeViteConfig(paths: OxiquillPaths, vite: ViteUserConfig): ViteUserCo
     plugins: [
       oxiquillDependencyResolverPlugin(paths),
       oxiquillVirtualModulesPlugin(paths),
+      oxiquillPreactJsxPlugin(paths),
+      bundledModuleCollectorPlugin(bundledModules, 'main'),
       ...(vite.plugins ?? [])
     ]
+  };
+}
+
+function oxiquillPreactJsxPlugin(paths: OxiquillPaths): Plugin {
+  const sourceRoot = realpathSync(pathInUrl(paths.frameworkRoot, 'src'));
+
+  return {
+    enforce: 'pre',
+    name: 'oxiquill-preact-jsx',
+    async transform(code, id) {
+      const filePath = id.split('?', 1)[0];
+      if (!filePath.endsWith('.tsx') || !isPathWithin(sourceRoot, filePath)) return undefined;
+
+      return transformWithEsbuild(code, filePath, {
+        jsx: 'automatic',
+        jsxImportSource: 'preact',
+        loader: 'tsx',
+        sourcemap: true
+      });
+    }
+  };
+}
+
+function bundledModuleCollectorPlugin(
+  collector: BundledModuleCollector,
+  source: 'main' | 'worker'
+): Plugin {
+  return {
+    name: `oxiquill-license-modules-${source}`,
+    generateBundle(_options, bundle) {
+      const browserBundle = Object.fromEntries(
+        Object.entries(bundle).filter(([, output]) =>
+          output.type === 'chunk' && output.fileName.endsWith('.js')
+        )
+      );
+      collector.add(source, collectBundleModuleIds(browserBundle));
+    }
   };
 }
 
@@ -634,6 +698,11 @@ function existingRealPaths(paths: string[]): string[] {
   }
 
   return realPaths;
+}
+
+function isPathWithin(directory: string, filePath: string): boolean {
+  const relative = path.relative(directory, filePath);
+  return relative !== '' && !relative.startsWith(`..${path.sep}`) && !path.isAbsolute(relative);
 }
 
 function mergeServerFsAllow(allow: string[] | undefined, additions: string[]): string[] {
