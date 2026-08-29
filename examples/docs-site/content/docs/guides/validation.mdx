@@ -31,7 +31,7 @@ pnpm test:wasm
 pnpm test:e2e
 ```
 
-`pnpm wasm:dev` regenerates the runtime for local development. `pnpm test:wasm` verifies generated Rust cell behavior. `pnpm test:e2e` verifies the built site in a browser.
+`pnpm wasm:dev` regenerates the runtime for local development. It requires `wasm32-wasi-ghc` when Haskell cells are present, as do `pnpm build`, `pnpm check`, `pnpm wasm:build`, and `pnpm test:wasm`. `pnpm dev` and `pnpm dev:runtime` are intentionally more forgiving: they keep Astro serving and show a Haskell cell error in the browser if the Haskell compiler is missing or a Haskell compile fails. `pnpm test:wasm` verifies generated Rust cell behavior. `pnpm test:e2e` verifies the built site in a browser, including Haskell cells.
 
 ## Unit and Coverage Checks
 
@@ -62,6 +62,8 @@ pnpm doc:rust
 - Unknown Rust crate: match the cell `crates` value to the `package.name` in `crates/*/Cargo.toml`.
 - Unsupported Python package: use a vendored Pyodide package or add package support before documenting it.
 - Missing Python runtime: confirm `public/oxiquill/pyodide` exists and run `pnpm wasm:dev` or `pnpm build`.
+- Missing Haskell compiler: install `wasm32-wasi-ghc`, source `~/.ghc-wasm/env` if using `ghc-wasm-meta`, or set `OXIQUILL_HASKELL_GHC` to the compiler path, then rerun `pnpm wasm:dev` or `pnpm build`.
+- Missing Haskell runtime: confirm `public/oxiquill/haskell-wasm/status.json` exists and rerun runtime generation.
 - Mermaid failure: confirm the code block language is `mermaid` and run `pnpm build` for MDX errors.
 - Missing media: confirm the file is under `public/media` and the MDX URL starts with `/media/`.
 - Coverage failure: add focused tests for handwritten source rather than modifying generated output.

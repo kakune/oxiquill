@@ -7,7 +7,7 @@ export default defineOxiquillConfig({
   ...(basePath ? { base: basePath } : {}),
   starlight: {
     title: 'Oxiquill',
-    description: 'A static documentation workspace for Rust, Python, math, diagrams, and media-rich MDX notes.',
+    description: 'A static documentation workspace for Rust, Python, Haskell, math, diagrams, and media-rich MDX notes.',
     defaultLocale: 'root',
     locales: {
       root: {
@@ -34,6 +34,7 @@ export default defineOxiquillConfig({
           { label: 'Getting Started', translations: { ja: 'はじめに' }, slug: 'guides/getting-started' },
           { label: 'Authoring Guide', translations: { ja: '執筆ガイド' }, slug: 'guides/authoring' },
           { label: 'Templates', translations: { ja: 'テンプレート' }, slug: 'guides/templates' },
+          { label: 'Licensing', translations: { ja: 'ライセンス' }, slug: 'guides/licensing' },
           { label: 'Validation', translations: { ja: '検証' }, slug: 'guides/validation' }
         ]
       },
@@ -53,7 +54,8 @@ export default defineOxiquillConfig({
         translations: { ja: 'サンプルノート' },
         items: [
           { label: 'Rust Ownership', translations: { ja: 'Rust の所有権' }, slug: 'samples/rust-ownership' },
-          { label: 'Logistic Map', translations: { ja: 'ロジスティック写像' }, slug: 'samples/logistic-map' }
+          { label: 'Logistic Map', translations: { ja: 'ロジスティック写像' }, slug: 'samples/logistic-map' },
+          { label: 'Haskell Series', translations: { ja: 'Haskell 数列' }, slug: 'samples/haskell-series' }
         ]
       }
     ]

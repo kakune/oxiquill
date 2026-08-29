@@ -1,0 +1,24 @@
+---
+title: ライセンス
+description: Oxiquill の dual license と生成サイトに含まれる notice を説明します。
+---
+
+Oxiquill は MIT License または Apache License, Version 2.0 のいずれかを選んで利用できます。選択したライセンスの条件に従い、Oxiquill を利用、変更、再配布できます。
+
+## 生成されるライセンスファイル
+
+Oxiquill は、各生成サイトの画面に表示されない static asset として次のファイルを書き出します。
+
+- `oxiquill/licenses/LICENSE-MIT`
+- `oxiquill/licenses/LICENSE-APACHE`
+- `oxiquill/licenses/THIRD_PARTY_LICENSES.txt`
+
+Third-party report は決定的な順序で生成されます。Production build では、サイトの main bundle と worker bundle に実際に含まれる package に加え、コピーされた Pyodide、Rust/Wasm、Haskell/WASI runtime artifact の監査済み manifest を記録します。必要なライセンス metadata や本文がない、または不明な場合、生成は失敗します。
+
+これらのファイルにより、Oxiquill の配布時に必要な notice は自動的に含まれます。サイト上の attribution、footer link、「Powered by Oxiquill」の表示は必要ありません。
+
+## 対象範囲
+
+生成 report は Oxiquill と、Oxiquill がサイトへ配置する runtime artifact を対象にします。Consumer が書いた content と、consumer の `crates/` directory にある任意の helper crate は意図的に対象外です。サイト所有者は、自身の content、helper crate、custom integration、その他の配布 asset について引き続き責任を持ちます。
+
+過去の Oxiquill release には、それぞれの tag に記録されたライセンスが引き続き適用されます。Dual license は現在の codebase と、repository の contribution 条項に基づいて今後受け入れる contribution に適用されます。

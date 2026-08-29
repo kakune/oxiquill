@@ -15,6 +15,7 @@ import { fileURLToPath } from 'node:url';
 const repoRoot = path.resolve(fileURLToPath(new URL('../..', import.meta.url)));
 const tempRoot = mkdtempSync(path.join(os.tmpdir(), 'oxiquill-dev-hmr-'));
 const tempSiteRoot = path.join(tempRoot, 'examples/docs-site');
+const chromiumExecutablePath = process.env.PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH?.trim();
 const children = new Set();
 let browser;
 
@@ -53,6 +54,7 @@ try {
   await waitForHttp(`http://127.0.0.1:${port}/features/interactive-cells/`, 60_000);
 
   browser = await chromium.launch({
+    ...(chromiumExecutablePath ? { executablePath: chromiumExecutablePath } : {}),
     args: ['--disable-setuid-sandbox', '--no-sandbox']
   });
   const page = await browser.newPage();

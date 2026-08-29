@@ -53,6 +53,9 @@ importers:
       '@astrojs/starlight':
         specifier: 0.39.2
         version: 0.39.2(astro@6.3.7(@types/node@24.12.4)(rollup@4.60.4)(yaml@2.9.0))(typescript@6.0.3)
+      '@bjorn3/browser_wasi_shim':
+        specifier: 0.4.2
+        version: 0.4.2
       astro:
         specifier: 6.3.7
         version: 6.3.7(@types/node@24.12.4)(rollup@4.60.4)(yaml@2.9.0)
@@ -277,6 +280,9 @@ packages:
   '@bcoe/v8-coverage@1.0.2':
     resolution: {integrity: sha512-6zABk/ECA/QYSCQ1NGiVwwbQerUCZ+TQbp64Q3AgmfNvurHH0j8TtXa1qbShXA6qqkpAj4V5W8pP6mLe1mcMqA==}
     engines: {node: '>=18'}
+
+  '@bjorn3/browser_wasi_shim@0.4.2':
+    resolution: {integrity: sha512-/iHkCVUG3VbcbmEHn5iIUpIrh7a7WPiwZ3sHy4HZKZzBdSadwdddYDZAII2zBvQYV0Lfi8naZngPCN7WPHI/hA==}
 
   '@braintree/sanitize-url@7.1.2':
     resolution: {integrity: sha512-jigsZK+sMF/cuiB7sERuo9V7N9jx+dhmHHnQyDSVdpZwVutaBu7WvNYqMDLSgFgfB30n452TP3vjDAvFC973mA==}
@@ -3768,6 +3774,8 @@ snapshots:
       '@babel/helper-validator-identifier': 7.28.5
 
   '@bcoe/v8-coverage@1.0.2': {}
+
+  '@bjorn3/browser_wasi_shim@0.4.2': {}
 
   '@braintree/sanitize-url@7.1.2': {}
 

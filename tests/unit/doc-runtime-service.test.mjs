@@ -6,6 +6,7 @@ import {
   stripUnusedWasmPackState
 } from '../../packages/oxiquill/src/generator/postprocess-rust-wasm.mjs';
 import {
+  buildHaskellWasm,
   buildRustWasm,
   collectCells,
   copyFileIfChanged,
@@ -14,14 +15,19 @@ import {
   createRuntimeVersion,
   createDocRuntimeContext,
   createDocRuntimePaths,
+  createHaskellRuntimeStatus,
   generateRuntimeVersionModule,
+  HASKELL_WASM_FILE,
   hashBytes,
   hashText,
   listFiles,
   listHelperCrates,
   markRuntimeReady,
+  MissingHaskellWasiCompilerError,
   readHelperManifests,
   resolveVendoredPyodidePackages,
+  resolveHaskellWasiCompiler,
+  shouldBuildHaskellWasm,
   shouldBuildWasm,
   stableFingerprint,
   summarizeCells,
@@ -54,6 +60,7 @@ function createMemoryFileSystem(initialFiles = {}) {
   ]);
   const writes = [];
   const copies = [];
+  const removals = [];
 
   function ensureParents(filePath) {
     const normalizedPath = memoryPath(filePath);
@@ -120,6 +127,12 @@ function createMemoryFileSystem(initialFiles = {}) {
         };
       });
     },
+    rm: async (filePath) => {
+      const normalizedPath = memoryPath(filePath);
+      files.delete(normalizedPath);
+      directories.delete(normalizedPath);
+      removals.push(normalizedPath);
+    },
     writeFile: async (filePath, content) => {
       const normalizedPath = memoryPath(filePath);
       ensureParents(normalizedPath);
@@ -133,6 +146,7 @@ function createMemoryFileSystem(initialFiles = {}) {
       files.set(normalizedTargetPath, Buffer.from(files.get(normalizedSourcePath)));
       copies.push([normalizedSourcePath, normalizedTargetPath]);
     },
+    removals,
     writes
   };
 }
@@ -197,12 +211,18 @@ describe('doc runtime service', () => {
     expect({
       docsDir: pathFromUrl(paths.docsDir),
       generatedDir: pathFromUrl(paths.generatedDir),
+      haskellCellsDir: pathFromUrl(paths.haskellCellsDir),
+      haskellWasmPublicDir: pathFromUrl(paths.haskellWasmPublicDir),
+      licensesPublicDir: pathFromUrl(paths.licensesPublicDir),
       pyodidePublicDir: pathFromUrl(paths.pyodidePublicDir),
       rustCellsDir: pathFromUrl(paths.rustCellsDir),
       runtimeVersionPath: pathFromUrl(paths.runtimeVersionPath)
     }).toEqual({
       docsDir: repoPath('content/docs'),
       generatedDir: repoPath('.oxiquill/generated'),
+      haskellCellsDir: repoPath('.oxiquill/haskell-cells'),
+      haskellWasmPublicDir: repoPath('public/oxiquill/haskell-wasm'),
+      licensesPublicDir: repoPath('public/oxiquill/licenses'),
       pyodidePublicDir: repoPath('public/oxiquill/pyodide'),
       rustCellsDir: repoPath('.oxiquill/rust-cells'),
       runtimeVersionPath: repoPath('.oxiquill/generated/runtime-version.ts')
@@ -287,7 +307,16 @@ describe('doc runtime service', () => {
     const fileSystem = createMemoryFileSystem({
       '/repo/content/docs/index.mdx': 'plain',
       '/repo/content/docs/note.mdx': '```rust\n//| id: a\n//| crates: []\nprintln!("a");\n```',
-      '/repo/content/docs/deep/page.md': '```python\n#| id: b\nprint("b")\n```'
+      '/repo/content/docs/deep/page.md': [
+        '```python',
+        '#| id: b',
+        'print("b")',
+        '```',
+        '```haskell',
+        '--| id: c',
+        'putStrLn "c"',
+        '```'
+      ].join('\n')
     });
     const paths = createDocRuntimePaths('/repo');
 
@@ -305,7 +334,7 @@ describe('doc runtime service', () => {
         root: '/repo',
         helperCrates: new Map()
       })
-    ).resolves.toMatchObject([{ id: 'deep__page__b' }, { id: 'note__a' }]);
+    ).resolves.toMatchObject([{ id: 'deep__page__b' }, { id: 'deep__page__c' }, { id: 'note__a' }]);
 
     const oddFileSystem = {
       readdir: async () => [
@@ -352,6 +381,24 @@ describe('doc runtime service', () => {
       })
     ).rejects.toThrow(
       'Python cell "py" in content/docs/page.mdx specifies unsupported packages: scipy'
+    );
+  });
+
+  it('fails clearly when an MDX Haskell cell uses unsupported dependency metadata', async () => {
+    const fileSystem = createMemoryFileSystem({
+      '/repo/content/docs/page.mdx': '```haskell\n--| id: hs\n--| packages: [lens]\nputStrLn "hs"\n```'
+    });
+
+    await expect(
+      collectCells({
+        fileSystem,
+        helperCrates: new Map(),
+        highlighter,
+        paths: createDocRuntimePaths('/repo'),
+        root: '/repo'
+      })
+    ).rejects.toThrow(
+      'Haskell cell "hs" in content/docs/page.mdx cannot specify packages'
     );
   });
 
@@ -548,7 +595,17 @@ describe('doc runtime service', () => {
   it('syncs generated runtime files and reports changed surfaces', async () => {
     const paths = createDocRuntimePaths('/repo');
     const fileSystem = createMemoryFileSystem({
-      '/repo/content/docs/page.mdx': '```rust\n//| id: a\n//| crates: [doc-rust]\nprintln!("a");\n```'
+      '/repo/content/docs/page.mdx': [
+        '```rust',
+        '//| id: a',
+        '//| crates: [doc-rust]',
+        'println!("a");',
+        '```',
+        '```haskell',
+        '--| id: h',
+        'putStrLn "h"',
+        '```'
+      ].join('\n')
     });
     const helperCrates = await listHelperCrates({
       fileSystem: createMemoryFileSystem({
@@ -563,18 +620,22 @@ describe('doc runtime service', () => {
       helperCrates,
       highlighter,
       paths,
-      root: '/repo'
+      root: '/repo',
+      syncLicenses: async () => false
     });
 
     expect(first).toMatchObject({
-      cellCount: 1,
+      cellCount: 2,
       cellsChanged: true,
+      haskellCellCount: 1,
+      haskellChanged: true,
       pyodideChanged: false,
       rustCellCount: 1,
       rustChanged: true
     });
     expect(fileSystem.writes.sort()).toEqual([
       '/repo/.oxiquill/generated/cells.ts',
+      '/repo/.oxiquill/haskell-cells/Main.hs',
       '/repo/.oxiquill/generated/cells.json',
       '/repo/.oxiquill/rust-cells/Cargo.toml',
       '/repo/.oxiquill/rust-cells/src/lib.rs'
@@ -592,6 +653,7 @@ describe('doc runtime service', () => {
       rustFingerprint: 'rust'
     }));
     expect(runtimeVersion.manifest).toBe(hashText('manifest'));
+    expect(runtimeVersion.haskell).toBe(hashText(''));
     expect(runtimeVersion.rust).toBe(hashText('rust'));
 
     const emptyRuntimeVersion = JSON.parse(createRuntimeVersion());
@@ -605,7 +667,8 @@ describe('doc runtime service', () => {
         helperCrates,
         highlighter,
         paths,
-        root: '/repo'
+        root: '/repo',
+        syncLicenses: async () => false
       })
     ).resolves.toMatchObject({
       cellsChanged: false,
@@ -617,19 +680,26 @@ describe('doc runtime service', () => {
   it('summarizes cells, decides when Wasm is needed, and builds with injected commands', async () => {
     const cells = [
       { crates: ['doc-rust'], id: 'rust', inputs: [], language: 'rust', source: 'println!("a");' },
-      { crates: [], id: 'py', inputs: [], language: 'python', source: 'print("a")' }
+      { crates: [], id: 'py', inputs: [], language: 'python', source: 'print("a")' },
+      { crates: [], id: 'hs', inputs: [], language: 'haskell', source: 'putStrLn "a"' }
     ];
     const previous = summarizeCells(cells);
     const changed = summarizeCells([{ ...cells[0], source: 'println!("b");' }]);
+    const changedHaskell = summarizeCells([{ ...cells[2], source: 'putStrLn "b"' }]);
 
     expect(stableFingerprint({ b: 2 })).toBe('{"b":2}');
-    expect(previous).toMatchObject({ cellCount: 2, rustCellCount: 1 });
+    expect(previous).toMatchObject({ cellCount: 3, haskellCellCount: 1, rustCellCount: 1 });
     expect(shouldBuildWasm({ current: previous, force: true, previous })).toBe(true);
     expect(shouldBuildWasm({ current: previous })).toBe(true);
     expect(shouldBuildWasm({ changeKinds: new Set(['crate']), current: previous, previous })).toBe(true);
     expect(shouldBuildWasm({ current: changed, previous })).toBe(true);
     expect(shouldBuildWasm({ current: previous, previous })).toBe(false);
     expect(shouldBuildWasm({ current: { ...previous, rustCellCount: 0 }, force: true })).toBe(false);
+    expect(shouldBuildHaskellWasm({ current: previous, force: true, previous })).toBe(true);
+    expect(shouldBuildHaskellWasm({ current: previous })).toBe(true);
+    expect(shouldBuildHaskellWasm({ current: changedHaskell, previous })).toBe(true);
+    expect(shouldBuildHaskellWasm({ current: previous, previous })).toBe(false);
+    expect(shouldBuildHaskellWasm({ current: { ...previous, haskellCellCount: 0 }, force: true })).toBe(false);
 
     const commands = [];
     await buildRustWasm({
@@ -672,5 +742,107 @@ describe('doc runtime service', () => {
       }
     });
     expect(commands[0][1]).toContain('--dev');
+
+    commands.length = 0;
+    const fileSystem = createMemoryFileSystem();
+    await buildHaskellWasm({
+      environment: {},
+      fileSystem,
+      haskellFingerprint: previous.haskellFingerprint,
+      mode: 'build',
+      root: '/repo',
+      runCommand: async (command, args, options) => {
+        commands.push([command, args, options]);
+      }
+    });
+    expect(commands).toEqual([
+      [
+        'wasm32-wasi-ghc',
+        [
+          '-O2',
+          '-odir',
+          repoPath('.oxiquill/haskell-cells/build'),
+          '-hidir',
+          repoPath('.oxiquill/haskell-cells/build'),
+          repoPath('.oxiquill/haskell-cells/Main.hs'),
+          '-o',
+          repoPath('public/oxiquill/haskell-wasm/doc_haskell_cells.wasm')
+        ],
+        { cwd: repoRoot }
+      ]
+    ]);
+    expect(fileSystem.existsSync('/repo/.oxiquill/haskell-cells/build')).toBe(true);
+    expect(fileSystem.existsSync('/repo/public/oxiquill/haskell-wasm')).toBe(true);
+    expect(JSON.parse(fileSystem.files.get('/repo/public/oxiquill/haskell-wasm/status.json').toString())).toEqual(
+      createHaskellRuntimeStatus({
+        haskellFingerprint: previous.haskellFingerprint,
+        status: 'ready'
+      })
+    );
+  });
+
+  it('resolves the Haskell compiler and reports strict build failures clearly', async () => {
+    expect(resolveHaskellWasiCompiler({})).toBe('wasm32-wasi-ghc');
+    expect(resolveHaskellWasiCompiler({ OXIQUILL_HASKELL_GHC: '/opt/ghc/bin/wasm-ghc' })).toBe(
+      '/opt/ghc/bin/wasm-ghc'
+    );
+    expect(resolveHaskellWasiCompiler({ OXIQUILL_HASKELL_GHC: '  ' })).toBe('wasm32-wasi-ghc');
+
+    const missingCompiler = new Error('spawn wasm32-wasi-ghc ENOENT');
+    missingCompiler.code = 'ENOENT';
+
+    await expect(
+      buildHaskellWasm({
+        environment: {},
+        fileSystem: createMemoryFileSystem(),
+        mode: 'dev',
+        root: '/repo',
+        runCommand: async () => {
+          throw missingCompiler;
+        }
+      })
+    ).rejects.toThrow(MissingHaskellWasiCompilerError);
+
+    await expect(
+      buildHaskellWasm({
+        environment: {},
+        fileSystem: createMemoryFileSystem(),
+        mode: 'dev',
+        root: '/repo',
+        runCommand: async () => {
+          throw new Error('type error in Main.hs');
+        }
+      })
+    ).rejects.toThrow('Haskell WASI runtime build failed with wasm32-wasi-ghc: type error in Main.hs');
+  });
+
+  it('writes unavailable Haskell runtime status and removes stale wasm for tolerated dev failures', async () => {
+    const missingCompiler = new Error('spawn wasm32-wasi-ghc ENOENT');
+    missingCompiler.code = 'ENOENT';
+    const staleWasmPath = `/repo/public/oxiquill/haskell-wasm/${HASKELL_WASM_FILE}`;
+    const fileSystem = createMemoryFileSystem({
+      [staleWasmPath]: 'stale wasm'
+    });
+    const result = await buildHaskellWasm({
+      environment: {},
+      fileSystem,
+      haskellFingerprint: 'current-haskell-fingerprint',
+      mode: 'dev',
+      root: '/repo',
+      runCommand: async () => {
+        throw missingCompiler;
+      },
+      tolerateFailure: true
+    });
+
+    expect(result.ok).toBe(false);
+    expect(result.error).toBeInstanceOf(MissingHaskellWasiCompilerError);
+    expect(fileSystem.existsSync(staleWasmPath)).toBe(false);
+    expect(fileSystem.removals).toEqual([staleWasmPath]);
+    expect(JSON.parse(fileSystem.files.get('/repo/public/oxiquill/haskell-wasm/status.json').toString())).toEqual({
+      status: 'unavailable',
+      haskellFingerprintHash: hashText('current-haskell-fingerprint'),
+      message: 'install wasm32-wasi-ghc and rerun pnpm wasm:dev.'
+    });
   });
 });

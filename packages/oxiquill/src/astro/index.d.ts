@@ -20,6 +20,8 @@ export type OxiquillPathOptions = Partial<Record<
   | 'docsDir'
   | 'frameworkRoot'
   | 'generatedDir'
+  | 'haskellCellsDir'
+  | 'haskellWasmPublicDir'
   | 'publicAssetsDir'
   | 'publicDir'
   | 'pyodidePublicDir'

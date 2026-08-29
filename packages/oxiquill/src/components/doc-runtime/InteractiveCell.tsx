@@ -48,7 +48,7 @@ function InteractiveCellPanel({
     <section class="doc-cell" data-cell-id={cell.id} data-language={cell.language} data-testid={`cell-${cell.id}`}>
       <div class="doc-cell__header">
         <div>
-          <p class="doc-cell__eyebrow">{cell.language === 'rust' ? 'Rust + Wasm' : 'Python + Pyodide'}</p>
+          <p class="doc-cell__eyebrow">{runtimeEyebrow(cell.language)}</p>
           <h3>{cell.title}</h3>
         </div>
         <div class="doc-cell__actions">
@@ -100,4 +100,15 @@ function InteractiveCellPanel({
       />
     </section>
   );
+}
+
+function runtimeEyebrow(language: CellManifest['language']): string {
+  switch (language) {
+    case 'rust':
+      return 'Rust + Wasm';
+    case 'python':
+      return 'Python + Pyodide';
+    case 'haskell':
+      return 'Haskell + WASI';
+  }
 }

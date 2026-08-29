@@ -5,10 +5,16 @@ import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import { afterEach, describe, expect, it, vi } from 'vitest';
+import { createOxiquillPaths } from '../../packages/oxiquill/src/config/paths.mjs';
 
 const cliPath = fileURLToPath(new URL('../../packages/oxiquill/src/cli/index.mjs', import.meta.url));
+const actualRepoRoot = fileURLToPath(new URL('../..', import.meta.url));
+const actualPaths = createOxiquillPaths({ workspaceRoot: actualRepoRoot });
 const repoRoot = path.resolve('/repo');
-const { isCliEntrypoint, runCli } = await import('../../packages/oxiquill/src/cli/commands.mjs');
+const { canLoadNativePackage, isCliEntrypoint, nodeExecutableCandidates, runCli, selectFrameworkNode } = await import(
+  '../../packages/oxiquill/src/cli/commands.mjs'
+);
+const testRoot = path.parse(process.cwd()).root;
 
 afterEach(() => {
   vi.restoreAllMocks();
@@ -42,4 +48,82 @@ describe('oxiquill CLI', () => {
       await rm(directory, { force: true, recursive: true });
     }
   });
+
+  it('deduplicates node executable candidates from PATH', () => {
+    const badDirectory = path.join(testRoot, 'bad', 'bin');
+    const goodDirectory = path.join(testRoot, 'good', 'bin');
+    const badNode = fakeNodeExecutable(badDirectory);
+    const goodNode = fakeNodeExecutable(goodDirectory);
+    const exists = (candidate) => [badNode, goodNode].includes(candidate);
+
+    expect(
+      nodeExecutableCandidates({
+        execPath: badNode,
+        exists,
+        pathValue: [badDirectory, goodDirectory].join(path.delimiter)
+      })
+    ).toEqual([badNode, goodNode]);
+  });
+
+  it('checks whether a node executable can load a native package', () => {
+    const spawn = vi.fn(() => ({ status: 0 }));
+
+    expect(
+      canLoadNativePackage('/usr/bin/node', '/repo/node_modules/rollup', { cwd: '/repo', env: {}, spawn })
+    ).toBe(true);
+    expect(spawn).toHaveBeenCalledWith(
+      '/usr/bin/node',
+      ['-e', expect.stringContaining('import(process.argv[1])'), '/repo/node_modules/rollup'],
+      {
+        cwd: '/repo',
+        env: {},
+        stdio: 'ignore'
+      }
+    );
+  });
+
+  it('uses a later PATH node for Astro when the current node cannot load native addons', () => {
+    const badDirectory = path.join(testRoot, 'bad', 'bin');
+    const goodDirectory = path.join(testRoot, 'good', 'bin');
+    const badNode = fakeNodeExecutable(badDirectory);
+    const goodNode = fakeNodeExecutable(goodDirectory);
+    const spawn = vi.fn((nodePath) => ({ status: nodePath === goodNode ? 0 : 1 }));
+    const warn = vi.fn();
+    const exists = (candidate) => [badNode, goodNode].includes(candidate);
+
+    expect(
+      selectFrameworkNode(actualPaths, {
+        env: {
+          PATH: [badDirectory, goodDirectory].join(path.delimiter)
+        },
+        execPath: badNode,
+        exists,
+        spawn,
+        warn
+      })
+    ).toBe(goodNode);
+    expect(warn).toHaveBeenCalledWith(expect.stringContaining(`Using ${goodNode} for Astro/Vite`));
+  });
+
+  it('selects the framework node separately for each CLI invocation', async () => {
+    const firstNode = fakeNodeExecutable(path.join(testRoot, 'first', 'bin'));
+    const secondNode = fakeNodeExecutable(path.join(testRoot, 'second', 'bin'));
+    const commands = [];
+    const selectNode = vi.fn()
+      .mockReturnValueOnce(firstNode)
+      .mockReturnValueOnce(secondNode);
+    const runCommand = async (command) => {
+      commands.push(command);
+    };
+
+    await runCli('preview', [], { cwd: actualRepoRoot, runCommand, selectNode });
+    await runCli('preview', [], { cwd: actualRepoRoot, runCommand, selectNode });
+
+    expect(selectNode).toHaveBeenCalledTimes(2);
+    expect(commands).toEqual([firstNode, secondNode]);
+  });
 });
+
+function fakeNodeExecutable(directory) {
+  return path.join(directory, process.platform === 'win32' ? 'node.exe' : 'node');
+}

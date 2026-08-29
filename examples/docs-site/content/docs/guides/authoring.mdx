@@ -66,6 +66,26 @@ print(scale * 10)
 
 Python cells run in a Pyodide worker. If a cell needs vendored packages, list them with `packages`. Supported package names include `numpy`, `pandas`, `matplotlib`, and their vendored dependencies.
 
+## Write Haskell Cells
+
+Haskell cells are fenced `haskell` code blocks with metadata in leading `--|` comments. They compile to WASI WebAssembly during runtime generation and run in a browser worker.
+
+````md
+```haskell
+--| id: sample-haskell-cell
+--| title: Haskell calculation
+--| run: reactive
+--| inputs:
+--|   count: { type: integer, label: count, min: 1, max: 10, step: 1, value: 4 }
+import Data.List (intercalate)
+
+let values = take count [2, 4 ..]
+putStrLn (intercalate ", " (map show values))
+```
+````
+
+Use standard-library modules only. Haskell cells do not support external packages, `packages`, or `crates`.
+
 ## Configure Cell Behavior
 
 Common metadata fields:

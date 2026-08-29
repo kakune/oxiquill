@@ -2,11 +2,11 @@ name: CI
 
 on:
   pull_request:
+    branches:
+      - main
   push:
     branches:
-      - develop
       - main
-      - 'release/**'
   workflow_dispatch:
 
 permissions:
@@ -92,6 +92,24 @@ jobs:
 
       - name: Install wasm-pack
         uses: taiki-e/install-action@wasm-pack
+
+      - name: Cache ghc-wasm
+        uses: actions/cache@v4
+        with:
+          path: ~/.ghc-wasm
+          key: ghc-wasm-${{ runner.os }}-9.14-v1
+
+      - name: Install ghc-wasm
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [ ! -x "$HOME/.ghc-wasm/wasm32-wasi-ghc/bin/wasm32-wasi-ghc" ]; then
+            sudo apt-get update
+            sudo apt-get install -y jq unzip zstd
+            curl -sS https://gitlab.haskell.org/haskell-wasm/ghc-wasm-meta/-/raw/master/bootstrap.sh | FLAVOUR=9.14 sh
+          fi
+          echo "OXIQUILL_HASKELL_GHC=$HOME/.ghc-wasm/wasm32-wasi-ghc/bin/wasm32-wasi-ghc" >> "$GITHUB_ENV"
+          "$HOME/.ghc-wasm/wasm32-wasi-ghc/bin/wasm32-wasi-ghc" --version
 
       - name: Install dependencies
         run: pnpm install --frozen-lockfile

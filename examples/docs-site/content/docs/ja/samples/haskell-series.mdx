@@ -1,0 +1,43 @@
+---
+title: Haskell 数列
+description: Haskell/WASI の計算、入力、text output を組み合わせたサンプルノートです。
+---
+
+この sample は小さな Haskell ノートです。読者が数列の parameter を変えると、build 時に作られた WASI module が browser で実行され、結果を確認できます。
+
+## このページで示すこと
+
+- 数列 parameter 用の reactive Haskell input。
+- lifted import を使う standard-library Haskell code。
+- `putStrLn` から capture される text output。
+
+## 数列
+
+この cell は scale した三角数を計算します。delta output を切り替えると、隣り合う項の差を確認できます。
+
+```haskell
+--| id: haskell-series-note
+--| title: Explore a Haskell series
+--| run: reactive
+--| inputs:
+--|   count: { type: integer, label: count, min: 3, max: 10, step: 1, value: 6 }
+--|   multiplier: { type: integer, label: multiplier, min: 1, max: 5, step: 1, value: 2 }
+--|   label: { type: text, label: label, value: series }
+--|   showDeltas: { type: checkbox, label: show deltas, value: true }
+import Data.List (intercalate)
+
+let indexes = [1 .. count]
+let values = map (\n -> multiplier * n * (n + 1) `div` 2) indexes
+let deltas = zipWith (-) (drop 1 values) values
+
+putStrLn (label ++ ": " ++ intercalate ", " (map show values))
+putStrLn ("total = " ++ show (sum values))
+
+if showDeltas
+  then putStrLn ("deltas = " ++ intercalate ", " (map show deltas))
+  else putStrLn "deltas hidden"
+```
+
+## 補足
+
+Haskell セルは standard library に収まる deterministic な例に向いています。短い functional transformation で結果を説明したいときに使います。

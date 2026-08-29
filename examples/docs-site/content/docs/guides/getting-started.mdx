@@ -13,8 +13,9 @@ Install these tools before running the project:
 - Rust toolchain `1.95.0`
 - `wasm-pack`
 - `cargo-llvm-cov`
+- `wasm32-wasi-ghc` when authoring Haskell cells
 
-The Rust toolchain and Wasm target are pinned by `rust-toolchain.toml`. Do not change the pinned toolchain as part of normal documentation work.
+The Rust toolchain and Wasm target are pinned by `rust-toolchain.toml`. Do not change the pinned toolchain as part of normal documentation work. Haskell cells use the GHC `wasm32-wasi` backend, commonly installed through `ghc-wasm-meta`. Its `~/.ghc-wasm/env` file exposes the toolchain; Oxiquill commands can also use `OXIQUILL_HASKELL_GHC` to point at `wasm32-wasi-ghc` without changing the rest of `PATH`. If ghc-wasm's static Node is first in `PATH`, set `OXIQUILL_NODE` to a normal Node.js binary for Astro/Vite subprocesses.
 
 ## Install Dependencies
 
@@ -67,6 +68,9 @@ The dev command starts with runtime generation, then watches the docs and helper
 - Prose, normal code blocks, math, Mermaid, and media changes update through Astro HMR.
 - Python cell changes update the generated cell manifest.
 - Rust cell changes and `crates/*` changes rebuild the generated Wasm runtime.
+- Haskell cell changes rebuild the generated WASI runtime when Haskell cells are present.
+
+If the Haskell compiler is missing or a Haskell cell fails to build, `pnpm dev` and `pnpm dev:runtime` keep serving and write a browser-visible Haskell cell error. Strict commands such as `pnpm build`, `pnpm check`, `pnpm wasm:dev`, `pnpm wasm:build`, and `pnpm test:wasm` fail until `wasm32-wasi-ghc` is available and the cell builds.
 
 If you need to inspect runtime generation separately from Astro, run the watcher and dev server in separate terminals:
 
@@ -97,8 +101,11 @@ The runtime generation scripts write generated files under:
 
 - `.oxiquill/generated`
 - `.oxiquill/rust-cells`
+- `.oxiquill/haskell-cells`
 - `public/oxiquill/pyodide`
 - `public/oxiquill/rust-wasm`
+- `public/oxiquill/haskell-wasm`
+- `public/oxiquill/licenses`
 - `dist`
 
 Do not edit those paths directly. Change MDX, helper crates, scripts, or handwritten runtime code, then regenerate with the existing commands.

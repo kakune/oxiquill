@@ -1,8 +1,8 @@
 import { relativePagePath, scopedCellId } from './authoring-ids.mjs';
 import { createDefaultImport, visit } from './remark-mdx-helpers.mjs';
 
-const optionPattern = /^\s*(?:(?:\/\/\/|\/\/|#)\|)\s?id:\s*([A-Za-z0-9_-]+)/m;
-const supportedLanguages = new Set(['rust', 'rs', 'python', 'py']);
+const optionPattern = /^\s*(?:(?:\/\/\/|\/\/|#|--)\|)\s?id:\s*([A-Za-z0-9_-]+)/m;
+const supportedLanguages = new Set(['rust', 'rs', 'python', 'py', 'haskell', 'hs']);
 
 export default function remarkInteractiveCells({ root = process.cwd() } = {}) {
   return (tree, file) => {

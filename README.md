@@ -2,7 +2,7 @@
 
 ## English
 
-Oxiquill is a static documentation workspace for technical notes written in MDX. It publishes an Astro Starlight site where one page can combine prose, Rust/Wasm cells, Python/Pyodide cells, math, Mermaid diagrams, images, PDFs, and rich output artifacts.
+Oxiquill is a static documentation workspace for technical notes written in MDX. It publishes an Astro Starlight site where one page can combine prose, Rust/Wasm cells, Python/Pyodide cells, Haskell/WASI cells, math, Mermaid diagrams, images, PDFs, and rich output artifacts.
 
 The repository is responsible for producing the static output in `dist/`. A sample build is published with GitHub Pages at <https://kakune.github.io/oxiquill/>. Production hosting, TLS, domains, and reverse proxies are handled outside this project.
 
@@ -13,6 +13,7 @@ English is the root documentation language. Japanese pages are published under `
 - Static Astro/Starlight documentation built from `examples/docs-site/content/docs`.
 - Rust code cells compiled to WebAssembly at build time and run in the browser.
 - Python code cells run in a browser Pyodide worker.
+- Haskell code cells compiled to WASI WebAssembly at build time and run in the browser.
 - Input controls generated from cell metadata, including sliders, numbers, text fields, textareas, checkboxes, selects, and radio groups.
 - Rich output rendering for text, JSON, tables, charts, images, and sandboxed HTML.
 - Python display helpers for pandas tables, matplotlib figures, MIME bundles, JSON, HTML, images, and generic values.
@@ -25,19 +26,38 @@ English is the root documentation language. Japanese pages are published under `
 
 ### Requirements
 
-- Node.js and `pnpm`
-- Rust toolchain `1.95.0`
+- Nix with flakes enabled, or equivalent manual tools
+- Node.js 24 and `pnpm` 11.2.2
+- Rust toolchain `1.95.0` with `wasm32-unknown-unknown`
 - `wasm-pack`
 - `cargo-llvm-cov`
+- `wasm32-wasi-ghc` 9.14 when authoring Haskell cells
+- Chromium for Playwright e2e tests
 
-The Rust toolchain and Wasm target are pinned by `rust-toolchain.toml`.
+On NixOS or any Linux system with Nix, use the checked-in flake to enter a shell with Node, pnpm, Rust, `wasm-pack`, `cargo-llvm-cov`, `wasm32-wasi-ghc`, and Chromium already wired up:
+
+```sh
+nix develop
+```
+
+The Nix shell sets `OXIQUILL_NODE`, `OXIQUILL_HASKELL_GHC`, `LLVM_COV`, `LLVM_PROFDATA`, `PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD=1`, and `PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH`. Writable tool caches are kept under the ignored `.cache/` directory.
+
+Without Nix, install equivalent tools manually. Haskell cells use GHC's `wasm32-wasi` backend. When using `ghc-wasm-meta`, keep a normal Node.js runtime first in `PATH` and point Oxiquill at the Haskell compiler directly:
+
+```sh
+nvm alias default 24.2.0
+export OXIQUILL_HASKELL_GHC="$HOME/.ghc-wasm/wasm32-wasi-ghc/bin/wasm32-wasi-ghc"
+```
+
+Avoid putting ghc-wasm's static Node ahead of the normal Node used by Vite, Vitest, and Astro. If your shell sources `~/.ghc-wasm/env`, run `nvm use 24.2.0` afterward or set `OXIQUILL_NODE` to a normal Node.js binary for Oxiquill's Astro/Vite subprocesses.
 
 ### Setup
 
-Install dependencies:
+Enter the development shell and install dependencies:
 
 ```sh
-pnpm install
+nix develop
+pnpm install --frozen-lockfile
 ```
 
 Start the development server:
@@ -46,7 +66,7 @@ Start the development server:
 pnpm dev
 ```
 
-`pnpm dev` delegates to `examples/docs-site` and generates the executable-cell runtime on startup, then watches MDX files and optional Rust helper sources. Prose, normal code blocks, math, Mermaid, and media changes use Astro HMR. Python cell changes update the generated manifest. Rust cell and `examples/docs-site/crates/*` changes rebuild the Wasm runtime.
+`pnpm dev` delegates to `examples/docs-site` and generates the executable-cell runtime on startup, then watches MDX files and optional Rust helper sources. Prose, normal code blocks, math, Mermaid, and media changes use Astro HMR. Python cell changes update the generated manifest. Rust cell and `examples/docs-site/crates/*` changes rebuild the Rust Wasm runtime. Haskell cell changes rebuild the Haskell/WASI runtime when Haskell cells are present. In development, a missing or failing Haskell compiler leaves Astro running and shows a browser-visible Haskell cell error until the compiler is installed and the runtime is regenerated.
 
 To run the runtime watcher and Astro separately, start these commands in separate terminals:
 
@@ -161,6 +181,19 @@ print(scale * 10)
 ```
 ````
 
+Haskell cell example:
+
+````md
+```haskell
+--| id: sample-haskell
+--| title: Haskell calculation
+--| run: button
+--| inputs:
+--|   scale: { type: integer, label: scale, min: 1, max: 10, step: 1, value: 2 }
+putStrLn ("scaled = " <> show (scale * sum [1..5]))
+```
+````
+
 Media example:
 
 ```md
@@ -173,14 +206,17 @@ Put public media files in `examples/docs-site/public/media`. They are served as-
 
 ### Generated Files
 
-`pnpm build`, `pnpm check`, and test commands run the `oxiquill` CLI. This extracts Rust/Python cells from MDX and writes generated runtime files.
+`pnpm build`, `pnpm check`, and test commands run the `oxiquill` CLI. This extracts Rust/Python/Haskell cells from MDX and writes generated runtime files. These strict commands, along with `pnpm wasm:dev`, `pnpm wasm:build`, and `pnpm test:wasm`, require `wasm32-wasi-ghc` when Haskell cells exist.
 
 Generated output includes:
 
 - `examples/docs-site/.oxiquill/generated`
 - `examples/docs-site/.oxiquill/rust-cells`
+- `examples/docs-site/.oxiquill/haskell-cells`
 - `examples/docs-site/public/oxiquill/pyodide`
 - `examples/docs-site/public/oxiquill/rust-wasm`
+- `examples/docs-site/public/oxiquill/haskell-wasm`
+- `examples/docs-site/public/oxiquill/licenses`
 - `examples/docs-site/dist`
 
 Do not edit generated output directly. Regenerate it with existing commands such as `pnpm docgen`, `pnpm wasm:dev`, `pnpm wasm:build`, `pnpm check`, or `pnpm build`.
@@ -207,13 +243,19 @@ pnpm lint:rust
 pnpm doc:rust
 ```
 
-For docs-only prose changes, `pnpm check` is usually enough. For interactive cell metadata, generated Rust/Wasm behavior, or browser-visible examples, also run `pnpm wasm:dev`, `pnpm test:wasm`, and `pnpm test:e2e` as appropriate.
+For docs-only prose changes, `pnpm check` is usually enough. For interactive cell metadata, generated Rust/Wasm or Haskell/WASI behavior, or browser-visible examples, also run `pnpm wasm:dev`, `pnpm test:wasm`, and `pnpm test:e2e` as appropriate.
 
 `test:unit:coverage` requires 85% statement, branch, function, and line coverage for handwritten TypeScript, Preact, and Node runtime code, excluding generated output. `test:rust:coverage` requires 85% line/function/region coverage for optional helper crates under `examples/docs-site/crates/` through `cargo-llvm-cov`. If no helper crates exist, Rust helper commands skip cleanly.
 
+### License
+
+Oxiquill is available under your choice of the [MIT License](./LICENSE-MIT) or the [Apache License, Version 2.0](./LICENSE-APACHE). Generated sites automatically include both Oxiquill license files and third-party notices under `oxiquill/licenses/`. No visible attribution or “Powered by Oxiquill” notice is required.
+
+See the [licensing guide](./examples/docs-site/content/docs/guides/licensing.mdx) for the generated-file scope and downstream responsibilities. Historical releases remain under the license recorded in their tags.
+
 ### Contributing
 
-Contributions are welcome. Please open issues for bug reports, questions, and proposals, and send focused pull requests for fixes or documentation improvements.
+Contributions are welcome. Please open issues for bug reports, questions, and proposals, and send focused pull requests to `main` from topic branches for fixes or documentation improvements. Pull requests are squash-merged after the required checks pass. Contributions are accepted under the inbound dual-license terms in [CONTRIBUTING.md](./CONTRIBUTING.md).
 
 ### Contributing
 
@@ -224,13 +266,15 @@ Contributions are welcome. Please open issues for bug reports, questions, and pr
 - If a Rust cell helper crate cannot be found, match the cell `crates` value to the `package.name` in `examples/docs-site/crates/*/Cargo.toml`.
 - If a Python cell specifies an unsupported package, use one of the vendored Pyodide packages or add support before documenting it.
 - If a Python cell does not start, confirm that `examples/docs-site/public/oxiquill/pyodide` exists and run `pnpm wasm:dev` or `pnpm build`.
+- If a Haskell cell does not build in a strict command, confirm `wasm32-wasi-ghc` is on `PATH`, source `~/.ghc-wasm/env`, or set `OXIQUILL_HASKELL_GHC` to the compiler path.
+- If a Haskell cell reports that the runtime is unavailable in dev, install or fix `wasm32-wasi-ghc` and rerun `pnpm wasm:dev`; `pnpm dev` will keep serving while the Haskell runtime is unavailable.
 - If a Mermaid diagram does not render, run `pnpm build` to catch MDX syntax errors and confirm the code block language is `mermaid`.
 - If a media file does not load, confirm that it is under `examples/docs-site/public/media` and referenced with a `/media/...` URL.
 - If coverage fails, add focused tests for the uncovered handwritten source rather than editing generated files.
 
 ## 日本語
 
-Oxiquill は、MDX で書いた技術ノートを静的サイトとして公開するためのドキュメントワークスペースです。Astro Starlight を土台にし、1つのページに本文、Rust/Wasm セル、Python/Pyodide セル、数式、Mermaid 図、画像、PDF、リッチ出力をまとめられます。
+Oxiquill は、MDX で書いた技術ノートを静的サイトとして公開するためのドキュメントワークスペースです。Astro Starlight を土台にし、1つのページに本文、Rust/Wasm セル、Python/Pyodide セル、Haskell/WASI セル、数式、Mermaid 図、画像、PDF、リッチ出力をまとめられます。
 
 このリポジトリの責務は、公開用の静的成果物 `dist/` を作るところまでです。サンプルビルドは GitHub Pages で <https://kakune.github.io/oxiquill/> に公開します。本番配信、TLS、ドメイン、リバースプロキシはこのプロジェクトの外側で扱います。
 
@@ -241,6 +285,7 @@ Oxiquill は、MDX で書いた技術ノートを静的サイトとして公開�
 - `examples/docs-site/content/docs` から Astro/Starlight の静的ドキュメントを生成する。
 - Rust コードセルをビルド時に WebAssembly 化し、ブラウザで実行する。
 - Python コードセルをブラウザの Pyodide worker で実行する。
+- Haskell コードセルをビルド時に WASI WebAssembly 化し、ブラウザで実行する。
 - セル metadata から slider、number、text、textarea、checkbox、select、radio の入力 UI を生成する。
 - text、JSON、table、chart、image、sandboxed HTML のリッチ出力を表示する。
 - pandas table、matplotlib figure、MIME bundle、JSON、HTML、image、通常の値を Python display helper で表示する。
@@ -253,19 +298,38 @@ Oxiquill は、MDX で書いた技術ノートを静的サイトとして公開�
 
 ### 前提
 
-- Node.js と `pnpm`
-- Rust toolchain `1.95.0`
+- Nix flakes、または同等の手動 tool
+- Node.js 24 と `pnpm` 11.2.2
+- `wasm32-unknown-unknown` を含む Rust toolchain `1.95.0`
 - `wasm-pack`
 - `cargo-llvm-cov`
+- Haskell セルを書く場合は `wasm32-wasi-ghc` 9.14
+- Playwright e2e test 用の Chromium
 
-Rust toolchain と Wasm target は `rust-toolchain.toml` で固定しています。
+NixOS または Nix を使える Linux では、このリポジトリの flake で shell に入ると、Node、pnpm、Rust、`wasm-pack`、`cargo-llvm-cov`、`wasm32-wasi-ghc`、Chromium が設定済みになります。
+
+```sh
+nix develop
+```
+
+Nix shell は `OXIQUILL_NODE`、`OXIQUILL_HASKELL_GHC`、`LLVM_COV`、`LLVM_PROFDATA`、`PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD=1`、`PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH` を設定します。tool cache は ignore 済みの `.cache/` 配下に置かれます。
+
+Nix を使わない場合は、同等の tool を手動で導入してください。Haskell セルは GHC の `wasm32-wasi` backend を使います。`ghc-wasm-meta` を使う場合は、通常の Node.js runtime を `PATH` の先頭に置いたまま、Oxiquill には Haskell compiler の path を直接指定します。
+
+```sh
+nvm alias default 24.2.0
+export OXIQUILL_HASKELL_GHC="$HOME/.ghc-wasm/wasm32-wasi-ghc/bin/wasm32-wasi-ghc"
+```
+
+Vite、Vitest、Astro が使う通常の Node より前に ghc-wasm の static Node を置かないでください。shell で `~/.ghc-wasm/env` を source する場合は、その後に `nvm use 24.2.0` を実行するか、Oxiquill の Astro/Vite subprocess 用に `OXIQUILL_NODE` で通常の Node.js binary を指定してください。
 
 ### セットアップ
 
-依存関係をインストールします。
+開発 shell に入り、依存関係をインストールします。
 
 ```sh
-pnpm install
+nix develop
+pnpm install --frozen-lockfile
 ```
 
 開発サーバーを起動します。
@@ -274,7 +338,7 @@ pnpm install
 pnpm dev
 ```
 
-`pnpm dev` は `examples/docs-site` に委譲し、起動時に実行可能セルのruntimeを生成します。その後は MDX と任意の Rust helper ソースを監視します。本文、通常コードブロック、数式、Mermaid、メディアの変更は Astro HMR で反映されます。Python セルの変更は生成manifestを更新します。Rust セルや `examples/docs-site/crates/*` の変更は Wasm runtime を再ビルドします。
+`pnpm dev` は `examples/docs-site` に委譲し、起動時に実行可能セルのruntimeを生成します。その後は MDX と任意の Rust helper ソースを監視します。本文、通常コードブロック、数式、Mermaid、メディアの変更は Astro HMR で反映されます。Python セルの変更は生成manifestを更新します。Rust セルや `examples/docs-site/crates/*` の変更は Rust Wasm runtime を再ビルドします。Haskell セルの変更は、Haskell セルがある場合に Haskell/WASI runtime を再ビルドします。開発中は Haskell compiler がない、または build に失敗しても Astro は起動したままになり、compiler を導入して runtime を再生成するまで Haskell セルに browser 上の error を表示します。
 
 runtime watcher と Astro を分けて起動したい場合は、次のコマンドを別々のターミナルで実行します。
 
@@ -389,6 +453,19 @@ print(scale * 10)
 ```
 ````
 
+Haskell セルの例:
+
+````md
+```haskell
+--| id: sample-haskell
+--| title: Haskell calculation
+--| run: button
+--| inputs:
+--|   scale: { type: integer, label: scale, min: 1, max: 10, step: 1, value: 2 }
+putStrLn ("scaled = " <> show (scale * sum [1..5]))
+```
+````
+
 メディアの例:
 
 ```md
@@ -401,14 +478,17 @@ print(scale * 10)
 
 ### 生成物
 
-`pnpm build`、`pnpm check`、各種 test command は `oxiquill` CLI を実行します。この処理は MDX 内の Rust/Python セルを抽出し、生成runtimeファイルを書き出します。
+`pnpm build`、`pnpm check`、各種 test command は `oxiquill` CLI を実行します。この処理は MDX 内の Rust/Python/Haskell セルを抽出し、生成runtimeファイルを書き出します。これらの strict command と `pnpm wasm:dev`、`pnpm wasm:build`、`pnpm test:wasm` は、Haskell セルがある場合に `wasm32-wasi-ghc` を必要とします。
 
 生成物には次の path が含まれます。
 
 - `examples/docs-site/.oxiquill/generated`
 - `examples/docs-site/.oxiquill/rust-cells`
+- `examples/docs-site/.oxiquill/haskell-cells`
 - `examples/docs-site/public/oxiquill/pyodide`
 - `examples/docs-site/public/oxiquill/rust-wasm`
+- `examples/docs-site/public/oxiquill/haskell-wasm`
+- `examples/docs-site/public/oxiquill/licenses`
 - `examples/docs-site/dist`
 
 生成物を直接編集しないでください。`pnpm docgen`、`pnpm wasm:dev`、`pnpm wasm:build`、`pnpm check`、`pnpm build` などの既存 command で再生成します。
@@ -435,13 +515,19 @@ pnpm lint:rust
 pnpm doc:rust
 ```
 
-docs-only の本文変更では、通常 `pnpm check` で十分です。実行可能セルの metadata、生成 Rust/Wasm の動作、ブラウザ上の表示例を変更した場合は、必要に応じて `pnpm wasm:dev`、`pnpm test:wasm`、`pnpm test:e2e` も実行します。
+docs-only の本文変更では、通常 `pnpm check` で十分です。実行可能セルの metadata、生成 Rust/Wasm や Haskell/WASI の動作、ブラウザ上の表示例を変更した場合は、必要に応じて `pnpm wasm:dev`、`pnpm test:wasm`、`pnpm test:e2e` も実行します。
 
 `test:unit:coverage` は Vitest の V8 coverage を使い、生成物を除いた手書きの TypeScript、Preact、Node runtime code に statement/branch/function/line 85% coverage を要求します。`test:rust:coverage` は `cargo-llvm-cov` で `examples/docs-site/crates/` 配下の任意の helper crate に line/function/region 85% を要求します。helper crate がない場合、Rust helper 用 command は正常終了で skip します。
 
+### ライセンス
+
+Oxiquill は [MIT License](./LICENSE-MIT) または [Apache License, Version 2.0](./LICENSE-APACHE) のいずれかを選んで利用できます。生成サイトには、Oxiquill の2つのライセンスファイルと third-party notice が `oxiquill/licenses/` 配下へ自動的に含まれます。画面上の attribution や「Powered by Oxiquill」の表示は必要ありません。
+
+生成ファイルの対象範囲と利用側の責任は[ライセンスガイド](./examples/docs-site/content/docs/ja/guides/licensing.mdx)を参照してください。過去の release には、それぞれの tag に記録されたライセンスが引き続き適用されます。
+
 ### コントリビューション
 
-バグ報告、質問、提案は issue で歓迎します。小さな修正やドキュメント改善の pull request も歓迎します。
+バグ報告、質問、提案は issue で歓迎します。修正やドキュメント改善は topic branch から `main` への小さな pull request として送ってください。必須 check が成功した pull request は squash merge します。Contribution は [CONTRIBUTING.md](./CONTRIBUTING.md) の inbound dual-license 条項に基づいて受け入れます。
 
 ### コントリビューション
 
@@ -452,6 +538,8 @@ docs-only の本文変更では、通常 `pnpm check` で十分です。実行�
 - Rust セルの helper crate が見つからない場合は、`examples/docs-site/crates/*/Cargo.toml` の `package.name` とセルの `crates` 指定を一致させます。
 - Python セルが未対応 package を指定している場合は、vendored Pyodide package を使うか、docs に書く前に対応を追加します。
 - Python セルが起動しない場合は、`examples/docs-site/public/oxiquill/pyodide` が生成されているか確認し、`pnpm wasm:dev` または `pnpm build` を実行します。
+- strict command で Haskell セルが build できない場合は、`wasm32-wasi-ghc` が `PATH` にあるか、`~/.ghc-wasm/env` を source したか、または `OXIQUILL_HASKELL_GHC` に compiler path を指定したか確認します。
+- dev で Haskell セルが runtime unavailable を表示する場合は、`wasm32-wasi-ghc` を導入または修正して `pnpm wasm:dev` を再実行します。`pnpm dev` は Haskell runtime が unavailable でも serving を続けます。
 - Mermaid 図が表示されない場合は、`pnpm build` で MDX の構文エラーを確認し、図の code block language が `mermaid` になっているか確認します。
 - メディアが表示されない場合は、ファイルが `examples/docs-site/public/media` 配下にあり、`/media/...` の URL で参照しているか確認します。
 - coverage が失敗した場合は、生成物ではなく対象ソースの未実行行を確認し、必要な正常系・失敗系 test を追加します。

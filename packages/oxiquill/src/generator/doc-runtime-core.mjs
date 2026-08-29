@@ -23,12 +23,26 @@ export {
 } from './doc-runtime/cell-metadata.mjs';
 export {
   assertUniqueCellIds,
+  assertUniqueHaskellFunctionNames,
+  assertUniqueHaskellInputBindings,
+  assertUniqueRustFunctionNames,
   assertUniqueRustInputBindings
 } from './doc-runtime/validators.mjs';
 export {
   helperCratesFromManifests,
   packageNameFromCargoToml
 } from './doc-runtime/helper-crates.mjs';
+export {
+  haskellFunctionName,
+  haskellIdentifier,
+  haskellReaderName
+} from './doc-runtime/haskell-identifiers.mjs';
+export {
+  generateHaskellFunction,
+  generateHaskellInputBinding,
+  generateHaskellMain,
+  splitHaskellCellSource
+} from './doc-runtime/haskell-codegen.mjs';
 export {
   rustFunctionName,
   rustIdentifier,

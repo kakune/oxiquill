@@ -1,11 +1,11 @@
 ---
 title: 実行可能セル
-description: 静的サイト上で動く Rust と Python のセルを設定します。
+description: 静的サイト上で動く Rust、Python、Haskell のセルを設定します。
 ---
 
 実行可能セルは、先頭に metadata comment を持つ通常の MDX code block です。Oxiquill は生成時にその block を抽出し、runtime UI に置き換えます。
 
-Rust セルは build 時に WebAssembly に compile されます。Python セルは browser の Pyodide worker で動きます。どちらの言語も同じ input metadata と run mode model を使います。
+Rust セルは build 時に WebAssembly に compile されます。Python セルは browser の Pyodide worker で動きます。Haskell セルは build 時に WASI WebAssembly module に compile されます。3つの言語は同じ input metadata と run mode model を使います。
 
 ## セル metadata
 
@@ -26,6 +26,8 @@ Python 専用 field:
 
 - `packages`: `numpy`、`pandas`、`matplotlib` などの vendored Pyodide package name。
 
+Haskell セルは standard library の code のみ対応します。`packages` や外部 helper module は使いません。
+
 ## run mode
 
 - `button`: 読者が明示的に実行します。
@@ -37,7 +39,7 @@ Python 専用 field:
 
 対応 input type は `range`、`number`、`integer`、`text`、`textarea`、`checkbox`、`select`、`radio` です。
 
-input name は cell 内の変数として使えます。Rust セルでは安全な Rust identifier に変換されます。記号だけが違う name は同じ Rust binding に変換される可能性があるため避けます。
+input name は cell 内の変数として使えます。Rust と Haskell セルでは安全な identifier に変換されます。記号だけが違う name は同じ binding に変換される可能性があるため避けます。
 
 ## Rust とグラフ
 
@@ -134,4 +136,26 @@ else:
 name = label.upper() if enabled else label
 print(f"{name}: {method} = {result}")
 print(f"style = {style}")
+```
+
+## Haskell 入力
+
+Haskell セルは `--|` metadata comment を使います。input value は Haskell 変数になり、`putStrLn` や `print` の text output が結果 panel に表示されます。
+
+```haskell
+--| id: haskell-controls
+--| title: Haskell input UI
+--| run: reactive
+--| inputs:
+--|   factor: { type: integer, label: factor, min: 1, max: 5, step: 1, value: 3 }
+--|   label: { type: text, label: label, value: sample }
+--|   includeSquares: { type: checkbox, label: include squares, value: true }
+import Data.List (intercalate)
+
+let base = [1 .. 4 :: Int]
+let scaled = map (* factor) base
+let displayed = if includeSquares then map (\value -> value * value) scaled else scaled
+
+putStrLn (label ++ ": " ++ intercalate ", " (map show displayed))
+putStrLn ("total = " ++ show (sum displayed))
 ```
