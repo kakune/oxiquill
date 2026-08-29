@@ -68,7 +68,7 @@
     "chokidar": "5.0.0",
     "echarts": "6.1.0",
     "katex": "0.16.47",
-    "mermaid": "11.15.0",
+    "mermaid": "11.16.1",
     "preact": "10.29.2",
     "pyodide": "0.29.4",
     "rehype-katex": "7.0.1",
