@@ -4,7 +4,9 @@
 
 - This directory contains Starlight docs and examples. Keep pages clear, direct, and useful to readers; avoid layout or runtime code in MDX unless the existing docs already use that pattern.
 - Interactive Rust, Python, and Haskell cells are fenced code blocks with YAML metadata in leading directive comments.
-- Every interactive cell needs a page-local unique `id`. Rust cells use `//|` or `///|`; Python cells use `#|`; Haskell cells use `--|`.
+- Keep metadata in one contiguous directive-comment block at the start of the cell. Later directive-looking comments are source code.
+- Every interactive cell needs a page-local unique lowercase kebab-case `id`. Input names use lowercase letters, digits, and underscores and must start with a letter.
+- Rust cells use `//|` or `///|`; Python cells use `#|`; Haskell cells use `--|`.
 - Rust cells use `crates: [...]`; Python cells use `packages: [...]`; Haskell cells use neither. Do not mix language-specific dependency metadata.
 - English pages live in `content/docs`; Japanese translations live in `content/docs/ja` with the same slug.
 - Public images, PDFs, and similar unprocessed media belong in `public/media` and should be referenced from MDX with `/media/...` URLs.

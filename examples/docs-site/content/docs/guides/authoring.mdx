@@ -34,7 +34,7 @@ Use the same route and general structure in Japanese translations. The Japanese 
 
 ## Write Rust Cells
 
-Rust cells are fenced `rust` code blocks with metadata in leading `//|` or `///|` comments. The `id` must be unique within the page. English and Japanese versions may reuse the same local `id`; the build creates page-scoped internal IDs.
+Rust cells are fenced `rust` code blocks with metadata in leading `//|` or `///|` comments. Metadata comments must form one contiguous block at the very start of the cell; later option-looking comments remain source code. The `id` must be unique within the page and match lowercase kebab-case. English and Japanese versions may reuse the same local `id`; the build creates page-scoped internal IDs.
 
 ````md
 ```rust
@@ -90,16 +90,16 @@ Use standard-library modules only. Haskell cells do not support external package
 
 Common metadata fields:
 
-- `id`: required page-local cell identifier.
-- `title`: heading shown in the cell UI.
-- `run`: `button`, `reactive`, `autorun`, or `hidden`; defaults to `button`.
-- `inputs`: named input controls made available as variables in the cell.
+- `id`: required lowercase kebab-case page-local cell identifier.
+- `title`: string heading shown in the cell UI; defaults to `id`.
+- `run`: `button`, `reactive`, or `autorun`; defaults to `button`.
+- `inputs`: mapping of lowercase cross-language identifiers to input definitions; forbidden for `autorun`.
 - `crates`: Rust helper crates; Rust only.
 - `packages`: Pyodide packages; Python only.
-- `timeoutMs`: positive timeout in milliseconds; defaults to `30000`.
-- `showSource`: set to `false` to hide source by default.
+- `timeoutMs`: positive integer timeout in milliseconds; defaults to `30000`.
+- `showSource`: boolean source visibility; defaults to `true`.
 
-Supported input types are `range`, `number`, `integer`, `text`, `textarea`, `checkbox`, `select`, and `radio`.
+These are the only top-level fields. Dependency arrays must contain unique non-empty strings. Supported input types are `range`, `number`, `integer`, `text`, `textarea`, `checkbox`, `select`, and `radio`. See [Interactive Cells](../../features/interactive-cells/) for the exact input fields, defaults, constraints, and option schema.
 
 ## Add Math
 

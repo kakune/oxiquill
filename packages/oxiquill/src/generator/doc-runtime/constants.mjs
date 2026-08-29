@@ -3,34 +3,8 @@ export const sourceThemes = {
   dark: 'github-dark'
 };
 
-export const supportedLanguages = new Map([
-  ['rust', 'rust'],
-  ['rs', 'rust'],
-  ['python', 'python'],
-  ['py', 'python'],
-  ['haskell', 'haskell'],
-  ['hs', 'haskell']
-]);
-
-export const runModes = ['button', 'reactive', 'autorun', 'hidden'];
-export const inputTypes = ['range', 'number', 'integer', 'text', 'textarea', 'checkbox', 'select', 'radio'];
-
 export const vendoredPyodidePackageRoots = ['matplotlib', 'pandas'];
-export const supportedPyodidePackages = [
-  'contourpy',
-  'cycler',
-  'fonttools',
-  'kiwisolver',
-  'matplotlib',
-  'numpy',
-  'packaging',
-  'pandas',
-  'pillow',
-  'pyparsing',
-  'python-dateutil',
-  'pytz',
-  'six'
-];
+export { supportedPyodidePackages } from '../../lib/doc-runtime/cell-authoring.mjs';
 
 export const rustReservedIdentifiers = new Set([
   'Self',

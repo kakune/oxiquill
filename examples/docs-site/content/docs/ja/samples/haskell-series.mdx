@@ -23,7 +23,7 @@ description: Haskell/WASI の計算、入力、text output を組み合わせた
 --|   count: { type: integer, label: count, min: 3, max: 10, step: 1, value: 6 }
 --|   multiplier: { type: integer, label: multiplier, min: 1, max: 5, step: 1, value: 2 }
 --|   label: { type: text, label: label, value: series }
---|   showDeltas: { type: checkbox, label: show deltas, value: true }
+--|   show_deltas: { type: checkbox, label: show deltas, value: true }
 import Data.List (intercalate)
 
 let indexes = [1 .. count]
@@ -33,7 +33,7 @@ let deltas = zipWith (-) (drop 1 values) values
 putStrLn (label ++ ": " ++ intercalate ", " (map show values))
 putStrLn ("total = " ++ show (sum values))
 
-if showDeltas
+if show_deltas
   then putStrLn ("deltas = " ++ intercalate ", " (map show deltas))
   else putStrLn "deltas hidden"
 ```

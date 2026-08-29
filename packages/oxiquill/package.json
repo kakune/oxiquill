@@ -73,8 +73,11 @@
     "pyodide": "0.29.4",
     "rehype-katex": "7.0.1",
     "remark-math": "6.0.0",
+    "remark-mdx": "3.1.1",
+    "remark-parse": "11.0.0",
     "shiki": "4.1.0",
     "typescript": "6.0.3",
+    "unified": "11.0.5",
     "vite": "7.3.3",
     "yaml": "2.9.0"
   }
