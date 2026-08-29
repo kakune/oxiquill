@@ -1,0 +1,19 @@
+{
+  "extends": "../../tsconfig.json",
+  "compilerOptions": {
+    "allowJs": true,
+    "allowImportingTsExtensions": false,
+    "checkJs": false,
+    "declaration": true,
+    "declarationMap": false,
+    "noEmit": false,
+    "noEmitOnError": true,
+    "outDir": "dist",
+    "rootDir": "src",
+    "jsx": "react-jsx",
+    "jsxImportSource": "preact",
+    "sourceMap": false
+  },
+  "include": ["src/**/*.d.ts", "src/**/*.mjs", "src/**/*.ts", "src/**/*.tsx"],
+  "exclude": ["dist", "src/env.d.ts"]
+}

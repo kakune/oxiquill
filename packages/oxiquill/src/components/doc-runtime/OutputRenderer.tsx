@@ -3,14 +3,14 @@ import type {
   ValidatedImageArtifact,
   ValidatedJsonArtifact,
   ValidatedOutputArtifact
-} from '../../lib/doc-runtime/output-artifact-validation';
+} from '../../lib/doc-runtime/output-artifact-validation.js';
 import type { ComponentChildren } from 'preact';
 import { useEffect, useState } from 'preact/hooks';
-import type { ChartSpec, TextArtifact } from '../../lib/doc-runtime/types';
-import ArtifactErrorBoundary, { ArtifactError } from './ArtifactErrorBoundary';
-import TableOutput from './TableOutput';
+import type { ChartSpec, TextArtifact } from '../../lib/doc-runtime/types.js';
+import ArtifactErrorBoundary, { ArtifactError } from './ArtifactErrorBoundary.js';
+import TableOutput from './TableOutput.js';
 
-type ChartOutputModule = typeof import('./ChartOutput');
+type ChartOutputModule = typeof import('./ChartOutput.js');
 type LoadChartOutput = () => Promise<ChartOutputModule>;
 type ChartRendererState =
   { status: 'loading' } | { status: 'ready'; module: ChartOutputModule } | { status: 'error'; message: string };
@@ -176,7 +176,7 @@ function artifactKey(output: ValidatedArtifactResult, index: number): string {
 }
 
 function loadChartOutput(): Promise<ChartOutputModule> {
-  chartOutputModuleReady ??= import('./ChartOutput').catch((error: unknown) => {
+  chartOutputModuleReady ??= import('./ChartOutput.js').catch((error: unknown) => {
     chartOutputModuleReady = undefined;
     throw error;
   });

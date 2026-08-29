@@ -1,7 +1,7 @@
 import { cells as generatedCells } from 'virtual:oxiquill/cells';
 import { runtimeVersion as generatedRuntimeVersion } from 'virtual:oxiquill/runtime-version';
-import { resetInteractiveRuntime } from './runtime-client';
-import type { CellManifest } from './types';
+import { resetInteractiveRuntime } from './runtime-client.js';
+import type { CellManifest } from './types.js';
 
 type GeneratedCellsModule = {
   cells: readonly CellManifest[];

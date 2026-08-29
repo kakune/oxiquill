@@ -27,11 +27,13 @@ Dependencies include Astro, Starlight, Preact, Pyodide, Mermaid, KaTeX, Vitest, 
 
 ## Create a Consumer Repository
 
-For a separate documentation repository, add only `oxiquill` and route scripts through its CLI:
+For a separate documentation repository, declare Oxiquill with its Astro and Starlight framework dependencies, then route scripts through the Oxiquill CLI:
 
 ```json
 {
   "dependencies": {
+    "@astrojs/starlight": "0.41.9",
+    "astro": "7.2.9",
     "oxiquill": "0.2.0"
   },
   "scripts": {
@@ -45,16 +47,23 @@ For a separate documentation repository, add only `oxiquill` and route scripts t
 Use the same setup for `link:`, workspace, Git dependency, or submodule-style installs; only the dependency specifier changes. The consumer config is:
 
 ```js
+import starlight from '@astrojs/starlight';
 import { defineOxiquillConfig } from 'oxiquill/astro';
 
 export default defineOxiquillConfig({
+  framework: { starlight },
   title: 'My Docs',
   sidebar: [{ label: 'Overview', items: [{ label: 'Home', slug: 'index' }] }]
 });
 ```
 
 ```ts
-export { collections } from 'oxiquill/content';
+import { defineCollection } from 'astro:content';
+import { docsLoader } from '@astrojs/starlight/loaders';
+import { docsSchema } from '@astrojs/starlight/schema';
+import { createOxiquillCollections } from 'oxiquill/content';
+
+export const collections = createOxiquillCollections({ defineCollection, docsLoader, docsSchema });
 ```
 
 ## Run the Development Server

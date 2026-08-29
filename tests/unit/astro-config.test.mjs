@@ -20,7 +20,7 @@ vi.mock('@astrojs/starlight', () => ({
   default: () => ({ hooks: {}, name: '@astrojs/starlight' })
 }));
 
-const { defineOxiquillConfig } = await import('../../packages/oxiquill/src/astro/index.ts');
+const { defineOxiquillConfig: definePackageConfig } = await import('../../packages/oxiquill/src/astro/index.ts');
 const linkedConsumerRoot = new URL('../fixtures/linked-consumer/', import.meta.url);
 const tempRoot = pathToFileURL(os.tmpdir());
 const preactExportSpecifiers = [
@@ -31,6 +31,16 @@ const preactExportSpecifiers = [
   'preact/debug',
   'preact/devtools'
 ];
+
+function defineOxiquillConfig(options) {
+  return definePackageConfig({
+    ...options,
+    framework: {
+      starlight: () => ({ hooks: {}, name: '@astrojs/starlight' }),
+      ...options.framework
+    }
+  });
+}
 
 function integrationNames(config) {
   return config.integrations.flat().map((integration) => integration.name);
@@ -91,6 +101,12 @@ async function resolveWithVite(update, ids) {
 }
 
 describe('defineOxiquillConfig', () => {
+  it('requires consumers to load the Starlight integration directly', () => {
+    expect(() => definePackageConfig({ sidebar: [], title: 'Docs' })).toThrow(
+      'requires framework.starlight to be an Astro integration factory'
+    );
+  });
+
   it('composes package-owned Astro integrations by default', () => {
     const config = defineOxiquillConfig({
       sidebar: [],
@@ -239,38 +255,7 @@ describe('defineOxiquillConfig', () => {
     }
   });
 
-  it('transforms installed Oxiquill TSX with the Preact JSX runtime', async () => {
-    const config = defineOxiquillConfig({ sidebar: [], title: 'Docs' });
-    const update = runConfigSetup(config, linkedConsumerRoot);
-    const plugin = update.vite.plugins.find((entry) => entry.name === 'oxiquill-preact-jsx');
-    const componentPath = fileURLToPath(
-      new URL('../../packages/oxiquill/src/components/doc-runtime/InteractiveCell.tsx', import.meta.url)
-    );
-    const linkedComponentPath = fileURLToPath(
-      new URL(
-        '../../examples/docs-site/node_modules/oxiquill/src/components/doc-runtime/InteractiveCell.tsx',
-        import.meta.url
-      )
-    );
-    const windowsPnpmComponentPath =
-      'C:/Users/RUNNER~1/AppData/Local/Temp/consumer/node_modules/.pnpm/oxiquill@file+..+oxiquill/node_modules/oxiquill/src/components/doc-runtime/InteractiveCell.tsx';
-
-    const transformed = await plugin.transform('export default () => <section>ok</section>;', componentPath);
-    const linkedTransformed = await plugin.transform(
-      'export default () => <section>ok</section>;',
-      linkedComponentPath
-    );
-    const windowsPnpmTransformed = await plugin.transform(
-      'export default () => <section>ok</section>;',
-      windowsPnpmComponentPath
-    );
-    expect(transformed.code).toContain('preact/jsx-runtime');
-    expect(linkedTransformed.code).toContain('preact/jsx-runtime');
-    expect(windowsPnpmTransformed.code).toContain('preact/jsx-runtime');
-    await expect(plugin.transform('export default () => <div />;', '/consumer/Component.tsx')).resolves.toBeUndefined();
-  });
-
-  it('bundles the Astro integration while sharing the Preact SSR runtime', () => {
+  it('bundles compiled Oxiquill while sharing the Preact SSR runtime', () => {
     const config = defineOxiquillConfig({
       sidebar: [],
       title: 'Docs'
@@ -278,7 +263,7 @@ describe('defineOxiquillConfig', () => {
 
     const update = runConfigSetup(config, linkedConsumerRoot);
 
-    expect(update.vite.ssr.noExternal).toEqual(expect.arrayContaining(['@astrojs/preact']));
+    expect(update.vite.ssr.noExternal).toEqual(expect.arrayContaining(['@astrojs/preact', 'oxiquill']));
     expect(update.vite.ssr.noExternal).not.toEqual(expect.arrayContaining(['preact', 'preact-render-to-string']));
     expect(update.vite.resolve.dedupe).toEqual(expect.arrayContaining(['@preact/signals', 'preact']));
   });
@@ -303,7 +288,7 @@ describe('defineOxiquillConfig', () => {
 
     expect(update.vite.ssr.external).toEqual(['external-runtime']);
     expect(update.vite.ssr.noExternal).toEqual(
-      expect.arrayContaining(['consumer-package', consumerNoExternal, '@astrojs/preact'])
+      expect.arrayContaining(['consumer-package', consumerNoExternal, '@astrojs/preact', 'oxiquill'])
     );
     expect(update.vite.resolve.dedupe).toEqual(
       expect.arrayContaining(['consumer-runtime', '@preact/signals', 'preact'])
@@ -322,7 +307,11 @@ describe('defineOxiquillConfig', () => {
 
       const update = runConfigSetup(config, linkedConsumerRoot);
 
-      expect(update.vite.ssr.noExternal).toEqual(expect.arrayContaining([noExternal, '@astrojs/preact']));
+      expect(update.vite.ssr.noExternal).toEqual(expect.arrayContaining([
+        noExternal,
+        '@astrojs/preact',
+        'oxiquill'
+      ]));
     }
   });
 

@@ -1,5 +1,5 @@
-import type { CellLanguage, CellManifest, InputValues, RuntimeWorkerRequest, RuntimeWorkerResponse } from './types';
-import { normalizeCellExecutionResult, type NormalizedCellExecutionResult } from './output-artifacts';
+import type { CellLanguage, CellManifest, InputValues, RuntimeWorkerRequest, RuntimeWorkerResponse } from './types.js';
+import { normalizeCellExecutionResult, type NormalizedCellExecutionResult } from './output-artifacts.js';
 
 type PendingRequest = {
   reject: (reason: Error) => void;
@@ -153,11 +153,11 @@ function createDefaultWorker(language: CellLanguage): Worker {
   /* v8 ignore next -- covered by browser integration and E2E tests. */
   switch (language) {
     case 'rust':
-      return new Worker(new URL('./rust-worker.ts', import.meta.url), { type: 'module' });
+      return new Worker(new URL('./rust-worker.js', import.meta.url), { type: 'module' });
     case 'python':
-      return new Worker(new URL('./python-worker.ts', import.meta.url), { type: 'module' });
+      return new Worker(new URL('./python-worker.js', import.meta.url), { type: 'module' });
     case 'haskell':
-      return new Worker(new URL('./haskell-worker.ts', import.meta.url), { type: 'module' });
+      return new Worker(new URL('./haskell-worker.js', import.meta.url), { type: 'module' });
   }
 }
 

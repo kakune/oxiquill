@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'preact/hooks';
-import type { ChartSpec } from '../../lib/doc-runtime/types';
+import type { ChartSpec } from '../../lib/doc-runtime/types.js';
 
 interface ChartOutputProps {
   spec: ChartSpec;

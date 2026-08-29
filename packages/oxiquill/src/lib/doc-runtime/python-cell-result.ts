@@ -1,5 +1,5 @@
-import { legacyResultToOutputs } from './output-artifacts';
-import type { RawCellExecutionResult } from './types';
+import { legacyResultToOutputs } from './output-artifacts.js';
+import type { RawCellExecutionResult } from './types.js';
 
 export function createPythonCellResult({
   displayOutputs,

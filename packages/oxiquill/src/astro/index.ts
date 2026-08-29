@@ -4,13 +4,11 @@ import path from 'node:path';
 import { defineConfig } from 'astro/config';
 import { unified } from '@astrojs/markdown-remark';
 import preact from '@astrojs/preact';
-import starlight from '@astrojs/starlight';
 import rehypeKatex from 'rehype-katex';
 import remarkMath from 'remark-math';
-import { mergeAlias, transformWithOxc } from 'vite';
+import { mergeAlias } from 'vite';
 import type { AstroIntegration, AstroUserConfig, FontProvider, Locales, SessionDriverConfig } from 'astro';
 import type { Options as PreactIntegrationOptions } from '@astrojs/preact';
-import type { StarlightUserConfig } from '@astrojs/starlight/types';
 import type { Alias, Plugin, PluginOption, UserConfig as ViteUserConfig } from 'vite';
 import { pathFromUrl, pathInUrl } from '../config/paths.mjs';
 import {
@@ -31,7 +29,6 @@ import { oxiquillVirtualModulesPlugin } from './virtual-modules.mjs';
 
 type IntegrationFactory<Options> = (options: Options) => AstroIntegration;
 type PreactIntegrationFactory = IntegrationFactory<PreactIntegrationOptions | undefined>;
-type StarlightIntegrationFactory = IntegrationFactory<StarlightUserConfig>;
 type BaseAstroUserConfig = AstroUserConfig<Locales, SessionDriverConfig | undefined, FontProvider[]>;
 type OxiquillPaths = ReturnType<typeof createOxiquillPaths>;
 type OxiquillPathOptionName =
@@ -56,6 +53,8 @@ type ViteWorkerPlugins = PluginOption[] | (() => PluginOption[]);
 type DocRuntimeContext = Awaited<ReturnType<typeof createDocRuntimeContext>>;
 type BundledModuleCollector = ReturnType<typeof createBundledModuleCollector>;
 type BrowserBundleCollector = ReturnType<typeof createBrowserBundleCollector>;
+type StarlightOption<Options, Name extends PropertyKey, Fallback> =
+  Options extends Partial<Record<Name, infer Value>> ? Value : Fallback;
 
 const frameworkPackageNames = ['astro', '@astrojs/markdown-remark', '@astrojs/preact', '@astrojs/starlight'];
 const viteManagedPackageNames = [
@@ -79,23 +78,33 @@ const viteAliasedPackageNames = [
   'axobject-query',
   'html-escaper'
 ];
-const viteSsrNoExternalPackageNames = ['@astrojs/preact'];
+const viteSsrNoExternalPackageNames = ['@astrojs/preact', 'oxiquill'];
 const viteResolveDedupePackageNames = ['@preact/signals', 'preact'];
 
-export interface OxiquillFrameworkOptions {
+export interface OxiquillFrameworkOptions<StarlightOptions extends object = object> {
   preact?: PreactIntegrationFactory;
-  starlight?: StarlightIntegrationFactory;
+  starlight: IntegrationFactory<StarlightOptions>;
 }
 
-export interface OxiquillConfig extends Omit<BaseAstroUserConfig, 'integrations' | 'markdown' | 'vite'> {
-  description?: StarlightUserConfig['description'];
-  framework?: OxiquillFrameworkOptions;
+interface OxiquillStarlightOptions {
+  components?: Record<string, string>;
+  customCss?: string[];
+  description?: string;
+  sidebar?: unknown;
+  title?: string;
+  [option: string]: unknown;
+}
+
+export interface OxiquillConfig<StarlightOptions extends object = object>
+  extends Omit<BaseAstroUserConfig, 'integrations' | 'markdown' | 'vite'> {
+  description?: StarlightOption<StarlightOptions, 'description', string>;
+  framework: OxiquillFrameworkOptions<StarlightOptions>;
   integrations?: AstroIntegrations;
   markdown?: AstroMarkdownConfig;
   paths?: OxiquillPathOptions;
-  sidebar?: StarlightUserConfig['sidebar'];
-  starlight?: Partial<StarlightUserConfig>;
-  title?: StarlightUserConfig['title'];
+  sidebar?: StarlightOption<StarlightOptions, 'sidebar', unknown>;
+  starlight?: Partial<StarlightOptions>;
+  title?: StarlightOption<StarlightOptions, 'title', string>;
   vite?: ViteUserConfig;
 }
 
@@ -110,10 +119,12 @@ const createDocRuntimeContextForPaths = createDocRuntimeContext as unknown as (o
   paths: OxiquillPaths;
 }) => Promise<DocRuntimeContext>;
 
-export function defineOxiquillConfig(options: OxiquillConfig = {}): BaseAstroUserConfig {
+export function defineOxiquillConfig<StarlightOptions extends object>(
+  options: OxiquillConfig<StarlightOptions>
+): BaseAstroUserConfig {
   const {
     base,
-    framework = {},
+    framework,
     integrations = [],
     markdown = {},
     paths,
@@ -125,21 +136,17 @@ export function defineOxiquillConfig(options: OxiquillConfig = {}): BaseAstroUse
     ...astroOptions
   } = options;
   const preactIntegration = resolveIntegrationFactory<PreactIntegrationOptions | undefined>(
-    framework.preact,
+    framework?.preact,
     preact,
     'framework.preact'
   );
-  const starlightIntegration = resolveIntegrationFactory<StarlightUserConfig>(
-    framework.starlight,
-    starlight,
-    'framework.starlight'
-  );
+  const starlightIntegration = requiredIntegrationFactory(framework?.starlight, 'framework.starlight');
   const mergedStarlightOptions = {
     ...(description == null ? {} : { description }),
     ...(sidebar == null ? {} : { sidebar }),
     ...(title == null ? {} : { title }),
     ...starlightOptions
-  };
+  } as OxiquillStarlightOptions;
 
   const config: BaseAstroUserConfig = {
     compressHTML: true,
@@ -150,7 +157,7 @@ export function defineOxiquillConfig(options: OxiquillConfig = {}): BaseAstroUse
     integrations: [
       oxiquillIntegration({ base, markdown, paths, vite }),
       preactIntegration(undefined),
-      starlightIntegration(createStarlightOptions(mergedStarlightOptions)),
+      callStarlightIntegration(starlightIntegration, createStarlightOptions(mergedStarlightOptions)),
       ...integrations
     ]
   };
@@ -167,6 +174,15 @@ function resolveIntegrationFactory<Options>(
   if (typeof factory === 'function') return factory;
 
   throw new TypeError(`defineOxiquillConfig expected ${optionName} to be an Astro integration factory.`);
+}
+
+function requiredIntegrationFactory<Options>(
+  factory: IntegrationFactory<Options> | undefined,
+  optionName: string
+): IntegrationFactory<Options> {
+  if (typeof factory === 'function') return factory;
+
+  throw new TypeError(`defineOxiquillConfig requires ${optionName} to be an Astro integration factory.`);
 }
 
 export function oxiquillIntegration({
@@ -245,7 +261,14 @@ export function oxiquillIntegration({
   };
 }
 
-function createStarlightOptions(options: Partial<StarlightUserConfig>): StarlightUserConfig {
+function callStarlightIntegration<StarlightOptions extends object>(
+  integration: IntegrationFactory<StarlightOptions>,
+  options: OxiquillStarlightOptions
+): AstroIntegration {
+  return (integration as unknown as IntegrationFactory<OxiquillStarlightOptions>)(options);
+}
+
+function createStarlightOptions(options: OxiquillStarlightOptions): OxiquillStarlightOptions {
   const {
     components = {},
     customCss = [],
@@ -357,7 +380,6 @@ function mergeViteConfig(
     plugins: [
       oxiquillDependencyResolverPlugin(paths),
       oxiquillVirtualModulesPlugin(paths),
-      oxiquillPreactJsxPlugin(paths),
       bundledModuleCollectorPlugin(bundledModules, 'main'),
       browserBundleCollectorPlugin(browserBundle, 'main'),
       ...(vite.plugins ?? [])
@@ -370,31 +392,6 @@ function browserBundleCollectorPlugin(collector: BrowserBundleCollector, source:
     name: `oxiquill-browser-bundle-${source}`,
     generateBundle(_options, bundle) {
       collector.add(source, bundle);
-    }
-  };
-}
-
-function oxiquillPreactJsxPlugin(paths: OxiquillPaths): Plugin {
-  const sourceRoot = realpathSync.native(pathInUrl(paths.frameworkRoot, 'src'));
-
-  return {
-    enforce: 'pre',
-    name: 'oxiquill-preact-jsx',
-    async transform(code, id) {
-      const filePath = id.split('?', 1)[0];
-      if (!filePath.endsWith('.tsx')) return undefined;
-
-      const realFilePath = existsSync(filePath) ? realpathSync.native(filePath) : filePath;
-      if (!isPathWithin(sourceRoot, realFilePath) && !isInstalledOxiquillSource(filePath)) return undefined;
-
-      return transformWithOxc(code, filePath, {
-        jsx: {
-          importSource: 'preact',
-          runtime: 'automatic'
-        },
-        lang: 'tsx',
-        sourcemap: true
-      });
     }
   };
 }
@@ -682,16 +679,6 @@ function existingRealPaths(paths: string[]): string[] {
   }
 
   return realPaths;
-}
-
-function isPathWithin(directory: string, filePath: string): boolean {
-  const relative = path.relative(directory, filePath);
-  return relative !== '' && !relative.startsWith(`..${path.sep}`) && !path.isAbsolute(relative);
-}
-
-function isInstalledOxiquillSource(filePath: string): boolean {
-  const normalizedPath = filePath.replaceAll('\\', '/').toLowerCase();
-  return normalizedPath.includes('/node_modules/oxiquill/src/');
 }
 
 function mergeServerFsAllow(allow: string[] | undefined, additions: string[]): string[] {

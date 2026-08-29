@@ -1,4 +1,4 @@
-import type { CellManifest, InputSpec, InputValues, RunMode } from './types';
+import type { CellManifest, InputSpec, InputValues, RunMode } from './types.js';
 
 export type RuntimeLocale = 'en' | 'ja';
 

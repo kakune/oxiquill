@@ -1,8 +1,11 @@
 {
   "name": "oxiquill",
   "version": "0.2.0",
+  "description": "Interactive Astro/Starlight notes with Rust, Python, math, Mermaid, WebAssembly, and Pyodide",
+  "author": "kakune",
   "private": false,
   "type": "module",
+  "packageManager": "pnpm@11.2.2",
   "license": "MIT OR Apache-2.0",
   "repository": {
     "type": "git",
@@ -21,43 +24,72 @@
     "provenance": true,
     "registry": "https://registry.npmjs.org/"
   },
+  "scripts": {
+    "clean": "node ./scripts/clean-dist.mjs",
+    "build": "pnpm run clean && tsc --project tsconfig.build.json && node ./scripts/copy-package-assets.mjs",
+    "prepare": "pnpm run build",
+    "prepack": "pnpm run build"
+  },
+  "types": "./dist/index.d.ts",
   "bin": {
-    "oxiquill": "./src/cli/index.mjs"
+    "oxiquill": "./dist/cli/index.mjs"
   },
   "exports": {
-    ".": "./src/index.mjs",
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js",
+      "default": "./dist/index.js"
+    },
     "./astro": {
-      "types": "./src/astro/index.d.ts",
-      "import": "./src/astro/index.ts",
-      "default": "./src/astro/index.ts"
+      "types": "./dist/astro/index.d.ts",
+      "import": "./dist/astro/index.js",
+      "default": "./dist/astro/index.js"
     },
     "./content": {
-      "types": "./src/content/index.d.ts",
-      "import": "./src/content/index.mjs",
-      "default": "./src/content/index.mjs"
+      "types": "./dist/content/index.d.ts",
+      "import": "./dist/content/index.js",
+      "default": "./dist/content/index.js"
     },
-    "./runtime/InteractiveCell": "./src/components/doc-runtime/InteractiveCell.tsx",
-    "./runtime/MermaidDiagram": "./src/components/doc-runtime/MermaidDiagram.tsx",
-    "./runtime/types": "./src/lib/doc-runtime/types.ts",
-    "./components/starlight/PageFrame": "./src/components/starlight/PageFrame.astro",
-    "./styles/katex.css": "./src/styles/katex.css",
-    "./styles/custom.css": "./src/styles/custom.css",
-    "./tsconfigs/strict": "./tsconfigs/strict.json",
-    "./env": "./src/env.d.ts"
+    "./runtime/InteractiveCell": {
+      "types": "./dist/components/doc-runtime/InteractiveCell.d.ts",
+      "import": "./dist/components/doc-runtime/InteractiveCell.js",
+      "default": "./dist/components/doc-runtime/InteractiveCell.js"
+    },
+    "./runtime/MermaidDiagram": {
+      "types": "./dist/components/doc-runtime/MermaidDiagram.d.ts",
+      "import": "./dist/components/doc-runtime/MermaidDiagram.js",
+      "default": "./dist/components/doc-runtime/MermaidDiagram.js"
+    },
+    "./runtime/types": {
+      "types": "./dist/lib/doc-runtime/types.d.ts",
+      "import": "./dist/lib/doc-runtime/types.js",
+      "default": "./dist/lib/doc-runtime/types.js"
+    },
+    "./components/starlight/PageFrame": "./dist/components/starlight/PageFrame.astro",
+    "./styles/katex.css": "./dist/styles/katex.css",
+    "./styles/custom.css": "./dist/styles/custom.css",
+    "./tsconfigs/strict": "./dist/tsconfigs/strict.json",
+    "./env": {
+      "types": "./dist/env.d.ts"
+    }
   },
   "files": [
     "LICENSE-APACHE",
     "LICENSE-MIT",
     "README.md",
-    "src",
-    "tsconfigs",
-    "!src/**/AGENTS.md"
+    "dist"
   ],
   "keywords": [
     "astro",
     "astro-integration",
     "documentation",
-    "starlight"
+    "haskell",
+    "mermaid",
+    "pyodide",
+    "python",
+    "rust",
+    "starlight",
+    "webassembly"
   ],
   "dependencies": {
     "@astrojs/check": "0.9.10",

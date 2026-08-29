@@ -27,11 +27,13 @@ pnpm install
 
 ## Consumer repository を作る
 
-別の documentation repository では、`oxiquill` だけを追加し、script は CLI に委譲します。
+別の documentation repository では、Oxiquill と Astro および Starlight の framework dependency を指定し、script は Oxiquill CLI に委譲します。
 
 ```json
 {
   "dependencies": {
+    "@astrojs/starlight": "0.41.9",
+    "astro": "7.2.9",
     "oxiquill": "0.2.0"
   },
   "scripts": {
@@ -45,16 +47,23 @@ pnpm install
 `link:`、workspace、Git dependency、submodule 形式でも同じ setup を使い、dependency specifier だけを変えます。consumer config は次の形です。
 
 ```js
+import starlight from '@astrojs/starlight';
 import { defineOxiquillConfig } from 'oxiquill/astro';
 
 export default defineOxiquillConfig({
+  framework: { starlight },
   title: 'My Docs',
   sidebar: [{ label: 'Overview', items: [{ label: 'Home', slug: 'index' }] }]
 });
 ```
 
 ```ts
-export { collections } from 'oxiquill/content';
+import { defineCollection } from 'astro:content';
+import { docsLoader } from '@astrojs/starlight/loaders';
+import { docsSchema } from '@astrojs/starlight/schema';
+import { createOxiquillCollections } from 'oxiquill/content';
+
+export const collections = createOxiquillCollections({ defineCollection, docsLoader, docsSchema });
 ```
 
 ## 開発サーバーを起動する

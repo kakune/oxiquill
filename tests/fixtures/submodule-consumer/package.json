@@ -3,6 +3,8 @@
   "private": true,
   "type": "module",
   "dependencies": {
+    "@astrojs/starlight": "0.41.9",
+    "astro": "7.2.9",
     "oxiquill": "link:../../../packages/oxiquill"
   }
 }

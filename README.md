@@ -89,11 +89,13 @@ pnpm preview
 
 ### Use From Another Repository
 
-A consuming docs repository only needs `oxiquill` as its documentation framework dependency:
+A consuming docs repository declares Oxiquill together with the Astro and Starlight versions it integrates:
 
 ```json
 {
   "dependencies": {
+    "@astrojs/starlight": "0.41.9",
+    "astro": "7.2.9",
     "oxiquill": "0.2.0"
   },
   "scripts": {
@@ -109,6 +111,8 @@ For local development against this checkout, use the same API with a local packa
 ```json
 {
   "dependencies": {
+    "@astrojs/starlight": "0.41.9",
+    "astro": "7.2.9",
     "oxiquill": "link:../oxiquill/packages/oxiquill"
   }
 }
@@ -117,16 +121,23 @@ For local development against this checkout, use the same API with a local packa
 The consumer config stays small:
 
 ```js
+import starlight from '@astrojs/starlight';
 import { defineOxiquillConfig } from 'oxiquill/astro';
 
 export default defineOxiquillConfig({
+  framework: { starlight },
   title: 'My Docs',
   sidebar: [{ label: 'Overview', items: [{ label: 'Home', slug: 'index' }] }]
 });
 ```
 
 ```ts
-export { collections } from 'oxiquill/content';
+import { defineCollection } from 'astro:content';
+import { docsLoader } from '@astrojs/starlight/loaders';
+import { docsSchema } from '@astrojs/starlight/schema';
+import { createOxiquillCollections } from 'oxiquill/content';
+
+export const collections = createOxiquillCollections({ defineCollection, docsLoader, docsSchema });
 ```
 
 Use `content/docs`, `crates`, `public`, and `.oxiquill` at the consumer repository root. Oxiquill writes generated internals and browser runtime assets into the consumer workspace, not into the installed package.
@@ -372,11 +383,13 @@ pnpm preview
 
 ### 別リポジトリから使う
 
-利用側の documentation repository では、framework dependency として `oxiquill` だけを追加します。
+利用側の documentation repository では、Oxiquill と、それが統合する Astro および Starlight の version を指定します。
 
 ```json
 {
   "dependencies": {
+    "@astrojs/starlight": "0.41.9",
+    "astro": "7.2.9",
     "oxiquill": "0.2.0"
   },
   "scripts": {
@@ -392,6 +405,8 @@ pnpm preview
 ```json
 {
   "dependencies": {
+    "@astrojs/starlight": "0.41.9",
+    "astro": "7.2.9",
     "oxiquill": "link:../oxiquill/packages/oxiquill"
   }
 }
@@ -400,16 +415,23 @@ pnpm preview
 consumer config は小さく保ちます。
 
 ```js
+import starlight from '@astrojs/starlight';
 import { defineOxiquillConfig } from 'oxiquill/astro';
 
 export default defineOxiquillConfig({
+  framework: { starlight },
   title: 'My Docs',
   sidebar: [{ label: 'Overview', items: [{ label: 'Home', slug: 'index' }] }]
 });
 ```
 
 ```ts
-export { collections } from 'oxiquill/content';
+import { defineCollection } from 'astro:content';
+import { docsLoader } from '@astrojs/starlight/loaders';
+import { docsSchema } from '@astrojs/starlight/schema';
+import { createOxiquillCollections } from 'oxiquill/content';
+
+export const collections = createOxiquillCollections({ defineCollection, docsLoader, docsSchema });
 ```
 
 利用側 repository root に `content/docs`、`crates`、`public`、`.oxiquill` を置きます。Oxiquill は生成内部ファイルと browser runtime asset を利用側 workspace に書き、installed package には書きません。

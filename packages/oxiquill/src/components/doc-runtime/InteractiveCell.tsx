@@ -1,10 +1,10 @@
 import { useState } from 'preact/hooks';
-import { labelsForLanguage, shouldShowRunButton } from '../../lib/doc-runtime/interactive-cell-model';
-import type { CellManifest } from '../../lib/doc-runtime/types';
-import { CellOutput } from './CellOutput';
-import { InputControl } from './InputControl';
-import { useManifestSnapshot, useRuntimeLabels } from './manifest-hooks';
-import { useInteractiveCellRun } from './useInteractiveCellRun';
+import { labelsForLanguage, shouldShowRunButton } from '../../lib/doc-runtime/interactive-cell-model.js';
+import type { CellManifest } from '../../lib/doc-runtime/types.js';
+import { CellOutput } from './CellOutput.js';
+import { InputControl } from './InputControl.js';
+import { useManifestSnapshot, useRuntimeLabels } from './manifest-hooks.js';
+import { useInteractiveCellRun } from './useInteractiveCellRun.js';
 
 interface InteractiveCellProps {
   cellId: string;

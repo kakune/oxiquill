@@ -1,8 +1,10 @@
+import starlight from '@astrojs/starlight';
 import { defineOxiquillConfig } from 'oxiquill/astro';
 
 const basePath = process.env.BASE_PATH;
 
 export default defineOxiquillConfig({
+  framework: { starlight },
   site: process.env.SITE ?? 'https://oxiquill.local',
   ...(basePath ? { base: basePath } : {}),
   starlight: {
