@@ -40,7 +40,7 @@
           });
           haskellGhc = ghc-wasm-meta.packages.${system}."wasm32-wasi-ghc-9_14";
           llvmTools = pkgs.llvmPackages.llvm;
-          chromiumExecutablePath = nixpkgs.lib.getExe pkgs.chromium;
+          playwrightBrowsers = pkgs.playwright-driver.browsers;
           nodeExecutablePath = nixpkgs.lib.getExe nodejs;
           haskellCompilerPath = "${haskellGhc}/bin/wasm32-wasi-ghc";
           llvmCovPath = "${llvmTools}/bin/llvm-cov";
@@ -53,7 +53,6 @@
             pkgs.cargo-llvm-cov
             llvmTools
             haskellGhc
-            pkgs.chromium
           ];
           cacheHook = ''
             export XDG_CACHE_HOME="$PWD/.cache/xdg"
@@ -69,12 +68,12 @@
         {
           inherit
             cacheHook
-            chromiumExecutablePath
             haskellCompilerPath
             llvmCovPath
             llvmProfdataPath
             nodeExecutablePath
             packages
+            playwrightBrowsers
             ;
         };
     in
@@ -92,8 +91,8 @@
             OXIQUILL_HASKELL_GHC = toolchain.haskellCompilerPath;
             LLVM_COV = toolchain.llvmCovPath;
             LLVM_PROFDATA = toolchain.llvmProfdataPath;
+            PLAYWRIGHT_BROWSERS_PATH = toolchain.playwrightBrowsers;
             PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD = "1";
-            PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH = toolchain.chromiumExecutablePath;
             shellHook = toolchain.cacheHook;
           };
         }
@@ -112,8 +111,8 @@
             OXIQUILL_HASKELL_GHC = toolchain.haskellCompilerPath;
             LLVM_COV = toolchain.llvmCovPath;
             LLVM_PROFDATA = toolchain.llvmProfdataPath;
+            PLAYWRIGHT_BROWSERS_PATH = toolchain.playwrightBrowsers;
             PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD = "1";
-            PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH = toolchain.chromiumExecutablePath;
           } ''
             node_version="$(node --version)"
             case "$node_version" in
@@ -138,7 +137,7 @@
             "$LLVM_PROFDATA" --version
             wasm-pack --version
             "$OXIQUILL_HASKELL_GHC" --version
-            "$PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH" --version
+            test -d "$PLAYWRIGHT_BROWSERS_PATH"
 
             mkdir -p "$out"
             {
