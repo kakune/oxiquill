@@ -12,11 +12,15 @@ export async function copyPyodideAssets({ fetchPackage, fileSystem = defaultFile
   const packageDir = resolvePyodidePackageDir({ fileSystem, paths });
   if (!fileSystem.existsSync(packageDir)) return false;
 
+  const [lockFile, pyodideVersion] = await Promise.all([
+    readJsonFile(path.join(packageDir, 'pyodide-lock.json'), { fileSystem }),
+    readPyodideVersion(packageDir, { fileSystem })
+  ]);
   const coreChanged = await Promise.all(
     [
       'pyodide.mjs',
       'pyodide.mjs.map',
-      'pyodide.asm.js',
+      'pyodide.asm.mjs',
       'pyodide.asm.wasm',
       'python_stdlib.zip',
       'pyodide-lock.json'
@@ -26,31 +30,33 @@ export async function copyPyodideAssets({ fetchPackage, fileSystem = defaultFile
       })
     )
   );
-  const lockFile = JSON.parse(await fileSystem.readFile(path.join(packageDir, 'pyodide-lock.json'), 'utf8'));
   const packageChanged = await copyVendoredPyodidePackages({
     fetchPackage,
     fileSystem,
     lockFile,
-    paths
+    paths,
+    pyodideVersion
   });
 
   return coreChanged.some(Boolean) || packageChanged;
 }
 
 export async function copyVendoredPyodidePackages({
-  fetchPackage = fetchPyodidePackage,
+  fetchPackage,
   fileSystem = defaultFileSystem,
   lockFile,
   paths,
+  pyodideVersion,
   roots = vendoredPyodidePackageRoots
 }) {
   const packages = resolveVendoredPyodidePackages(lockFile, roots);
+  const downloadPackage = fetchPackage ?? ((fileName) => fetchPyodidePackage(fileName, pyodideVersion));
   const changed = await Promise.all(
     packages.map(async (packageInfo) => {
       const targetPath = pathInUrl(paths.pyodidePublicDir, packageInfo.file_name);
       if (await hasPackageContent(targetPath, packageInfo.sha256, { fileSystem })) return false;
 
-      const content = await fetchPackage(packageInfo.file_name);
+      const content = await downloadPackage(packageInfo.file_name);
       assertPackageSha256(content, packageInfo.sha256, packageInfo.name);
       await fileSystem.mkdir(path.dirname(targetPath), { recursive: true });
       await fileSystem.writeFile(targetPath, content);
@@ -59,6 +65,23 @@ export async function copyVendoredPyodidePackages({
   );
 
   return changed.some(Boolean);
+}
+
+async function readPyodideVersion(packageDir, { fileSystem }) {
+  const packageMetadata = await readJsonFile(path.join(packageDir, 'package.json'), { fileSystem });
+  if (typeof packageMetadata.version !== 'string' || packageMetadata.version.trim() === '') {
+    throw new Error('Pyodide package metadata is missing a version.');
+  }
+
+  return packageMetadata.version;
+}
+
+async function readJsonFile(filePath, { fileSystem }) {
+  try {
+    return JSON.parse(await fileSystem.readFile(filePath, 'utf8'));
+  } catch (error) {
+    throw new Error(`Pyodide metadata file is invalid: ${filePath}.`, { cause: error });
+  }
 }
 
 function resolvePyodidePackageDir({ fileSystem, paths }) {
@@ -102,8 +125,12 @@ function assertPackageSha256(content, expectedSha256, packageName) {
   }
 }
 
-async function fetchPyodidePackage(fileName) {
-  const url = `https://cdn.jsdelivr.net/pyodide/v0.29.4/full/${fileName}`;
+async function fetchPyodidePackage(fileName, pyodideVersion) {
+  if (typeof pyodideVersion !== 'string' || pyodideVersion.trim() === '') {
+    throw new Error('A Pyodide version is required to download vendored packages.');
+  }
+
+  const url = `https://cdn.jsdelivr.net/pyodide/v${pyodideVersion}/full/${fileName}`;
   const response = await fetch(url);
   if (!response.ok) {
     throw new Error(`Failed to download ${url}: ${response.status} ${response.statusText}`);

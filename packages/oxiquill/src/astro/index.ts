@@ -2,11 +2,12 @@ import { existsSync, readFileSync, realpathSync } from 'node:fs';
 import { createRequire } from 'node:module';
 import path from 'node:path';
 import { defineConfig } from 'astro/config';
+import { unified } from '@astrojs/markdown-remark';
 import preact from '@astrojs/preact';
 import starlight from '@astrojs/starlight';
 import rehypeKatex from 'rehype-katex';
 import remarkMath from 'remark-math';
-import { mergeAlias, transformWithEsbuild } from 'vite';
+import { mergeAlias, transformWithOxc } from 'vite';
 import type {
   AstroIntegration,
   AstroUserConfig,
@@ -60,7 +61,12 @@ type ViteWorkerPlugins = PluginOption[] | (() => PluginOption[]);
 type DocRuntimeContext = Awaited<ReturnType<typeof createDocRuntimeContext>>;
 type BundledModuleCollector = ReturnType<typeof createBundledModuleCollector>;
 
-const frameworkPackageNames = ['astro', '@astrojs/preact', '@astrojs/starlight'];
+const frameworkPackageNames = [
+  'astro',
+  '@astrojs/markdown-remark',
+  '@astrojs/preact',
+  '@astrojs/starlight'
+];
 const viteManagedPackageNames = [
   ...frameworkPackageNames,
   '@preact/signals',
@@ -154,6 +160,7 @@ export function defineOxiquillConfig(options: OxiquillConfig = {}): BaseAstroUse
   };
 
   const config: BaseAstroUserConfig = {
+    compressHTML: true,
     output: 'static',
     srcDir: '.',
     ...astroOptions,
@@ -279,8 +286,12 @@ function mergeMarkdownConfig(
   markdown: AstroMarkdownConfig
 ) {
   const {
+    gfm,
+    processor,
     rehypePlugins = [],
+    remarkRehype,
     remarkPlugins = [],
+    smartypants,
     syntaxHighlight,
     ...markdownRest
   } = markdown;
@@ -288,22 +299,27 @@ function mergeMarkdownConfig(
 
   return {
     ...markdownRest,
+    processor: processor ?? unified({
+      gfm,
+      rehypePlugins: [
+        rehypeKatex,
+        ...rehypePlugins
+      ],
+      remarkPlugins: [
+        remarkMath,
+        [remarkPublicAssetBase, { base }],
+        [remarkInteractiveCells, { root: pathFromUrl(paths.workspaceRoot) }],
+        remarkMermaidDiagrams,
+        ...remarkPlugins
+      ],
+      remarkRehype,
+      smartypants
+    }),
     syntaxHighlight: {
       ...syntaxHighlightOptions,
       type: syntaxHighlightOptions.type ?? 'shiki',
       excludeLangs: syntaxHighlightOptions.excludeLangs ?? ['math', 'mermaid']
-    },
-    remarkPlugins: [
-      remarkMath,
-      [remarkPublicAssetBase, { base }],
-      [remarkInteractiveCells, { root: pathFromUrl(paths.workspaceRoot) }],
-      remarkMermaidDiagrams,
-      ...remarkPlugins
-    ],
-    rehypePlugins: [
-      rehypeKatex,
-      ...rehypePlugins
-    ]
+    }
   };
 }
 
@@ -352,7 +368,7 @@ function mergeViteConfig(
       ]
     },
     build: {
-      chunkSizeWarningLimit: 650,
+      chunkSizeWarningLimit: 675,
       ...vite.build
     },
     plugins: [
@@ -375,10 +391,12 @@ function oxiquillPreactJsxPlugin(paths: OxiquillPaths): Plugin {
       const filePath = id.split('?', 1)[0];
       if (!filePath.endsWith('.tsx') || !isPathWithin(sourceRoot, filePath)) return undefined;
 
-      return transformWithEsbuild(code, filePath, {
-        jsx: 'automatic',
-        jsxImportSource: 'preact',
-        loader: 'tsx',
+      return transformWithOxc(code, filePath, {
+        jsx: {
+          importSource: 'preact',
+          runtime: 'automatic'
+        },
+        lang: 'tsx',
         sourcemap: true
       });
     }

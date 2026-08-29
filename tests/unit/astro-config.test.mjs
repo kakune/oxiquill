@@ -98,10 +98,46 @@ describe('defineOxiquillConfig', () => {
       sidebar: [],
       title: 'Docs'
     });
+    const update = runConfigSetup(config);
 
     expect(integrationNames(config)).toContain('oxiquill');
     expect(integrationNames(config)).toContain('@astrojs/preact');
     expect(integrationNames(config)).toContain('@astrojs/starlight');
+    expect(config.compressHTML).toBe(true);
+    expect(update.markdown.processor.name).toBe('unified');
+  });
+
+  it('configures Oxiquill and consumer plugins on the unified Markdown processor', () => {
+    const remarkPlugin = () => {};
+    const rehypePlugin = () => {};
+    const config = defineOxiquillConfig({
+      markdown: {
+        rehypePlugins: [rehypePlugin],
+        remarkPlugins: [remarkPlugin]
+      },
+      sidebar: [],
+      title: 'Docs'
+    });
+    const update = runConfigSetup(config);
+
+    expect(update.markdown.processor.options.remarkPlugins.at(-1)).toBe(remarkPlugin);
+    expect(update.markdown.processor.options.rehypePlugins.at(-1)).toBe(rehypePlugin);
+    expect(update.markdown).not.toHaveProperty('remarkPlugins');
+    expect(update.markdown).not.toHaveProperty('rehypePlugins');
+  });
+
+  it('preserves explicit Astro rendering and Markdown processor options', () => {
+    const processor = { render: vi.fn() };
+    const config = defineOxiquillConfig({
+      compressHTML: 'jsx',
+      markdown: { processor },
+      sidebar: [],
+      title: 'Docs'
+    });
+    const update = runConfigSetup(config);
+
+    expect(config.compressHTML).toBe('jsx');
+    expect(update.markdown.processor).toBe(processor);
   });
 
   it('passes top-level shorthand options to Starlight', () => {

@@ -507,9 +507,10 @@ describe('doc runtime service', () => {
     const present = createMemoryFileSystem(
       Object.fromEntries(
         [
+          ['package.json', JSON.stringify({ version: '314.0.6' })],
           'pyodide.mjs',
           'pyodide.mjs.map',
-          'pyodide.asm.js',
+          'pyodide.asm.mjs',
           'pyodide.asm.wasm',
           'python_stdlib.zip',
           ['pyodide-lock.json', JSON.stringify(lockFile)]
@@ -526,6 +527,13 @@ describe('doc runtime service', () => {
     expect(present.files.get('/repo/public/oxiquill/pyodide/matplotlib.whl')).toEqual(Buffer.from('matplotlib bytes'));
     expect(present.files.get('/repo/public/oxiquill/pyodide/pandas.whl')).toEqual(Buffer.from('pandas bytes'));
     await expect(copyPyodideAssets({ fetchPackage, fileSystem: present, paths, root: '/repo' })).resolves.toBe(false);
+
+    const missingVersion = createMemoryFileSystem({
+      '/repo/node_modules/pyodide/package.json': '{}',
+      '/repo/node_modules/pyodide/pyodide-lock.json': JSON.stringify(lockFile)
+    });
+    await expect(copyPyodideAssets({ fileSystem: missingVersion, paths, root: '/repo' }))
+      .rejects.toThrow('missing a version');
   });
 
   it('resolves and verifies vendored Pyodide packages recursively', async () => {
@@ -618,12 +626,13 @@ describe('doc runtime service', () => {
         fileSystem: createMemoryFileSystem(),
         lockFile,
         paths,
+        pyodideVersion: '314.0.6',
         roots: ['root']
       })).resolves.toBe(true);
     } finally {
       globalThis.fetch = originalFetch;
     }
-    expect(requestedUrls).toEqual(['https://cdn.jsdelivr.net/pyodide/v0.29.4/full/root.whl']);
+    expect(requestedUrls).toEqual(['https://cdn.jsdelivr.net/pyodide/v314.0.6/full/root.whl']);
 
     globalThis.fetch = async () => ({
       ok: false,
@@ -635,6 +644,7 @@ describe('doc runtime service', () => {
         fileSystem: createMemoryFileSystem(),
         lockFile,
         paths,
+        pyodideVersion: '314.0.6',
         roots: ['root']
       })).rejects.toThrow('503 unavailable');
     } finally {
