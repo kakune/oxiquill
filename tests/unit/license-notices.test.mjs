@@ -213,6 +213,22 @@ describe('license notices', () => {
       }
     ]);
 
+    const customPaths = createDocRuntimePaths({
+      frameworkRoot,
+      pyodidePublicDir: 'python-runtime',
+      workspaceRoot
+    });
+    const custom = createMemoryFileSystem({
+      [licensePath('MIT.txt')]: 'Runtime license text',
+      [workspacePath('public/oxiquill/python-runtime/runtime.wasm')]: 'wasm'
+    });
+    await expect(collectRuntimeArtifactNotices({
+      fileSystem: custom,
+      licenseDataDir,
+      manifest: runtimeManifest,
+      paths: customPaths
+    })).resolves.toHaveLength(1);
+
     const inactive = createMemoryFileSystem({ [licensePath('MIT.txt')]: 'Runtime license text' });
     await expect(
       collectRuntimeArtifactNotices({

@@ -94,6 +94,10 @@ describe('python worker asset URLs', () => {
       indexUrl: '/oxiquill/oxiquill/pyodide/',
       moduleUrl: '/oxiquill/oxiquill/pyodide/pyodide.mjs'
     });
+    expect(resolvePyodideUrls('/notes', 'runtime%20assets/python/')).toEqual({
+      indexUrl: '/notes/runtime%20assets/python/',
+      moduleUrl: '/notes/runtime%20assets/python/pyodide.mjs'
+    });
   });
 });
 
