@@ -252,14 +252,21 @@ describe('defineOxiquillConfig', () => {
         import.meta.url
       )
     );
+    const windowsPnpmComponentPath =
+      'C:/Users/RUNNER~1/AppData/Local/Temp/consumer/node_modules/.pnpm/oxiquill@file+..+oxiquill/node_modules/oxiquill/src/components/doc-runtime/InteractiveCell.tsx';
 
     const transformed = await plugin.transform('export default () => <section>ok</section>;', componentPath);
     const linkedTransformed = await plugin.transform(
       'export default () => <section>ok</section>;',
       linkedComponentPath
     );
+    const windowsPnpmTransformed = await plugin.transform(
+      'export default () => <section>ok</section>;',
+      windowsPnpmComponentPath
+    );
     expect(transformed.code).toContain('preact/jsx-runtime');
     expect(linkedTransformed.code).toContain('preact/jsx-runtime');
+    expect(windowsPnpmTransformed.code).toContain('preact/jsx-runtime');
     await expect(plugin.transform('export default () => <div />;', '/consumer/Component.tsx')).resolves.toBeUndefined();
   });
 

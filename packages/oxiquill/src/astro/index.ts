@@ -375,7 +375,7 @@ function browserBundleCollectorPlugin(collector: BrowserBundleCollector, source:
 }
 
 function oxiquillPreactJsxPlugin(paths: OxiquillPaths): Plugin {
-  const sourceRoot = realpathSync(pathInUrl(paths.frameworkRoot, 'src'));
+  const sourceRoot = realpathSync.native(pathInUrl(paths.frameworkRoot, 'src'));
 
   return {
     enforce: 'pre',
@@ -384,8 +384,8 @@ function oxiquillPreactJsxPlugin(paths: OxiquillPaths): Plugin {
       const filePath = id.split('?', 1)[0];
       if (!filePath.endsWith('.tsx')) return undefined;
 
-      const realFilePath = existsSync(filePath) ? realpathSync(filePath) : filePath;
-      if (!isPathWithin(sourceRoot, realFilePath)) return undefined;
+      const realFilePath = existsSync(filePath) ? realpathSync.native(filePath) : filePath;
+      if (!isPathWithin(sourceRoot, realFilePath) && !isInstalledOxiquillSource(filePath)) return undefined;
 
       return transformWithOxc(code, filePath, {
         jsx: {
@@ -687,6 +687,11 @@ function existingRealPaths(paths: string[]): string[] {
 function isPathWithin(directory: string, filePath: string): boolean {
   const relative = path.relative(directory, filePath);
   return relative !== '' && !relative.startsWith(`..${path.sep}`) && !path.isAbsolute(relative);
+}
+
+function isInstalledOxiquillSource(filePath: string): boolean {
+  const normalizedPath = filePath.replaceAll('\\', '/').toLowerCase();
+  return normalizedPath.includes('/node_modules/oxiquill/src/');
 }
 
 function mergeServerFsAllow(allow: string[] | undefined, additions: string[]): string[] {
