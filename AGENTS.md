@@ -7,13 +7,12 @@
 ## Branch Strategy
 
 - Do development work on topic branches such as `feat/...`, `fix/...`, `chore/...`, or `docs/...`.
-- Submit topic branch changes to `develop` by pull request. Do not push directly to `develop` or `main`.
+- Submit every topic branch, Dependabot update, and release preparation branch to `main` by pull request. Do not push directly to `main`.
 - Keep commits small and separated by logical meaning.
-- Pull requests to `main` must come only from release branches, for example `release/v0.1.1`.
-- After a release branch is merged into `main`, merge that same release branch into `develop` so `develop` stays in sync.
-- Use squash merge when merging into `develop`.
-- Use merge commits when merging into `main`.
-- Branch rules prohibit all other merge methods.
+- Keep pull requests up to date with `main`, pass every required check, and resolve review conversations before merging.
+- Use squash merge for every pull request into `main`; branch rules prohibit other merge methods.
+- Delete merged topic branches. GitHub deletes them automatically unless a protection rule retains them.
+- Prepare releases on `release/vX.Y.Z` branches created from the latest `main`. Squash-merge the release pull request into `main`, tag the resulting `main` commit, and retain the protected release branch without further updates.
 
 ## Project Shape
 
