@@ -5,9 +5,7 @@ import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { pathToFileURL } from 'node:url';
 import { afterEach, describe, expect, it } from 'vitest';
-import {
-  createOxiquillIntegrationMetadata
-} from '../../packages/oxiquill/src/config/metadata.mjs';
+import { createOxiquillIntegrationMetadata } from '../../packages/oxiquill/src/config/metadata.mjs';
 import {
   loadOxiquillProjectConfig,
   resolveAstroConfigFile,
@@ -19,9 +17,7 @@ const temporaryDirectories = [];
 const astroModuleUrl = new URL('../../packages/oxiquill/src/astro/index.ts', import.meta.url).href;
 
 afterEach(async () => {
-  await Promise.all(
-    temporaryDirectories.splice(0).map((directory) => rm(directory, { force: true, recursive: true }))
-  );
+  await Promise.all(temporaryDirectories.splice(0).map((directory) => rm(directory, { force: true, recursive: true })));
 });
 
 describe('Oxiquill project configuration', () => {
@@ -78,24 +74,26 @@ describe('Oxiquill project configuration', () => {
   });
 
   it('normalizes Windows separators for generated URLs and identifiers', () => {
-    expect(normalizePath('C:\\workspace\\public\\oxiquill assets')).toBe(
-      'C:/workspace/public/oxiquill assets'
-    );
+    expect(normalizePath('C:\\workspace\\public\\oxiquill assets')).toBe('C:/workspace/public/oxiquill assets');
   });
 
   it('accepts equivalent explicit paths and reports conflicting fields', () => {
     const root = path.resolve('/repo');
-    expect(() => resolveProject({
-      root,
-      astro: { publicDir: './public-assets' },
-      paths: { publicDir: 'nested/../public-assets' }
-    })).not.toThrow();
+    expect(() =>
+      resolveProject({
+        root,
+        astro: { publicDir: './public-assets' },
+        paths: { publicDir: 'nested/../public-assets' }
+      })
+    ).not.toThrow();
 
-    expect(() => resolveProject({
-      root,
-      astro: { cacheDir: '.astro-cache' },
-      paths: { cacheDir: '.runtime-cache' }
-    })).toThrow(
+    expect(() =>
+      resolveProject({
+        root,
+        astro: { cacheDir: '.astro-cache' },
+        paths: { cacheDir: '.runtime-cache' }
+      })
+    ).toThrow(
       `Conflicting project paths: cacheDir resolves to ${path.join(root, '.astro-cache')}, ` +
         `but paths.cacheDir resolves to ${path.join(root, '.runtime-cache')}.`
     );
@@ -120,12 +118,15 @@ describe('Oxiquill project configuration', () => {
   it('rejects malformed and broad owned paths before work begins', () => {
     const root = path.resolve('/repo');
     expect(() => resolveProject({ root, paths: { docsDir: '' } })).toThrow('docsDir must not be empty');
-    expect(() => resolveProject({ root, paths: { docsDir: new URL('https://example.com/docs') } }))
-      .toThrow('docsDir must be a path string or file URL');
-    expect(() => resolveProject({ root, astro: { cacheDir: '.' } }))
-      .toThrow('cacheDir must resolve to a directory inside');
-    expect(() => resolveProject({ root, paths: { publicAssetsDir: '..' } }))
-      .toThrow('paths.publicAssetsDir must resolve to a directory inside');
+    expect(() => resolveProject({ root, paths: { docsDir: new URL('https://example.com/docs') } })).toThrow(
+      'docsDir must be a path string or file URL'
+    );
+    expect(() => resolveProject({ root, astro: { cacheDir: '.' } })).toThrow(
+      'cacheDir must resolve to a directory inside'
+    );
+    expect(() => resolveProject({ root, paths: { publicAssetsDir: '..' } })).toThrow(
+      'paths.publicAssetsDir must resolve to a directory inside'
+    );
   });
 
   it('uses Astro config discovery order and explicit config paths', async () => {
@@ -134,24 +135,29 @@ describe('Oxiquill project configuration', () => {
     await writeFile(path.join(root, 'astro.config.js'), 'export default {};\n');
 
     expect(resolveAstroConfigFile({ cwd: root })).toBe(path.join(root, 'astro.config.js'));
-    expect(resolveAstroConfigFile({ cwd: root, configFile: 'astro.config.ts' }))
-      .toBe(path.join(root, 'astro.config.ts'));
-    expect(() => resolveAstroConfigFile({ cwd: root, configFile: 'missing.mjs' }))
-      .toThrow('Astro config file was not found');
+    expect(resolveAstroConfigFile({ cwd: root, configFile: 'astro.config.ts' })).toBe(
+      path.join(root, 'astro.config.ts')
+    );
+    expect(() => resolveAstroConfigFile({ cwd: root, configFile: 'missing.mjs' })).toThrow(
+      'Astro config file was not found'
+    );
   });
 
   it('loads a custom config through Vite and finds its integration metadata', async () => {
     const root = await temporaryDirectory();
     const configPath = path.join(root, 'custom config.mts');
-    await writeFile(configPath, [
-      `import { defineOxiquillConfig } from ${JSON.stringify(astroModuleUrl)};`,
-      'export default defineOxiquillConfig({',
-      '  cacheDir: "custom cache",',
-      '  framework: { starlight: () => ({ name: "starlight", hooks: {} }) },',
-      '  paths: { docsDir: "written docs", generatedDir: "generated runtime" }',
-      '});',
-      ''
-    ].join('\n'));
+    await writeFile(
+      configPath,
+      [
+        `import { defineOxiquillConfig } from ${JSON.stringify(astroModuleUrl)};`,
+        'export default defineOxiquillConfig({',
+        '  cacheDir: "custom cache",',
+        '  framework: { starlight: () => ({ name: "starlight", hooks: {} }) },',
+        '  paths: { docsDir: "written docs", generatedDir: "generated runtime" }',
+        '});',
+        ''
+      ].join('\n')
+    );
 
     const projectConfig = await loadOxiquillProjectConfig({ cwd: root, configFile: 'custom config.mts' });
 
@@ -160,9 +166,7 @@ describe('Oxiquill project configuration', () => {
       docsDir: path.join(root, 'written docs'),
       generatedDir: path.join(root, 'custom cache/generated runtime')
     });
-    expect(projectConfig.astroConfigArgs).toEqual([
-      '--root', root, '--config', 'custom config.mts'
-    ]);
+    expect(projectConfig.astroConfigArgs).toEqual(['--root', root, '--config', 'custom config.mts']);
   });
 
   it('fails clearly for missing, invalid, absent, and duplicate integrations', async () => {
@@ -170,20 +174,26 @@ describe('Oxiquill project configuration', () => {
     await expect(loadOxiquillProjectConfig({ cwd: root })).rejects.toThrow('No Astro config was found');
 
     await writeFile(path.join(root, 'invalid.mjs'), 'export default { broken: ;\n');
-    await expect(loadOxiquillProjectConfig({ cwd: root, configFile: 'invalid.mjs' }))
-      .rejects.toThrow('Unable to load Oxiquill project config');
+    await expect(loadOxiquillProjectConfig({ cwd: root, configFile: 'invalid.mjs' })).rejects.toThrow(
+      'Unable to load Oxiquill project config'
+    );
 
     await writeFile(path.join(root, 'none.mjs'), 'export default {};\n');
-    await expect(loadOxiquillProjectConfig({ cwd: root, configFile: 'none.mjs' }))
-      .rejects.toThrow('does not contain an Oxiquill integration');
+    await expect(loadOxiquillProjectConfig({ cwd: root, configFile: 'none.mjs' })).rejects.toThrow(
+      'does not contain an Oxiquill integration'
+    );
 
-    await writeFile(path.join(root, 'duplicate.mjs'), [
-      `import { oxiquillIntegration } from ${JSON.stringify(astroModuleUrl)};`,
-      'export default { integrations: [oxiquillIntegration(), oxiquillIntegration()] };',
-      ''
-    ].join('\n'));
-    await expect(loadOxiquillProjectConfig({ cwd: root, configFile: 'duplicate.mjs' }))
-      .rejects.toThrow('contains 2 Oxiquill integrations; expected exactly one');
+    await writeFile(
+      path.join(root, 'duplicate.mjs'),
+      [
+        `import { oxiquillIntegration } from ${JSON.stringify(astroModuleUrl)};`,
+        'export default { integrations: [oxiquillIntegration(), oxiquillIntegration()] };',
+        ''
+      ].join('\n')
+    );
+    await expect(loadOxiquillProjectConfig({ cwd: root, configFile: 'duplicate.mjs' })).rejects.toThrow(
+      'contains 2 Oxiquill integrations; expected exactly one'
+    );
   });
 });
 

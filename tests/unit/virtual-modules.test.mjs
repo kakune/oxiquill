@@ -88,15 +88,9 @@ describe('oxiquill virtual modules', () => {
     });
     const plugin = oxiquillVirtualModulesPlugin(paths);
 
-    expect(plugin.resolveId('virtual:oxiquill/runtime-paths')).toBe(
-      '\0virtual:oxiquill/runtime-paths'
-    );
-    expect(plugin.load('\0virtual:oxiquill/runtime-paths')).toContain(
-      'runtime%20assets/compiled%20haskell/'
-    );
-    expect(plugin.load('\0virtual:oxiquill/runtime-paths')).toContain(
-      'runtime%20assets/python%20runtime/'
-    );
+    expect(plugin.resolveId('virtual:oxiquill/runtime-paths')).toBe('\0virtual:oxiquill/runtime-paths');
+    expect(plugin.load('\0virtual:oxiquill/runtime-paths')).toContain('runtime%20assets/compiled%20haskell/');
+    expect(plugin.load('\0virtual:oxiquill/runtime-paths')).toContain('runtime%20assets/python%20runtime/');
   });
 
   it('watches generated files without forcing full-page reloads', () => {

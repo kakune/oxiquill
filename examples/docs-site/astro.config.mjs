@@ -34,9 +34,21 @@ export default defineOxiquillConfig({
         translations: { ja: 'ガイド' },
         items: [
           { label: 'Getting Started', translations: { ja: 'はじめに' }, slug: 'guides/getting-started' },
-          { label: 'Project Configuration', translations: { ja: 'プロジェクト設定' }, slug: 'guides/project-configuration' },
-          { label: 'Python Runtime Assets', translations: { ja: 'Python runtime asset' }, slug: 'guides/python-runtime' },
-          { label: 'Support and Security', translations: { ja: 'サポートとセキュリティ' }, slug: 'guides/support-and-security' },
+          {
+            label: 'Project Configuration',
+            translations: { ja: 'プロジェクト設定' },
+            slug: 'guides/project-configuration'
+          },
+          {
+            label: 'Python Runtime Assets',
+            translations: { ja: 'Python runtime asset' },
+            slug: 'guides/python-runtime'
+          },
+          {
+            label: 'Support and Security',
+            translations: { ja: 'サポートとセキュリティ' },
+            slug: 'guides/support-and-security'
+          },
           { label: 'Troubleshooting', translations: { ja: 'トラブルシューティング' }, slug: 'guides/troubleshooting' },
           { label: 'Authoring Guide', translations: { ja: '執筆ガイド' }, slug: 'guides/authoring' },
           { label: 'Templates', translations: { ja: 'テンプレート' }, slug: 'guides/templates' },

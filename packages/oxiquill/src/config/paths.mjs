@@ -90,10 +90,12 @@ export function canonicalPath(value) {
 
 export function isPathWithin(parentPath, candidatePath) {
   const relativePath = path.relative(canonicalPath(parentPath), canonicalPath(candidatePath));
-  return relativePath !== '' &&
+  return (
+    relativePath !== '' &&
     relativePath !== '..' &&
     !relativePath.startsWith(`..${path.sep}`) &&
-    !path.isAbsolute(relativePath);
+    !path.isAbsolute(relativePath)
+  );
 }
 
 export function assertPathWithin(parentPath, candidatePath, fieldName) {
@@ -126,9 +128,7 @@ function assertFileUrl(value) {
 }
 
 function withoutTrailingSeparator(value) {
-  return value.length > path.parse(value).root.length && value.endsWith(path.sep)
-    ? value.slice(0, -1)
-    : value;
+  return value.length > path.parse(value).root.length && value.endsWith(path.sep) ? value.slice(0, -1) : value;
 }
 
 function inferDefaultFrameworkRoot() {

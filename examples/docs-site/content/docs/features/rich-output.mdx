@@ -20,14 +20,14 @@ Every artifact may have optional string `id`, `title`, and `caption` fields. Val
 
 ## Artifact Schema
 
-| Kind | Required fields | Optional behavior |
-| --- | --- | --- |
-| `text` | `stream: "stdout" \| "stderr" \| "display"`, `content: string` | `truncated` indicates bounded content. |
-| `json` | `value` | Cycle-aware formatting represents BigInt explicitly; `truncated` indicates bounded serialized data. |
-| `table` | `columns`, rectangular `rows` | `rowCount` records the original size; `truncated` marks a preview. |
-| `chart` | Valid `spec` described below | Oversize/invalid charts become a local artifact error. |
-| `image` | `mime: image/png \| image/jpeg \| image/svg+xml`, valid data | `alt` supplies the image alternative. |
-| `html` | `html: string`, `sandboxed: true` | Always rendered in an iframe with an empty sandbox permission set. |
+| Kind    | Required fields                                                | Optional behavior                                                                                   |
+| ------- | -------------------------------------------------------------- | --------------------------------------------------------------------------------------------------- |
+| `text`  | `stream: "stdout" \| "stderr" \| "display"`, `content: string` | `truncated` indicates bounded content.                                                              |
+| `json`  | `value`                                                        | Cycle-aware formatting represents BigInt explicitly; `truncated` indicates bounded serialized data. |
+| `table` | `columns`, rectangular `rows`                                  | `rowCount` records the original size; `truncated` marks a preview.                                  |
+| `chart` | Valid `spec` described below                                   | Oversize/invalid charts become a local artifact error.                                              |
+| `image` | `mime: image/png \| image/jpeg \| image/svg+xml`, valid data   | `alt` supplies the image alternative.                                                               |
+| `html`  | `html: string`, `sandboxed: true`                              | Always rendered in an iframe with an empty sandbox permission set.                                  |
 
 Table columns contain `key`, `label`, and optional `type`: `string`, `number`, `integer`, `boolean`, `date`, `datetime`, `null`, or `unknown`. Every row must have exactly the declared column count.
 
@@ -46,14 +46,14 @@ Charts expose a textual title/caption and bounded accessible summary or equivale
 
 Limits apply after validation and are cumulative for each run:
 
-| Resource | Limit | Over-limit result |
-| --- | --- | --- |
-| Artifacts | 100 per run | Additional artifacts are rejected locally. |
-| Text, serialized JSON, HTML | 1 MiB per artifact | Text/JSON may use `truncated: true`; HTML is rejected. |
-| Table | 10,000 rows and 100 columns | A bounded table may use `truncated: true` and `rowCount`. |
-| Chart | 100,000 total points/bins/cells | Artifact-local error. |
-| Image | 10 MiB decoded bytes | Artifact-local error. |
-| All validated output | 16 MiB per run | Artifacts exceeding the remaining budget are rejected locally. |
+| Resource                    | Limit                           | Over-limit result                                              |
+| --------------------------- | ------------------------------- | -------------------------------------------------------------- |
+| Artifacts                   | 100 per run                     | Additional artifacts are rejected locally.                     |
+| Text, serialized JSON, HTML | 1 MiB per artifact              | Text/JSON may use `truncated: true`; HTML is rejected.         |
+| Table                       | 10,000 rows and 100 columns     | A bounded table may use `truncated: true` and `rowCount`.      |
+| Chart                       | 100,000 total points/bins/cells | Artifact-local error.                                          |
+| Image                       | 10 MiB decoded bytes            | Artifact-local error.                                          |
+| All validated output        | 16 MiB per run                  | Artifacts exceeding the remaining budget are rejected locally. |
 
 `truncated: true` is valid only for text, JSON, and table artifacts. Chart, image, and HTML artifacts are never silently truncated. Invalid/cyclic/over-deep JSON, ragged tables, non-finite chart values, invalid base64/MIME pairs, or unsafe structural records cannot crash the cell component.
 

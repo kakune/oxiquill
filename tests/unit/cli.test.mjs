@@ -79,9 +79,7 @@ describe('oxiquill CLI', () => {
       configFile: 'custom.mjs'
     });
     expect(() => parseConfigOption(['--config'])).toThrow('--config must be followed by a path');
-    expect(() => parseConfigOption(['--config=a', '--config', 'b'])).toThrow(
-      '--config may only be specified once'
-    );
+    expect(() => parseConfigOption(['--config=a', '--config', 'b'])).toThrow('--config may only be specified once');
   });
 
   it('loads a selected config once and forwards the resolved Astro arguments', async () => {
@@ -104,7 +102,13 @@ describe('oxiquill CLI', () => {
     expect(runCommand).toHaveBeenCalledWith(
       nodePath,
       expect.arrayContaining([
-        'preview', '--root', actualRepoRoot, '--config', '../custom config.mts', '--host', 'localhost'
+        'preview',
+        '--root',
+        actualRepoRoot,
+        '--config',
+        '../custom config.mts',
+        '--host',
+        'localhost'
       ]),
       expect.objectContaining({ cwd: actualRepoRoot })
     );

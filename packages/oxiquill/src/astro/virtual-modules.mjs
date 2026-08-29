@@ -27,10 +27,7 @@ export function oxiquillVirtualModulesPlugin(paths) {
     ]
   ]);
   const rustWasmFile = pathInUrl(paths.rustWasmPublicDir, 'doc_rust_cells.js');
-  const watchedFiles = [
-    ...Array.from(generatedModules.values()).map(({ file }) => file),
-    rustWasmFile
-  ];
+  const watchedFiles = [...Array.from(generatedModules.values()).map(({ file }) => file), rustWasmFile];
   const changedFileModuleIds = new Map([
     [normalizePath(pathFromUrl(paths.cellsModulePath)), '\0virtual:oxiquill/cells'],
     [normalizePath(pathFromUrl(paths.runtimeVersionPath)), '\0virtual:oxiquill/runtime-version'],

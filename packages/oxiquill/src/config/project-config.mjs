@@ -2,16 +2,8 @@ import { existsSync } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { loadConfigFromFile } from 'vite';
-import {
-  assertPathWithin,
-  canonicalPath,
-  createOxiquillPaths,
-  directoryPath
-} from './paths.mjs';
-import {
-  astroDirectoryOptionNames,
-  readOxiquillMetadata
-} from './metadata.mjs';
+import { assertPathWithin, canonicalPath, createOxiquillPaths, directoryPath } from './paths.mjs';
+import { astroDirectoryOptionNames, readOxiquillMetadata } from './metadata.mjs';
 
 const astroConfigFileNames = Object.freeze([
   'astro.config.mjs',
@@ -60,11 +52,12 @@ export async function loadOxiquillProjectConfig({ cwd = process.cwd(), configFil
 
   const configMetadata = readOxiquillMetadata(loaded.config);
   const integrationMetadata = integrationEntries[0].metadata;
-  const astroExplicitFields = configMetadata?.kind === 'config'
-    ? configMetadata.astroExplicitFields
-    : astroDirectoryOptionNames.filter(
-        (fieldName) => Object.hasOwn(loaded.config, fieldName) && loaded.config[fieldName] !== undefined
-      );
+  const astroExplicitFields =
+    configMetadata?.kind === 'config'
+      ? configMetadata.astroExplicitFields
+      : astroDirectoryOptionNames.filter(
+          (fieldName) => Object.hasOwn(loaded.config, fieldName) && loaded.config[fieldName] !== undefined
+        );
 
   return resolveOxiquillProjectConfig({
     astroConfig: loaded.config,
@@ -87,10 +80,7 @@ export function resolveOxiquillProjectConfig({
   }
 
   const invocationCwd = canonicalPath(pathFromConfigValue(cwd, process.cwd(), 'cwd'));
-  const explicitAstroFields = new Set([
-    ...astroExplicitFields,
-    ...integrationMetadata.astroExplicitFields
-  ]);
+  const explicitAstroFields = new Set([...astroExplicitFields, ...integrationMetadata.astroExplicitFields]);
   const explicitPathFields = new Set(integrationMetadata.pathExplicitFields);
   const astroOptions = {
     ...integrationMetadata.astro,
@@ -131,10 +121,7 @@ export function resolveOxiquillProjectConfig({
     pathOptions,
     pathExplicitFields: explicitPathFields
   });
-  const outDir = directoryPath(
-    explicitAstroFields.has('outDir') ? astroOptions.outDir : 'dist',
-    workspaceRoot
-  );
+  const outDir = directoryPath(explicitAstroFields.has('outDir') ? astroOptions.outDir : 'dist', workspaceRoot);
   const paths = createOxiquillPaths({
     ...pathOptions,
     workspaceRoot,
@@ -149,12 +136,7 @@ export function resolveOxiquillProjectConfig({
     ? path.resolve(pathFromConfigValue(configFile, invocationCwd, 'configFile'))
     : undefined;
   const astroConfigArgs = resolvedConfigFile
-    ? Object.freeze([
-        '--root',
-        paths.workspaceRoot,
-        '--config',
-        path.relative(paths.workspaceRoot, resolvedConfigFile)
-      ])
+    ? Object.freeze(['--root', paths.workspaceRoot, '--config', path.relative(paths.workspaceRoot, resolvedConfigFile)])
     : Object.freeze(['--root', paths.workspaceRoot]);
 
   return Object.freeze({

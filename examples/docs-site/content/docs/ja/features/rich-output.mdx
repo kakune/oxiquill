@@ -20,14 +20,14 @@ Oxiquill は次の出力を表示します。
 
 ## Artifact schema
 
-| Kind | Required field | Optional behavior |
-| --- | --- | --- |
-| `text` | `stream: "stdout" \| "stderr" \| "display"`, `content: string` | `truncated` が bounded content を示します。 |
-| `json` | `value` | cycle-aware formatting が BigInt を明示表現し、`truncated` が bounded serialized data を示します。 |
-| `table` | `columns`、rectangular `rows` | `rowCount` が original size、`truncated` が preview を示します。 |
-| `chart` | 下記の valid `spec` | oversize/invalid chart は local artifact error。 |
-| `image` | `mime: image/png \| image/jpeg \| image/svg+xml`、valid data | `alt` が image alternative。 |
-| `html` | `html: string`, `sandboxed: true` | empty sandbox permission の iframe 内に常に表示。 |
+| Kind    | Required field                                                 | Optional behavior                                                                                  |
+| ------- | -------------------------------------------------------------- | -------------------------------------------------------------------------------------------------- |
+| `text`  | `stream: "stdout" \| "stderr" \| "display"`, `content: string` | `truncated` が bounded content を示します。                                                        |
+| `json`  | `value`                                                        | cycle-aware formatting が BigInt を明示表現し、`truncated` が bounded serialized data を示します。 |
+| `table` | `columns`、rectangular `rows`                                  | `rowCount` が original size、`truncated` が preview を示します。                                   |
+| `chart` | 下記の valid `spec`                                            | oversize/invalid chart は local artifact error。                                                   |
+| `image` | `mime: image/png \| image/jpeg \| image/svg+xml`、valid data   | `alt` が image alternative。                                                                       |
+| `html`  | `html: string`, `sandboxed: true`                              | empty sandbox permission の iframe 内に常に表示。                                                  |
 
 table column は `key`、`label`、optional `type` を持ちます。type は `string`、`number`、`integer`、`boolean`、`date`、`datetime`、`null`、`unknown` です。各 row は declared column count と正確に一致する必要があります。
 
@@ -46,14 +46,14 @@ chart は textual title/caption と bounded accessible summary または equival
 
 limit は validation 後に適用され、各 run で累積します。
 
-| Resource | Limit | 超過時 |
-| --- | --- | --- |
-| Artifact | 1 run 100個 | 追加 artifact を local reject。 |
-| Text、serialized JSON、HTML | artifact ごとに 1 MiB | Text/JSON は `truncated: true` 可、HTML は reject。 |
-| Table | 10,000 row、100 column | bounded table は `truncated: true` と `rowCount` を使用可。 |
-| Chart | 合計100,000 point/bin/cell | artifact-local error。 |
-| Image | decoded 10 MiB | artifact-local error。 |
-| 全 validated output | 1 run 16 MiB | remaining budget を超える artifact を local reject。 |
+| Resource                    | Limit                      | 超過時                                                      |
+| --------------------------- | -------------------------- | ----------------------------------------------------------- |
+| Artifact                    | 1 run 100個                | 追加 artifact を local reject。                             |
+| Text、serialized JSON、HTML | artifact ごとに 1 MiB      | Text/JSON は `truncated: true` 可、HTML は reject。         |
+| Table                       | 10,000 row、100 column     | bounded table は `truncated: true` と `rowCount` を使用可。 |
+| Chart                       | 合計100,000 point/bin/cell | artifact-local error。                                      |
+| Image                       | decoded 10 MiB             | artifact-local error。                                      |
+| 全 validated output         | 1 run 16 MiB               | remaining budget を超える artifact を local reject。        |
 
 `truncated: true` を使えるのは text、JSON、table だけです。chart、image、HTML は黙って truncate しません。invalid/cyclic/over-deep JSON、ragged table、non-finite chart value、invalid base64/MIME pair、unsafe structural record が cell component を crash させることはありません。
 

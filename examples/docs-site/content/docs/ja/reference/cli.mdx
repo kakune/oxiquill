@@ -7,34 +7,34 @@ install 済み binary は project script、`pnpm exec oxiquill`、`npx oxiquill`
 
 ## Global option
 
-| Option | 動作 |
-| --- | --- |
-| `--help`, `-h` | global または command-specific usage を表示し、成功で終了します。 |
-| `--version` | install 済み Oxiquill package version を表示します。 |
-| `--debug` | error の cause/stack を表示します。通常の expected error は簡潔です。 |
-| `--config <path>` | すべての project command で指定 Astro/Oxiquill config を使います。 |
-| `--` | 残りの対応 argument を underlying Astro command へ渡します。 |
+| Option            | 動作                                                                  |
+| ----------------- | --------------------------------------------------------------------- |
+| `--help`, `-h`    | global または command-specific usage を表示し、成功で終了します。     |
+| `--version`       | install 済み Oxiquill package version を表示します。                  |
+| `--debug`         | error の cause/stack を表示します。通常の expected error は簡潔です。 |
+| `--config <path>` | すべての project command で指定 Astro/Oxiquill config を使います。    |
+| `--`              | 残りの対応 argument を underlying Astro command へ渡します。          |
 
 unknown option、option value の欠落、unknown command、余分な positional argument は usage を表示して non-zero で終了し、project を変更しません。
 
 ## Command
 
-| Command | 動作 |
-| --- | --- |
-| `init [directory]` | versioned static starter を作ります。default は current directory です。 |
-| `dev` | 必要な runtime を生成し、watcher と Astro development server を起動します。 |
-| `dev:runtime` | runtime/source watcher だけを起動します。 |
-| `dev:astro` | Astro development server だけを起動します。 |
-| `build` | 必要な runtime を生成し、check 後に static site を作ります。 |
-| `preview` | 既存 production build を preview します。 |
-| `check` | 必要な runtime、Astro type を同期し、Astro diagnostics を実行します。 |
-| `docgen` | manifest を同期し、`--wasm dev|build` で必要な language runtime も build します。 |
-| `clean` | resolved Oxiquill-owned/generated path と設定済み Astro output だけを削除します。 |
-| `test-rust` | optional helper crate を test します。 |
-| `test-rust-coverage` | helper crate を 85% coverage threshold 付きで test します。 |
-| `lint-rust` | helper crate の全 target に warning deny で Clippy を実行します。 |
-| `doc-rust` | dependency を除いて helper crate documentation を build します。 |
-| `test-wasm` | runtime を生成し、すべての generated Rust/Haskell cell を default input で実行します。 |
+| Command              | 動作                                                                                   |
+| -------------------- | -------------------------------------------------------------------------------------- | -------------------------------------------------- |
+| `init [directory]`   | versioned static starter を作ります。default は current directory です。               |
+| `dev`                | 必要な runtime を生成し、watcher と Astro development server を起動します。            |
+| `dev:runtime`        | runtime/source watcher だけを起動します。                                              |
+| `dev:astro`          | Astro development server だけを起動します。                                            |
+| `build`              | 必要な runtime を生成し、check 後に static site を作ります。                           |
+| `preview`            | 既存 production build を preview します。                                              |
+| `check`              | 必要な runtime、Astro type を同期し、Astro diagnostics を実行します。                  |
+| `docgen`             | manifest を同期し、`--wasm dev                                                         | build` で必要な language runtime も build します。 |
+| `clean`              | resolved Oxiquill-owned/generated path と設定済み Astro output だけを削除します。      |
+| `test-rust`          | optional helper crate を test します。                                                 |
+| `test-rust-coverage` | helper crate を 85% coverage threshold 付きで test します。                            |
+| `lint-rust`          | helper crate の全 target に warning deny で Clippy を実行します。                      |
+| `doc-rust`           | dependency を除いて helper crate documentation を build します。                       |
+| `test-wasm`          | runtime を生成し、すべての generated Rust/Haskell cell を default input で実行します。 |
 
 `dev`、`dev:astro`、`build`、`preview`、`check` は documented Astro argument を受け取り、`--` より後の値もそのまま渡します。
 

@@ -17,12 +17,7 @@ export const oxiquillPathOptionNames = Object.freeze([
   'workspaceRoot'
 ]);
 
-export const astroDirectoryOptionNames = Object.freeze([
-  'root',
-  'publicDir',
-  'cacheDir',
-  'outDir'
-]);
+export const astroDirectoryOptionNames = Object.freeze(['root', 'publicDir', 'cacheDir', 'outDir']);
 
 export function createOxiquillIntegrationMetadata({ astro = {}, paths = {} } = {}) {
   return Object.freeze({

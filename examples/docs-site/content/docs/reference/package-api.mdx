@@ -7,19 +7,19 @@ Oxiquill is ESM-only. Use the package export map instead of importing files belo
 
 ## Exports
 
-| Export | Public API |
-| --- | --- |
-| `oxiquill` | `defineOxiquillConfig`, `oxiquillIntegration` |
-| `oxiquill/astro` | The same functions plus `OxiquillConfig`, `OxiquillIntegrationOptions`, `OxiquillFrameworkOptions`, and `OxiquillPathOptions` types |
-| `oxiquill/content` | Ready-to-use `collections` and advanced `createOxiquillCollections` with their dependency/collection types |
-| `oxiquill/runtime/InteractiveCell` | Preact component used by the interactive-cell remark transform |
-| `oxiquill/runtime/MermaidDiagram` | Preact Mermaid renderer used by the Mermaid remark transform |
-| `oxiquill/runtime/types` | Cell manifest, input, worker message, artifact, table, and chart TypeScript types |
-| `oxiquill/components/starlight/PageFrame` | Oxiquill's Starlight page-frame override |
-| `oxiquill/styles/katex.css` | KaTeX styles loaded by the default integration |
-| `oxiquill/styles/custom.css` | Oxiquill runtime, output, media, and page-frame styles |
-| `oxiquill/tsconfigs/strict` | Strict TypeScript base config for consumer projects |
-| `oxiquill/env` | Ambient declarations for Oxiquill virtual modules and asset imports |
+| Export                                    | Public API                                                                                                                          |
+| ----------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------- |
+| `oxiquill`                                | `defineOxiquillConfig`, `oxiquillIntegration`                                                                                       |
+| `oxiquill/astro`                          | The same functions plus `OxiquillConfig`, `OxiquillIntegrationOptions`, `OxiquillFrameworkOptions`, and `OxiquillPathOptions` types |
+| `oxiquill/content`                        | Ready-to-use `collections` and advanced `createOxiquillCollections` with their dependency/collection types                          |
+| `oxiquill/runtime/InteractiveCell`        | Preact component used by the interactive-cell remark transform                                                                      |
+| `oxiquill/runtime/MermaidDiagram`         | Preact Mermaid renderer used by the Mermaid remark transform                                                                        |
+| `oxiquill/runtime/types`                  | Cell manifest, input, worker message, artifact, table, and chart TypeScript types                                                   |
+| `oxiquill/components/starlight/PageFrame` | Oxiquill's Starlight page-frame override                                                                                            |
+| `oxiquill/styles/katex.css`               | KaTeX styles loaded by the default integration                                                                                      |
+| `oxiquill/styles/custom.css`              | Oxiquill runtime, output, media, and page-frame styles                                                                              |
+| `oxiquill/tsconfigs/strict`               | Strict TypeScript base config for consumer projects                                                                                 |
+| `oxiquill/env`                            | Ambient declarations for Oxiquill virtual modules and asset imports                                                                 |
 
 The component, style, and environment exports are public for advanced composition, but a normal project gets them through `defineOxiquillConfig()` and should not import them manually.
 

@@ -12,8 +12,8 @@ const markdownPaths = [
   path.join(repositoryRoot, 'CHANGELOG.md'),
   path.join(repositoryRoot, 'SECURITY.md'),
   path.join(repositoryRoot, 'packages/oxiquill/README.md'),
-  ...await markdownFiles(path.join(repositoryRoot, 'docs')),
-  ...await markdownFiles(contentRoot)
+  ...(await markdownFiles(path.join(repositoryRoot, 'docs'))),
+  ...(await markdownFiles(contentRoot))
 ].sort();
 const documents = new Map(
   await Promise.all(markdownPaths.map(async (filePath) => [filePath, await readFile(filePath, 'utf8')]))
@@ -30,7 +30,9 @@ checkJsonExamples();
 checkPackageImports();
 checkShellCommands();
 
-console.log(`Verified ${documents.size} documentation files, internal links, localized routes, contracts, and examples.`);
+console.log(
+  `Verified ${documents.size} documentation files, internal links, localized routes, contracts, and examples.`
+);
 
 async function checkLinks() {
   const linkPattern = /!?(?:\[[^\]]*\])\(([^)\s]+)(?:\s+"[^"]*")?\)/gu;
@@ -52,7 +54,7 @@ async function checkLinks() {
       await assertExists(resolved, sourcePath, rawTarget);
 
       if (fragment && /\.(?:md|mdx)$/u.test(resolved)) {
-        const targetSource = documents.get(resolved) ?? await readFile(resolved, 'utf8');
+        const targetSource = documents.get(resolved) ?? (await readFile(resolved, 'utf8'));
         assertFragment(resolved, targetSource, fragment, sourcePath);
       }
     }
@@ -83,10 +85,7 @@ async function resolveSiteTarget(sourcePath, target) {
   );
 
   const slug = route.replace(/^\/+|\/+$/gu, '') || 'index';
-  const candidates = [
-    path.join(contentRoot, `${slug}.mdx`),
-    path.join(contentRoot, slug, 'index.mdx')
-  ];
+  const candidates = [path.join(contentRoot, `${slug}.mdx`), path.join(contentRoot, slug, 'index.mdx')];
   for (const candidate of candidates) {
     if (await exists(candidate)) return candidate;
   }
@@ -151,8 +150,9 @@ async function checkPublicContracts() {
   }
 
   const cliSource = await readFile(path.join(repositoryRoot, 'packages/oxiquill/src/cli/commands.mjs'), 'utf8');
-  const implementedCommands = Array.from(cliSource.matchAll(/case '([^']+)':/gu), (match) => match[1])
-    .filter((command) => !['help', '--help', '-h'].includes(command));
+  const implementedCommands = Array.from(cliSource.matchAll(/case '([^']+)':/gu), (match) => match[1]).filter(
+    (command) => !['help', '--help', '-h'].includes(command)
+  );
   const targetCommands = new Set([...implementedCommands, 'init']);
   const cliReferences = [
     documents.get(path.join(contentRoot, 'reference/cli.mdx')),
@@ -173,7 +173,20 @@ async function checkPublicContracts() {
     documents.get(path.join(contentRoot, 'features/rich-output.mdx')),
     documents.get(path.join(contentRoot, 'ja/features/rich-output.mdx'))
   ];
-  for (const discriminator of ['text', 'json', 'table', 'chart', 'image', 'html', 'line', 'scatter', 'bar', 'histogram', 'area', 'heatmap']) {
+  for (const discriminator of [
+    'text',
+    'json',
+    'table',
+    'chart',
+    'image',
+    'html',
+    'line',
+    'scatter',
+    'bar',
+    'histogram',
+    'area',
+    'heatmap'
+  ]) {
     for (const reference of outputReferences) {
       assert.ok(reference.includes(`\`${discriminator}\``), `Rich-output reference is missing ${discriminator}.`);
     }
@@ -194,9 +207,11 @@ function checkJsonExamples() {
 
 function checkPackageImports() {
   const packageJson = JSON.parse(documentsPackageJson);
-  const publicSpecifiers = new Set(Object.keys(packageJson.exports).map((key) =>
-    key === '.' ? packageJson.name : `${packageJson.name}${key.slice(1)}`
-  ));
+  const publicSpecifiers = new Set(
+    Object.keys(packageJson.exports).map((key) =>
+      key === '.' ? packageJson.name : `${packageJson.name}${key.slice(1)}`
+    )
+  );
 
   for (const [filePath, source] of documents) {
     for (const match of source.matchAll(/from\s+['"](oxiquill(?:\/[^'"]+)?)['"]/gu)) {
@@ -212,8 +227,20 @@ function checkShellCommands() {
   const pnpmBuiltins = new Set(['--dir', 'add', 'audit', 'dlx', 'exec', 'install', 'run']);
   const npmBuiltins = new Set(['audit', 'deprecate', 'install', 'pack', 'publish', 'stage']);
   const cliCommands = new Set([
-    'init', 'dev', 'dev:runtime', 'dev:astro', 'build', 'preview', 'check', 'docgen', 'clean',
-    'test-rust', 'test-rust-coverage', 'lint-rust', 'doc-rust', 'test-wasm'
+    'init',
+    'dev',
+    'dev:runtime',
+    'dev:astro',
+    'build',
+    'preview',
+    'check',
+    'docgen',
+    'clean',
+    'test-rust',
+    'test-rust-coverage',
+    'lint-rust',
+    'doc-rust',
+    'test-wasm'
   ]);
 
   for (const [filePath, source] of documents) {
@@ -235,7 +262,10 @@ function checkShellCommands() {
             assert.ok(npmBuiltins.has(command), `${relative(filePath)} references unsupported npm command ${command}.`);
           }
         } else if (words[0] === 'oxiquill') {
-          assert.ok(cliCommands.has(words[1]), `${relative(filePath)} references unknown Oxiquill command ${words[1]}.`);
+          assert.ok(
+            cliCommands.has(words[1]),
+            `${relative(filePath)} references unknown Oxiquill command ${words[1]}.`
+          );
         }
       }
     }
@@ -262,11 +292,13 @@ function headingSlug(heading) {
 
 async function markdownFiles(directory) {
   const entries = await readdir(directory, { withFileTypes: true });
-  const nested = await Promise.all(entries.map(async (entry) => {
-    const entryPath = path.join(directory, entry.name);
-    if (entry.isDirectory()) return markdownFiles(entryPath);
-    return /\.(?:md|mdx)$/u.test(entry.name) ? [entryPath] : [];
-  }));
+  const nested = await Promise.all(
+    entries.map(async (entry) => {
+      const entryPath = path.join(directory, entry.name);
+      if (entry.isDirectory()) return markdownFiles(entryPath);
+      return /\.(?:md|mdx)$/u.test(entry.name) ? [entryPath] : [];
+    })
+  );
   return nested.flat();
 }
 

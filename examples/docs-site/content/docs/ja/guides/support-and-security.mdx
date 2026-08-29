@@ -5,15 +5,15 @@ description: 対応 platform/browser、実行 model、content trust boundary を
 
 ## Compatibility matrix
 
-| Capability | Linux | macOS | Windows | Chromium | Firefox | WebKit |
-| --- | --- | --- | --- | --- | --- | --- |
-| Node.js 24+ の core package/CLI | 対応 | 対応 | 対応 | — | — | — |
-| npm/pnpm による consumer install | 対応 | 対応 | 対応 | — | — | — |
-| pinned Rust toolchain と `wasm-pack` による Rust/Wasm generation | 対応 | 対応 | 対応 | — | — | — |
-| Python/Pyodide asset generation | 対応 | 対応 | 対応 | — | — | — |
-| `wasm32-wasi-ghc` 9.14 による Haskell/WASI generation | 対応 | 対応 | 非対応 | — | — | — |
-| built static site と Rust/Python/Haskell execution | — | — | — | 対応 | 対応 | 対応 |
-| 生成済み Haskell Wasm の表示 | — | — | 対応 browser host | 対応 | 対応 | 対応 |
+| Capability                                                       | Linux | macOS | Windows           | Chromium | Firefox | WebKit |
+| ---------------------------------------------------------------- | ----- | ----- | ----------------- | -------- | ------- | ------ |
+| Node.js 24+ の core package/CLI                                  | 対応  | 対応  | 対応              | —        | —       | —      |
+| npm/pnpm による consumer install                                 | 対応  | 対応  | 対応              | —        | —       | —      |
+| pinned Rust toolchain と `wasm-pack` による Rust/Wasm generation | 対応  | 対応  | 対応              | —        | —       | —      |
+| Python/Pyodide asset generation                                  | 対応  | 対応  | 対応              | —        | —       | —      |
+| `wasm32-wasi-ghc` 9.14 による Haskell/WASI generation            | 対応  | 対応  | 非対応            | —        | —       | —      |
+| built static site と Rust/Python/Haskell execution               | —     | —     | —                 | 対応     | 対応    | 対応   |
+| 生成済み Haskell Wasm の表示                                     | —     | —     | 対応 browser host | 対応     | 対応    | 対応   |
 
 package boundary は Node.js 24 以上です。repository は pnpm 11.2.2 を使い、consumer は npm/pnpm を使えます。native Windows では Haskell cell を author/generate できませんが、Linux/macOS で作った Haskell Wasm を serve/view できます。
 

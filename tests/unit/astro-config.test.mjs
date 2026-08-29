@@ -131,12 +131,16 @@ describe('defineOxiquillConfig', () => {
     const update = runConfigSetup(config);
 
     expect(path.resolve(fileURLToPath(update.cacheDir))).toBe(path.join(fileURLToPath(tempRoot), 'state'));
-    expect(() => runConfigSetup(defineOxiquillConfig({
-      publicDir: 'astro-public',
-      paths: { publicDir: 'oxiquill-public' },
-      sidebar: [],
-      title: 'Docs'
-    }))).toThrow('Conflicting project paths: publicDir');
+    expect(() =>
+      runConfigSetup(
+        defineOxiquillConfig({
+          publicDir: 'astro-public',
+          paths: { publicDir: 'oxiquill-public' },
+          sidebar: [],
+          title: 'Docs'
+        })
+      )
+    ).toThrow('Conflicting project paths: publicDir');
   });
 
   it('composes package-owned Astro integrations by default', () => {

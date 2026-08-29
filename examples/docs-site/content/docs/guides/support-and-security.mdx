@@ -5,15 +5,15 @@ description: Know the supported platforms, browser matrix, execution model, and 
 
 ## Compatibility Matrix
 
-| Capability | Linux | macOS | Windows | Chromium | Firefox | WebKit |
-| --- | --- | --- | --- | --- | --- | --- |
-| Core package and CLI with Node.js 24+ | Supported | Supported | Supported | — | — | — |
-| Consumer installation with npm or pnpm | Supported | Supported | Supported | — | — | — |
-| Rust/Wasm generation with the pinned Rust toolchain and `wasm-pack` | Supported | Supported | Supported | — | — | — |
-| Python/Pyodide asset generation | Supported | Supported | Supported | — | — | — |
-| Haskell/WASI generation with `wasm32-wasi-ghc` 9.14 | Supported | Supported | Not supported | — | — | — |
-| Built static site and Rust/Python/Haskell execution | — | — | — | Supported | Supported | Supported |
-| Viewing already generated Haskell Wasm | — | — | Supported host browser | Supported | Supported | Supported |
+| Capability                                                          | Linux     | macOS     | Windows                | Chromium  | Firefox   | WebKit    |
+| ------------------------------------------------------------------- | --------- | --------- | ---------------------- | --------- | --------- | --------- |
+| Core package and CLI with Node.js 24+                               | Supported | Supported | Supported              | —         | —         | —         |
+| Consumer installation with npm or pnpm                              | Supported | Supported | Supported              | —         | —         | —         |
+| Rust/Wasm generation with the pinned Rust toolchain and `wasm-pack` | Supported | Supported | Supported              | —         | —         | —         |
+| Python/Pyodide asset generation                                     | Supported | Supported | Supported              | —         | —         | —         |
+| Haskell/WASI generation with `wasm32-wasi-ghc` 9.14                 | Supported | Supported | Not supported          | —         | —         | —         |
+| Built static site and Rust/Python/Haskell execution                 | —         | —         | —                      | Supported | Supported | Supported |
+| Viewing already generated Haskell Wasm                              | —         | —         | Supported host browser | Supported | Supported | Supported |
 
 Node.js 24 or newer is the package boundary. The repository uses pnpm 11.2.2; consumers may use npm or pnpm. Native Windows cannot author/generate Haskell cells, but it can serve and view Haskell Wasm produced on Linux or macOS.
 

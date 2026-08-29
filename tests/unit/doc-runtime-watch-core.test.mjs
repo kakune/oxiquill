@@ -51,10 +51,7 @@ describe('doc runtime watch core', () => {
       workspaceRoot: '/repo'
     });
 
-    expect(createRuntimeWatchPaths(paths)).toEqual([
-      paths.docsDir,
-      paths.cratesDir
-    ]);
+    expect(createRuntimeWatchPaths(paths)).toEqual([paths.docsDir, paths.cratesDir]);
     expect(classifyChangedPath('written docs/guide.mdx', paths)).toBe('docs');
     expect(classifyChangedPath('helper crates/example/src/lib.rs', paths)).toBe('crate');
     expect(classifyChangedPath('content/docs/guide.mdx', paths)).toBe('other');

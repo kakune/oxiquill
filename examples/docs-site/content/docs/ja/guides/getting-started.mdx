@@ -121,12 +121,12 @@ pnpm preview
 
 ## Optional language prerequisite
 
-| Content | Author/build prerequisite | Reader prerequisite |
-| --- | --- | --- |
-| Static MDX、math、Mermaid、media | Node.js 24+ と npm/pnpm | supported browser |
-| Python cell | generation 時の network または verified offline Pyodide cache | supported browser。asset は site が配信 |
-| Rust cell | pinned Rust toolchain、`wasm32-unknown-unknown`、`wasm-pack` | supported browser |
-| Haskell cell | Linux/macOS と `wasm32-wasi-ghc` 9.14 | 任意 desktop OS の supported browser |
+| Content                          | Author/build prerequisite                                     | Reader prerequisite                     |
+| -------------------------------- | ------------------------------------------------------------- | --------------------------------------- |
+| Static MDX、math、Mermaid、media | Node.js 24+ と npm/pnpm                                       | supported browser                       |
+| Python cell                      | generation 時の network または verified offline Pyodide cache | supported browser。asset は site が配信 |
+| Rust cell                        | pinned Rust toolchain、`wasm32-unknown-unknown`、`wasm-pack`  | supported browser                       |
+| Haskell cell                     | Linux/macOS と `wasm32-wasi-ghc` 9.14                         | 任意 desktop OS の supported browser    |
 
 repository maintainer は full validation suite 用に `cargo-llvm-cov` と Playwright browser も必要です。
 

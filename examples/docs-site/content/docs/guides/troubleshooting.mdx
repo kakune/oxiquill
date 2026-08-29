@@ -7,39 +7,39 @@ Start with the first Oxiquill diagnostic. Generation errors include the relevant
 
 ## Installation and Package Resolution
 
-| Symptom | Resolution |
-| --- | --- |
-| Node version or syntax error | Install Node.js 24 or newer and confirm `node --version` in the same shell that launches pnpm/npm. |
-| `oxiquill` command not found | Install it in project dependencies, run it through a package script, or use `pnpm exec oxiquill`. Do not depend on a global install. |
+| Symptom                                                  | Resolution                                                                                                                              |
+| -------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------- |
+| Node version or syntax error                             | Install Node.js 24 or newer and confirm `node --version` in the same shell that launches pnpm/npm.                                      |
+| `oxiquill` command not found                             | Install it in project dependencies, run it through a package script, or use `pnpm exec oxiquill`. Do not depend on a global install.    |
 | npm/pnpm resolves source or duplicate Preact incorrectly | Remove stale `node_modules`, reinstall from the lockfile, and import only documented package exports. Do not deep-import package files. |
-| Native Rollup/Vite addon cannot load | Use a normal Node build. If ghc-wasm put a static Node first in `PATH`, move the normal Node earlier or set `OXIQUILL_NODE`. |
+| Native Rollup/Vite addon cannot load                     | Use a normal Node build. If ghc-wasm put a static Node first in `PATH`, move the normal Node earlier or set `OXIQUILL_NODE`.            |
 
 ## Rust and Wasm
 
-| Symptom | Resolution |
-| --- | --- |
-| Rust toolchain/target missing | Install the pinned `rust-toolchain.toml` toolchain and `wasm32-unknown-unknown` target. |
-| `wasm-pack` missing | Install `wasm-pack`, then rerun `pnpm wasm:dev` or the failed strict command. |
-| Unknown helper crate | Match `crates: [...]` to `package.name` in a direct child of the configured `cratesDir`. Use `crates: []` when none are needed. |
-| Stale Rust cell or missing Wasm | Regenerate with `pnpm wasm:dev`; do not edit `.oxiquill` or `public/oxiquill`. |
+| Symptom                         | Resolution                                                                                                                      |
+| ------------------------------- | ------------------------------------------------------------------------------------------------------------------------------- |
+| Rust toolchain/target missing   | Install the pinned `rust-toolchain.toml` toolchain and `wasm32-unknown-unknown` target.                                         |
+| `wasm-pack` missing             | Install `wasm-pack`, then rerun `pnpm wasm:dev` or the failed strict command.                                                   |
+| Unknown helper crate            | Match `crates: [...]` to `package.name` in a direct child of the configured `cratesDir`. Use `crates: []` when none are needed. |
+| Stale Rust cell or missing Wasm | Regenerate with `pnpm wasm:dev`; do not edit `.oxiquill` or `public/oxiquill`.                                                  |
 
 ## Haskell
 
-| Symptom | Resolution |
-| --- | --- |
-| `wasm32-wasi-ghc` missing | Install ghc-wasm 9.14 on Linux/macOS or set `OXIQUILL_HASKELL_GHC` to the compiler. Native Windows generation is unsupported. |
-| Astro/Vite fails after sourcing ghc-wasm | Put a normal Node.js 24 runtime before ghc-wasm's static Node, or set `OXIQUILL_NODE`. |
-| Runtime unavailable or stale | Fix the compiler/cell error and rerun `pnpm wasm:dev`. Check the generated status diagnostic rather than editing it. |
+| Symptom                                  | Resolution                                                                                                                    |
+| ---------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------- |
+| `wasm32-wasi-ghc` missing                | Install ghc-wasm 9.14 on Linux/macOS or set `OXIQUILL_HASKELL_GHC` to the compiler. Native Windows generation is unsupported. |
+| Astro/Vite fails after sourcing ghc-wasm | Put a normal Node.js 24 runtime before ghc-wasm's static Node, or set `OXIQUILL_NODE`.                                        |
+| Runtime unavailable or stale             | Fix the compiler/cell error and rerun `pnpm wasm:dev`. Check the generated status diagnostic rather than editing it.          |
 
 ## Python Downloads and Offline Builds
 
-| Symptom | Resolution |
-| --- | --- |
-| CDN or mirror request fails | Confirm DNS/TLS/proxy access and the configured mirror base. The error identifies the effective URL and HTTP/connection cause. |
+| Symptom                                | Resolution                                                                                                                          |
+| -------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------- |
+| CDN or mirror request fails            | Confirm DNS/TLS/proxy access and the configured mirror base. The error identifies the effective URL and HTTP/connection cause.      |
 | Download times out or exhausts retries | Retry after connectivity recovers or use a complete verified cache; each attempt is limited to 30 seconds and three total attempts. |
-| SHA-256 mismatch | Do not bypass verification. Remove the named corrupt cache entry and fetch it from a trusted source/mirror. |
-| Offline cache miss | Populate the exact filename/hash on a connected machine using the same Oxiquill/Pyodide version, then transfer the verified cache. |
-| Unsupported Python package | Use a package listed by the installed Pyodide lockfile or remove it from `packages`. |
+| SHA-256 mismatch                       | Do not bypass verification. Remove the named corrupt cache entry and fetch it from a trusted source/mirror.                         |
+| Offline cache miss                     | Populate the exact filename/hash on a connected machine using the same Oxiquill/Pyodide version, then transfer the verified cache.  |
+| Unsupported Python package             | Use a package listed by the installed Pyodide lockfile or remove it from `packages`.                                                |
 
 ## Configuration and Paths
 

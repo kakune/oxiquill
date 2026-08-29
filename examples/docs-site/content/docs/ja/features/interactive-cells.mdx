@@ -13,16 +13,16 @@ interactive fence は `rust`、`python`、`haskell`（Markdown の `{.rust}` for
 
 許可される top-level field は次だけで、unknown field は error です。
 
-| Field | Type と rule | Default |
-| --- | --- | --- |
-| `id` | 必須の lowercase kebab-case `^[a-z][a-z0-9]*(?:-[a-z0-9]+)*$`。page 内と route scope 後で unique。 | — |
-| `title` | cell header に表示する string。 | `id` |
-| `run` | `button`、`reactive`、`autorun`。 | `button` |
-| `inputs` | `^[a-z][a-z0-9_]*$` に一致する lowercase cross-language identifier から input spec への mapping。`autorun` では禁止。 | `{}` |
-| `packages` | unique non-empty Pyodide package name。Python 専用。 | `[]` |
-| `crates` | `cratesDir` 直下の helper package name の unique non-empty list。Rust 専用。 | `[]` |
-| `timeoutMs` | positive integer millisecond。 | `30000` |
-| `showSource` | initial source visibility を指定する boolean。 | `true` |
+| Field        | Type と rule                                                                                                          | Default  |
+| ------------ | --------------------------------------------------------------------------------------------------------------------- | -------- |
+| `id`         | 必須の lowercase kebab-case `^[a-z][a-z0-9]*(?:-[a-z0-9]+)*$`。page 内と route scope 後で unique。                    | —        |
+| `title`      | cell header に表示する string。                                                                                       | `id`     |
+| `run`        | `button`、`reactive`、`autorun`。                                                                                     | `button` |
+| `inputs`     | `^[a-z][a-z0-9_]*$` に一致する lowercase cross-language identifier から input spec への mapping。`autorun` では禁止。 | `{}`     |
+| `packages`   | unique non-empty Pyodide package name。Python 専用。                                                                  | `[]`     |
+| `crates`     | `cratesDir` 直下の helper package name の unique non-empty list。Rust 専用。                                          | `[]`     |
+| `timeoutMs`  | positive integer millisecond。                                                                                        | `30000`  |
+| `showSource` | initial source visibility を指定する boolean。                                                                        | `true`   |
 
 source には metadata 以外の code が必要です。malformed YAML、wrong scalar/collection type、duplicate normalized ID/binding/function、unknown package/crate、language-mismatched dependency field は output を書く前に失敗します。diagnostic は page path、fence start line、可能なら cell ID、正確な field path を含みます。
 
@@ -40,13 +40,13 @@ superseded queued work は破棄され、stale result が新しい state を上�
 
 各 input が受け取るのは type に関係する field だけです。共通 field は `type`、`label`、`value`。numeric input は `min`、`max`、`step`、`integer`、`select`/`radio` は `options` も使います。
 
-| Type | Value と constraint |
-| --- | --- |
-| `range`, `number` | finite number。`step > 0`、`min <= max`、default が bound 内。 |
-| `integer` | integer value と integer bound/step。同じ numeric constraint。 |
-| `text`, `textarea` | string value。 |
-| `checkbox` | boolean value。 |
-| `select`, `radio` | non-empty unique string option または `{ label, value }` object。default は option value と一致。 |
+| Type               | Value と constraint                                                                               |
+| ------------------ | ------------------------------------------------------------------------------------------------- |
+| `range`, `number`  | finite number。`step > 0`、`min <= max`、default が bound 内。                                    |
+| `integer`          | integer value と integer bound/step。同じ numeric constraint。                                    |
+| `text`, `textarea` | string value。                                                                                    |
+| `checkbox`         | boolean value。                                                                                   |
+| `select`, `radio`  | non-empty unique string option または `{ label, value }` object。default は option value と一致。 |
 
 `type` の default は `text`、`label` の default は input name です。default value は checkbox が `false`、numeric input が `0`、text input が空 string です。numeric 専用 field は non-numeric control で拒否され、`options` は `select`/`radio` 以外では使えません。
 

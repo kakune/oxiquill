@@ -7,34 +7,34 @@ Run the installed binary through project scripts, `pnpm exec oxiquill`, `npx oxi
 
 ## Global Options
 
-| Option | Behavior |
-| --- | --- |
-| `--help`, `-h` | Show global or command-specific usage and exit successfully. |
-| `--version` | Print the installed Oxiquill package version. |
-| `--debug` | Include cause and stack details in errors; expected errors are concise otherwise. |
-| `--config <path>` | Use the selected Astro/Oxiquill config for every project command. |
-| `--` | Forward all remaining supported arguments to the underlying Astro command. |
+| Option            | Behavior                                                                          |
+| ----------------- | --------------------------------------------------------------------------------- |
+| `--help`, `-h`    | Show global or command-specific usage and exit successfully.                      |
+| `--version`       | Print the installed Oxiquill package version.                                     |
+| `--debug`         | Include cause and stack details in errors; expected errors are concise otherwise. |
+| `--config <path>` | Use the selected Astro/Oxiquill config for every project command.                 |
+| `--`              | Forward all remaining supported arguments to the underlying Astro command.        |
 
 Unknown options, missing option values, unknown commands, and extra positional arguments print usage and exit non-zero without modifying the project.
 
 ## Commands
 
-| Command | Behavior |
-| --- | --- |
-| `init [directory]` | Create the versioned static starter. The current directory is the default. |
-| `dev` | Generate required runtimes, then run the watcher and Astro development server. |
-| `dev:runtime` | Run only the runtime/source watcher. |
-| `dev:astro` | Run only Astro's development server. |
-| `build` | Generate required runtimes, run checks, and create the static site. |
-| `preview` | Preview the existing production build. |
-| `check` | Generate required runtimes, synchronize Astro types, and run Astro diagnostics. |
-| `docgen` | Synchronize the manifest; `--wasm dev|build` also builds required language runtimes. |
-| `clean` | Remove only resolved Oxiquill-owned/generated and configured Astro output paths. |
-| `test-rust` | Test optional helper crates. |
-| `test-rust-coverage` | Test helper crates with the configured 85% coverage thresholds. |
-| `lint-rust` | Run Clippy for all helper-crate targets with warnings denied. |
-| `doc-rust` | Build helper-crate documentation without dependencies. |
-| `test-wasm` | Generate runtimes and execute every generated Rust/Haskell cell with defaults. |
+| Command              | Behavior                                                                         |
+| -------------------- | -------------------------------------------------------------------------------- | ---------------------------------------------- |
+| `init [directory]`   | Create the versioned static starter. The current directory is the default.       |
+| `dev`                | Generate required runtimes, then run the watcher and Astro development server.   |
+| `dev:runtime`        | Run only the runtime/source watcher.                                             |
+| `dev:astro`          | Run only Astro's development server.                                             |
+| `build`              | Generate required runtimes, run checks, and create the static site.              |
+| `preview`            | Preview the existing production build.                                           |
+| `check`              | Generate required runtimes, synchronize Astro types, and run Astro diagnostics.  |
+| `docgen`             | Synchronize the manifest; `--wasm dev                                            | build` also builds required language runtimes. |
+| `clean`              | Remove only resolved Oxiquill-owned/generated and configured Astro output paths. |
+| `test-rust`          | Test optional helper crates.                                                     |
+| `test-rust-coverage` | Test helper crates with the configured 85% coverage thresholds.                  |
+| `lint-rust`          | Run Clippy for all helper-crate targets with warnings denied.                    |
+| `doc-rust`           | Build helper-crate documentation without dependencies.                           |
+| `test-wasm`          | Generate runtimes and execute every generated Rust/Haskell cell with defaults.   |
 
 `dev`, `dev:astro`, `build`, `preview`, and `check` accept their documented Astro arguments, including values after `--`. For example:
 

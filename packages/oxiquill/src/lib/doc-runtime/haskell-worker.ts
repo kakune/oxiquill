@@ -98,10 +98,7 @@ export function createHaskellCellResult({
   };
 }
 
-export function resolveHaskellWasmUrl(
-  baseUrl = import.meta.env.BASE_URL,
-  runtimePath = haskellWasmPath
-): string {
+export function resolveHaskellWasmUrl(baseUrl = import.meta.env.BASE_URL, runtimePath = haskellWasmPath): string {
   const base = baseUrl.endsWith('/') ? baseUrl : `${baseUrl}/`;
   const normalizedRuntimePath = runtimePath.replace(/^\/+|\/+$/gu, '');
   return `${base}${normalizedRuntimePath}/doc_haskell_cells.wasm`;

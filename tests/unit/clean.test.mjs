@@ -18,11 +18,13 @@ describe('Oxiquill cleanup', () => {
 
     await cleanOxiquillWorkspace({ fileSystem, paths });
 
-    expect(fileSystem.rm.mock.calls).toEqual(expect.arrayContaining([
-      [path.join(root, 'custom-cache'), { force: true, recursive: true }],
-      [path.join(root, 'custom-output'), { force: true, recursive: true }],
-      [path.join(root, 'public/custom-assets'), { force: true, recursive: true }]
-    ]));
+    expect(fileSystem.rm.mock.calls).toEqual(
+      expect.arrayContaining([
+        [path.join(root, 'custom-cache'), { force: true, recursive: true }],
+        [path.join(root, 'custom-output'), { force: true, recursive: true }],
+        [path.join(root, 'public/custom-assets'), { force: true, recursive: true }]
+      ])
+    );
     expect(fileSystem.rm).toHaveBeenCalledTimes(3);
   });
 
@@ -34,8 +36,9 @@ describe('Oxiquill cleanup', () => {
     };
     const fileSystem = { rm: vi.fn(async () => undefined) };
 
-    await expect(cleanOxiquillWorkspace({ fileSystem, paths }))
-      .rejects.toThrow('cacheDir must resolve to a directory inside');
+    await expect(cleanOxiquillWorkspace({ fileSystem, paths })).rejects.toThrow(
+      'cacheDir must resolve to a directory inside'
+    );
     expect(fileSystem.rm).not.toHaveBeenCalled();
     await expect(cleanOxiquillWorkspace()).rejects.toThrow('requires resolved project paths');
   });

@@ -10,15 +10,11 @@ export async function cleanOxiquillWorkspace({ fileSystem = defaultFileSystem, p
   assertPathWithin(paths.workspaceRoot, paths.cacheDir, 'cacheDir');
   assertPathWithin(paths.workspaceRoot, paths.outDir, 'outDir');
   assertPathWithin(paths.publicDir, paths.publicAssetsDir, 'paths.publicAssetsDir');
-  const ownedPaths = Array.from(new Set([
-    canonicalPath(paths.cacheDir),
-    canonicalPath(paths.publicAssetsDir),
-    canonicalPath(paths.outDir)
-  ]));
-
-  await Promise.all(
-    ownedPaths.map((targetPath) => fileSystem.rm(targetPath, { recursive: true, force: true }))
+  const ownedPaths = Array.from(
+    new Set([canonicalPath(paths.cacheDir), canonicalPath(paths.publicAssetsDir), canonicalPath(paths.outDir)])
   );
+
+  await Promise.all(ownedPaths.map((targetPath) => fileSystem.rm(targetPath, { recursive: true, force: true })));
 }
 
 if (import.meta.url === pathToFileURL(process.argv[1] ?? '').href) {

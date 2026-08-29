@@ -13,16 +13,16 @@ Interactive fences use `rust`, `python`, or `haskell` (including Markdown's `{.r
 
 Only these top-level fields are accepted; unknown fields are errors:
 
-| Field | Type and rule | Default |
-| --- | --- | --- |
-| `id` | Required lowercase kebab-case matching `^[a-z][a-z0-9]*(?:-[a-z0-9]+)*$`; unique within the page and after route scoping. | — |
-| `title` | String shown in the cell header. | `id` |
-| `run` | `button`, `reactive`, or `autorun`. | `button` |
-| `inputs` | Mapping from lowercase cross-language identifiers matching `^[a-z][a-z0-9_]*$` to input specs. Not allowed with `autorun`. | `{}` |
-| `packages` | Unique non-empty Pyodide package names; Python only. | `[]` |
-| `crates` | Unique non-empty helper package names from direct children of `cratesDir`; Rust only. | `[]` |
-| `timeoutMs` | Positive integer milliseconds. | `30000` |
-| `showSource` | Boolean controlling initial source visibility. | `true` |
+| Field        | Type and rule                                                                                                              | Default  |
+| ------------ | -------------------------------------------------------------------------------------------------------------------------- | -------- |
+| `id`         | Required lowercase kebab-case matching `^[a-z][a-z0-9]*(?:-[a-z0-9]+)*$`; unique within the page and after route scoping.  | —        |
+| `title`      | String shown in the cell header.                                                                                           | `id`     |
+| `run`        | `button`, `reactive`, or `autorun`.                                                                                        | `button` |
+| `inputs`     | Mapping from lowercase cross-language identifiers matching `^[a-z][a-z0-9_]*$` to input specs. Not allowed with `autorun`. | `{}`     |
+| `packages`   | Unique non-empty Pyodide package names; Python only.                                                                       | `[]`     |
+| `crates`     | Unique non-empty helper package names from direct children of `cratesDir`; Rust only.                                      | `[]`     |
+| `timeoutMs`  | Positive integer milliseconds.                                                                                             | `30000`  |
+| `showSource` | Boolean controlling initial source visibility.                                                                             | `true`   |
 
 The source must contain non-metadata code. Malformed YAML, a wrong scalar/collection type, duplicate normalized ID/binding/function, unknown package/crate, or language-mismatched dependency field fails before output is written. Diagnostics include page path, fence start line, cell ID when available, and the exact field path.
 
@@ -40,13 +40,13 @@ Superseded queued work is discarded, stale results cannot replace newer state, a
 
 Every input accepts only fields relevant to its type. Common fields are `type`, `label`, and `value`; numeric inputs also use `min`, `max`, `step`, and `integer`, while `select` and `radio` use `options`.
 
-| Type | Value and constraints |
-| --- | --- |
-| `range`, `number` | Finite number; `step > 0`, `min <= max`, and the default must be within bounds. |
-| `integer` | Integer value and integer bounds/step; the same numeric constraints apply. |
-| `text`, `textarea` | String value. |
-| `checkbox` | Boolean value. |
-| `select`, `radio` | Non-empty unique string options or `{ label, value }` objects; the default must equal an option value. |
+| Type               | Value and constraints                                                                                  |
+| ------------------ | ------------------------------------------------------------------------------------------------------ |
+| `range`, `number`  | Finite number; `step > 0`, `min <= max`, and the default must be within bounds.                        |
+| `integer`          | Integer value and integer bounds/step; the same numeric constraints apply.                             |
+| `text`, `textarea` | String value.                                                                                          |
+| `checkbox`         | Boolean value.                                                                                         |
+| `select`, `radio`  | Non-empty unique string options or `{ label, value }` objects; the default must equal an option value. |
 
 `type` defaults to `text`, and `label` defaults to the input name. Default values are `false` for checkbox, `0` for numeric inputs, and an empty string for text inputs. Numeric-only fields are rejected on non-numeric controls, and `options` is rejected outside `select` and `radio`.
 
