@@ -10,7 +10,8 @@ export default defineConfig({
       'echarts/components': testFile('./tests/unit/mocks/echarts-modules.ts'),
       'echarts/core': testFile('./tests/unit/mocks/echarts-core.ts'),
       'echarts/renderers': testFile('./tests/unit/mocks/echarts-modules.ts'),
-      mermaid: testFile('./tests/unit/mocks/mermaid.ts')
+      mermaid: testFile('./tests/unit/mocks/mermaid.ts'),
+      'virtual:oxiquill/runtime-paths': testFile('./tests/unit/mocks/runtime-paths.ts')
     }
   },
   test: {
@@ -22,6 +23,9 @@ export default defineConfig({
       provider: 'v8',
       reporter: ['text', 'json-summary'],
       include: [
+        'packages/oxiquill/src/cli/config-option.mjs',
+        'packages/oxiquill/src/config/**/*.mjs',
+        'packages/oxiquill/src/generator/clean.mjs',
         'packages/oxiquill/src/generator/doc-runtime-core.mjs',
         'packages/oxiquill/src/generator/doc-runtime-service.mjs',
         'packages/oxiquill/src/generator/doc-runtime-watch-core.mjs',

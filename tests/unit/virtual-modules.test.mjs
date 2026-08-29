@@ -2,7 +2,7 @@ import { describe, expect, it, vi } from 'vitest';
 import { mkdtempSync, mkdirSync, rmSync, writeFileSync } from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
-import { pathFromUrl } from '../../packages/oxiquill/src/config/paths.mjs';
+import { pathFromUrl, pathInUrl } from '../../packages/oxiquill/src/config/paths.mjs';
 import { oxiquillVirtualModulesPlugin } from '../../packages/oxiquill/src/astro/virtual-modules.mjs';
 import { createDocRuntimePaths } from '../../packages/oxiquill/src/generator/doc-runtime-service.mjs';
 
@@ -15,7 +15,7 @@ function createPlugin() {
 }
 
 function rustWasmFile(paths) {
-  return pathFromUrl(new URL('doc_rust_cells.js', paths.rustWasmPublicDir));
+  return pathInUrl(paths.rustWasmPublicDir, 'doc_rust_cells.js');
 }
 
 describe('oxiquill virtual modules', () => {
@@ -75,6 +75,26 @@ describe('oxiquill virtual modules', () => {
       'export const runtimeVersion = "not-ready";\n'
     );
     expect(context.addWatchFile).toHaveBeenCalledTimes(2);
+  });
+
+  it('exposes encoded public runtime paths from the resolved directories', () => {
+    const paths = createDocRuntimePaths({
+      haskellWasmPublicDir: 'compiled haskell',
+      publicAssetsDir: 'runtime assets',
+      pyodidePublicDir: 'python runtime',
+      workspaceRoot: '/repo'
+    });
+    const plugin = oxiquillVirtualModulesPlugin(paths);
+
+    expect(plugin.resolveId('virtual:oxiquill/runtime-paths')).toBe(
+      '\0virtual:oxiquill/runtime-paths'
+    );
+    expect(plugin.load('\0virtual:oxiquill/runtime-paths')).toContain(
+      'runtime%20assets/compiled%20haskell/'
+    );
+    expect(plugin.load('\0virtual:oxiquill/runtime-paths')).toContain(
+      'runtime%20assets/python%20runtime/'
+    );
   });
 
   it('watches generated files without forcing full-page reloads', () => {

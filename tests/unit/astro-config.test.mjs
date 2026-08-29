@@ -21,6 +21,7 @@ vi.mock('@astrojs/starlight', () => ({
 }));
 
 const { defineOxiquillConfig } = await import('../../packages/oxiquill/src/astro/index.ts');
+const { readOxiquillMetadata } = await import('../../packages/oxiquill/src/config/metadata.mjs');
 const linkedConsumerRoot = new URL('../fixtures/linked-consumer/', import.meta.url);
 const tempRoot = pathToFileURL(os.tmpdir());
 const preactExportSpecifiers = [
@@ -93,6 +94,37 @@ async function resolveWithVite(update, ids) {
 }
 
 describe('defineOxiquillConfig', () => {
+  it('retains frozen internal metadata without adding enumerable config fields', () => {
+    const config = defineOxiquillConfig({ sidebar: [], title: 'Docs' });
+    const integration = config.integrations.flat().find((entry) => entry.name === 'oxiquill');
+
+    expect(readOxiquillMetadata(config)).toMatchObject({ kind: 'config' });
+    expect(readOxiquillMetadata(integration)).toMatchObject({ kind: 'integration' });
+    expect(Object.isFrozen(readOxiquillMetadata(config))).toBe(true);
+    expect(Object.keys(config)).not.toContain('oxiquill');
+  });
+
+  it('uses configured Oxiquill paths in the Astro setup hook and rejects conflicts', () => {
+    const config = defineOxiquillConfig({
+      paths: {
+        cacheDir: 'state',
+        docsDir: 'written-docs',
+        generatedDir: 'runtime'
+      },
+      sidebar: [],
+      title: 'Docs'
+    });
+    const update = runConfigSetup(config);
+
+    expect(path.resolve(fileURLToPath(update.cacheDir))).toBe(path.join(fileURLToPath(tempRoot), 'state'));
+    expect(() => runConfigSetup(defineOxiquillConfig({
+      publicDir: 'astro-public',
+      paths: { publicDir: 'oxiquill-public' },
+      sidebar: [],
+      title: 'Docs'
+    }))).toThrow('Conflicting project paths: publicDir');
+  });
+
   it('composes package-owned Astro integrations by default', () => {
     const config = defineOxiquillConfig({
       sidebar: [],
