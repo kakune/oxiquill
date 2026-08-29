@@ -219,7 +219,7 @@ describe('doc runtime service', () => {
 
     expect(removals).toEqual(
       ['.gitignore', 'doc_rust_cells.d.ts', 'doc_rust_cells_bg.wasm.d.ts', 'package.json'].map((fileName) => [
-        repoPath('pkg', fileName),
+        memoryPath(repoPath('pkg', fileName)),
         { force: true }
       ])
     );
