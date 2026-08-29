@@ -30,14 +30,14 @@
     "clean": "pnpm --dir examples/docs-site clean"
   },
   "devDependencies": {
-    "@playwright/test": "1.60.0",
-    "@testing-library/jest-dom": "6.9.1",
+    "@playwright/test": "1.62.1",
+    "@testing-library/jest-dom": "7.0.1",
     "@testing-library/preact": "3.2.4",
-    "@vitest/coverage-v8": "4.1.7",
-    "jsdom": "29.1.1",
+    "@vitest/coverage-v8": "4.1.11",
+    "jsdom": "30.0.1",
     "preact": "10.29.8",
-    "typescript": "6.0.3",
+    "typescript": "7.0.2",
     "vite": "8.2.2",
-    "vitest": "4.1.7"
+    "vitest": "4.1.11"
   }
 }
