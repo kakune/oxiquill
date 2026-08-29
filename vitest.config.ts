@@ -25,6 +25,7 @@ export default defineConfig({
         'packages/oxiquill/src/generator/doc-runtime-core.mjs',
         'packages/oxiquill/src/generator/doc-runtime-service.mjs',
         'packages/oxiquill/src/generator/doc-runtime-watch-core.mjs',
+        'packages/oxiquill/src/generator/license-notices.mjs',
         'packages/oxiquill/src/generator/run-helper-cargo.mjs',
         'packages/oxiquill/src/components/doc-runtime/**/*.tsx',
         'packages/oxiquill/src/lib/doc-runtime/**/*.ts',
@@ -32,6 +33,7 @@ export default defineConfig({
       ],
       exclude: [
         '**/.oxiquill/**',
+        'packages/oxiquill/src/lib/doc-runtime/haskell-worker.ts',
         'packages/oxiquill/src/lib/doc-runtime/manifest.ts',
         'packages/oxiquill/src/lib/doc-runtime/python-worker.ts',
         'packages/oxiquill/src/lib/doc-runtime/rust-worker.ts',

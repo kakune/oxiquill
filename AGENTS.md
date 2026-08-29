@@ -7,13 +7,12 @@
 ## Branch Strategy
 
 - Do development work on topic branches such as `feat/...`, `fix/...`, `chore/...`, or `docs/...`.
-- Submit topic branch changes to `develop` by pull request. Do not push directly to `develop` or `main`.
+- Submit every topic branch, Dependabot update, and release preparation branch to `main` by pull request. Do not push directly to `main`.
 - Keep commits small and separated by logical meaning.
-- Pull requests to `main` must come only from release branches, for example `release/v0.1.1`.
-- After a release branch is merged into `main`, merge that same release branch into `develop` so `develop` stays in sync.
-- Use squash merge when merging into `develop`.
-- Use merge commits when merging into `main`.
-- Branch rules prohibit all other merge methods.
+- Keep pull requests up to date with `main`, pass every required check, and resolve review conversations before merging.
+- Use squash merge for every pull request into `main`; branch rules prohibit other merge methods.
+- Delete merged topic branches. GitHub deletes them automatically unless a protection rule retains them.
+- Prepare releases on `release/vX.Y.Z` branches created from the latest `main`. Squash-merge the release pull request into `main`, tag the resulting `main` commit, and retain the protected release branch without further updates.
 
 ## Project Shape
 
@@ -39,5 +38,5 @@
 
 - For frontend/runtime changes, run `pnpm test:unit` and `pnpm check`; use `pnpm test:unit:coverage` for covered logic changes.
 - For Rust changes, run `pnpm test:rust`, `pnpm lint:rust`, and `pnpm doc:rust`; use `pnpm test:rust:coverage` when behavior or coverage changes.
-- For interactive cell generation or Wasm runtime changes, run `pnpm wasm:dev` and `pnpm test:wasm`; add `pnpm test:e2e` for browser-facing behavior.
+- For interactive cell generation or Wasm runtime changes, run `pnpm wasm:dev` and `pnpm test:wasm`; add `pnpm test:e2e` for browser-facing behavior. Haskell cells also require `wasm32-wasi-ghc` during runtime generation.
 - Run `pnpm test` before considering broad changes complete when practical.

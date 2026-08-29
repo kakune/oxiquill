@@ -15,7 +15,7 @@ version = "0.2.0"
 description = "Generated Rust cells for the documentation runtime."
 edition = "2024"
 rust-version = "1.95"
-license = "AGPL-3.0-only"
+license = "MIT OR Apache-2.0"
 publish = false
 
 [workspace]

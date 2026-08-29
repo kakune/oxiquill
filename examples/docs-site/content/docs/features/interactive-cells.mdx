@@ -1,11 +1,11 @@
 ---
 title: Interactive Cells
-description: Configure Rust and Python cells that execute on the static site.
+description: Configure Rust, Python, and Haskell cells that execute on the static site.
 ---
 
 Interactive cells are ordinary MDX code blocks with metadata comments at the top. Oxiquill extracts those blocks during generation and replaces them with a runtime UI.
 
-Rust cells are compiled to WebAssembly at build time. Python cells run in a browser Pyodide worker. Both languages use the same input metadata and run-mode model.
+Rust cells are compiled to WebAssembly at build time. Python cells run in a browser Pyodide worker. Haskell cells are compiled to a WASI WebAssembly module at build time. All three languages use the same input metadata and run-mode model.
 
 ## Cell Metadata
 
@@ -26,6 +26,8 @@ Python-only field:
 
 - `packages`: vendored Pyodide package names such as `numpy`, `pandas`, or `matplotlib`.
 
+Haskell cells use standard-library code only. They do not support `packages` or external helper modules.
+
 ## Run Modes
 
 - `button`: the reader starts execution explicitly.
@@ -37,7 +39,7 @@ Python-only field:
 
 Supported input types are `range`, `number`, `integer`, `text`, `textarea`, `checkbox`, `select`, and `radio`.
 
-Input names are available as variables inside the cell. In Rust cells, names are converted into safe Rust identifiers. Avoid names that differ only by punctuation, because they may map to the same Rust binding.
+Input names are available as variables inside the cell. In Rust and Haskell cells, names are converted into safe language identifiers. Avoid names that differ only by punctuation, because they may map to the same binding.
 
 ## Rust and Plots
 
@@ -134,4 +136,26 @@ else:
 name = label.upper() if enabled else label
 print(f"{name}: {method} = {result}")
 print(f"style = {style}")
+```
+
+## Haskell Inputs
+
+Haskell cells use `--|` metadata comments. Input values become Haskell variables, and text output written with `putStrLn` or `print` appears in the result panel.
+
+```haskell
+--| id: haskell-controls
+--| title: Haskell input UI
+--| run: reactive
+--| inputs:
+--|   factor: { type: integer, label: factor, min: 1, max: 5, step: 1, value: 3 }
+--|   label: { type: text, label: label, value: sample }
+--|   includeSquares: { type: checkbox, label: include squares, value: true }
+import Data.List (intercalate)
+
+let base = [1 .. 4 :: Int]
+let scaled = map (* factor) base
+let displayed = if includeSquares then map (\value -> value * value) scaled else scaled
+
+putStrLn (label ++ ": " ++ intercalate ", " (map show displayed))
+putStrLn ("total = " ++ show (sum displayed))
 ```

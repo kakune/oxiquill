@@ -7,7 +7,9 @@ export const supportedLanguages = new Map([
   ['rust', 'rust'],
   ['rs', 'rust'],
   ['python', 'python'],
-  ['py', 'python']
+  ['py', 'python'],
+  ['haskell', 'haskell'],
+  ['hs', 'haskell']
 ]);
 
 export const runModes = ['button', 'reactive', 'autorun', 'hidden'];
@@ -84,4 +86,33 @@ export const rustReservedIdentifiers = new Set([
   'where',
   'while',
   'yield'
+]);
+
+export const haskellReservedIdentifiers = new Set([
+  '_',
+  'as',
+  'case',
+  'class',
+  'data',
+  'default',
+  'deriving',
+  'do',
+  'else',
+  'foreign',
+  'hiding',
+  'if',
+  'import',
+  'in',
+  'infix',
+  'infixl',
+  'infixr',
+  'instance',
+  'let',
+  'module',
+  'newtype',
+  'of',
+  'qualified',
+  'then',
+  'type',
+  'where'
 ]);

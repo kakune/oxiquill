@@ -59,6 +59,33 @@ println!("value = {value}");
 Explain what changed in the result and what readers should notice.
 ````
 
+## Haskell 実行可能ノート
+
+standard library の Haskell example と text output に使います。
+
+````md
+---
+title: Haskell note
+description: A note where readers can change Haskell inputs and inspect output.
+---
+
+Explain the computation before the cell.
+
+```haskell
+--| id: unique-haskell-cell-id
+--| title: Calculate with Haskell
+--| run: reactive
+--| inputs:
+--|   count: { type: integer, label: count, min: 1, max: 8, step: 1, value: 4 }
+import Data.List (intercalate)
+
+let values = take count [1, 3 ..]
+putStrLn (intercalate ", " (map show values))
+```
+
+Explain what readers should notice in the output.
+````
+
 ## 図解ノート
 
 構造、状態、手順を code よりも図で説明したいときに使います。

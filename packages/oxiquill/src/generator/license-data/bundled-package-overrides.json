@@ -1,0 +1,17 @@
+{
+  "schemaVersion": 1,
+  "packages": [
+    {
+      "name": "boolbase",
+      "version": "1.0.0",
+      "license": "ISC",
+      "licenseFile": "javascript/boolbase-1.0.0-LICENSE.txt"
+    },
+    {
+      "name": "@pagefind/default-ui",
+      "version": "1.5.2",
+      "license": "MIT",
+      "licenseFile": "javascript/pagefind-1.5.2-LICENSE-MIT.txt"
+    }
+  ]
+}
