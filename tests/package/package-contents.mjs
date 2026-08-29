@@ -49,8 +49,8 @@ try {
   assert.ok((await readFile(cliPath, 'utf8')).startsWith('#!/usr/bin/env node\n'));
   if (process.platform !== 'win32') {
     assert.equal((await stat(cliPath)).mode & 0o111, 0o111, 'the built CLI must be executable');
+    assert.equal(first.files.find(({ path: filePath }) => filePath === 'dist/cli/index.mjs')?.mode, 0o755);
   }
-  assert.equal(first.files.find(({ path: filePath }) => filePath === 'dist/cli/index.mjs')?.mode, 0o755);
 
   await assertExportTargetsArePacked(actualFiles);
   console.log(`Verified ${actualFiles.length} deterministic files in the oxiquill npm tarball.`);
