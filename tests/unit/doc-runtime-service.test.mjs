@@ -478,32 +478,26 @@ describe('doc runtime service', () => {
     ).rejects.toThrow('broken read');
   });
 
-  it('copies Pyodide assets when present and skips when absent', async () => {
+  it('copies Pyodide assets from a package-graph resolution', async () => {
     const paths = createDocRuntimePaths('/repo');
-    const absent = createMemoryFileSystem();
-    await expect(copyPyodideAssets({ fileSystem: absent, paths, root: '/repo' })).resolves.toBe(false);
-
     const lockFile = {
       packages: {
         matplotlib: pyodidePackage('matplotlib', 'matplotlib.whl', 'matplotlib bytes'),
         pandas: pyodidePackage('pandas', 'pandas.whl', 'pandas bytes')
       }
     };
+    const packageDir = '/repo/node_modules/.pnpm/pyodide@0.29.4/node_modules/pyodide';
     const present = createMemoryFileSystem(
       Object.fromEntries(
         [
           ['package.json', JSON.stringify({ version: '314.0.6' })],
           'pyodide.mjs',
           'pyodide.mjs.map',
-          'pyodide.asm.mjs',
+          'pyodide.asm.js',
           'pyodide.asm.wasm',
           'python_stdlib.zip',
           ['pyodide-lock.json', JSON.stringify(lockFile)]
-        ].map((file) =>
-          Array.isArray(file)
-            ? [`/repo/node_modules/pyodide/${file[0]}`, file[1]]
-            : [`/repo/node_modules/pyodide/${file}`, file]
-        )
+        ].map((file) => Array.isArray(file) ? [`${packageDir}/${file[0]}`, file[1]] : [`${packageDir}/${file}`, file])
       )
     );
     const fetched = {
@@ -512,18 +506,39 @@ describe('doc runtime service', () => {
     };
     const fetchPackage = async (fileName) => fetched[fileName];
 
-    await expect(copyPyodideAssets({ fetchPackage, fileSystem: present, paths, root: '/repo' })).resolves.toBe(true);
+    const resolvePackageJson = () => `${packageDir}/package.json`;
+    await expect(copyPyodideAssets({ fetchPackage, fileSystem: present, paths, resolvePackageJson })).resolves.toBe(true);
     expect(present.files.get('/repo/public/oxiquill/pyodide/matplotlib.whl')).toEqual(Buffer.from('matplotlib bytes'));
     expect(present.files.get('/repo/public/oxiquill/pyodide/pandas.whl')).toEqual(Buffer.from('pandas bytes'));
-    await expect(copyPyodideAssets({ fetchPackage, fileSystem: present, paths, root: '/repo' })).resolves.toBe(false);
+    await expect(copyPyodideAssets({ fetchPackage, fileSystem: present, paths, resolvePackageJson })).resolves.toBe(false);
+  });
 
-    const missingVersion = createMemoryFileSystem({
-      '/repo/node_modules/pyodide/package.json': '{}',
-      '/repo/node_modules/pyodide/pyodide-lock.json': JSON.stringify(lockFile)
-    });
-    await expect(copyPyodideAssets({ fileSystem: missingVersion, paths, root: '/repo' })).rejects.toThrow(
-      'missing a version'
-    );
+  it('fails clearly when Pyodide or a required source asset is missing', async () => {
+    const paths = createDocRuntimePaths('/repo');
+    await expect(copyPyodideAssets({
+      fileSystem: createMemoryFileSystem(),
+      paths,
+      resolvePackageJson: () => {
+        throw new Error('MODULE_NOT_FOUND');
+      }
+    })).rejects.toThrow('Unable to resolve required Pyodide package "pyodide" from Oxiquill');
+
+    const packageDir = '/repo/installed/pyodide';
+    const missingWasm = createMemoryFileSystem(Object.fromEntries(
+      [
+        'pyodide.mjs',
+        'pyodide.mjs.map',
+        'pyodide.asm.js',
+        'python_stdlib.zip',
+        ['pyodide-lock.json', JSON.stringify({ packages: {} })]
+      ].map((file) => Array.isArray(file) ? [`${packageDir}/${file[0]}`, file[1]] : [`${packageDir}/${file}`, file])
+    ));
+
+    await expect(copyPyodideAssets({
+      fileSystem: missingWasm,
+      paths,
+      resolvePackageJson: () => `${packageDir}/package.json`
+    })).rejects.toThrow(`Required Pyodide asset "pyodide.asm.wasm" is missing from package "pyodide" at "${packageDir}/pyodide.asm.wasm"`);
   });
 
   it('resolves and verifies vendored Pyodide packages recursively', async () => {
@@ -687,7 +702,8 @@ describe('doc runtime service', () => {
       highlighter,
       paths,
       root: '/repo',
-      syncLicenses: async () => false
+      syncLicenses: async () => false,
+      syncPyodide: async () => false
     });
 
     expect(first).toMatchObject({
@@ -736,7 +752,8 @@ describe('doc runtime service', () => {
         highlighter,
         paths,
         root: '/repo',
-        syncLicenses: async () => false
+        syncLicenses: async () => false,
+        syncPyodide: async () => false
       })
     ).resolves.toMatchObject({
       cellsChanged: false,
