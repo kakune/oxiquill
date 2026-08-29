@@ -1,4 +1,4 @@
-[pytz-2025.2.dist-info/LICENSE.txt]
+[pytz-2026.1.post1.dist-info/LICENSE.txt]
 Copyright (c) 2003-2019 Stuart Bishop <stuart@stuartbishop.net>
 
 Permission is hereby granted, free of charge, to any person obtaining a

@@ -99,11 +99,13 @@ def __oxiquill_should_include_index(index, include_index=None):
 
 def __oxiquill_is_pandas_dataframe(value):
     cls = value.__class__
-    return cls.__name__ == "DataFrame" and getattr(cls, "__module__", "").startswith("pandas.")
+    module = getattr(cls, "__module__", "")
+    return cls.__name__ == "DataFrame" and (module == "pandas" or module.startswith("pandas."))
 
 def __oxiquill_is_pandas_series(value):
     cls = value.__class__
-    return cls.__name__ == "Series" and getattr(cls, "__module__", "").startswith("pandas.")
+    module = getattr(cls, "__module__", "")
+    return cls.__name__ == "Series" and (module == "pandas" or module.startswith("pandas."))
 
 def __oxiquill_pandas_dataframe_artifact(
     dataframe,

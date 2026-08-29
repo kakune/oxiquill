@@ -119,6 +119,7 @@ describe('python rich display support', () => {
     expect(pythonDisplaySupportCode).toContain('def __oxiquill_is_pandas_series');
     expect(pythonDisplaySupportCode).toContain('def __oxiquill_pandas_dataframe_artifact');
     expect(pythonDisplaySupportCode).toContain('def __oxiquill_pandas_series_artifact');
+    expect(pythonDisplaySupportCode).toContain('module == "pandas" or module.startswith("pandas.")');
     expect(pythonDisplaySupportCode).toContain('"rowCount": row_count');
     expect(pythonDisplaySupportCode).toContain('"truncated": truncated_rows or truncated_columns');
     expect(pythonDisplaySupportCode).toContain('Failed to convert dataframe output');

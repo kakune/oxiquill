@@ -67,7 +67,7 @@
     },
     {
       "name": "Pyodide",
-      "version": "0.29.4",
+      "version": "314.0.6",
       "license": "MPL-2.0",
       "licenseFiles": ["MPL-2.0.json"],
       "files": ["pyodide/pyodide.asm.wasm"],
@@ -75,7 +75,7 @@
     },
     {
       "name": "Python standard library",
-      "version": "3.13.2",
+      "version": "3.14.2",
       "license": "PSF-2.0",
       "licenseFiles": ["PSF-2.0.txt"],
       "files": ["pyodide/python_stdlib.zip"],
@@ -187,10 +187,10 @@
     },
     {
       "name": "contourpy",
-      "version": "1.3.1",
+      "version": "1.3.3",
       "license": "BSD-3-Clause",
-      "licenseFiles": ["python/contourpy-1.3.1-LICENSES.txt"],
-      "files": ["pyodide/contourpy-1.3.1-cp313-cp313-pyemscripten_2025_0_wasm32.whl"],
+      "licenseFiles": ["python/contourpy-1.3.3-LICENSES.txt"],
+      "files": ["pyodide/contourpy-1.3.3-cp314-cp314-pyemscripten_2026_0_wasm32.whl"],
       "source": "copied Pyodide wheel; package-specific notices remain in the wheel archive"
     },
     {
@@ -203,66 +203,66 @@
     },
     {
       "name": "fonttools",
-      "version": "4.56.0",
+      "version": "4.62.1",
       "license": "MIT",
-      "licenseFiles": ["python/fonttools-4.56.0-LICENSES.txt"],
-      "files": ["pyodide/fonttools-4.56.0-py3-none-any.whl"],
+      "licenseFiles": ["python/fonttools-4.62.1-LICENSES.txt"],
+      "files": ["pyodide/fonttools-4.62.1-py3-none-any.whl"],
       "source": "copied Pyodide wheel; package-specific notices remain in the wheel archive"
     },
     {
       "name": "kiwisolver",
-      "version": "1.4.8",
+      "version": "1.5.0",
       "license": "BSD-3-Clause",
-      "licenseFiles": ["python/kiwisolver-1.4.8-LICENSES.txt"],
-      "files": ["pyodide/kiwisolver-1.4.8-cp313-cp313-pyemscripten_2025_0_wasm32.whl"],
+      "licenseFiles": ["python/kiwisolver-1.5.0-LICENSES.txt"],
+      "files": ["pyodide/kiwisolver-1.5.0-cp314-cp314-pyemscripten_2026_0_wasm32.whl"],
       "source": "copied Pyodide wheel; package-specific notices remain in the wheel archive"
     },
     {
       "name": "matplotlib",
-      "version": "3.8.4",
+      "version": "3.10.8",
       "license": "PSF-2.0",
-      "licenseFiles": ["python/matplotlib-3.8.4-LICENSES.txt"],
-      "files": ["pyodide/matplotlib-3.8.4-cp313-cp313-pyemscripten_2025_0_wasm32.whl"],
+      "licenseFiles": ["python/matplotlib-3.10.8-LICENSES.txt"],
+      "files": ["pyodide/matplotlib-3.10.8-cp314-cp314-pyemscripten_2026_0_wasm32.whl"],
       "source": "copied Pyodide wheel; additional bundled notices remain in the wheel archive"
     },
     {
       "name": "numpy",
-      "version": "2.2.5",
+      "version": "2.4.6",
       "license": "BSD-3-Clause",
-      "licenseFiles": ["python/numpy-2.2.5-LICENSES.txt"],
-      "files": ["pyodide/numpy-2.2.5-cp313-cp313-pyemscripten_2025_0_wasm32.whl"],
+      "licenseFiles": ["python/numpy-2.4.6-LICENSES.txt"],
+      "files": ["pyodide/numpy-2.4.6-cp314-cp314-pyemscripten_2026_0_wasm32.whl"],
       "source": "copied Pyodide wheel; package-specific notices remain in the wheel archive"
     },
     {
       "name": "packaging",
-      "version": "26.2",
+      "version": "26.1",
       "license": "Apache-2.0 OR BSD-2-Clause",
-      "licenseFiles": ["python/packaging-26.2-LICENSES.txt"],
-      "files": ["pyodide/packaging-26.2-py3-none-any.whl"],
+      "licenseFiles": ["python/packaging-26.1-LICENSES.txt"],
+      "files": ["pyodide/packaging-26.1-py3-none-any.whl"],
       "source": "copied Pyodide wheel; package-specific notices remain in the wheel archive"
     },
     {
       "name": "pandas",
-      "version": "2.3.3",
+      "version": "3.0.2",
       "license": "BSD-3-Clause",
-      "licenseFiles": ["python/pandas-2.3.3-LICENSES.txt"],
-      "files": ["pyodide/pandas-2.3.3-cp313-cp313-pyemscripten_2025_0_wasm32.whl"],
+      "licenseFiles": ["python/pandas-3.0.2-LICENSES.txt"],
+      "files": ["pyodide/pandas-3.0.2-cp314-cp314-pyemscripten_2026_0_wasm32.whl"],
       "source": "copied Pyodide wheel; package-specific notices remain in the wheel archive"
     },
     {
       "name": "Pillow",
-      "version": "11.3.0",
+      "version": "12.2.0",
       "license": "HPND",
-      "licenseFiles": ["python/Pillow-11.3.0-LICENSES.txt"],
-      "files": ["pyodide/pillow-11.3.0-cp313-cp313-pyemscripten_2025_0_wasm32.whl"],
+      "licenseFiles": ["python/Pillow-12.2.0-LICENSES.txt"],
+      "files": ["pyodide/pillow-12.2.0-cp314-cp314-pyemscripten_2026_0_wasm32.whl"],
       "source": "copied Pyodide wheel; package-specific notices remain in the wheel archive"
     },
     {
       "name": "pyparsing",
-      "version": "3.2.1",
+      "version": "3.3.2",
       "license": "MIT",
-      "licenseFiles": ["python/pyparsing-3.2.1-LICENSES.txt"],
-      "files": ["pyodide/pyparsing-3.2.1-py3-none-any.whl"],
+      "licenseFiles": ["python/pyparsing-3.3.2-LICENSES.txt"],
+      "files": ["pyodide/pyparsing-3.3.2-py3-none-any.whl"],
       "source": "copied Pyodide wheel; package-specific notices remain in the wheel archive"
     },
     {
@@ -275,10 +275,10 @@
     },
     {
       "name": "pytz",
-      "version": "2025.2",
+      "version": "2026.1.post1",
       "license": "MIT",
-      "licenseFiles": ["python/pytz-2025.2-LICENSES.txt"],
-      "files": ["pyodide/pytz-2025.2-py2.py3-none-any.whl"],
+      "licenseFiles": ["python/pytz-2026.1.post1-LICENSES.txt"],
+      "files": ["pyodide/pytz-2026.1.post1-py2.py3-none-any.whl"],
       "source": "copied Pyodide wheel; package-specific notices remain in the wheel archive"
     },
     {

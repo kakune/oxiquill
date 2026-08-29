@@ -12,6 +12,12 @@
       "version": "1.5.2",
       "license": "MIT",
       "licenseFile": "javascript/pagefind-1.5.2-LICENSE-MIT.txt"
+    },
+    {
+      "name": "fastdom",
+      "version": "1.0.12",
+      "license": "MIT",
+      "licenseFile": "javascript/fastdom-1.0.12-LICENSE-MIT.txt"
     }
   ]
 }
