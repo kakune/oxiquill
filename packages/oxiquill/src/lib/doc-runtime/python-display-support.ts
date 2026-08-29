@@ -6,7 +6,7 @@ import json
 
 __oxiquill_outputs = []
 __oxiquill_displayed_figures = set()
-__oxiquill_table_limit = 1000
+__oxiquill_table_limit = 10000
 __oxiquill_table_column_limit = 100
 
 def __oxiquill_meta(artifact, title=None, caption=None):

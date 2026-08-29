@@ -1,28 +1,20 @@
 import type {
   ChartArtifact,
-  ChartSpec,
   CellExecutionResult,
   OutputArtifact,
   PlotSpec,
   RawCellExecutionResult,
-  TableColumn,
   TextArtifact
 } from './types';
+import {
+  validateOutputArtifacts,
+  type ValidatedArtifactResult,
+  type ValidatedOutputArtifact
+} from './output-artifact-validation';
 
-const artifactKinds = new Set(['text', 'json', 'table', 'chart', 'image', 'html']);
-const artifactStreams = new Set(['stdout', 'stderr', 'display']);
-const tableColumnTypes = new Set([
-  'string',
-  'number',
-  'integer',
-  'boolean',
-  'date',
-  'datetime',
-  'null',
-  'unknown'
-]);
-const chartKinds = new Set(['line', 'scatter', 'bar', 'histogram', 'area', 'heatmap']);
-const imageMimes = new Set(['image/png', 'image/jpeg', 'image/svg+xml']);
+export interface NormalizedCellExecutionResult extends CellExecutionResult {
+  outputResults: readonly ValidatedArtifactResult[];
+}
 
 export function legacyResultToOutputs(result: RawCellExecutionResult): readonly OutputArtifact[] {
   return [
@@ -47,44 +39,103 @@ export function outputsToLegacyResult(outputs: readonly OutputArtifact[]): CellE
   };
 }
 
-export function normalizeCellExecutionResult(result: RawCellExecutionResult): CellExecutionResult {
-  const explicitOutputs = Array.isArray(result.outputs)
-    ? result.outputs.filter(isOutputArtifact)
-    : [];
-  const outputs = explicitOutputs.length > 0 ? explicitOutputs : legacyResultToOutputs(result);
+export function normalizeCellExecutionResult(result: RawCellExecutionResult): NormalizedCellExecutionResult {
+  const rawOutputs = ownDataField(result, 'outputs');
+  const outputCandidates = rawOutputs.present
+    ? Array.isArray(rawOutputs.value) ? rawOutputs.value : [rawOutputs.value]
+    : legacyResultToOutputCandidates(result);
+  const outputResults = validateOutputArtifacts(outputCandidates);
+  const outputs = outputResults.flatMap((output) => output.status === 'valid'
+    ? [publicOutputArtifact(output.artifact)]
+    : []);
   const legacy = outputsToLegacyResult(outputs);
+  const rawStdout = ownDataField(result, 'stdout').value;
+  const rawStderr = ownDataField(result, 'stderr').value;
+  const rawValue = ownDataField(result, 'value');
+  const rawPlots = ownDataField(result, 'plots');
 
   return {
-    stdout: typeof result.stdout === 'string' ? result.stdout : legacy.stdout,
-    ...(typeof result.stderr === 'string' ? { stderr: result.stderr } : legacy.stderr ? { stderr: legacy.stderr } : {}),
-    ...(Object.hasOwn(result, 'value') ? { value: result.value } : Object.hasOwn(legacy, 'value') ? { value: legacy.value } : {}),
-    plots: Array.isArray(result.plots) ? result.plots : legacy.plots,
-    outputs
+    stdout: typeof rawStdout === 'string' ? rawStdout : legacy.stdout,
+    ...(typeof rawStderr === 'string' ? { stderr: rawStderr } : legacy.stderr ? { stderr: legacy.stderr } : {}),
+    ...(rawValue.present ? { value: rawValue.value } : Object.hasOwn(legacy, 'value') ? { value: legacy.value } : {}),
+    plots: rawPlots.present && Array.isArray(rawPlots.value)
+      ? validatedLegacyPlots(rawPlots.value)
+      : legacy.plots,
+    outputs,
+    outputResults
   };
 }
 
-export function isOutputArtifact(value: unknown): value is OutputArtifact {
-  if (!isRecord(value) || !artifactKinds.has(value.kind as string) || !hasValidBaseArtifact(value)) {
-    return false;
-  }
+function legacyResultToOutputCandidates(result: RawCellExecutionResult): readonly unknown[] {
+  const stdout = ownDataField(result, 'stdout').value;
+  const stderr = ownDataField(result, 'stderr').value;
+  const value = ownDataField(result, 'value');
+  const plots = ownDataField(result, 'plots').value;
+  return [
+    typeof stdout === 'string' && stdout.length > 0
+      ? [{ kind: 'text', stream: 'stdout', content: stdout }]
+      : [],
+    typeof stderr === 'string' && stderr.length > 0
+      ? [{ kind: 'text', stream: 'stderr', content: stderr }]
+      : [],
+    value.present && value.value != null && value.value !== ''
+      ? [{ kind: 'json', value: value.value }]
+      : [],
+    ...(Array.isArray(plots) ? plots.map((plot) => [legacyPlotCandidate(plot)]) : [])
+  ].flat();
+}
 
-  switch (value.kind) {
-    case 'text':
-      return artifactStreams.has(value.stream as string) && typeof value.content === 'string';
-    case 'json':
-      return Object.hasOwn(value, 'value');
-    case 'table':
-      return isTableArtifact(value);
-    case 'chart':
-      return isChartSpec(value.spec);
-    case 'image':
-      return isImageArtifact(value);
-    case 'html':
-      return typeof value.html === 'string' && value.sandboxed === true;
-    /* v8 ignore next -- artifactKinds rejects unknown artifact kinds before this switch. */
-    default:
-      return false;
+function validatedLegacyPlots(values: readonly unknown[]): readonly PlotSpec[] {
+  return validateOutputArtifacts(values.map(legacyPlotCandidate))
+    .flatMap((result) => result.status === 'valid' ? chartArtifactToLegacyPlot(result.artifact) : []);
+}
+
+function legacyPlotCandidate(value: unknown): unknown {
+  if (typeof value !== 'object' || value === null || Array.isArray(value)) return value;
+  const record = value as Record<string, unknown>;
+  const kind = ownDataField(record, 'kind').value;
+  const xLabel = ownDataField(record, 'x_label').value;
+  const yLabel = ownDataField(record, 'y_label').value;
+  const points = ownDataField(record, 'points').value;
+  return {
+    kind: 'chart',
+    spec: {
+      kind,
+      xLabel,
+      yLabel,
+      xType: 'value',
+      yType: 'value',
+      tooltip: true,
+      dataZoom: true,
+      series: [{ points }]
+    }
+  };
+}
+
+function ownDataField(
+  record: object,
+  key: PropertyKey
+): { present: boolean; value: unknown } {
+  const descriptor = Object.getOwnPropertyDescriptor(record, key);
+  return descriptor && Object.hasOwn(descriptor, 'value')
+    ? { present: true, value: descriptor.value }
+    : { present: descriptor != null, value: undefined };
+}
+
+function publicOutputArtifact(artifact: ValidatedOutputArtifact): OutputArtifact {
+  if (artifact.kind === 'json') {
+    const { formattedValue: _formattedValue, ...output } = artifact;
+    return output;
   }
+  if (artifact.kind === 'image') {
+    const { source: _source, ...output } = artifact;
+    return output;
+  }
+  return artifact;
+}
+
+export function isOutputArtifact(value: unknown): value is OutputArtifact {
+  return validateOutputArtifacts([value])[0]?.status === 'valid';
 }
 
 function legacyPlotToChartArtifact(plot: PlotSpec): ChartArtifact {
@@ -129,52 +180,4 @@ function joinTextArtifacts(outputs: readonly OutputArtifact[], stream: TextArtif
     .map((output) => output.content)
     .filter((content) => content.length > 0)
     .join('\n');
-}
-
-function hasValidBaseArtifact(value: Record<string, unknown>): boolean {
-  return (
-    optionalString(value.id) &&
-    optionalString(value.title) &&
-    optionalString(value.caption) &&
-    (typeof value.truncated === 'boolean' || value.truncated == null)
-  );
-}
-
-function isTableArtifact(value: Record<string, unknown>): boolean {
-  return (
-    Array.isArray(value.columns) &&
-    value.columns.every(isTableColumn) &&
-    Array.isArray(value.rows) &&
-    value.rows.every(Array.isArray) &&
-    (typeof value.rowCount === 'number' || value.rowCount == null)
-  );
-}
-
-function isTableColumn(value: unknown): value is TableColumn {
-  return (
-    isRecord(value) &&
-    typeof value.key === 'string' &&
-    typeof value.label === 'string' &&
-    (value.type == null || tableColumnTypes.has(value.type as string))
-  );
-}
-
-function isChartSpec(value: unknown): value is ChartSpec {
-  return isRecord(value) && chartKinds.has(value.kind as string);
-}
-
-function isImageArtifact(value: Record<string, unknown>): boolean {
-  return (
-    imageMimes.has(value.mime as string) &&
-    typeof value.data === 'string' &&
-    optionalString(value.alt)
-  );
-}
-
-function optionalString(value: unknown): boolean {
-  return value == null || typeof value === 'string';
-}
-
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === 'object' && value !== null;
 }

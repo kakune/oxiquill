@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'preact/hooks';
+import { useEffect, useMemo, useState } from 'preact/hooks';
 import type { TableArtifact, TableColumn } from '../../lib/doc-runtime/types';
 
 interface TableOutputProps {
@@ -11,18 +11,30 @@ type SortState = {
   direction: SortDirection;
 };
 
+export type TableCsvResult =
+  | { ok: true; csv: string }
+  | { ok: false; error: string };
+
+type CopyStatus = {
+  kind: 'success' | 'error';
+  message: string;
+};
+
 const pageSizes = [10, 25, 50, 100] as const;
 
 export default function TableOutput({ table }: TableOutputProps) {
   const [pageSize, setPageSize] = useState<(typeof pageSizes)[number]>(pageSizes[0]);
   const [page, setPage] = useState(0);
   const [sort, setSort] = useState<SortState>();
+  const [copyStatus, setCopyStatus] = useState<CopyStatus>();
   const sortedRows = useMemo(() => sortRows(table.rows, sort), [table.rows, sort]);
   const pageCount = Math.max(1, Math.ceil(sortedRows.length / pageSize));
   const safePage = Math.min(page, pageCount - 1);
   const currentRows = visibleRows(sortedRows, safePage, pageSize);
   const firstRow = sortedRows.length === 0 ? 0 : safePage * pageSize + 1;
   const lastRow = Math.min(sortedRows.length, (safePage + 1) * pageSize);
+
+  useEffect(() => setCopyStatus(undefined), [table]);
 
   function updateSort(columnIndex: number): void {
     setPage(0);
@@ -33,7 +45,25 @@ export default function TableOutput({ table }: TableOutputProps) {
   }
 
   async function copyVisibleCsv(): Promise<void> {
-    await globalThis.navigator.clipboard?.writeText(tableToCsv(table.columns, currentRows));
+    const converted = tableToCsv(table.columns, currentRows);
+    if (!converted.ok) {
+      setCopyStatus({ kind: 'error', message: `Unable to copy CSV: ${converted.error}` });
+      return;
+    }
+    try {
+      const clipboard = globalThis.navigator.clipboard;
+      if (!clipboard) {
+        setCopyStatus({ kind: 'error', message: 'Unable to copy CSV: Clipboard access is unavailable.' });
+        return;
+      }
+      await clipboard.writeText(converted.csv);
+      setCopyStatus({ kind: 'success', message: 'Copied visible rows as CSV.' });
+    } catch (error) {
+      setCopyStatus({
+        kind: 'error',
+        message: `Unable to copy CSV: ${error instanceof Error ? error.message : String(error)}`
+      });
+    }
   }
 
   return (
@@ -110,6 +140,15 @@ export default function TableOutput({ table }: TableOutputProps) {
           </button>
         </div>
       </div>
+      {copyStatus ? (
+        <p
+          class={copyStatus.kind === 'error' ? 'error-state' : 'doc-table-output__status'}
+          data-testid="table-copy-status"
+          role={copyStatus.kind === 'error' ? 'alert' : 'status'}
+        >
+          {copyStatus.message}
+        </p>
+      ) : null}
     </section>
   );
 }
@@ -130,11 +169,23 @@ export function visibleRows(rows: readonly unknown[][], page: number, pageSize: 
   return rows.slice(page * pageSize, (page + 1) * pageSize);
 }
 
-export function tableToCsv(columns: readonly TableColumn[], rows: readonly unknown[][]): string {
-  return [
-    columns.map((column) => csvCell(column.label)).join(','),
-    ...rows.map((row) => columns.map((_, index) => csvCell(row[index])).join(','))
-  ].join('\n');
+export function tableToCsv(columns: readonly TableColumn[], rows: readonly unknown[][]): TableCsvResult {
+  try {
+    return {
+      ok: true,
+      csv: [
+        columns.map((column) => csvCell(column.label)).join(','),
+        ...rows.map((row, rowIndex) => {
+          if (row.length !== columns.length) {
+            throw new Error(`Row ${rowIndex + 1} has ${row.length} cells; expected ${columns.length}.`);
+          }
+          return columns.map((_, index) => csvCell(row[index])).join(',');
+        })
+      ].join('\n')
+    };
+  } catch (error) {
+    return { ok: false, error: error instanceof Error ? error.message : String(error) };
+  }
 }
 
 export function formatTableCell(value: unknown): string {
@@ -147,7 +198,7 @@ export function formatTableCell(value: unknown): string {
   }
   if (typeof value === 'boolean') return value ? 'true' : 'false';
   if (typeof value === 'string') return value;
-  return JSON.stringify(value);
+  throw new Error(`Unsupported validated table cell type: ${typeof value}.`);
 }
 
 function compareCellValues(left: unknown, right: unknown): number {
@@ -161,8 +212,13 @@ function compareCellValues(left: unknown, right: unknown): number {
 
 function csvCell(value: unknown): string {
   if (value == null) return '';
-
-  const text = typeof value === 'object' ? JSON.stringify(value) : String(value);
+  if (!['string', 'number', 'boolean'].includes(typeof value)) {
+    throw new Error(`Unsupported validated table cell type: ${typeof value}.`);
+  }
+  if (typeof value === 'number' && !Number.isFinite(value)) {
+    throw new Error('Validated table cells must contain finite numbers.');
+  }
+  const text = String(value);
   return /[",\n\r]/u.test(text) ? `"${text.replace(/"/gu, '""')}"` : text;
 }
 

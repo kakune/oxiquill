@@ -1,16 +1,18 @@
 import type {
-  CellExecutionResult,
   CellLanguage,
   CellManifest,
   InputValues,
   RuntimeWorkerRequest,
   RuntimeWorkerResponse
 } from './types';
-import { normalizeCellExecutionResult } from './output-artifacts';
+import {
+  normalizeCellExecutionResult,
+  type NormalizedCellExecutionResult
+} from './output-artifacts';
 
 type PendingRequest = {
   reject: (reason: Error) => void;
-  resolve: (value: CellExecutionResult) => void;
+  resolve: (value: NormalizedCellExecutionResult) => void;
   timeout: ReturnType<typeof setTimeout>;
   worker: Worker;
 };
@@ -25,7 +27,7 @@ export function runInteractiveCell(
   cell: CellManifest,
   inputs: InputValues,
   runtimeVersion?: string
-): Promise<CellExecutionResult> {
+): Promise<NormalizedCellExecutionResult> {
   /* v8 ignore next -- the factory is unit-tested; this delegates to browser Worker adapters. */
   return defaultRuntimeClient.runInteractiveCell(cell, inputs, runtimeVersion);
 }
@@ -46,7 +48,11 @@ export function createInteractiveCellRunner(dependencies: RuntimeClientDependenc
   const workers = new Map<CellLanguage, Worker>();
   const pending = new Map<number, PendingRequest>();
 
-  function runCell(cell: CellManifest, inputs: InputValues, runtimeVersion?: string): Promise<CellExecutionResult> {
+  function runCell(
+    cell: CellManifest,
+    inputs: InputValues,
+    runtimeVersion?: string
+  ): Promise<NormalizedCellExecutionResult> {
     const requestId = nextRequestId++;
     const worker = getWorker(cell.language);
     const request = createWorkerRequest(requestId, cell, inputs, runtimeVersion);
