@@ -1,4 +1,4 @@
-import { useEffect, useRef } from 'preact/hooks';
+import { useEffect, useRef, useState } from 'preact/hooks';
 import type { ChartSpec } from '../../lib/doc-runtime/types';
 
 interface ChartOutputProps {
@@ -44,7 +44,10 @@ export default function ChartOutput({ spec }: ChartOutputProps) {
   const element = useRef<HTMLDivElement>(null);
   const chart = useRef<EChartsInstance>();
   const latestSpec = useRef(spec);
+  const [renderError, setRenderError] = useState<Error>();
   latestSpec.current = spec;
+
+  if (renderError) throw renderError;
 
   useEffect(() => {
     const chartElement = element.current!;
@@ -52,15 +55,19 @@ export default function ChartOutput({ spec }: ChartOutputProps) {
     let nextChart: EChartsInstance | undefined;
     let resizeObserver: ResizeObserver | undefined;
 
-    void loadECharts().then((echarts) => {
-      if (cancelled) return;
+    void loadECharts()
+      .then((echarts) => {
+        if (cancelled) return;
 
-      nextChart = echarts.init(chartElement, undefined, { renderer: 'canvas' });
-      chart.current = nextChart;
-      nextChart.setOption(chartSpecToEChartsOptions(latestSpec.current), true);
-      resizeObserver = new ResizeObserver(() => nextChart?.resize());
-      resizeObserver.observe(chartElement);
-    });
+        nextChart = echarts.init(chartElement, undefined, { renderer: 'canvas' });
+        chart.current = nextChart;
+        nextChart.setOption(chartSpecToEChartsOptions(latestSpec.current), true);
+        resizeObserver = new ResizeObserver(() => nextChart?.resize());
+        resizeObserver.observe(chartElement);
+      })
+      .catch((error: unknown) => {
+        if (!cancelled) setRenderError(toError(error));
+      });
 
     return () => {
       cancelled = true;
@@ -71,10 +78,18 @@ export default function ChartOutput({ spec }: ChartOutputProps) {
   }, []);
 
   useEffect(() => {
-    chart.current?.setOption(chartSpecToEChartsOptions(spec), true);
+    try {
+      chart.current?.setOption(chartSpecToEChartsOptions(spec), true);
+    } catch (error) {
+      setRenderError(toError(error));
+    }
   }, [spec]);
 
   return <div ref={element} class="doc-plot" data-testid="doc-plot" />;
+}
+
+function toError(value: unknown): Error {
+  return value instanceof Error ? value : new Error(String(value));
 }
 
 export function chartSpecToEChartsOptions(spec: ChartSpec): EChartsOptions {
