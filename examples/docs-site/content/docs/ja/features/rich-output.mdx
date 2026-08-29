@@ -16,20 +16,46 @@ Oxiquill は次の出力を表示します。
 - SVG、PNG、JPEG data から作る image。
 - iframe 内の sandboxed HTML。
 
-Oxiquill は各 artifact を render 前に検証し、次の runtime 上限を適用します。
+各 artifact は optional string の `id`、`title`、`caption` を持てます。worker から受け取る value は untrusted です。Oxiquill は renderer に渡す前に discriminator、field、plain-record structure、array shape、finite number、row width、MIME/base64 data、nested value を検証します。reject/render failure になった一つの artifact は local diagnostic を表示し、valid sibling を消しません。
 
-- 1 run あたり100 artifact。
-- text、format 済み JSON、HTML は1 artifact あたり UTF-8 で1 MiB。
-- table は10,000 row、100 column。
-- chart は data point、bin、cell の合計が100,000。
-- image は decode 後の data が10 MiB。
-- 1 run 全体で検証済み output data が16 MiB。
+## Artifact schema
 
-Text、JSON、table artifact は安全な境界で切り詰められ、truncated と表示されます。上限を超えた chart、image、HTML は、その artifact だけの error を表示します。不正な output や renderer failure も artifact 内に分離されるため、正常な sibling output は引き続き利用できます。
+| Kind | Required field | Optional behavior |
+| --- | --- | --- |
+| `text` | `stream: "stdout" \| "stderr" \| "display"`, `content: string` | `truncated` が bounded content を示します。 |
+| `json` | `value` | cycle-aware formatting が BigInt を明示表現し、`truncated` が bounded serialized data を示します。 |
+| `table` | `columns`、rectangular `rows` | `rowCount` が original size、`truncated` が preview を示します。 |
+| `chart` | 下記の valid `spec` | oversize/invalid chart は local artifact error。 |
+| `image` | `mime: image/png \| image/jpeg \| image/svg+xml`、valid data | `alt` が image alternative。 |
+| `html` | `html: string`, `sandboxed: true` | empty sandbox permission の iframe 内に常に表示。 |
 
-JSON formatting は cycle を扱えます。Cycle は `[Circular -> path]` marker、BigInt は `{ "$bigint": "value" }`、深すぎる、または大きすぎる subtree は `[Truncated]` marker で表します。Table の structured cell も同じ安全な formatting を使います。Image data は宣言した SVG、PNG、JPEG MIME type と一致する必要があり、PNG/JPEG payload は対応する file signature を持つ正しい base64 でなければなりません。
+table column は `key`、`label`、optional `type` を持ちます。type は `string`、`number`、`integer`、`boolean`、`date`、`datetime`、`null`、`unknown` です。各 row は declared column count と正確に一致する必要があります。
 
-HTML は常に空の `sandbox` attribute を持つ iframe 内で render されます。Script permission と same-origin permission は付与されません。Table の CSV control は copy 成功に加え、conversion、permission、clipboard の失敗も表示します。
+## Chart schema
+
+すべての chart spec は optional `title`、`xLabel`、`yLabel`、`xType`、`yType`、`legend`、`tooltip`、`dataZoom` を受け取ります。axis type は `value`、`category`、`time`、`log` です。
+
+- `line`、`scatter`、`area`: optional `name` と `[x, y]` point を持つ `series[]`。
+- `bar`: string `categories[]` と同じ length の numeric-or-null `values[]` series。
+- `histogram`: finite `[lower, upper, count]` tuple の `bins[]`。
+- `heatmap`: optional `xCategories`/`yCategories` と finite `[x, y, value]` cell。
+
+chart は textual title/caption と bounded accessible summary または equivalent table を提供します。equivalent がある場合、implementation canvas は accessibility API から隠されます。
+
+## Resource limit
+
+limit は validation 後に適用され、各 run で累積します。
+
+| Resource | Limit | 超過時 |
+| --- | --- | --- |
+| Artifact | 1 run 100個 | 追加 artifact を local reject。 |
+| Text、serialized JSON、HTML | artifact ごとに 1 MiB | Text/JSON は `truncated: true` 可、HTML は reject。 |
+| Table | 10,000 row、100 column | bounded table は `truncated: true` と `rowCount` を使用可。 |
+| Chart | 合計100,000 point/bin/cell | artifact-local error。 |
+| Image | decoded 10 MiB | artifact-local error。 |
+| 全 validated output | 1 run 16 MiB | remaining budget を超える artifact を local reject。 |
+
+`truncated: true` を使えるのは text、JSON、table だけです。chart、image、HTML は黙って truncate しません。invalid/cyclic/over-deep JSON、ragged table、non-finite chart value、invalid base64/MIME pair、unsafe structural record が cell component を crash させることはありません。
 
 ## Python display helper
 
@@ -106,3 +132,5 @@ emit_html!(r#"<p><strong>Sandboxed HTML</strong> emitted from Rust.</p>"#);
 ## 使い分け
 
 短い説明文には stdout を使います。正確な構造を見せたい場合は JSON、比較可能な record には table、傾向や分布には chart、生成された視覚情報には image、他の artifact で表せない markup には sandboxed HTML を使います。
+
+copy、sort、pagination、validation、running、completion、failure state は keyboard 操作可能で、localized English/Japanese label とともに announce されます。sandboxed HTML には意図的に script/same-origin permission がありません。trust boundary は [サポートとセキュリティ](/ja/guides/support-and-security/) を参照してください。

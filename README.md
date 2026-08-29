@@ -89,7 +89,25 @@ pnpm preview
 
 ### Use From Another Repository
 
-A consuming docs repository declares Oxiquill together with the Astro and Starlight versions it integrates:
+A new consumer can create the static starter without a global install:
+
+```sh
+pnpm dlx oxiquill init my-docs
+cd my-docs
+pnpm install
+pnpm check
+pnpm build
+pnpm preview
+```
+
+For an existing project, install Oxiquill together with the Astro and Starlight packages imported by the project:
+
+```sh
+pnpm add oxiquill astro @astrojs/starlight
+npm install oxiquill astro @astrojs/starlight
+```
+
+Route project scripts through the CLI:
 
 ```json
 {
@@ -101,7 +119,9 @@ A consuming docs repository declares Oxiquill together with the Astro and Starli
   "scripts": {
     "dev": "oxiquill dev",
     "build": "oxiquill build",
-    "check": "oxiquill check"
+    "check": "oxiquill check",
+    "preview": "oxiquill preview",
+    "clean": "oxiquill clean"
   }
 }
 ```
@@ -141,6 +161,8 @@ export const collections = createOxiquillCollections({ defineCollection, docsLoa
 ```
 
 Use `content/docs`, `crates`, `public`, and `.oxiquill` at the consumer repository root. Oxiquill writes generated internals and browser runtime assets into the consumer workspace, not into the installed package.
+
+The complete consumer contract is published in [Getting Started](./examples/docs-site/content/docs/guides/getting-started.mdx), [Project Configuration](./examples/docs-site/content/docs/guides/project-configuration.mdx), the [Package API](./examples/docs-site/content/docs/reference/package-api.mdx), the [CLI reference](./examples/docs-site/content/docs/reference/cli.mdx), [Support and Security](./examples/docs-site/content/docs/guides/support-and-security.mdx), and [Troubleshooting](./examples/docs-site/content/docs/guides/troubleshooting.mdx).
 
 ### Repository Layout
 
@@ -283,6 +305,8 @@ Contributions are welcome. Please open issues for bug reports, questions, and pr
 
 Contributions are welcome. Please open issues for bug reports, questions, and proposals, and send focused pull requests for fixes or documentation improvements.
 
+See [CHANGELOG.md](./CHANGELOG.md) for release history, [SECURITY.md](./SECURITY.md) for private vulnerability reporting and supported versions, and [docs/RELEASING.md](./docs/RELEASING.md) for the maintainer release process.
+
 ### Troubleshooting
 
 - If a Rust cell helper crate cannot be found, match the cell `crates` value to the `package.name` in `examples/docs-site/crates/*/Cargo.toml`.
@@ -383,7 +407,25 @@ pnpm preview
 
 ### 別リポジトリから使う
 
-利用側の documentation repository では、Oxiquill と、それが統合する Astro および Starlight の version を指定します。
+global install をせずに static starter を作成できます。
+
+```sh
+pnpm dlx oxiquill init my-docs
+cd my-docs
+pnpm install
+pnpm check
+pnpm build
+pnpm preview
+```
+
+既存 project では、project が直接 import する Astro および Starlight とともに Oxiquill を追加します。
+
+```sh
+pnpm add oxiquill astro @astrojs/starlight
+npm install oxiquill astro @astrojs/starlight
+```
+
+project script は CLI 経由にします。
 
 ```json
 {
@@ -395,7 +437,9 @@ pnpm preview
   "scripts": {
     "dev": "oxiquill dev",
     "build": "oxiquill build",
-    "check": "oxiquill check"
+    "check": "oxiquill check",
+    "preview": "oxiquill preview",
+    "clean": "oxiquill clean"
   }
 }
 ```
@@ -435,6 +479,8 @@ export const collections = createOxiquillCollections({ defineCollection, docsLoa
 ```
 
 利用側 repository root に `content/docs`、`crates`、`public`、`.oxiquill` を置きます。Oxiquill は生成内部ファイルと browser runtime asset を利用側 workspace に書き、installed package には書きません。
+
+consumer contract の詳細は [はじめに](./examples/docs-site/content/docs/ja/guides/getting-started.mdx)、[プロジェクト設定](./examples/docs-site/content/docs/ja/guides/project-configuration.mdx)、[Package API](./examples/docs-site/content/docs/ja/reference/package-api.mdx)、[CLI reference](./examples/docs-site/content/docs/ja/reference/cli.mdx)、[サポートとセキュリティ](./examples/docs-site/content/docs/ja/guides/support-and-security.mdx)、[トラブルシューティング](./examples/docs-site/content/docs/ja/guides/troubleshooting.mdx) を参照してください。
 
 ### リポジトリ構成
 

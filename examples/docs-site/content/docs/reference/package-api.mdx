@@ -1,0 +1,46 @@
+---
+title: Package API
+description: Reference every public Oxiquill package export and its intended use.
+---
+
+Oxiquill is ESM-only. Use the package export map instead of importing files below `node_modules/oxiquill` directly.
+
+## Exports
+
+| Export | Public API |
+| --- | --- |
+| `oxiquill` | `defineOxiquillConfig`, `oxiquillIntegration` |
+| `oxiquill/astro` | The same functions plus `OxiquillConfig`, `OxiquillIntegrationOptions`, `OxiquillFrameworkOptions`, and `OxiquillPathOptions` types |
+| `oxiquill/content` | Ready-to-use `collections` and advanced `createOxiquillCollections` with their dependency/collection types |
+| `oxiquill/runtime/InteractiveCell` | Preact component used by the interactive-cell remark transform |
+| `oxiquill/runtime/MermaidDiagram` | Preact Mermaid renderer used by the Mermaid remark transform |
+| `oxiquill/runtime/types` | Cell manifest, input, worker message, artifact, table, and chart TypeScript types |
+| `oxiquill/components/starlight/PageFrame` | Oxiquill's Starlight page-frame override |
+| `oxiquill/styles/katex.css` | KaTeX styles loaded by the default integration |
+| `oxiquill/styles/custom.css` | Oxiquill runtime, output, media, and page-frame styles |
+| `oxiquill/tsconfigs/strict` | Strict TypeScript base config for consumer projects |
+| `oxiquill/env` | Ambient declarations for Oxiquill virtual modules and asset imports |
+
+The component, style, and environment exports are public for advanced composition, but a normal project gets them through `defineOxiquillConfig()` and should not import them manually.
+
+## Astro API
+
+Use `defineOxiquillConfig(options)` for a complete site. It installs the Oxiquill integration before Preact and Starlight, then appends consumer integrations. See [Project Configuration](/guides/project-configuration/) for fields and precedence.
+
+Use `oxiquillIntegration(options)` only in a manually composed Astro config. It provides Markdown transforms, virtual modules, runtime generation, Wasm builds, Vite resolution, and license output, but it does not add Preact or Starlight for you.
+
+Invalid framework integration factories throw a `TypeError`. Configuration loading and path conflicts fail before generated files are written.
+
+## Content API
+
+Most sites should re-export the ready collection:
+
+```ts
+export { collections } from 'oxiquill/content';
+```
+
+`createOxiquillCollections({ defineCollection, docsLoader, docsSchema })` exists for tests or hosts that must inject compatible Astro/Starlight functions. It returns `{ docs }` using Starlight's loader and schema.
+
+## Runtime Types
+
+`oxiquill/runtime/types` describes the public wire shapes exchanged between generated manifests, workers, and renderers. Treat these values as untrusted at runtime: artifact validation and resource limits still apply even when TypeScript accepts a producer. See [Interactive Cells](/features/interactive-cells/) and [Rich Output](/features/rich-output/) for the complete contracts.
