@@ -1,14 +1,5 @@
-import type {
-  CellLanguage,
-  CellManifest,
-  InputValues,
-  RuntimeWorkerRequest,
-  RuntimeWorkerResponse
-} from './types';
-import {
-  normalizeCellExecutionResult,
-  type NormalizedCellExecutionResult
-} from './output-artifacts';
+import type { CellLanguage, CellManifest, InputValues, RuntimeWorkerRequest, RuntimeWorkerResponse } from './types';
+import { normalizeCellExecutionResult, type NormalizedCellExecutionResult } from './output-artifacts';
 
 type PendingRequest = {
   reject: (reason: Error) => void;
@@ -137,9 +128,7 @@ function createWorkerRequest(
   return {
     requestId,
     cellId: cell.id,
-    ...(cell.language === 'haskell'
-      ? { haskellFingerprintHash: runtimeHaskellFingerprintHash(runtimeVersion) }
-      : {}),
+    ...(cell.language === 'haskell' ? { haskellFingerprintHash: runtimeHaskellFingerprintHash(runtimeVersion) } : {}),
     inputArgs: cell.language === 'haskell' ? cell.inputs.map((input) => inputArgument(input, inputs)) : undefined,
     inputs,
     source: cell.language === 'python' ? cell.source : undefined,
@@ -176,10 +165,7 @@ function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null;
 }
 
-function inputArgument(
-  input: CellManifest['inputs'][number],
-  inputs: InputValues
-): string {
+function inputArgument(input: CellManifest['inputs'][number], inputs: InputValues): string {
   const value = inputs[input.name] ?? input.value;
   if (typeof value === 'boolean') return value ? 'true' : 'false';
   return String(value);

@@ -7,7 +7,8 @@ export default defineOxiquillConfig({
   ...(basePath ? { base: basePath } : {}),
   starlight: {
     title: 'Oxiquill',
-    description: 'A static documentation workspace for Rust, Python, Haskell, math, diagrams, and media-rich MDX notes.',
+    description:
+      'A static documentation workspace for Rust, Python, Haskell, math, diagrams, and media-rich MDX notes.',
     defaultLocale: 'root',
     locales: {
       root: {
@@ -23,9 +24,7 @@ export default defineOxiquillConfig({
       {
         label: 'Overview',
         translations: { ja: '概要' },
-        items: [
-          { label: 'Oxiquill', slug: 'index' }
-        ]
+        items: [{ label: 'Oxiquill', slug: 'index' }]
       },
       {
         label: 'Guides',

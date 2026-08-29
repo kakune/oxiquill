@@ -39,12 +39,8 @@ describe('doc runtime watch core', () => {
 
   it('uses non-glob watch roots and normalizes chokidar event paths', () => {
     expect(createRuntimeWatchPaths()).toEqual(['content/docs', 'crates']);
-    expect(toWatchEventRelativePath('/repo', 'content/docs/index.mdx')).toBe(
-      'content/docs/index.mdx'
-    );
-    expect(toWatchEventRelativePath('/repo', '/repo/crates/doc-rust/src/lib.rs')).toBe(
-      'crates/doc-rust/src/lib.rs'
-    );
+    expect(toWatchEventRelativePath('/repo', 'content/docs/index.mdx')).toBe('content/docs/index.mdx');
+    expect(toWatchEventRelativePath('/repo', '/repo/crates/doc-rust/src/lib.rs')).toBe('crates/doc-rust/src/lib.rs');
   });
 
   it('serializes tasks and coalesces pending enqueues', async () => {

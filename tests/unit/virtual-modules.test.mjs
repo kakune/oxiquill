@@ -46,10 +46,12 @@ describe('oxiquill virtual modules', () => {
     const hot = { send: vi.fn() };
     const context = { environment: { hot, moduleGraph } };
 
-    expect(plugin.hotUpdate.call(context, {
-      file: pathFromUrl(paths.cellsModulePath),
-      modules: [unrelatedNode, watchedFreshCellsNode]
-    })).toEqual([watchedFreshCellsNode, cellsNode, freshCellsNode]);
+    expect(
+      plugin.hotUpdate.call(context, {
+        file: pathFromUrl(paths.cellsModulePath),
+        modules: [unrelatedNode, watchedFreshCellsNode]
+      })
+    ).toEqual([watchedFreshCellsNode, cellsNode, freshCellsNode]);
     expect(hot.send).toHaveBeenCalledWith({
       type: 'custom',
       event: 'oxiquill:manifest-changed',

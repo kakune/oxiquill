@@ -69,7 +69,6 @@ type BaseArtifact = {
   byteLength: number;
 };
 
-type JsonContainer = unknown[] | Record<string, unknown>;
 type JsonVisitTask = {
   assign: (value: unknown) => void;
   depth: number;
@@ -232,10 +231,9 @@ function validateTableArtifact(record: Record<string, unknown>, remainingBytes: 
     throw new ArtifactValidationError('Table artifact column keys must be unique.');
   }
 
-  let byteLength = base.byteLength + columns.reduce(
-    (total, column) => total + utf8ByteLength(column.key) + utf8ByteLength(column.label),
-    0
-  );
+  let byteLength =
+    base.byteLength +
+    columns.reduce((total, column) => total + utf8ByteLength(column.key) + utf8ByteLength(column.label), 0);
   if (byteLength > remainingBytes) {
     throw new ArtifactValidationError('Table artifact metadata exceeds the remaining 16 MiB run limit.');
   }
@@ -306,9 +304,8 @@ function validateImageArtifact(record: Record<string, unknown>, remainingBytes: 
   }
   const data = requiredString(record, 'data', 'Image artifact');
   const alt = optionalString(record, 'alt', 'Image artifact');
-  const validated = mime === 'image/svg+xml'
-    ? validateSvgImage(data)
-    : validateBase64Image(data, mime as 'image/png' | 'image/jpeg');
+  const validated =
+    mime === 'image/svg+xml' ? validateSvgImage(data) : validateBase64Image(data, mime as 'image/png' | 'image/jpeg');
   if (validated.decodedBytes > outputArtifactLimits.decodedBytesPerImage) {
     throw new ArtifactValidationError(
       `Image artifact is ${validated.decodedBytes} decoded bytes; maximum is ${outputArtifactLimits.decodedBytesPerImage}.`
@@ -381,9 +378,7 @@ function validateTableColumn(value: unknown, index: number): TableColumn {
   const record = plainRecord(value, `Table artifact column ${index + 1}`);
   const type = optionalString(record, 'type', `Table artifact column ${index + 1}`);
   if (type != null && !tableColumnTypes.has(type as TableColumnType)) {
-    throw new ArtifactValidationError(
-      `Table artifact column ${index + 1} type ${quoted(type)} is not supported.`
-    );
+    throw new ArtifactValidationError(`Table artifact column ${index + 1} type ${quoted(type)} is not supported.`);
   }
   return {
     key: requiredString(record, 'key', `Table artifact column ${index + 1}`),
@@ -404,9 +399,7 @@ function validateTableCell(
       : { value: '', byteLength: 0, truncated: true };
   }
   if (typeof value === 'boolean') {
-    return maxBytes >= 1
-      ? { value, byteLength: 1, truncated: false }
-      : { value: '', byteLength: 0, truncated: true };
+    return maxBytes >= 1 ? { value, byteLength: 1, truncated: false } : { value: '', byteLength: 0, truncated: true };
   }
   if (typeof value === 'number') {
     if (!Number.isFinite(value)) {
@@ -414,19 +407,13 @@ function validateTableCell(
         `Table artifact cell ${rowIndex + 1}:${columnIndex + 1} must contain a finite number.`
       );
     }
-    return maxBytes >= 8
-      ? { value, byteLength: 8, truncated: false }
-      : { value: '', byteLength: 0, truncated: true };
+    return maxBytes >= 8 ? { value, byteLength: 8, truncated: false } : { value: '', byteLength: 0, truncated: true };
   }
   if (typeof value === 'string') {
     const bounded = truncateUtf8(value, maxBytes);
     return { value: bounded.value, byteLength: bounded.byteLength, truncated: bounded.truncated };
   }
-  const formatted = safeJsonFormat(
-    value,
-    maxBytes,
-    `Table artifact cell ${rowIndex + 1}:${columnIndex + 1}`
-  );
+  const formatted = safeJsonFormat(value, maxBytes, `Table artifact cell ${rowIndex + 1}:${columnIndex + 1}`);
   return {
     value: formatted.formatted,
     byteLength: utf8ByteLength(formatted.formatted),
@@ -573,18 +560,21 @@ function safeJsonFormat(value: unknown, maxBytes: number, context: string): Json
   let estimatedBytes = 0;
   let truncated = false;
   const active = new WeakMap<object, string>();
-  const tasks: JsonTask[] = [{
-    kind: 'visit',
-    input: value,
-    path: '$',
-    depth: 0,
-    assign: (next) => {
-      safeValue = next;
+  const tasks: JsonTask[] = [
+    {
+      kind: 'visit',
+      input: value,
+      path: '$',
+      depth: 0,
+      assign: (next) => {
+        safeValue = next;
+      }
     }
-  }];
+  ];
 
   while (tasks.length > 0) {
-    const task = tasks.pop()!;
+    const task = tasks.pop();
+    if (task == null) break;
     if (task.kind === 'array') {
       if (estimatedBytes >= maxBytes) {
         task.output.push('[Truncated]');
@@ -622,7 +612,8 @@ function safeJsonFormat(value: unknown, maxBytes: number, context: string): Json
         active.delete(task.input);
         continue;
       }
-      const key = task.keys[task.index]!;
+      const key = task.keys[task.index];
+      if (key == null) continue;
       const descriptor = dataDescriptor(task.input, key, `${context} at ${task.path}`);
       estimatedBytes += utf8ByteLength(key) + 4;
       tasks.push({ ...task, index: task.index + 1 });
@@ -731,18 +722,14 @@ function validateBase64Image(
   const parsed = parseDataUrl(data);
   const payload = parsed ? parsed.payload : data;
   if (parsed && parsed.mime !== mime) {
-    throw new ArtifactValidationError(
-      `Image artifact MIME mismatch: field is ${mime}, data URL is ${parsed.mime}.`
-    );
+    throw new ArtifactValidationError(`Image artifact MIME mismatch: field is ${mime}, data URL is ${parsed.mime}.`);
   }
   if (parsed && !parsed.base64) {
     throw new ArtifactValidationError(`${mime} image data URLs must use base64 encoding.`);
   }
   const decodedBytes = validateBase64(payload);
   const header = decodeBase64Prefix(payload, mime === 'image/png' ? 8 : 3);
-  const signature = mime === 'image/png'
-    ? [0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]
-    : [0xff, 0xd8, 0xff];
+  const signature = mime === 'image/png' ? [0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a] : [0xff, 0xd8, 0xff];
   if (!signature.every((byte, index) => header[index] === byte)) {
     throw new ArtifactValidationError(`Image artifact payload does not match ${mime}.`);
   }
@@ -766,9 +753,7 @@ function validateSvgImage(data: string): { data: string; decodedBytes: number; s
       );
     }
     try {
-      svg = utf8Decoder.decode(
-        Uint8Array.from(atob(parsed.payload), (character) => character.charCodeAt(0))
-      );
+      svg = utf8Decoder.decode(Uint8Array.from(atob(parsed.payload), (character) => character.charCodeAt(0)));
     } catch {
       throw new ArtifactValidationError('SVG image artifact must contain valid UTF-8 data.');
     }
@@ -809,7 +794,12 @@ function parseDataUrl(data: string): { base64: boolean; mime: string; payload: s
   if (!data.startsWith('data:')) return undefined;
   const match = /^data:([^;,]+)(?:;charset=[^;,]+)?(;base64)?,([\s\S]*)$/u.exec(data);
   if (!match) throw new ArtifactValidationError('Image artifact data URL is malformed.');
-  return { mime: match[1]!, base64: match[2] === ';base64', payload: match[3]! };
+  const mime = match[1];
+  const payload = match[3];
+  if (mime == null || payload == null) {
+    throw new ArtifactValidationError('Image artifact data URL is malformed.');
+  }
+  return { mime, base64: match[2] === ';base64', payload };
 }
 
 function validateBase64(payload: string): number {
@@ -835,7 +825,7 @@ function validateBase64(payload: string): number {
       throw new ArtifactValidationError('Image artifact contains invalid base64 data.');
     }
   }
-  return payload.length / 4 * 3 - padding;
+  return (payload.length / 4) * 3 - padding;
 }
 
 function decodeBase64Prefix(payload: string, byteCount: number): readonly number[] {
@@ -872,7 +862,8 @@ function truncateUtf8(value: string, maxBytes: number): { byteLength: number; tr
     if (utf8ByteLength(candidate) + markerBytes <= maxBytes) low = middle;
     else high = middle - 1;
   }
-  if (low > 0 && /[\uD800-\uDBFF]/u.test(value[low - 1]!)) low -= 1;
+  const lastCodeUnit = value.charCodeAt(low - 1);
+  if (low > 0 && lastCodeUnit >= 0xd800 && lastCodeUnit <= 0xdbff) low -= 1;
   const bounded = `${value.slice(0, low)}${marker}`;
   return { value: bounded, byteLength: utf8ByteLength(bounded), truncated: true };
 }
@@ -945,11 +936,7 @@ function optionalBoolean(record: Record<string, unknown>, key: string, context: 
   return value;
 }
 
-function optionalNonNegativeInteger(
-  record: Record<string, unknown>,
-  key: string,
-  context: string
-): number | undefined {
+function optionalNonNegativeInteger(record: Record<string, unknown>, key: string, context: string): number | undefined {
   if (!Object.hasOwn(record, key)) return undefined;
   const value = requiredOwnValue(record, key, context);
   if (typeof value !== 'number' || !Number.isSafeInteger(value) || value < 0) {
@@ -983,11 +970,7 @@ function stringArray(value: unknown, context: string): string[] {
   });
 }
 
-function optionalStringArray(
-  record: Record<string, unknown>,
-  key: string,
-  context: string
-): string[] | undefined {
+function optionalStringArray(record: Record<string, unknown>, key: string, context: string): string[] | undefined {
   if (!Object.hasOwn(record, key)) return undefined;
   const values = stringArray(requiredOwnValue(record, key, context), `${context} ${key}`);
   if (values.length > outputArtifactLimits.chartDataItems) throw chartLimitError(values.length);

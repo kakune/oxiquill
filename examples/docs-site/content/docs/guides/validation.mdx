@@ -7,6 +7,15 @@ Validation should match the risk of the change. Prose-only edits need lighter ch
 
 ## Common Checks
 
+Run the required lint and formatting gate for every code or configuration change:
+
+```sh
+pnpm lint
+pnpm format:check
+```
+
+`pnpm lint` runs ESLint for JavaScript, MJS, TypeScript, TSX, and Astro with zero warnings, verifies Prettier formatting, and runs the strict Rust lint. Use `pnpm format` to apply the configured source, config, Markdown/MDX, JSON, and YAML format.
+
 Run `pnpm check` for normal documentation changes:
 
 ```sh
@@ -28,10 +37,11 @@ Use these commands when changing executable cells, cell metadata, rich output ex
 ```sh
 pnpm wasm:dev
 pnpm test:wasm
+pnpm test:haskell
 pnpm test:e2e
 ```
 
-`pnpm wasm:dev` regenerates the runtime for local development. It requires `wasm32-wasi-ghc` when Haskell cells are present, as do `pnpm build`, `pnpm check`, `pnpm wasm:build`, and `pnpm test:wasm`. `pnpm dev` and `pnpm dev:runtime` are intentionally more forgiving: they keep Astro serving and show a Haskell cell error in the browser if the Haskell compiler is missing or a Haskell compile fails. `pnpm test:wasm` verifies generated Rust cell behavior. `pnpm test:e2e` verifies the built site in a browser, including Haskell cells.
+`pnpm wasm:dev` regenerates the runtime for local development. It requires `wasm32-wasi-ghc` when Haskell cells are present, as do `pnpm build`, `pnpm check`, `pnpm wasm:build`, and `pnpm test:wasm`. `pnpm dev` and `pnpm dev:runtime` are intentionally more forgiving: they keep Astro serving and show a Haskell cell error in the browser if the Haskell compiler is missing or a Haskell compile fails. `pnpm test:wasm` verifies generated Rust cell behavior, and `pnpm test:haskell` executes the generated Haskell/WASI runtime. `pnpm test:e2e` runs the full browser suite in Chromium, Firefox, and WebKit.
 
 ## Unit and Coverage Checks
 
@@ -42,7 +52,20 @@ pnpm test:unit
 pnpm test:unit:coverage
 ```
 
-Coverage requires 85% statement, branch, function, and line coverage, and excludes generated runtime output. Add focused tests for uncovered handwritten code instead of editing generated files.
+Coverage requires 85% statement, branch, function, and line coverage across handwritten CLI, Astro integration, config/path, manifest, worker, generator, and runtime modules. Only generated output and type-only declarations are excluded. Add focused tests for uncovered handwritten code instead of editing generated files.
+
+## Packed Consumer Checks
+
+Verify installation without workspace links through both supported package managers:
+
+```sh
+pnpm test:consumer:npm
+pnpm test:consumer:pnpm
+```
+
+Each command packs `oxiquill`, installs the tarball in a temporary standalone project, runs the CLI and static check, generates a Rust/Wasm cell, and builds the site.
+
+Pull requests require compatibility jobs on Linux, macOS, and Windows, Haskell runtime jobs on Linux and macOS, and full browser jobs for Chromium, Firefox, and WebKit. Every supported matrix cell is merge-blocking.
 
 ## Rust Helper Checks
 

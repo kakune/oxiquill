@@ -1,15 +1,6 @@
-import {
-  haskellFunctionName,
-  haskellIdentifier
-} from './haskell-identifiers.mjs';
-import {
-  rustFunctionName,
-  rustIdentifier
-} from './rust-identifiers.mjs';
-import {
-  throwInteractiveCellDiagnostics,
-  uniqueCellIdDiagnostics
-} from '../../lib/doc-runtime/cell-authoring.mjs';
+import { haskellFunctionName, haskellIdentifier } from './haskell-identifiers.mjs';
+import { rustFunctionName, rustIdentifier } from './rust-identifiers.mjs';
+import { throwInteractiveCellDiagnostics, uniqueCellIdDiagnostics } from '../../lib/doc-runtime/cell-authoring.mjs';
 
 export function assertUniqueCellIds(cells) {
   throwInteractiveCellDiagnostics(uniqueCellIdDiagnostics(cells));

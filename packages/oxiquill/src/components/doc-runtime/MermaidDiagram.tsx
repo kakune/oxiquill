@@ -34,34 +34,35 @@ export default function MermaidDiagram({ diagramId, source }: MermaidDiagramProp
   }, []);
 
   useEffect(() => {
-    const element = container.current!;
+    const element = container.current;
+    if (!element) return undefined;
 
     let cancelled = false;
 
-    async function renderDiagram() {
+    async function renderDiagram(renderElement: HTMLDivElement) {
       setState('rendering');
       setError(undefined);
-      element.replaceChildren();
+      renderElement.replaceChildren();
 
       try {
         initializeMermaid(colorScheme);
         const { svg, bindFunctions } = await mermaid.render(renderId, source);
         if (cancelled) return;
 
-        element.innerHTML = svg;
-        bindFunctions?.(element);
+        renderElement.innerHTML = svg;
+        bindFunctions?.(renderElement);
         setState('ready');
       } catch (caught) {
         if (cancelled) return;
 
         const message = caught instanceof Error ? caught.message : String(caught);
-        element.textContent = 'Mermaid diagram could not be rendered.';
+        renderElement.textContent = 'Mermaid diagram could not be rendered.';
         setError(message);
         setState('error');
       }
     }
 
-    void renderDiagram();
+    void renderDiagram(element);
 
     return () => {
       cancelled = true;

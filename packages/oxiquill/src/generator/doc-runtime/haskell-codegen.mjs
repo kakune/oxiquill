@@ -1,8 +1,4 @@
-import {
-  haskellFunctionName,
-  haskellIdentifier,
-  haskellReaderName
-} from './haskell-identifiers.mjs';
+import { haskellFunctionName, haskellIdentifier, haskellReaderName } from './haskell-identifiers.mjs';
 
 export function generateHaskellMain(haskellCells) {
   const splitCells = haskellCells.map((cell) => ({ cell, source: splitHaskellCellSource(cell) }));
@@ -45,8 +41,7 @@ export function generateHaskellFunction(cell, source = splitHaskellCellSource(ce
       return `    ${variable} <- ${haskellReaderName(input)} ${haskellStringLiteral(input.name)} raw_${variable}`;
     })
     .join('\n');
-  const expectedInputMessage =
-    `Haskell cell ${haskellStringLiteral(cell.id)} expected ${cell.inputs.length} input(s), received `;
+  const expectedInputMessage = `Haskell cell ${haskellStringLiteral(cell.id)} expected ${cell.inputs.length} input(s), received `;
   const body = indentHaskellSource(source, '    ');
 
   if (cell.inputs.length === 0) {

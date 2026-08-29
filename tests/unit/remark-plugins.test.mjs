@@ -55,9 +55,7 @@ describe('remark interactive cells', () => {
 
     remarkInteractiveCells({ root: '/repo' })(tree, {});
 
-    expect(tree.children[0].value).toBe(
-      "import InteractiveCell from 'oxiquill/runtime/InteractiveCell';"
-    );
+    expect(tree.children[0].value).toBe("import InteractiveCell from 'oxiquill/runtime/InteractiveCell';");
     expect(tree.children[1].attributes[1]).toEqual({
       type: 'mdxJsxAttribute',
       name: 'cellId',
@@ -92,9 +90,7 @@ describe('remark interactive cells', () => {
       path: '/repo/src/components/doc-runtime/example.mdx'
     });
 
-    expect(tree.children[0].value).toBe(
-      "import InteractiveCell from 'oxiquill/runtime/InteractiveCell';"
-    );
+    expect(tree.children[0].value).toBe("import InteractiveCell from 'oxiquill/runtime/InteractiveCell';");
   });
 
   it('leaves trees without interactive cells unchanged', () => {
@@ -143,9 +139,11 @@ describe('remark interactive cells', () => {
     };
     const tree = { type: 'root', children: [valid, invalid] };
 
-    expect(() => remarkInteractiveCells({ root: '/repo' })(tree, {
-      path: '/repo/content/docs/page.mdx'
-    })).toThrow('content/docs/page.mdx:9 [cell "Bad.id"] id:');
+    expect(() =>
+      remarkInteractiveCells({ root: '/repo' })(tree, {
+        path: '/repo/content/docs/page.mdx'
+      })
+    ).toThrow('content/docs/page.mdx:9 [cell "Bad.id"] id:');
     expect(valid.type).toBe('code');
   });
 
@@ -158,9 +156,11 @@ describe('remark interactive cells', () => {
       ]
     };
 
-    expect(() => remarkInteractiveCells({ root: '/repo' })(tree, {
-      path: '/repo/content/docs/page.mdx'
-    })).toThrow('content/docs/page.mdx:5 [cell "repeated"] id: Duplicate page-local cell id');
+    expect(() =>
+      remarkInteractiveCells({ root: '/repo' })(tree, {
+        path: '/repo/content/docs/page.mdx'
+      })
+    ).toThrow('content/docs/page.mdx:5 [cell "repeated"] id: Duplicate page-local cell id');
     expect(tree.children[0].type).toBe('code');
   });
 });
@@ -218,9 +218,7 @@ describe('remark Mermaid diagrams', () => {
 
     remarkMermaidDiagrams({ root: '/repo' })(tree, {});
 
-    expect(tree.children[0].value).toBe(
-      "import MermaidDiagram from 'oxiquill/runtime/MermaidDiagram';"
-    );
+    expect(tree.children[0].value).toBe("import MermaidDiagram from 'oxiquill/runtime/MermaidDiagram';");
   });
 
   it('keeps package-stable Mermaid imports for non-docs files', () => {
@@ -233,9 +231,7 @@ describe('remark Mermaid diagrams', () => {
       path: '/repo/src/components/doc-runtime/example.mdx'
     });
 
-    expect(tree.children[0].value).toBe(
-      "import MermaidDiagram from 'oxiquill/runtime/MermaidDiagram';"
-    );
+    expect(tree.children[0].value).toBe("import MermaidDiagram from 'oxiquill/runtime/MermaidDiagram';");
   });
 
   it('leaves trees without Mermaid diagrams unchanged', () => {

@@ -97,7 +97,10 @@ describe('runtime client', () => {
     const originalWorker = globalThis.Worker;
     const defaultWorkers: DefaultFakeWorker[] = [];
     globalThis.Worker = class extends FakeWorker {
-      constructor(readonly url: URL, readonly options: WorkerOptions) {
+      constructor(
+        readonly url: URL,
+        readonly options: WorkerOptions
+      ) {
         super();
         defaultWorkers.push(this as DefaultFakeWorker);
       }

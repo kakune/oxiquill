@@ -56,10 +56,7 @@ export function localeFromLanguage(languageTag?: string): RuntimeLocale {
   return languageTag?.toLowerCase().startsWith('ja') ? 'ja' : 'en';
 }
 
-export function idleOutputMessage(
-  runMode: CellManifest['run'],
-  labels: RuntimeLabels = runtimeLabels.en
-): string {
+export function idleOutputMessage(runMode: CellManifest['run'], labels: RuntimeLabels = runtimeLabels.en): string {
   return runMode === 'reactive' || runMode === 'autorun' ? labels.idleReactive : labels.idleButton;
 }
 

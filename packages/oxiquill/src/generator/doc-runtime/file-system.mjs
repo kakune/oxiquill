@@ -1,12 +1,5 @@
 import { existsSync } from 'node:fs';
-import {
-  copyFile,
-  mkdir,
-  readFile,
-  readdir,
-  rm,
-  writeFile
-} from 'node:fs/promises';
+import { copyFile, mkdir, readFile, readdir, rm, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import { pathFromUrl } from '../../config/paths.mjs';
 import { hashBytes } from './hashing.mjs';
@@ -77,10 +70,7 @@ async function hasTextContent(filePath, content, { fileSystem }) {
 
 async function hasBinaryContent(sourcePath, targetPath, { fileSystem }) {
   try {
-    const [source, target] = await Promise.all([
-      fileSystem.readFile(sourcePath),
-      fileSystem.readFile(targetPath)
-    ]);
+    const [source, target] = await Promise.all([fileSystem.readFile(sourcePath), fileSystem.readFile(targetPath)]);
     return Buffer.compare(source, target) === 0;
   } catch (error) {
     if (error && error.code === 'ENOENT') return false;

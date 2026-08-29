@@ -10,10 +10,7 @@ interface ArtifactErrorBoundaryState {
   error?: string;
 }
 
-export default class ArtifactErrorBoundary extends Component<
-  ArtifactErrorBoundaryProps,
-  ArtifactErrorBoundaryState
-> {
+export default class ArtifactErrorBoundary extends Component<ArtifactErrorBoundaryProps, ArtifactErrorBoundaryState> {
   state: ArtifactErrorBoundaryState = {};
 
   componentDidCatch(error: unknown): void {

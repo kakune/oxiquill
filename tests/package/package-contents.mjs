@@ -28,7 +28,8 @@ const requiredFiles = [
   'src/generator/license-notices.mjs'
 ];
 requiredFiles.push(
-  ...runtimeManifest.artifacts.flatMap(({ licenseFiles }) => licenseFiles)
+  ...runtimeManifest.artifacts
+    .flatMap(({ licenseFiles }) => licenseFiles)
     .map((filePath) => `src/generator/license-data/${filePath}`),
   ...packageOverrides.packages.map(({ licenseFile }) => `src/generator/license-data/${licenseFile}`)
 );

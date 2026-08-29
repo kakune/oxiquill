@@ -66,11 +66,8 @@ function createMemoryFileSystem(initialFiles = {}) {
     const normalizedPath = memoryPath(filePath);
     const hasDriveRoot = /^[A-Za-z]:\//u.test(normalizedPath);
     const root = hasDriveRoot ? normalizedPath.slice(0, 2) : normalizedPath.startsWith('/') ? '/' : '';
-    const relativePath = root === '/'
-      ? normalizedPath.slice(1)
-      : hasDriveRoot
-        ? normalizedPath.slice(3)
-        : normalizedPath;
+    const relativePath =
+      root === '/' ? normalizedPath.slice(1) : hasDriveRoot ? normalizedPath.slice(3) : normalizedPath;
     const parts = relativePath.split('/').filter(Boolean);
     let current = root;
     if (current && current !== '/') directories.add(current);
@@ -264,9 +261,7 @@ describe('doc runtime service', () => {
     const helperCrates = await listHelperCrates({ fileSystem, paths });
     expect(Array.from(helperCrates.keys())).toEqual(['a-crate', 'b-crate']);
     expect(helperCrates.get('a-crate')).toMatchObject({ name: 'a-crate' });
-    await expect(listHelperCrates({ paths, readManifests: async () => [] })).resolves.toEqual(
-      new Map()
-    );
+    await expect(listHelperCrates({ paths, readManifests: async () => [] })).resolves.toEqual(new Map());
 
     const missing = {
       ...fileSystem,
@@ -286,9 +281,7 @@ describe('doc runtime service', () => {
         throw error;
       }
     };
-    await expect(readHelperManifests({ fileSystem: unreadableDirectory, paths })).rejects.toThrow(
-      'permission denied'
-    );
+    await expect(readHelperManifests({ fileSystem: unreadableDirectory, paths })).rejects.toThrow('permission denied');
 
     const unreadableManifest = {
       readdir: async () => [{ isDirectory: () => true, name: 'doc-rust' }],
@@ -298,9 +291,7 @@ describe('doc runtime service', () => {
         throw error;
       }
     };
-    await expect(readHelperManifests({ fileSystem: unreadableManifest, paths })).rejects.toThrow(
-      'broken manifest'
-    );
+    await expect(readHelperManifests({ fileSystem: unreadableManifest, paths })).rejects.toThrow('broken manifest');
   });
 
   it('lists files recursively and collects interactive cells', async () => {
@@ -361,9 +352,7 @@ describe('doc runtime service', () => {
         paths: createDocRuntimePaths('/repo'),
         root: '/repo'
       })
-    ).rejects.toThrow(
-      'content/docs/page.mdx:1 [cell "a"] crates[0]: Unknown Rust helper crate "missing-helper"'
-    );
+    ).rejects.toThrow('content/docs/page.mdx:1 [cell "a"] crates[0]: Unknown Rust helper crate "missing-helper"');
   });
 
   it('fails clearly when an MDX Python cell specifies unsupported packages', async () => {
@@ -379,9 +368,7 @@ describe('doc runtime service', () => {
         paths: createDocRuntimePaths('/repo'),
         root: '/repo'
       })
-    ).rejects.toThrow(
-      'content/docs/page.mdx:1 [cell "py"] packages[0]: Unsupported Pyodide package "scipy"'
-    );
+    ).rejects.toThrow('content/docs/page.mdx:1 [cell "py"] packages[0]: Unsupported Pyodide package "scipy"');
   });
 
   it('fails clearly when an MDX Haskell cell uses unsupported dependency metadata', async () => {
@@ -397,9 +384,7 @@ describe('doc runtime service', () => {
         paths: createDocRuntimePaths('/repo'),
         root: '/repo'
       })
-    ).rejects.toThrow(
-      'content/docs/page.mdx:1 [cell "hs"] packages: This field is not supported for Haskell cells'
-    );
+    ).rejects.toThrow('content/docs/page.mdx:1 [cell "hs"] packages: This field is not supported for Haskell cells');
   });
 
   it('rejects local and scoped cell id duplicates before highlighting or writing output', async () => {
@@ -425,14 +410,14 @@ describe('doc runtime service', () => {
       }
     };
 
-    await expect(syncDocRuntime({
-      fileSystem: localDuplicate,
-      helperCrates: new Map(),
-      highlighter: countingHighlighter,
-      paths: createDocRuntimePaths('/repo')
-    })).rejects.toThrow(
-      'content/docs/page.mdx:6 [cell "repeated"] id: Duplicate page-local cell id "repeated"'
-    );
+    await expect(
+      syncDocRuntime({
+        fileSystem: localDuplicate,
+        helperCrates: new Map(),
+        highlighter: countingHighlighter,
+        paths: createDocRuntimePaths('/repo')
+      })
+    ).rejects.toThrow('content/docs/page.mdx:6 [cell "repeated"] id: Duplicate page-local cell id "repeated"');
     expect(highlights).toBe(0);
     expect(localDuplicate.writes).toEqual([]);
 
@@ -440,14 +425,14 @@ describe('doc runtime service', () => {
       '/repo/content/docs/a-b.mdx': '```python\n#| id: repeated\nprint("one")\n```',
       '/repo/content/docs/a.b.mdx': '```python\n#| id: repeated\nprint("two")\n```'
     });
-    await expect(syncDocRuntime({
-      fileSystem: scopedDuplicate,
-      helperCrates: new Map(),
-      highlighter: countingHighlighter,
-      paths: createDocRuntimePaths('/repo')
-    })).rejects.toThrow(
-      'content/docs/a.b.mdx:1 [cell "repeated"] id: Scoped cell id "a-b__repeated" collides'
-    );
+    await expect(
+      syncDocRuntime({
+        fileSystem: scopedDuplicate,
+        helperCrates: new Map(),
+        highlighter: countingHighlighter,
+        paths: createDocRuntimePaths('/repo')
+      })
+    ).rejects.toThrow('content/docs/a.b.mdx:1 [cell "repeated"] id: Scoped cell id "a-b__repeated" collides');
     expect(highlights).toBe(0);
     expect(scopedDuplicate.writes).toEqual([]);
   });
@@ -488,9 +473,9 @@ describe('doc runtime service', () => {
         throw error;
       }
     };
-    await expect(copyFileIfChanged('/repo/source.bin', '/repo/target.bin', { fileSystem: failingBinary })).rejects.toThrow(
-      'broken read'
-    );
+    await expect(
+      copyFileIfChanged('/repo/source.bin', '/repo/target.bin', { fileSystem: failingBinary })
+    ).rejects.toThrow('broken read');
   });
 
   it('copies Pyodide assets when present and skips when absent', async () => {
@@ -514,7 +499,11 @@ describe('doc runtime service', () => {
           'pyodide.asm.wasm',
           'python_stdlib.zip',
           ['pyodide-lock.json', JSON.stringify(lockFile)]
-        ].map((file) => Array.isArray(file) ? [`/repo/node_modules/pyodide/${file[0]}`, file[1]] : [`/repo/node_modules/pyodide/${file}`, file])
+        ].map((file) =>
+          Array.isArray(file)
+            ? [`/repo/node_modules/pyodide/${file[0]}`, file[1]]
+            : [`/repo/node_modules/pyodide/${file}`, file]
+        )
       )
     );
     const fetched = {
@@ -532,8 +521,9 @@ describe('doc runtime service', () => {
       '/repo/node_modules/pyodide/package.json': '{}',
       '/repo/node_modules/pyodide/pyodide-lock.json': JSON.stringify(lockFile)
     });
-    await expect(copyPyodideAssets({ fileSystem: missingVersion, paths, root: '/repo' }))
-      .rejects.toThrow('missing a version');
+    await expect(copyPyodideAssets({ fileSystem: missingVersion, paths, root: '/repo' })).rejects.toThrow(
+      'missing a version'
+    );
   });
 
   it('resolves and verifies vendored Pyodide packages recursively', async () => {
@@ -557,33 +547,43 @@ describe('doc runtime service', () => {
       'root.whl': Buffer.from('root bytes')
     };
 
-    expect(resolveVendoredPyodidePackages(lockFile, ['root']).map((entry) => entry.name)).toEqual(['dep', 'leaf', 'root']);
-    await expect(copyVendoredPyodidePackages({
-      fetchPackage: async (fileName) => fetched[fileName],
-      fileSystem,
-      lockFile,
-      paths,
-      roots: ['root']
-    })).resolves.toBe(true);
-    await expect(copyVendoredPyodidePackages({
-      fetchPackage: async (fileName) => fetched[fileName],
-      fileSystem,
-      lockFile,
-      paths,
-      roots: ['root']
-    })).resolves.toBe(false);
+    expect(resolveVendoredPyodidePackages(lockFile, ['root']).map((entry) => entry.name)).toEqual([
+      'dep',
+      'leaf',
+      'root'
+    ]);
+    await expect(
+      copyVendoredPyodidePackages({
+        fetchPackage: async (fileName) => fetched[fileName],
+        fileSystem,
+        lockFile,
+        paths,
+        roots: ['root']
+      })
+    ).resolves.toBe(true);
+    await expect(
+      copyVendoredPyodidePackages({
+        fetchPackage: async (fileName) => fetched[fileName],
+        fileSystem,
+        lockFile,
+        paths,
+        roots: ['root']
+      })
+    ).resolves.toBe(false);
 
     expect(() => resolveVendoredPyodidePackages({}, ['root'])).toThrow('missing a packages table');
     expect(() => resolveVendoredPyodidePackages({ packages: {} }, ['missing'])).toThrow(
       'Pyodide package "missing" is missing'
     );
-    await expect(copyVendoredPyodidePackages({
-      fetchPackage: async () => Buffer.from('changed'),
-      fileSystem: createMemoryFileSystem(),
-      lockFile,
-      paths,
-      roots: ['root']
-    })).rejects.toThrow('has sha256');
+    await expect(
+      copyVendoredPyodidePackages({
+        fetchPackage: async () => Buffer.from('changed'),
+        fileSystem: createMemoryFileSystem(),
+        lockFile,
+        paths,
+        roots: ['root']
+      })
+    ).rejects.toThrow('has sha256');
 
     const readFailure = createMemoryFileSystem();
     const originalReadFile = readFailure.readFile;
@@ -595,13 +595,15 @@ describe('doc runtime service', () => {
       }
       return originalReadFile(filePath);
     };
-    await expect(copyVendoredPyodidePackages({
-      fetchPackage: async (fileName) => fetched[fileName],
-      fileSystem: readFailure,
-      lockFile,
-      paths,
-      roots: ['root']
-    })).rejects.toThrow('permission denied');
+    await expect(
+      copyVendoredPyodidePackages({
+        fetchPackage: async (fileName) => fetched[fileName],
+        fileSystem: readFailure,
+        lockFile,
+        paths,
+        roots: ['root']
+      })
+    ).rejects.toThrow('permission denied');
   });
 
   it('downloads vendored Pyodide packages with the default fetcher', async () => {
@@ -622,13 +624,15 @@ describe('doc runtime service', () => {
       };
     };
     try {
-      await expect(copyVendoredPyodidePackages({
-        fileSystem: createMemoryFileSystem(),
-        lockFile,
-        paths,
-        pyodideVersion: '314.0.6',
-        roots: ['root']
-      })).resolves.toBe(true);
+      await expect(
+        copyVendoredPyodidePackages({
+          fileSystem: createMemoryFileSystem(),
+          lockFile,
+          paths,
+          pyodideVersion: '314.0.6',
+          roots: ['root']
+        })
+      ).resolves.toBe(true);
     } finally {
       globalThis.fetch = originalFetch;
     }
@@ -640,13 +644,15 @@ describe('doc runtime service', () => {
       statusText: 'unavailable'
     });
     try {
-      await expect(copyVendoredPyodidePackages({
-        fileSystem: createMemoryFileSystem(),
-        lockFile,
-        paths,
-        pyodideVersion: '314.0.6',
-        roots: ['root']
-      })).rejects.toThrow('503 unavailable');
+      await expect(
+        copyVendoredPyodidePackages({
+          fileSystem: createMemoryFileSystem(),
+          lockFile,
+          paths,
+          pyodideVersion: '314.0.6',
+          roots: ['root']
+        })
+      ).rejects.toThrow('503 unavailable');
     } finally {
       globalThis.fetch = originalFetch;
     }
@@ -693,25 +699,27 @@ describe('doc runtime service', () => {
       rustCellCount: 1,
       rustChanged: true
     });
-    expect(fileSystem.writes.sort()).toEqual([
-      '/repo/.oxiquill/generated/cells.ts',
-      '/repo/.oxiquill/haskell-cells/Main.hs',
-      '/repo/.oxiquill/generated/cells.json',
-      '/repo/.oxiquill/rust-cells/Cargo.toml',
-      '/repo/.oxiquill/rust-cells/src/lib.rs'
-    ].sort());
+    expect(fileSystem.writes.sort()).toEqual(
+      [
+        '/repo/.oxiquill/generated/cells.ts',
+        '/repo/.oxiquill/haskell-cells/Main.hs',
+        '/repo/.oxiquill/generated/cells.json',
+        '/repo/.oxiquill/rust-cells/Cargo.toml',
+        '/repo/.oxiquill/rust-cells/src/lib.rs'
+      ].sort()
+    );
 
     await expect(markRuntimeReady({ fileSystem, paths, summary: first, version: 'ready-1' })).resolves.toBe(true);
-    expect(fileSystem.files.get('/repo/.oxiquill/generated/runtime-version.ts').toString()).toContain(
-      'ready-1'
-    );
+    expect(fileSystem.files.get('/repo/.oxiquill/generated/runtime-version.ts').toString()).toContain('ready-1');
     expect(generateRuntimeVersionModule('ready-2')).toContain('ready-2');
     expect(hashText('runtime')).toHaveLength(64);
 
-    const runtimeVersion = JSON.parse(createRuntimeVersion({
-      manifestFingerprint: 'manifest',
-      rustFingerprint: 'rust'
-    }));
+    const runtimeVersion = JSON.parse(
+      createRuntimeVersion({
+        manifestFingerprint: 'manifest',
+        rustFingerprint: 'rust'
+      })
+    );
     expect(runtimeVersion.manifest).toBe(hashText('manifest'));
     expect(runtimeVersion.haskell).toBe(hashText(''));
     expect(runtimeVersion.rust).toBe(hashText('rust'));
@@ -843,9 +851,7 @@ describe('doc runtime service', () => {
 
   it('resolves the Haskell compiler and reports strict build failures clearly', async () => {
     expect(resolveHaskellWasiCompiler({})).toBe('wasm32-wasi-ghc');
-    expect(resolveHaskellWasiCompiler({ OXIQUILL_HASKELL_GHC: '/opt/ghc/bin/wasm-ghc' })).toBe(
-      '/opt/ghc/bin/wasm-ghc'
-    );
+    expect(resolveHaskellWasiCompiler({ OXIQUILL_HASKELL_GHC: '/opt/ghc/bin/wasm-ghc' })).toBe('/opt/ghc/bin/wasm-ghc');
     expect(resolveHaskellWasiCompiler({ OXIQUILL_HASKELL_GHC: '  ' })).toBe('wasm32-wasi-ghc');
 
     const missingCompiler = new Error('spawn wasm32-wasi-ghc ENOENT');

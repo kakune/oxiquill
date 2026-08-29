@@ -1,16 +1,16 @@
 import assert from 'node:assert/strict';
 import { spawnSync } from 'node:child_process';
-import {
-  appendFile,
-  cp,
-  mkdtemp,
-  readFile,
-  rm,
-  writeFile
-} from 'node:fs/promises';
+import { appendFile, cp, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
-import { fileURLToPath } from 'node:url';
+import { fileURLToPath, pathToFileURL } from 'node:url';
+
+const packageManagerArgument = process.argv.indexOf('--package-manager');
+const packageManager = process.argv[packageManagerArgument + 1];
+assert.ok(
+  packageManagerArgument >= 0 && (packageManager === 'npm' || packageManager === 'pnpm'),
+  '--package-manager must be either "npm" or "pnpm".'
+);
 
 const repositoryRoot = fileURLToPath(new URL('../../', import.meta.url));
 const packageRoot = path.join(repositoryRoot, 'packages/oxiquill');
@@ -24,23 +24,18 @@ try {
 
   await cp(path.join(repositoryRoot, 'templates/basic'), consumerRoot, { recursive: true });
   const packageJson = JSON.parse(await readFile(path.join(consumerRoot, 'package.json'), 'utf8'));
-  packageJson.dependencies.oxiquill = `file:${tarballPath}`;
+  packageJson.dependencies.oxiquill = pathToFileURL(tarballPath).href;
   packageJson.scripts['wasm:dev'] = 'oxiquill docgen --wasm dev';
   await writeFile(path.join(consumerRoot, 'package.json'), `${JSON.stringify(packageJson, null, 2)}\n`);
-  await appendFile(path.join(consumerRoot, 'content/docs/index.mdx'), [
-    '',
-    '```rust',
-    '//| id: package-smoke',
-    '//| crates: []',
-    'println!("packed consumer");',
-    '```',
-    ''
-  ].join('\n'));
+  await appendFile(
+    path.join(consumerRoot, 'content/docs/index.mdx'),
+    ['', '```rust', '//| id: package-smoke', '//| crates: []', 'println!("packed consumer");', '```', ''].join('\n')
+  );
 
-  run('pnpm', ['install'], consumerRoot);
-  run('pnpm', ['check'], consumerRoot);
-  run('pnpm', ['run', 'wasm:dev'], consumerRoot);
-  run('pnpm', ['build'], consumerRoot);
+  run(packageManager, ['install'], consumerRoot);
+  run(packageManager, ['run', 'check'], consumerRoot);
+  run(packageManager, ['run', 'wasm:dev'], consumerRoot);
+  run(packageManager, ['run', 'build'], consumerRoot);
 
   const publicLicenses = path.join(consumerRoot, 'public/oxiquill/licenses');
   const builtLicenses = path.join(consumerRoot, 'dist/oxiquill/licenses');
@@ -49,7 +44,7 @@ try {
     await assertFile(path.join(builtLicenses, fileName));
   }
   await assertFile(path.join(consumerRoot, 'public/oxiquill/rust-wasm/doc_rust_cells_bg.wasm'));
-  console.log(`Packed consumer smoke test passed in ${consumerRoot}.`);
+  console.log(`Packed consumer smoke test passed with ${packageManager} in ${consumerRoot}.`);
 } finally {
   await rm(temporaryRoot, { force: true, recursive: true });
 }

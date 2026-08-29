@@ -36,7 +36,9 @@
 
 ## Validation
 
+- Run `pnpm lint` for JavaScript/TypeScript/Astro linting, formatting checks, and strict Rust linting. Use `pnpm format` to apply the repository format before rerunning the check.
 - For frontend/runtime changes, run `pnpm test:unit` and `pnpm check`; use `pnpm test:unit:coverage` for covered logic changes.
 - For Rust changes, run `pnpm test:rust`, `pnpm lint:rust`, and `pnpm doc:rust`; use `pnpm test:rust:coverage` when behavior or coverage changes.
-- For interactive cell generation or Wasm runtime changes, run `pnpm wasm:dev` and `pnpm test:wasm`; add `pnpm test:e2e` for browser-facing behavior. Haskell cells also require `wasm32-wasi-ghc` during runtime generation.
+- For interactive cell generation or Wasm runtime changes, run `pnpm wasm:dev`, `pnpm test:wasm`, and `pnpm test:haskell`; add `pnpm test:e2e` for browser-facing behavior. Haskell cells also require `wasm32-wasi-ghc` during runtime generation.
+- For package changes, run `pnpm test:package` and both `pnpm test:consumer:npm` and `pnpm test:consumer:pnpm`.
 - Run `pnpm test` before considering broad changes complete when practical.

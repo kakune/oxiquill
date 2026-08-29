@@ -7,18 +7,9 @@ const chartTokens = [
   'emit_heatmap!'
 ];
 
-const imageTokens = [
-  'emit_image_svg!',
-  'emit_image_png!',
-  'emit_svg!',
-  'emit_png_base64!'
-];
+const imageTokens = ['emit_image_svg!', 'emit_image_png!', 'emit_svg!', 'emit_png_base64!'];
 
-const tableTokens = [
-  'emit_table!',
-  'emit_table_with_columns!',
-  'emit_records_table!'
-];
+const tableTokens = ['emit_table!', 'emit_table_with_columns!', 'emit_records_table!'];
 
 const sourceFeatureDescriptors = [
   ['legacyPlot', ['emit_line_plot!']],
@@ -37,9 +28,7 @@ export function rustOutputCapabilities(rustCells) {
 
 export function rustSourceCapabilities(source) {
   return {
-    ...Object.fromEntries(
-      sourceFeatureDescriptors.map(([key, tokens]) => [key, hasAnyToken(source, tokens)])
-    ),
+    ...Object.fromEntries(sourceFeatureDescriptors.map(([key, tokens]) => [key, hasAnyToken(source, tokens)])),
     chart: hasAnyToken(source, chartTokens),
     image: hasAnyToken(source, imageTokens),
     table: hasAnyToken(source, tableTokens)

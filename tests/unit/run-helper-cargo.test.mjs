@@ -96,10 +96,12 @@ describe('helper cargo runner', () => {
   });
 
   it('detects helper workspace state and skips when no helper crates exist', async () => {
-    await expect(helperWorkspaceState({
-      fileSystem: createMemoryFileSystem(),
-      root: repoRoot
-    })).resolves.toEqual({
+    await expect(
+      helperWorkspaceState({
+        fileSystem: createMemoryFileSystem(),
+        root: repoRoot
+      })
+    ).resolves.toEqual({
       hasHelperCrates: false,
       hasWorkspaceManifest: false,
       workspaceManifestPath: 'crates/Cargo.toml'
@@ -134,28 +136,28 @@ describe('helper cargo runner', () => {
     });
 
     expect(commands).toEqual([
-      [
-        'cargo',
-        ['doc', '--no-deps', '--manifest-path', 'crates/Cargo.toml', '--workspace'],
-        { cwd: repoRoot }
-      ]
+      ['cargo', ['doc', '--no-deps', '--manifest-path', 'crates/Cargo.toml', '--workspace'], { cwd: repoRoot }]
     ]);
   });
 
   it('rejects invalid runner and workspace states', async () => {
-    await expect(runHelperCargo({
-      argv: [],
-      fileSystem: createMemoryFileSystem(),
-      root: repoRoot
-    })).rejects.toThrow('Expected a Cargo subcommand');
+    await expect(
+      runHelperCargo({
+        argv: [],
+        fileSystem: createMemoryFileSystem(),
+        root: repoRoot
+      })
+    ).rejects.toThrow('Expected a Cargo subcommand');
 
-    await expect(runHelperCargo({
-      argv: ['test'],
-      fileSystem: createMemoryFileSystem({
-        '/repo/crates/doc-rust/Cargo.toml': '[package]\nname = "doc-rust"\n'
-      }),
-      root: repoRoot
-    })).rejects.toThrow(/crates[\\/]Cargo\.toml does not exist/);
+    await expect(
+      runHelperCargo({
+        argv: ['test'],
+        fileSystem: createMemoryFileSystem({
+          '/repo/crates/doc-rust/Cargo.toml': '[package]\nname = "doc-rust"\n'
+        }),
+        root: repoRoot
+      })
+    ).rejects.toThrow(/crates[\\/]Cargo\.toml does not exist/);
 
     const brokenReaddir = {
       readFile: async () => '',

@@ -12,119 +12,291 @@ on:
 permissions:
   contents: read
 
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
 env:
   CARGO_TERM_COLOR: always
+  GHC_WASM_REVISION: 8fd59591635cb47ad7db124562039bea8441cae8
   NODE_VERSION: '24'
   PNPM_VERSION: '11.2.2'
   RUST_TOOLCHAIN: '1.95.0'
 
 jobs:
-  basic-tests:
-    name: Basic tests (${{ matrix.os }})
+  unit-coverage:
+    name: Unit coverage
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v6
+      - name: Set up pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: ${{ env.PNPM_VERSION }}
+          run_install: false
+      - name: Set up Node.js
+        uses: actions/setup-node@v6
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: pnpm
+          cache-dependency-path: pnpm-lock.yaml
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+      - name: Audit production dependencies
+        run: pnpm audit --prod --audit-level=low
+      - name: Run unit coverage
+        run: pnpm test:unit:coverage
+
+  rust-quality:
+    name: Rust quality
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v6
+      - name: Set up pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: ${{ env.PNPM_VERSION }}
+          run_install: false
+      - name: Set up Node.js
+        uses: actions/setup-node@v6
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: pnpm
+          cache-dependency-path: pnpm-lock.yaml
+      - name: Set up Rust
+        shell: bash
+        run: |
+          rustup toolchain install "$RUST_TOOLCHAIN" --profile minimal --component clippy --component rustfmt
+          rustup default "$RUST_TOOLCHAIN"
+      - name: Install cargo-llvm-cov
+        uses: taiki-e/install-action@v2
+        with:
+          tool: cargo-llvm-cov
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+      - name: Run Rust lint, docs, and coverage
+        run: pnpm test:rust:quality
+
+  compatibility:
+    name: Compatibility (${{ matrix.label }})
     runs-on: ${{ matrix.os }}
+    timeout-minutes: 30
     strategy:
       fail-fast: false
       matrix:
-        os:
-          - ubuntu-latest
-          - macos-latest
-          - windows-latest
-
+        include:
+          - label: Linux
+            os: ubuntu-latest
+          - label: macOS
+            os: macos-latest
+          - label: Windows
+            os: windows-latest
     steps:
       - name: Check out repository
-        uses: actions/checkout@v4
-
+        uses: actions/checkout@v6
       - name: Set up pnpm
         uses: pnpm/action-setup@v4
         with:
           version: ${{ env.PNPM_VERSION }}
           run_install: false
-
       - name: Set up Node.js
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v6
         with:
           node-version: ${{ env.NODE_VERSION }}
           cache: pnpm
-
+          cache-dependency-path: pnpm-lock.yaml
       - name: Set up Rust
         shell: bash
         run: |
-          rustup toolchain install "$RUST_TOOLCHAIN" --profile minimal --component clippy --component rustfmt --target wasm32-unknown-unknown
+          rustup toolchain install "$RUST_TOOLCHAIN" --profile minimal --component clippy --component rustfmt
           rustup default "$RUST_TOOLCHAIN"
-
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
+      - name: Run compatibility checks
+        run: pnpm test:compatibility
 
-      - name: Run unit tests
-        run: pnpm test:unit
-
-      - name: Run Rust tests
-        run: pnpm test:rust
-
-  linux-validation:
-    name: Linux full suite and lint
-    runs-on: ubuntu-latest
-
+  packed-consumer:
+    name: Packed consumer (${{ matrix.label }}, ${{ matrix.package-manager }})
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 45
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - label: Linux
+            os: ubuntu-latest
+            package-manager: npm
+          - label: Linux
+            os: ubuntu-latest
+            package-manager: pnpm
+          - label: macOS
+            os: macos-latest
+            package-manager: npm
+          - label: macOS
+            os: macos-latest
+            package-manager: pnpm
+          - label: Windows
+            os: windows-latest
+            package-manager: npm
+          - label: Windows
+            os: windows-latest
+            package-manager: pnpm
     steps:
       - name: Check out repository
-        uses: actions/checkout@v4
-
+        uses: actions/checkout@v6
       - name: Set up pnpm
         uses: pnpm/action-setup@v4
         with:
           version: ${{ env.PNPM_VERSION }}
           run_install: false
-
       - name: Set up Node.js
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v6
         with:
           node-version: ${{ env.NODE_VERSION }}
           cache: pnpm
-
-      - name: Set up Rust
+          cache-dependency-path: pnpm-lock.yaml
+      - name: Set up Rust and Wasm target
         shell: bash
         run: |
-          rustup toolchain install "$RUST_TOOLCHAIN" --profile minimal --component clippy --component rustfmt --target wasm32-unknown-unknown
+          rustup toolchain install "$RUST_TOOLCHAIN" --profile minimal --target wasm32-unknown-unknown
           rustup default "$RUST_TOOLCHAIN"
-
-      - name: Install cargo-llvm-cov
-        uses: taiki-e/install-action@cargo-llvm-cov
-
       - name: Install wasm-pack
-        uses: taiki-e/install-action@wasm-pack
+        uses: taiki-e/install-action@v2
+        with:
+          tool: wasm-pack
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+      - name: Test packed consumer
+        run: pnpm test:consumer:${{ matrix.package-manager }}
 
+  runtime:
+    name: Runtime (${{ matrix.label }})
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 60
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - label: Linux
+            os: ubuntu-latest
+          - label: macOS
+            os: macos-latest
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v6
+      - name: Set up pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: ${{ env.PNPM_VERSION }}
+          run_install: false
+      - name: Set up Node.js
+        uses: actions/setup-node@v6
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: pnpm
+          cache-dependency-path: pnpm-lock.yaml
+      - name: Set up Rust and Wasm target
+        shell: bash
+        run: |
+          rustup toolchain install "$RUST_TOOLCHAIN" --profile minimal --target wasm32-unknown-unknown
+          rustup default "$RUST_TOOLCHAIN"
+      - name: Install wasm-pack
+        uses: taiki-e/install-action@v2
+        with:
+          tool: wasm-pack
       - name: Cache ghc-wasm
-        uses: actions/cache@v4
+        uses: actions/cache@v5
         with:
           path: ~/.ghc-wasm
-          key: ghc-wasm-${{ runner.os }}-9.14-v1
-
+          key: ghc-wasm-${{ runner.os }}-${{ runner.arch }}-9.14-${{ env.GHC_WASM_REVISION }}
       - name: Install ghc-wasm
         shell: bash
         run: |
           set -euo pipefail
-          if [ ! -x "$HOME/.ghc-wasm/wasm32-wasi-ghc/bin/wasm32-wasi-ghc" ]; then
-            sudo apt-get update
-            sudo apt-get install -y jq unzip zstd
-            curl -sS https://gitlab.haskell.org/haskell-wasm/ghc-wasm-meta/-/raw/master/bootstrap.sh | FLAVOUR=9.14 sh
+          compiler="$HOME/.ghc-wasm/wasm32-wasi-ghc/bin/wasm32-wasi-ghc"
+          if [ ! -x "$compiler" ]; then
+            if [ "$RUNNER_OS" = "Linux" ]; then
+              sudo apt-get update
+              sudo apt-get install -y jq unzip zstd
+            else
+              brew list jq >/dev/null 2>&1 || brew install jq
+              brew list zstd >/dev/null 2>&1 || brew install zstd
+            fi
+            source_dir="$(mktemp -d)"
+            curl --fail --location --retry 5 --silent --show-error \
+              "https://gitlab.haskell.org/haskell-wasm/ghc-wasm-meta/-/archive/$GHC_WASM_REVISION/ghc-wasm-meta-$GHC_WASM_REVISION.tar.gz" \
+              | tar xz -C "$source_dir" --strip-components=1
+            (
+              cd "$source_dir"
+              FLAVOUR=9.14 PREFIX="$HOME/.ghc-wasm" ./setup.sh
+            )
           fi
-          echo "OXIQUILL_HASKELL_GHC=$HOME/.ghc-wasm/wasm32-wasi-ghc/bin/wasm32-wasi-ghc" >> "$GITHUB_ENV"
-          "$HOME/.ghc-wasm/wasm32-wasi-ghc/bin/wasm32-wasi-ghc" --version
-
+          echo "OXIQUILL_HASKELL_GHC=$compiler" >> "$GITHUB_ENV"
+          "$compiler" --version
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
+      - name: Run generated runtime and static build tests
+        run: pnpm test:runtime
+      - name: Upload Linux browser site
+        if: matrix.label == 'Linux'
+        uses: actions/upload-artifact@v5
+        with:
+          name: browser-site
+          path: examples/docs-site/dist
+          if-no-files-found: error
+          retention-days: 1
 
-      - name: Audit production dependencies
-        run: pnpm audit --prod --audit-level=low
-
-      - name: Install Playwright browsers
-        run: pnpm exec playwright install --with-deps chromium
-
-      - name: Run Astro check
-        run: pnpm check
-
-      - name: Run Rust lint
-        run: pnpm lint:rust
-
-      - name: Run full test suite
-        run: pnpm test
+  browser:
+    name: Browser (${{ matrix.label }})
+    needs: runtime
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - label: Chromium
+            project: chromium
+          - label: Firefox
+            project: firefox
+          - label: WebKit
+            project: webkit
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v6
+      - name: Set up pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: ${{ env.PNPM_VERSION }}
+          run_install: false
+      - name: Set up Node.js
+        uses: actions/setup-node@v6
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: pnpm
+          cache-dependency-path: pnpm-lock.yaml
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+      - name: Download built browser site
+        uses: actions/download-artifact@v5
+        with:
+          name: browser-site
+          path: examples/docs-site/dist
+      - name: Install Playwright browser
+        run: pnpm exec playwright install --with-deps ${{ matrix.project }}
+      - name: Run browser suite
+        run: pnpm test:e2e --project=${{ matrix.project }}
+      - name: Upload failed browser report
+        if: failure()
+        uses: actions/upload-artifact@v5
+        with:
+          name: playwright-${{ matrix.project }}-${{ github.run_attempt }}
+          path: |
+            playwright-report
+            test-results
+          if-no-files-found: ignore
+          retention-days: 7

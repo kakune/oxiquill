@@ -137,17 +137,19 @@ describe('python rich display support', () => {
   });
 
   it('combines stream output, rich display artifacts, and final values deterministically', () => {
-    expect(createPythonCellResult({
-      stdout: 'printed',
-      stderr: 'warned',
-      value: { ok: true },
-      plots: [],
-      displayOutputs: [
-        { kind: 'html', html: '<strong>display</strong>', sandboxed: true },
-        { kind: 'image', mime: 'image/svg+xml', data: '<svg />', alt: 'plot' },
-        { kind: 'text', stream: 'display', content: 'fallback' }
-      ]
-    })).toEqual({
+    expect(
+      createPythonCellResult({
+        stdout: 'printed',
+        stderr: 'warned',
+        value: { ok: true },
+        plots: [],
+        displayOutputs: [
+          { kind: 'html', html: '<strong>display</strong>', sandboxed: true },
+          { kind: 'image', mime: 'image/svg+xml', data: '<svg />', alt: 'plot' },
+          { kind: 'text', stream: 'display', content: 'fallback' }
+        ]
+      })
+    ).toEqual({
       stdout: 'printed',
       stderr: 'warned',
       value: { ok: true },

@@ -67,10 +67,7 @@ function memoryPath(filePath) {
 const workspaceRoot = path.resolve('/repo');
 const frameworkRoot = path.resolve('/framework');
 const licenseDataDir = path.resolve('/licenses');
-const packageRoot = path.join(
-  workspaceRoot,
-  'node_modules/.pnpm/example@1.2.3/node_modules/example'
-);
+const packageRoot = path.join(workspaceRoot, 'node_modules/.pnpm/example@1.2.3/node_modules/example');
 const relativePackageRoot = path.relative(path.parse(packageRoot).root, packageRoot);
 const workspacePath = (...segments) => path.join(workspaceRoot, ...segments);
 const frameworkPath = (...segments) => path.join(frameworkRoot, ...segments);
@@ -104,38 +101,47 @@ describe('license notices', () => {
     const workerModule = `${path.join(packageRoot, 'worker.js')}?worker_file`;
     const collector = createBundledModuleCollector();
 
-    expect(collectBundleModuleIds({
-      asset: { fileName: 'style.css', source: '', type: 'asset' },
-      chunk: { modules: { [mainModule]: {}, '\0virtual:module': {} }, type: 'chunk' }
-    })).toEqual(['\0virtual:module', mainModule]);
+    expect(
+      collectBundleModuleIds({
+        asset: { fileName: 'style.css', source: '', type: 'asset' },
+        chunk: { modules: { [mainModule]: {}, '\0virtual:module': {} }, type: 'chunk' }
+      })
+    ).toEqual(['\0virtual:module', mainModule]);
     expect(packageRootFromModuleId(workerModule)).toBe(packageRoot);
     expect(packageRootFromModuleId(workspacePath('source.ts'))).toBeUndefined();
 
     collector.add('worker', [workerModule, workerModule]);
     collector.add('main', [mainModule]);
     collector.add('worker', [mainModule]);
-    expect(collector.snapshot()).toEqual(new Map([
-      ['worker', [mainModule, workerModule]],
-      ['main', [mainModule]]
-    ]));
+    expect(collector.snapshot()).toEqual(
+      new Map([
+        ['worker', [mainModule, workerModule]],
+        ['main', [mainModule]]
+      ])
+    );
     collector.reset();
     expect(collector.snapshot()).toEqual(new Map());
   });
 
   it('collects deterministic bundled package notices and combines bundle sources', async () => {
     const fileSystem = createMemoryFileSystem(packageFiles);
-    const notices = await collectBundledPackageNotices(new Map([
-      ['worker', [path.join(packageRoot, 'worker.js')]],
-      ['main', [path.join(relativePackageRoot, 'main.js'), workspacePath('source.ts')]]
-    ]), { fileSystem, searchRoots: [workspacePath('site')] });
+    const notices = await collectBundledPackageNotices(
+      new Map([
+        ['worker', [path.join(packageRoot, 'worker.js')]],
+        ['main', [path.join(relativePackageRoot, 'main.js'), workspacePath('source.ts')]]
+      ]),
+      { fileSystem, searchRoots: [workspacePath('site')] }
+    );
 
-    expect(notices).toEqual([{
-      license: 'MIT',
-      licenseText: '[LICENSE]\nExample license text',
-      name: 'example',
-      sources: ['bundled JavaScript (main)', 'bundled JavaScript (worker)'],
-      version: '1.2.3'
-    }]);
+    expect(notices).toEqual([
+      {
+        license: 'MIT',
+        licenseText: '[LICENSE]\nExample license text',
+        name: 'example',
+        sources: ['bundled JavaScript (main)', 'bundled JavaScript (worker)'],
+        version: '1.2.3'
+      }
+    ]);
     expect(generateThirdPartyLicenseReport(notices)).toContain('example 1.2.3');
     expect(generateThirdPartyLicenseReport(notices)).toBe(generateThirdPartyLicenseReport([...notices].reverse()));
   });
@@ -153,11 +159,13 @@ describe('license notices', () => {
 
     const inferred = createMemoryFileSystem({
       ...packageFiles,
-      [path.join(packageRoot, 'LICENSE')]: 'Permission is hereby granted, free of charge, to any person obtaining a copy',
+      [path.join(packageRoot, 'LICENSE')]:
+        'Permission is hereby granted, free of charge, to any person obtaining a copy',
       [path.join(packageRoot, 'package.json')]: JSON.stringify({ name: 'example', version: '1.2.3' })
     });
-    await expect(collectBundledPackageNotices(moduleGroups, { fileSystem: inferred }))
-      .resolves.toMatchObject([{ license: 'MIT' }]);
+    await expect(collectBundledPackageNotices(moduleGroups, { fileSystem: inferred })).resolves.toMatchObject([
+      { license: 'MIT' }
+    ]);
 
     const missingText = createMemoryFileSystem({
       [path.join(packageRoot, 'package.json')]: packageFiles[path.join(packageRoot, 'package.json')]
@@ -174,10 +182,12 @@ describe('license notices', () => {
       }),
       [licensePath('example.txt')]: 'Audited fallback text'
     });
-    await expect(collectBundledPackageNotices(moduleGroups, {
-      fileSystem: overridden,
-      licenseDataDir
-    })).resolves.toMatchObject([{ licenseText: '[example.txt]\nAudited fallback text' }]);
+    await expect(
+      collectBundledPackageNotices(moduleGroups, {
+        fileSystem: overridden,
+        licenseDataDir
+      })
+    ).resolves.toMatchObject([{ licenseText: '[example.txt]\nAudited fallback text' }]);
   });
 
   it('selects copied runtime artifacts and validates the full manifest', async () => {
@@ -186,62 +196,76 @@ describe('license notices', () => {
       [licensePath('MIT.txt')]: 'Runtime license text',
       [workspacePath('public/oxiquill/pyodide/runtime.wasm')]: 'wasm'
     });
-    await expect(collectRuntimeArtifactNotices({
-      fileSystem: active,
-      licenseDataDir,
-      manifest: runtimeManifest,
-      paths
-    })).resolves.toEqual([{
-      license: 'MIT',
-      licenseText: '[MIT.txt]\nRuntime license text',
-      name: 'Runtime example',
-      sources: ['copied runtime'],
-      version: '4.5.6'
-    }]);
+    await expect(
+      collectRuntimeArtifactNotices({
+        fileSystem: active,
+        licenseDataDir,
+        manifest: runtimeManifest,
+        paths
+      })
+    ).resolves.toEqual([
+      {
+        license: 'MIT',
+        licenseText: '[MIT.txt]\nRuntime license text',
+        name: 'Runtime example',
+        sources: ['copied runtime'],
+        version: '4.5.6'
+      }
+    ]);
 
     const inactive = createMemoryFileSystem({ [licensePath('MIT.txt')]: 'Runtime license text' });
-    await expect(collectRuntimeArtifactNotices({
-      fileSystem: inactive,
-      licenseDataDir,
-      manifest: runtimeManifest,
-      paths
-    })).resolves.toEqual([]);
+    await expect(
+      collectRuntimeArtifactNotices({
+        fileSystem: inactive,
+        licenseDataDir,
+        manifest: runtimeManifest,
+        paths
+      })
+    ).resolves.toEqual([]);
 
     const jsonText = createMemoryFileSystem({
       [licensePath('MIT.json')]: JSON.stringify({ licenseText: 'Decoded license text' }),
       [workspacePath('public/oxiquill/pyodide/runtime.wasm')]: 'wasm'
     });
-    await expect(collectRuntimeArtifactNotices({
-      fileSystem: jsonText,
-      licenseDataDir,
-      manifest: {
-        artifacts: [{ ...runtimeManifest.artifacts[0], licenseFiles: ['MIT.json'] }],
-        schemaVersion: 1
-      },
-      paths
-    })).resolves.toMatchObject([{ licenseText: '[MIT.json]\nDecoded license text' }]);
+    await expect(
+      collectRuntimeArtifactNotices({
+        fileSystem: jsonText,
+        licenseDataDir,
+        manifest: {
+          artifacts: [{ ...runtimeManifest.artifacts[0], licenseFiles: ['MIT.json'] }],
+          schemaVersion: 1
+        },
+        paths
+      })
+    ).resolves.toMatchObject([{ licenseText: '[MIT.json]\nDecoded license text' }]);
 
-    await expect(collectRuntimeArtifactNotices({
-      fileSystem: createMemoryFileSystem(),
-      licenseDataDir,
-      manifest: runtimeManifest,
-      paths
-    })).rejects.toThrow('License text MIT.txt is missing');
-    await expect(collectRuntimeArtifactNotices({
-      fileSystem: active,
-      licenseDataDir,
-      manifest: { artifacts: [], schemaVersion: 2 },
-      paths
-    })).rejects.toThrow('schemaVersion 1');
-    await expect(collectRuntimeArtifactNotices({
-      fileSystem: active,
-      licenseDataDir,
-      manifest: {
-        artifacts: [{ ...runtimeManifest.artifacts[0], license: 'UNLICENSED' }],
-        schemaVersion: 1
-      },
-      paths
-    })).rejects.toThrow('unknown license');
+    await expect(
+      collectRuntimeArtifactNotices({
+        fileSystem: createMemoryFileSystem(),
+        licenseDataDir,
+        manifest: runtimeManifest,
+        paths
+      })
+    ).rejects.toThrow('License text MIT.txt is missing');
+    await expect(
+      collectRuntimeArtifactNotices({
+        fileSystem: active,
+        licenseDataDir,
+        manifest: { artifacts: [], schemaVersion: 2 },
+        paths
+      })
+    ).rejects.toThrow('schemaVersion 1');
+    await expect(
+      collectRuntimeArtifactNotices({
+        fileSystem: active,
+        licenseDataDir,
+        manifest: {
+          artifacts: [{ ...runtimeManifest.artifacts[0], license: 'UNLICENSED' }],
+          schemaVersion: 1
+        },
+        paths
+      })
+    ).rejects.toThrow('unknown license');
   });
 
   it('copies own licenses and writes stable public, Cargo, and built-site reports', async () => {
@@ -257,36 +281,47 @@ describe('license notices', () => {
     });
     const moduleGroups = new Map([['main', [path.join(packageRoot, 'main.js')]]]);
 
-    await expect(syncLicenseArtifacts({
-      fileSystem,
-      licenseDataDir,
-      moduleGroups,
-      paths
-    })).resolves.toBe(true);
-    expect(fileSystem.files.get(memoryPath(workspacePath('public/oxiquill/licenses/LICENSE-MIT'))).toString())
-      .toBe('MIT license');
-    expect(fileSystem.files.get(memoryPath(workspacePath('.oxiquill/rust-cells/LICENSE-APACHE'))).toString())
-      .toBe('Apache license');
-    expect(fileSystem.files.get(memoryPath(workspacePath('.oxiquill/rust-cells/Cargo.lock'))).toString())
-      .toBe('audited lock');
-    expect(fileSystem.files.get(memoryPath(workspacePath('public/oxiquill/licenses/THIRD_PARTY_LICENSES.txt'))).toString())
-      .toContain('Runtime example 4.5.6');
+    await expect(
+      syncLicenseArtifacts({
+        fileSystem,
+        licenseDataDir,
+        moduleGroups,
+        paths
+      })
+    ).resolves.toBe(true);
+    expect(fileSystem.files.get(memoryPath(workspacePath('public/oxiquill/licenses/LICENSE-MIT'))).toString()).toBe(
+      'MIT license'
+    );
+    expect(fileSystem.files.get(memoryPath(workspacePath('.oxiquill/rust-cells/LICENSE-APACHE'))).toString()).toBe(
+      'Apache license'
+    );
+    expect(fileSystem.files.get(memoryPath(workspacePath('.oxiquill/rust-cells/Cargo.lock'))).toString()).toBe(
+      'audited lock'
+    );
+    expect(
+      fileSystem.files.get(memoryPath(workspacePath('public/oxiquill/licenses/THIRD_PARTY_LICENSES.txt'))).toString()
+    ).toContain('Runtime example 4.5.6');
 
-    await expect(syncLicenseArtifacts({
-      fileSystem,
-      licenseDataDir,
-      moduleGroups,
-      paths
-    })).resolves.toBe(false);
-    await expect(syncLicenseArtifacts({
-      fileSystem,
-      licenseDataDir,
-      moduleGroups,
-      outputDirectory: workspacePath('dist/oxiquill/licenses'),
-      paths
-    })).resolves.toBe(true);
-    expect(fileSystem.files.get(memoryPath(workspacePath('dist/oxiquill/licenses/THIRD_PARTY_LICENSES.txt'))).toString())
-      .toContain('bundled JavaScript (main)');
+    await expect(
+      syncLicenseArtifacts({
+        fileSystem,
+        licenseDataDir,
+        moduleGroups,
+        paths
+      })
+    ).resolves.toBe(false);
+    await expect(
+      syncLicenseArtifacts({
+        fileSystem,
+        licenseDataDir,
+        moduleGroups,
+        outputDirectory: workspacePath('dist/oxiquill/licenses'),
+        paths
+      })
+    ).resolves.toBe(true);
+    expect(
+      fileSystem.files.get(memoryPath(workspacePath('dist/oxiquill/licenses/THIRD_PARTY_LICENSES.txt'))).toString()
+    ).toContain('bundled JavaScript (main)');
   });
 
   it('deduplicates identical notices and rejects conflicting text', () => {
@@ -297,14 +332,12 @@ describe('license notices', () => {
       sources: ['worker'],
       version: '1.0.0'
     };
-    expect(generateThirdPartyLicenseReport([
-      notice,
-      { ...notice, sources: ['main'] }
-    ])).toContain('Included from: main, worker');
-    expect(() => generateThirdPartyLicenseReport([
-      notice,
-      { ...notice, licenseText: 'different' }
-    ])).toThrow('Conflicting license data');
+    expect(generateThirdPartyLicenseReport([notice, { ...notice, sources: ['main'] }])).toContain(
+      'Included from: main, worker'
+    );
+    expect(() => generateThirdPartyLicenseReport([notice, { ...notice, licenseText: 'different' }])).toThrow(
+      'Conflicting license data'
+    );
     expect(generateThirdPartyLicenseReport([])).toContain('No third-party runtime artifacts');
   });
 });

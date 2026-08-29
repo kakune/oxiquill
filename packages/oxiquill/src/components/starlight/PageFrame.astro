@@ -5,23 +5,23 @@ import { Icon } from '@astrojs/starlight/components';
 const { hasSidebar, dir, lang } = Astro.locals.starlightRoute;
 const isRtl = dir === 'rtl';
 const labels =
-	lang === 'ja'
-		? {
-				collapse: 'サイドバーを折りたたむ',
-				expand: 'サイドバーを展開する',
-			}
-		: {
-				collapse: 'Collapse sidebar',
-				expand: 'Expand sidebar',
-			};
+  lang === 'ja'
+    ? {
+        collapse: 'サイドバーを折りたたむ',
+        expand: 'サイドバーを展開する'
+      }
+    : {
+        collapse: 'Collapse sidebar',
+        expand: 'Expand sidebar'
+      };
 const collapseIcon = isRtl ? 'right-arrow' : 'left-arrow';
 const expandIcon = isRtl ? 'left-arrow' : 'right-arrow';
 ---
 
 {
-	hasSidebar && (
-		<script is:inline>
-			{`
+  hasSidebar && (
+    <script is:inline>
+      {`
 				(() => {
 					try {
 						if (
@@ -38,277 +38,275 @@ const expandIcon = isRtl ? 'left-arrow' : 'right-arrow';
 					} catch {}
 				})();
 			`}
-		</script>
-	)
+    </script>
+  )
 }
 
 <div class="page sl-flex">
-	<header class="header"><slot name="header" /></header>
-	{
-		hasSidebar && (
-			<nav class="sidebar print:hidden" aria-label={Astro.locals.t('sidebarNav.accessibleLabel')}>
-				<MobileMenuToggle />
-				<div id="starlight__sidebar" class="sidebar-pane">
-					<div class="sidebar-content sl-flex">
-						<slot name="sidebar" />
-					</div>
-				</div>
-				<starlight-sidebar-toggle
-					class="print:hidden"
-					data-collapse-label={labels.collapse}
-					data-expand-label={labels.expand}
-				>
-					<button
-						type="button"
-						class="sidebar-toggle-button sl-flex"
-						aria-controls="starlight__sidebar"
-						aria-expanded="true"
-						aria-label={labels.collapse}
-						title={labels.collapse}
-					>
-						<span class="collapse-sidebar" aria-hidden="true">
-							<Icon name={collapseIcon} size="1rem" />
-						</span>
-						<span class="expand-sidebar" aria-hidden="true">
-							<Icon name={expandIcon} size="1rem" />
-						</span>
-					</button>
-				</starlight-sidebar-toggle>
-			</nav>
-		)
-	}
-	<div class="main-frame"><slot /></div>
+  <header class="header"><slot name="header" /></header>
+  {
+    hasSidebar && (
+      <nav class="sidebar print:hidden" aria-label={Astro.locals.t('sidebarNav.accessibleLabel')}>
+        <MobileMenuToggle />
+        <div id="starlight__sidebar" class="sidebar-pane">
+          <div class="sidebar-content sl-flex">
+            <slot name="sidebar" />
+          </div>
+        </div>
+        <starlight-sidebar-toggle
+          class="print:hidden"
+          data-collapse-label={labels.collapse}
+          data-expand-label={labels.expand}
+        >
+          <button
+            type="button"
+            class="sidebar-toggle-button sl-flex"
+            aria-controls="starlight__sidebar"
+            aria-expanded="true"
+            aria-label={labels.collapse}
+            title={labels.collapse}
+          >
+            <span class="collapse-sidebar" aria-hidden="true">
+              <Icon name={collapseIcon} size="1rem" />
+            </span>
+            <span class="expand-sidebar" aria-hidden="true">
+              <Icon name={expandIcon} size="1rem" />
+            </span>
+          </button>
+        </starlight-sidebar-toggle>
+      </nav>
+    )
+  }
+  <div class="main-frame"><slot /></div>
 </div>
 
 <script>
-	const storageKey = 'oxiquill-sidebar-collapsed';
-	const desktopQuery = matchMedia('(min-width: 50rem)');
+  const storageKey = 'oxiquill-sidebar-collapsed';
+  const desktopQuery = matchMedia('(min-width: 50rem)');
 
-	class StarlightSidebarToggle extends HTMLElement {
-		button = this.querySelector('button')!;
-		sidebar = document.getElementById(this.button.getAttribute('aria-controls') || '');
-		collapseLabel = this.dataset.collapseLabel || 'Collapse sidebar';
-		expandLabel = this.dataset.expandLabel || 'Expand sidebar';
+  class StarlightSidebarToggle extends HTMLElement {
+    button = this.querySelector('button')!;
+    sidebar = document.getElementById(this.button.getAttribute('aria-controls') || '');
+    collapseLabel = this.dataset.collapseLabel || 'Collapse sidebar';
+    expandLabel = this.dataset.expandLabel || 'Expand sidebar';
 
-		connectedCallback() {
-			this.button.addEventListener('click', this.toggleCollapsed);
-			desktopQuery.addEventListener('change', this.applyStoredState);
-			this.applyStoredState();
-		}
+    connectedCallback() {
+      this.button.addEventListener('click', this.toggleCollapsed);
+      desktopQuery.addEventListener('change', this.applyStoredState);
+      this.applyStoredState();
+    }
 
-		disconnectedCallback() {
-			this.button.removeEventListener('click', this.toggleCollapsed);
-			desktopQuery.removeEventListener('change', this.applyStoredState);
-		}
+    disconnectedCallback() {
+      this.button.removeEventListener('click', this.toggleCollapsed);
+      desktopQuery.removeEventListener('change', this.applyStoredState);
+    }
 
-		applyStoredState = () => {
-			this.setCollapsed(this.getStoredCollapsed());
-		};
+    applyStoredState = () => {
+      this.setCollapsed(this.getStoredCollapsed());
+    };
 
-		toggleCollapsed = () => {
-			if (!desktopQuery.matches) return;
-			const nextCollapsed = !document.documentElement.hasAttribute('data-sidebar-collapsed');
-			this.storeCollapsed(nextCollapsed);
-			this.setCollapsed(nextCollapsed);
-		};
+    toggleCollapsed = () => {
+      if (!desktopQuery.matches) return;
+      const nextCollapsed = !document.documentElement.hasAttribute('data-sidebar-collapsed');
+      this.storeCollapsed(nextCollapsed);
+      this.setCollapsed(nextCollapsed);
+    };
 
-		getStoredCollapsed(): boolean {
-			try {
-				return sessionStorage.getItem(storageKey) === 'true';
-			} catch {
-				return false;
-			}
-		}
+    getStoredCollapsed(): boolean {
+      try {
+        return sessionStorage.getItem(storageKey) === 'true';
+      } catch {
+        return false;
+      }
+    }
 
-		storeCollapsed(collapsed: boolean) {
-			try {
-				if (collapsed) {
-					sessionStorage.setItem(storageKey, 'true');
-				} else {
-					sessionStorage.removeItem(storageKey);
-				}
-			} catch {}
-		}
+    storeCollapsed(collapsed: boolean) {
+      try {
+        if (collapsed) {
+          sessionStorage.setItem(storageKey, 'true');
+        } else {
+          sessionStorage.removeItem(storageKey);
+        }
+      } catch {}
+    }
 
-		setCollapsed(collapsed: boolean) {
-			const active = desktopQuery.matches && collapsed;
-			const label = active ? this.expandLabel : this.collapseLabel;
-			document.documentElement.toggleAttribute('data-sidebar-collapsed', active);
-			if (active) {
-				document.documentElement.style.setProperty('--sl-content-inline-start', '0rem');
-				document.documentElement.style.setProperty(
-					'--sl-content-width',
-					'calc(var(--oq-sidebar-base-content-width) + var(--sl-sidebar-width))'
-				);
-			} else {
-				document.documentElement.style.removeProperty('--sl-content-inline-start');
-				document.documentElement.style.removeProperty('--sl-content-width');
-			}
-			this.button.setAttribute('aria-expanded', String(!active));
-			this.button.setAttribute('aria-label', label);
-			this.button.title = label;
-			if (this.sidebar) {
-				if (active) {
-					this.sidebar.setAttribute('aria-hidden', 'true');
-				} else {
-					this.sidebar.removeAttribute('aria-hidden');
-				}
-				this.sidebar.toggleAttribute('inert', active);
-			}
-		}
-	}
+    setCollapsed(collapsed: boolean) {
+      const active = desktopQuery.matches && collapsed;
+      const label = active ? this.expandLabel : this.collapseLabel;
+      document.documentElement.toggleAttribute('data-sidebar-collapsed', active);
+      if (active) {
+        document.documentElement.style.setProperty('--sl-content-inline-start', '0rem');
+        document.documentElement.style.setProperty(
+          '--sl-content-width',
+          'calc(var(--oq-sidebar-base-content-width) + var(--sl-sidebar-width))'
+        );
+      } else {
+        document.documentElement.style.removeProperty('--sl-content-inline-start');
+        document.documentElement.style.removeProperty('--sl-content-width');
+      }
+      this.button.setAttribute('aria-expanded', String(!active));
+      this.button.setAttribute('aria-label', label);
+      this.button.title = label;
+      if (this.sidebar) {
+        if (active) {
+          this.sidebar.setAttribute('aria-hidden', 'true');
+        } else {
+          this.sidebar.removeAttribute('aria-hidden');
+        }
+        this.sidebar.toggleAttribute('inert', active);
+      }
+    }
+  }
 
-	if (!customElements.get('starlight-sidebar-toggle')) {
-		customElements.define('starlight-sidebar-toggle', StarlightSidebarToggle);
-	}
+  if (!customElements.get('starlight-sidebar-toggle')) {
+    customElements.define('starlight-sidebar-toggle', StarlightSidebarToggle);
+  }
 </script>
 
 <style>
-	:global(:root) {
-		--oq-sidebar-base-content-width: 45rem;
-	}
+  :global(:root) {
+    --oq-sidebar-base-content-width: 45rem;
+  }
 
-	@media (min-width: 50rem) {
-		:global([data-sidebar-collapsed]) {
-			--sl-content-inline-start: 0rem;
-			--sl-content-width: calc(var(--oq-sidebar-base-content-width) + var(--sl-sidebar-width));
-		}
-	}
+  @media (min-width: 50rem) {
+    :global([data-sidebar-collapsed]) {
+      --sl-content-inline-start: 0rem;
+      --sl-content-width: calc(var(--oq-sidebar-base-content-width) + var(--sl-sidebar-width));
+    }
+  }
 </style>
 
 <style>
-	@layer starlight.core {
-		.page {
-			flex-direction: column;
-			min-height: 100vh;
-		}
+  @layer starlight.core {
+    .page {
+      flex-direction: column;
+      min-height: 100vh;
+    }
 
-		.header {
-			z-index: var(--sl-z-index-navbar);
-			position: fixed;
-			inset-inline-start: 0;
-			inset-block-start: 0;
-			width: 100%;
-			height: var(--sl-nav-height);
-			border-bottom: 1px solid var(--sl-color-hairline-shade);
-			padding: var(--sl-nav-pad-y) var(--sl-nav-pad-x);
-			padding-inline-end: var(--sl-nav-pad-x);
-			background-color: var(--sl-color-bg-nav);
-		}
+    .header {
+      z-index: var(--sl-z-index-navbar);
+      position: fixed;
+      inset-inline-start: 0;
+      inset-block-start: 0;
+      width: 100%;
+      height: var(--sl-nav-height);
+      border-bottom: 1px solid var(--sl-color-hairline-shade);
+      padding: var(--sl-nav-pad-y) var(--sl-nav-pad-x);
+      padding-inline-end: var(--sl-nav-pad-x);
+      background-color: var(--sl-color-bg-nav);
+    }
 
-		:global([data-has-sidebar]) .header {
-			padding-inline-end: calc(
-				var(--sl-nav-gap) + var(--sl-nav-pad-x) + var(--sl-menu-button-size)
-			);
-		}
+    :global([data-has-sidebar]) .header {
+      padding-inline-end: calc(var(--sl-nav-gap) + var(--sl-nav-pad-x) + var(--sl-menu-button-size));
+    }
 
-		.sidebar-pane {
-			visibility: var(--sl-sidebar-visibility, hidden);
-			position: fixed;
-			z-index: var(--sl-z-index-menu);
-			inset-block: var(--sl-nav-height) 0;
-			inset-inline-start: 0;
-			width: 100%;
-			background-color: var(--sl-color-black);
-			overflow-y: auto;
-			scrollbar-gutter: stable;
-		}
+    .sidebar-pane {
+      visibility: var(--sl-sidebar-visibility, hidden);
+      position: fixed;
+      z-index: var(--sl-z-index-menu);
+      inset-block: var(--sl-nav-height) 0;
+      inset-inline-start: 0;
+      width: 100%;
+      background-color: var(--sl-color-black);
+      overflow-y: auto;
+      scrollbar-gutter: stable;
+    }
 
-		:global([aria-expanded='true']) ~ .sidebar-pane {
-			--sl-sidebar-visibility: visible;
-		}
+    :global([aria-expanded='true']) ~ .sidebar-pane {
+      --sl-sidebar-visibility: visible;
+    }
 
-		.sidebar-content {
-			height: 100%;
-			min-height: max-content;
-			padding: 1rem var(--sl-sidebar-pad-x) 0;
-			flex-direction: column;
-			gap: 1rem;
-		}
+    .sidebar-content {
+      height: 100%;
+      min-height: max-content;
+      padding: 1rem var(--sl-sidebar-pad-x) 0;
+      flex-direction: column;
+      gap: 1rem;
+    }
 
-		@media (min-width: 50rem) {
-			.sidebar-content::after {
-				content: '';
-				padding-bottom: 1px;
-			}
-		}
+    @media (min-width: 50rem) {
+      .sidebar-content::after {
+        content: '';
+        padding-bottom: 1px;
+      }
+    }
 
-		.main-frame {
-			padding-top: calc(var(--sl-nav-height) + var(--sl-mobile-toc-height));
-			padding-inline-start: var(--sl-content-inline-start);
-		}
+    .main-frame {
+      padding-top: calc(var(--sl-nav-height) + var(--sl-mobile-toc-height));
+      padding-inline-start: var(--sl-content-inline-start);
+    }
 
-		starlight-sidebar-toggle {
-			display: none;
-		}
+    starlight-sidebar-toggle {
+      display: none;
+    }
 
-		.sidebar-toggle-button {
-			align-items: center;
-			justify-content: center;
-			border: 1px solid var(--sl-color-hairline-shade);
-			border-radius: 50%;
-			width: 2rem;
-			height: 2rem;
-			padding: 0;
-			background-color: var(--sl-color-bg-nav);
-			color: var(--sl-color-text);
-			box-shadow: var(--sl-shadow-sm);
-			cursor: pointer;
-		}
+    .sidebar-toggle-button {
+      align-items: center;
+      justify-content: center;
+      border: 1px solid var(--sl-color-hairline-shade);
+      border-radius: 50%;
+      width: 2rem;
+      height: 2rem;
+      padding: 0;
+      background-color: var(--sl-color-bg-nav);
+      color: var(--sl-color-text);
+      box-shadow: var(--sl-shadow-sm);
+      cursor: pointer;
+    }
 
-		.sidebar-toggle-button:hover {
-			border-color: var(--sl-color-gray-4);
-			background-color: var(--sl-color-gray-6);
-		}
+    .sidebar-toggle-button:hover {
+      border-color: var(--sl-color-gray-4);
+      background-color: var(--sl-color-gray-6);
+    }
 
-		.sidebar-toggle-button:focus-visible {
-			outline: 2px solid var(--sl-color-accent);
-			outline-offset: 2px;
-		}
+    .sidebar-toggle-button:focus-visible {
+      outline: 2px solid var(--sl-color-accent);
+      outline-offset: 2px;
+    }
 
-		.sidebar-toggle-button[aria-expanded='true'] .expand-sidebar,
-		.sidebar-toggle-button[aria-expanded='false'] .collapse-sidebar {
-			display: none;
-		}
+    .sidebar-toggle-button[aria-expanded='true'] .expand-sidebar,
+    .sidebar-toggle-button[aria-expanded='false'] .collapse-sidebar {
+      display: none;
+    }
 
-		@media (min-width: 50rem) {
-			:global([data-has-sidebar]) .header {
-				padding-inline-end: var(--sl-nav-pad-x);
-			}
+    @media (min-width: 50rem) {
+      :global([data-has-sidebar]) .header {
+        padding-inline-end: var(--sl-nav-pad-x);
+      }
 
-			.sidebar-pane {
-				--sl-sidebar-visibility: visible;
-				width: var(--sl-sidebar-width);
-				background-color: var(--sl-color-bg-sidebar);
-				border-inline-end: 1px solid var(--sl-color-hairline-shade);
-			}
+      .sidebar-pane {
+        --sl-sidebar-visibility: visible;
+        width: var(--sl-sidebar-width);
+        background-color: var(--sl-color-bg-sidebar);
+        border-inline-end: 1px solid var(--sl-color-hairline-shade);
+      }
 
-			starlight-sidebar-toggle {
-				display: block;
-			}
+      starlight-sidebar-toggle {
+        display: block;
+      }
 
-			.sidebar-toggle-button {
-				position: fixed;
-				z-index: var(--sl-z-index-navbar);
-				inset-block-start: calc(var(--sl-nav-height) + 0.75rem);
-				inset-inline-start: calc(var(--sl-sidebar-width) - 1rem);
-				transition:
-					background-color 0.15s ease,
-					border-color 0.15s ease,
-					inset-inline-start 0.15s ease;
-			}
+      .sidebar-toggle-button {
+        position: fixed;
+        z-index: var(--sl-z-index-navbar);
+        inset-block-start: calc(var(--sl-nav-height) + 0.75rem);
+        inset-inline-start: calc(var(--sl-sidebar-width) - 1rem);
+        transition:
+          background-color 0.15s ease,
+          border-color 0.15s ease,
+          inset-inline-start 0.15s ease;
+      }
 
-			:global([data-sidebar-collapsed]) .sidebar-pane {
-				visibility: hidden;
-				width: 0;
-				border-inline-end: 0;
-				overflow: hidden;
-				pointer-events: none;
-			}
+      :global([data-sidebar-collapsed]) .sidebar-pane {
+        visibility: hidden;
+        width: 0;
+        border-inline-end: 0;
+        overflow: hidden;
+        pointer-events: none;
+      }
 
-			:global([data-sidebar-collapsed]) .sidebar-toggle-button {
-				inset-inline-start: var(--sl-nav-pad-x);
-			}
-		}
-	}
+      :global([data-sidebar-collapsed]) .sidebar-toggle-button {
+        inset-inline-start: var(--sl-nav-pad-x);
+      }
+    }
+  }
 </style>

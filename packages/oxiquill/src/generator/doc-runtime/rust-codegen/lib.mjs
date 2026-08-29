@@ -1,10 +1,7 @@
 import { generateRustReaders } from '../rust-readers.mjs';
 import { rustFunctionName } from '../rust-identifiers.mjs';
 import { generatedBanner } from './banners.mjs';
-import {
-  generateRustFunction,
-  generateRustTest
-} from './functions.mjs';
+import { generateRustFunction, generateRustTest } from './functions.mjs';
 import { generateRustOutputTypes } from './output-types.mjs';
 
 export function generateRustLib(rustCells) {

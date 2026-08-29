@@ -17,6 +17,7 @@ concurrency:
 
 env:
   CARGO_TERM_COLOR: always
+  GHC_WASM_REVISION: 8fd59591635cb47ad7db124562039bea8441cae8
   NODE_VERSION: '24'
   PNPM_VERSION: '11.2.2'
   RUST_TOOLCHAIN: '1.95.0'
@@ -30,7 +31,7 @@ jobs:
 
     steps:
       - name: Check out repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
 
       - name: Set up pnpm
         uses: pnpm/action-setup@v4
@@ -39,10 +40,11 @@ jobs:
           run_install: false
 
       - name: Set up Node.js
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v6
         with:
           node-version: ${{ env.NODE_VERSION }}
           cache: pnpm
+          cache-dependency-path: pnpm-lock.yaml
 
       - name: Set up Rust
         shell: bash
@@ -54,10 +56,10 @@ jobs:
         uses: taiki-e/install-action@wasm-pack
 
       - name: Cache ghc-wasm
-        uses: actions/cache@v4
+        uses: actions/cache@v5
         with:
           path: ~/.ghc-wasm
-          key: ghc-wasm-${{ runner.os }}-9.14-v1
+          key: ghc-wasm-${{ runner.os }}-${{ runner.arch }}-9.14-${{ env.GHC_WASM_REVISION }}
 
       - name: Install ghc-wasm
         shell: bash
@@ -66,7 +68,14 @@ jobs:
           if [ ! -x "$HOME/.ghc-wasm/wasm32-wasi-ghc/bin/wasm32-wasi-ghc" ]; then
             sudo apt-get update
             sudo apt-get install -y jq unzip zstd
-            curl -sS https://gitlab.haskell.org/haskell-wasm/ghc-wasm-meta/-/raw/master/bootstrap.sh | FLAVOUR=9.14 sh
+            source_dir="$(mktemp -d)"
+            curl --fail --location --retry 5 --silent --show-error \
+              "https://gitlab.haskell.org/haskell-wasm/ghc-wasm-meta/-/archive/$GHC_WASM_REVISION/ghc-wasm-meta-$GHC_WASM_REVISION.tar.gz" \
+              | tar xz -C "$source_dir" --strip-components=1
+            (
+              cd "$source_dir"
+              FLAVOUR=9.14 PREFIX="$HOME/.ghc-wasm" ./setup.sh
+            )
           fi
           echo "OXIQUILL_HASKELL_GHC=$HOME/.ghc-wasm/wasm32-wasi-ghc/bin/wasm32-wasi-ghc" >> "$GITHUB_ENV"
           "$HOME/.ghc-wasm/wasm32-wasi-ghc/bin/wasm32-wasi-ghc" --version

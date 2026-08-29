@@ -20,20 +20,21 @@ export function pageIdFromPath(pagePath) {
     normalized
   );
 
-  return docsRelativePath
-    .split('/')
-    .filter(Boolean)
-    .map(sanitizeId)
-    .join('__');
+  return docsRelativePath.split('/').filter(Boolean).map(sanitizeId).join('__');
 }
 
 function sanitizeId(value) {
-  const sanitized = String(value).trim().replace(/[^A-Za-z0-9_-]+/gu, '-').replace(/^-+|-+$/gu, '');
+  const sanitized = String(value)
+    .trim()
+    .replace(/[^A-Za-z0-9_-]+/gu, '-')
+    .replace(/^-+|-+$/gu, '');
   return sanitized || 'cell';
 }
 
 function normalizePath(value) {
-  return String(value ?? '').split(path.sep).join('/');
+  return String(value ?? '')
+    .split(path.sep)
+    .join('/');
 }
 
 function escapeRegExp(value) {

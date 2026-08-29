@@ -4,4 +4,6 @@ set -eu
 repo_root=$(git rev-parse --show-toplevel)
 cd "$repo_root"
 
+pnpm lint:js
+pnpm format:check
 pnpm test:unit

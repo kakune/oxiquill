@@ -1,7 +1,4 @@
-import {
-  hashText,
-  stableFingerprint
-} from './hashing.mjs';
+import { hashText, stableFingerprint } from './hashing.mjs';
 
 export function summarizeCells(cells) {
   const rustCells = cells.filter((cell) => cell.language === 'rust');
