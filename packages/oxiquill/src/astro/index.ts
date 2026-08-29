@@ -1,4 +1,4 @@
-import { existsSync, readFileSync, realpathSync } from 'node:fs';
+import { existsSync, readFileSync } from 'node:fs';
 import { createRequire } from 'node:module';
 import path from 'node:path';
 import { pathToFileURL } from 'node:url';
@@ -11,7 +11,14 @@ import { mergeAlias } from 'vite';
 import type { AstroConfig, AstroIntegration, AstroUserConfig, FontProvider, Locales, SessionDriverConfig } from 'astro';
 import type { Options as PreactIntegrationOptions } from '@astrojs/preact';
 import type { Alias, Plugin, PluginOption, UserConfig as ViteUserConfig } from 'vite';
-import { directoryPath, pathFromUrl, pathInUrl, relativePathFromUrl } from '../config/paths.mjs';
+import {
+  canonicalPath,
+  createOxiquillPaths,
+  directoryPath,
+  pathFromUrl,
+  pathInUrl,
+  relativePathFromUrl
+} from '../config/paths.mjs';
 import {
   attachOxiquillMetadata,
   createOxiquillConfigMetadata,
@@ -31,7 +38,6 @@ import { buildHaskellWasm, buildRustWasm } from '../generator/doc-runtime/wasm-b
 import remarkInteractiveCells from '../lib/doc-runtime/remark-interactive-cells.mjs';
 import remarkMermaidDiagrams from '../lib/doc-runtime/remark-mermaid-diagrams.mjs';
 import remarkPublicAssetBase from '../lib/doc-runtime/remark-public-asset-base.mjs';
-import { createOxiquillPaths } from '../config/paths.mjs';
 import { oxiquillVirtualModulesPlugin } from './virtual-modules.mjs';
 
 type IntegrationFactory<Options> = (options: Options) => AstroIntegration;
@@ -762,7 +768,7 @@ function existingRealPaths(paths: string[]): string[] {
   for (const candidate of paths) {
     if (!existsSync(candidate)) continue;
 
-    const realPath = realpathSync(candidate);
+    const realPath = canonicalPath(candidate);
     if (seen.has(realPath)) continue;
 
     seen.add(realPath);

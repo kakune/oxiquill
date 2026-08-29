@@ -1,6 +1,5 @@
 // @vitest-environment node
 
-import { realpathSync } from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -22,8 +21,9 @@ vi.mock('@astrojs/starlight', () => ({
 
 const { defineOxiquillConfig: definePackageConfig } = await import('../../packages/oxiquill/src/astro/index.ts');
 const { readOxiquillMetadata } = await import('../../packages/oxiquill/src/config/metadata.mjs');
+const { canonicalPath } = await import('../../packages/oxiquill/src/config/paths.mjs');
 const linkedConsumerRoot = new URL('../fixtures/linked-consumer/', import.meta.url);
-const tempRoot = pathToFileURL(os.tmpdir());
+const tempRoot = pathToFileURL(canonicalPath(os.tmpdir()));
 const preactExportSpecifiers = [
   'preact',
   'preact/jsx-runtime',
@@ -253,9 +253,9 @@ describe('defineOxiquillConfig', () => {
     const normalizedAllow = allow.map((entry) => entry.replaceAll('\\', '/'));
 
     expect(allow).toContain('/already-allowed');
-    expect(allow).toContain(realpathSync(fileURLToPath(tempRoot)));
-    expect(allow).toContain(realpathSync('packages/oxiquill'));
-    expect(allow).toContain(realpathSync('node_modules'));
+    expect(allow).toContain(canonicalPath(fileURLToPath(tempRoot)));
+    expect(allow).toContain(canonicalPath('packages/oxiquill'));
+    expect(allow).toContain(canonicalPath('node_modules'));
     expect(normalizedAllow.some((entry) => entry.includes('node_modules/.pnpm/katex'))).toBe(true);
     expect(normalizedAllow.some((entry) => entry.includes('node_modules/.pnpm/@astrojs+preact'))).toBe(true);
     expect(normalizedAllow.some((entry) => entry.includes('node_modules/.pnpm/@bjorn3+browser_wasi_shim'))).toBe(true);

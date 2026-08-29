@@ -11,7 +11,7 @@ import {
   resolveAstroConfigFile,
   resolveOxiquillProjectConfig
 } from '../../packages/oxiquill/src/config/project-config.mjs';
-import { normalizePath } from '../../packages/oxiquill/src/config/paths.mjs';
+import { canonicalPath, normalizePath } from '../../packages/oxiquill/src/config/paths.mjs';
 
 const temporaryDirectories = [];
 const astroModuleUrl = new URL('../../packages/oxiquill/src/astro/index.ts', import.meta.url).href;
@@ -207,7 +207,7 @@ function resolveProject({ astro = {}, paths = {}, root }) {
 }
 
 async function temporaryDirectory() {
-  const directory = await mkdtemp(path.join(tmpdir(), 'oxiquill-config-'));
+  const directory = canonicalPath(await mkdtemp(path.join(tmpdir(), 'oxiquill-config-')));
   temporaryDirectories.push(directory);
   return directory;
 }

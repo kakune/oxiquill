@@ -549,7 +549,7 @@ describe('doc runtime service', () => {
         resolvePackageJson: () => `${packageDir}/package.json`
       })
     ).rejects.toThrow(
-      `Required Pyodide asset "pyodide.asm.wasm" is missing from package "pyodide" at "${packageDir}/pyodide.asm.wasm"`
+      `Required Pyodide asset "pyodide.asm.wasm" is missing from package "pyodide" at "${path.join(packageDir, 'pyodide.asm.wasm')}"`
     );
   });
 
