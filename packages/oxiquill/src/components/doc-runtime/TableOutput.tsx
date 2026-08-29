@@ -52,6 +52,7 @@ export default function TableOutput({
   }
 
   async function copyVisibleCsv(): Promise<void> {
+    if (copyStatus?.kind === 'copying') return;
     setCopyStatus({ kind: 'copying', message: labels.copyingCsv });
     const converted = tableToCsv(table.columns, currentRows);
     if (!converted.ok) {
@@ -134,8 +135,8 @@ export default function TableOutput({
           <button
             type="button"
             aria-busy={copyStatus?.kind === 'copying'}
+            aria-disabled={copyStatus?.kind === 'copying'}
             data-testid="table-copy-csv"
-            disabled={copyStatus?.kind === 'copying'}
             onClick={copyVisibleCsv}
           >
             {copyStatus?.kind === 'copying' ? labels.copyingCsv : labels.copyCsv}

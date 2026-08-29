@@ -76,8 +76,10 @@ function InteractiveCellPanel({
               class="run-button"
               aria-busy={runtime.isRunning}
               aria-controls={ids.output}
-              disabled={runtime.isRunning}
-              onClick={runtime.run}
+              aria-disabled={runtime.isRunning}
+              onClick={() => {
+                if (!runtime.isRunning) runtime.run();
+              }}
             >
               {runtime.isRunning ? labels.running : labels.run}
             </button>

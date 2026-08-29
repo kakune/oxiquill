@@ -91,14 +91,19 @@ export default function ChartOutput({ artifact, idPrefix, labels }: ChartOutputP
   }, [spec]);
 
   const titleId = `${idPrefix}-title`;
+  const captionId = artifact.caption ? `${idPrefix}-caption` : undefined;
   const descriptionId = `${idPrefix}-description`;
   const title = artifact.title ?? spec.title ?? labels.chartTitle(spec.kind);
 
   return (
-    <figure class="doc-chart-output" aria-labelledby={titleId} aria-describedby={descriptionId}>
-      <figcaption id={titleId}>
-        <strong>{title}</strong>
-        {artifact.caption ? <span>{artifact.caption}</span> : null}
+    <figure
+      class="doc-chart-output"
+      aria-labelledby={titleId}
+      aria-describedby={[captionId, descriptionId].filter(Boolean).join(' ')}
+    >
+      <figcaption>
+        <strong id={titleId}>{title}</strong>
+        {artifact.caption ? <span id={captionId}>{artifact.caption}</span> : null}
       </figcaption>
       <div ref={element} class="doc-plot" aria-hidden="true" data-testid="doc-plot" />
       <p id={descriptionId} class="doc-chart-output__summary">
