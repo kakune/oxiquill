@@ -1,59 +1,79 @@
 import { coerceInputValue, formatInputValue } from '../../lib/doc-runtime/interactive-cell-model.js';
+import type { RuntimeLabels } from '../../lib/doc-runtime/runtime-localization.js';
 import type { InputSpec } from '../../lib/doc-runtime/types.js';
+import { useState } from 'preact/hooks';
 
 type InputValue = string | number | boolean;
 
 export function InputControl({
   cellId,
   input,
+  labels,
   value,
   onChange
 }: {
   cellId: string;
   input: InputSpec;
+  labels: RuntimeLabels;
   onChange: (value: InputValue) => void;
   value: InputValue;
 }) {
-  const id = inputControlId(cellId, input.name);
+  const ids = inputControlIds(cellId, input.name);
+  const [validation, setValidation] = useState<string>();
+  const descriptionId = input.description ? ids.description : undefined;
+  const validationId = validation ? ids.validation : undefined;
 
   if (input.type === 'checkbox') {
     return (
-      <label class="doc-input doc-input--checkbox" for={id}>
-        <input
-          id={id}
-          type="checkbox"
-          checked={Boolean(value)}
-          onInput={(event) => onChange(event.currentTarget.checked)}
-        />
-        <span>{input.label}</span>
-      </label>
+      <div class="doc-input">
+        <label class="doc-input--checkbox" for={ids.control} id={ids.label}>
+          <input
+            id={ids.control}
+            aria-describedby={descriptionId}
+            type="checkbox"
+            checked={Boolean(value)}
+            onInput={(event) => onChange(event.currentTarget.checked)}
+          />
+          <span>{input.label}</span>
+        </label>
+        <InputDescription id={descriptionId} description={input.description} />
+      </div>
     );
   }
 
   if (input.type === 'select') {
     return (
-      <label class="doc-input" for={id}>
-        <span>{input.label}</span>
-        <select id={id} value={String(value)} onInput={(event) => onChange(event.currentTarget.value)}>
+      <div class="doc-input">
+        <label for={ids.control} id={ids.label}>
+          {input.label}
+        </label>
+        <select
+          id={ids.control}
+          aria-describedby={descriptionId}
+          value={String(value)}
+          onInput={(event) => onChange(event.currentTarget.value)}
+        >
           {input.options.map((option) => (
             <option key={option.value} value={option.value}>
               {option.label}
             </option>
           ))}
         </select>
-      </label>
+        <InputDescription id={descriptionId} description={input.description} />
+      </div>
     );
   }
 
   if (input.type === 'radio') {
     return (
-      <fieldset class="doc-input doc-input--radio">
-        <legend>{input.label}</legend>
-        {input.options.map((option) => (
-          <label key={option.value}>
+      <fieldset class="doc-input doc-input--radio" aria-describedby={descriptionId}>
+        <legend id={ids.label}>{input.label}</legend>
+        {input.options.map((option, optionIndex) => (
+          <label key={option.value} for={`${ids.control}-option-${optionIndex}`}>
             <input
+              id={`${ids.control}-option-${optionIndex}`}
               type="radio"
-              name={id}
+              name={ids.control}
               value={option.value}
               checked={String(value) === option.value}
               onInput={(event) => onChange(event.currentTarget.value)}
@@ -61,28 +81,42 @@ export function InputControl({
             <span>{option.label}</span>
           </label>
         ))}
+        <InputDescription id={descriptionId} description={input.description} />
       </fieldset>
     );
   }
 
   if (input.type === 'textarea') {
     return (
-      <label class="doc-input" for={id}>
-        <span>{input.label}</span>
-        <textarea id={id} value={String(value)} onInput={(event) => onChange(event.currentTarget.value)} />
-      </label>
+      <div class="doc-input">
+        <label for={ids.control} id={ids.label}>
+          {input.label}
+        </label>
+        <textarea
+          id={ids.control}
+          aria-describedby={descriptionId}
+          value={String(value)}
+          onInput={(event) => onChange(event.currentTarget.value)}
+        />
+        <InputDescription id={descriptionId} description={input.description} />
+      </div>
     );
   }
 
   if (input.type === 'range') {
     return (
-      <label class="doc-input" for={id}>
-        <span>
-          {input.label} <strong data-testid={`${input.name}-value`}>{formatInputValue(value)}</strong>
-        </span>
+      <div class="doc-input">
+        <div class="doc-input__label-row">
+          <label for={ids.control} id={ids.label}>
+            {input.label}
+          </label>
+          <output id={ids.value} for={ids.control} data-testid={`${input.name}-value`}>
+            {formatInputValue(value)}
+          </output>
+        </div>
         <input
-          id={id}
-          aria-label={input.name}
+          id={ids.control}
+          aria-describedby={describedBy(descriptionId, ids.value)}
           type="range"
           min={input.min}
           max={input.max}
@@ -90,31 +124,76 @@ export function InputControl({
           value={Number(value)}
           onInput={(event) => onChange(Number(event.currentTarget.value))}
         />
-      </label>
+        <InputDescription id={descriptionId} description={input.description} />
+      </div>
     );
   }
 
   const numeric = input.type === 'number' || input.type === 'integer';
 
   return (
-    <label class="doc-input" for={id}>
-      <span>{input.label}</span>
+    <div class="doc-input">
+      <label for={ids.control} id={ids.label}>
+        {input.label}
+      </label>
       <input
-        id={id}
-        aria-label={input.name}
+        id={ids.control}
+        aria-describedby={descriptionId}
+        aria-errormessage={validationId}
+        aria-invalid={validation ? true : undefined}
         type={numeric ? 'number' : 'text'}
         min={input.min}
         max={input.max}
-        step={input.step}
+        step={input.type === 'integer' ? (input.step ?? 1) : input.step}
         value={String(value)}
         onInput={(event) => {
+          setValidation(numeric ? inputValidationMessage(event.currentTarget.validity, input, labels) : undefined);
           onChange(coerceInputValue(input, event.currentTarget.value));
         }}
       />
-    </label>
+      <InputDescription id={descriptionId} description={input.description} />
+      {validation ? (
+        <p id={ids.validation} class="doc-input__validation error-state" role="alert">
+          {validation}
+        </p>
+      ) : null}
+    </div>
   );
 }
 
 export function inputControlId(cellId: string, inputName: string): string {
   return `doc-input-${cellId}-${inputName}`;
+}
+
+export function inputControlIds(cellId: string, inputName: string) {
+  const control = inputControlId(cellId, inputName);
+  return {
+    control,
+    description: `${control}-description`,
+    label: `${control}-label`,
+    validation: `${control}-validation`,
+    value: `${control}-value`
+  };
+}
+
+function InputDescription({ description, id }: { description?: string; id?: string }) {
+  return description && id ? (
+    <p id={id} class="doc-input__description">
+      {description}
+    </p>
+  ) : null;
+}
+
+function describedBy(...ids: Array<string | undefined>): string | undefined {
+  const value = ids.filter(Boolean).join(' ');
+  return value || undefined;
+}
+
+function inputValidationMessage(validity: ValidityState, input: InputSpec, labels: RuntimeLabels): string | undefined {
+  if (validity.valid) return undefined;
+  if (validity.badInput) return labels.inputNumber;
+  if (validity.rangeUnderflow && input.min !== undefined) return labels.inputMinimum(input.min);
+  if (validity.rangeOverflow && input.max !== undefined) return labels.inputMaximum(input.max);
+  if (validity.stepMismatch) return labels.inputStep;
+  return labels.inputNumber;
 }

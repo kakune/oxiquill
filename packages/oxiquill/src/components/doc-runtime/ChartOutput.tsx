@@ -1,8 +1,11 @@
 import { useEffect, useRef, useState } from 'preact/hooks';
-import type { ChartSpec } from '../../lib/doc-runtime/types.js';
+import type { RuntimeLabels } from '../../lib/doc-runtime/runtime-localization.js';
+import type { ChartArtifact, ChartSpec } from '../../lib/doc-runtime/types.js';
 
 interface ChartOutputProps {
-  spec: ChartSpec;
+  artifact: ChartArtifact;
+  idPrefix: string;
+  labels: RuntimeLabels;
 }
 
 type EChartsCore = typeof import('echarts/core');
@@ -40,7 +43,8 @@ function loadECharts(): Promise<EChartsCore> {
   return echartsModule;
 }
 
-export default function ChartOutput({ spec }: ChartOutputProps) {
+export default function ChartOutput({ artifact, idPrefix, labels }: ChartOutputProps) {
+  const { spec } = artifact;
   const element = useRef<HTMLDivElement>(null);
   const chart = useRef<EChartsInstance>();
   const latestSpec = useRef(spec);
@@ -86,7 +90,23 @@ export default function ChartOutput({ spec }: ChartOutputProps) {
     }
   }, [spec]);
 
-  return <div ref={element} class="doc-plot" data-testid="doc-plot" />;
+  const titleId = `${idPrefix}-title`;
+  const descriptionId = `${idPrefix}-description`;
+  const title = artifact.title ?? spec.title ?? labels.chartTitle(spec.kind);
+
+  return (
+    <figure class="doc-chart-output" aria-labelledby={titleId} aria-describedby={descriptionId}>
+      <figcaption id={titleId}>
+        <strong>{title}</strong>
+        {artifact.caption ? <span>{artifact.caption}</span> : null}
+      </figcaption>
+      <div ref={element} class="doc-plot" aria-hidden="true" data-testid="doc-plot" />
+      <p id={descriptionId} class="doc-chart-output__summary">
+        <span class="doc-visually-hidden">{labels.chartCaption}: </span>
+        {chartDataSummary(spec, labels)}
+      </p>
+    </figure>
+  );
 }
 
 function toError(value: unknown): Error {
@@ -117,6 +137,72 @@ export function chartSpecToEChartsOptions(spec: ChartSpec): EChartsOptions {
   }
 
   return base;
+}
+
+export function chartDataSummary(spec: ChartSpec, labels: RuntimeLabels): string {
+  const details = chartSummaryDetails(spec, labels);
+  return details.dataCount === 0 ? labels.noChartData : labels.chartSummary(details);
+}
+
+function chartSummaryDetails(spec: ChartSpec, labels: RuntimeLabels) {
+  const numberFormat = new Intl.NumberFormat(labels.locale === 'ja' ? 'ja-JP' : 'en-US', {
+    maximumSignificantDigits: 6
+  });
+  const range = (values: readonly unknown[]) => numericRange(values, numberFormat);
+
+  switch (spec.kind) {
+    case 'line':
+    case 'scatter':
+    case 'area': {
+      const points = spec.series.flatMap((series) => series.points);
+      return {
+        dataCount: points.length,
+        seriesCount: spec.series.length,
+        seriesNames: seriesNames(spec.series),
+        xRange: range(points.map((point) => point[0])),
+        yRange: range(points.map((point) => point[1]))
+      };
+    }
+    case 'bar': {
+      const values = spec.series.flatMap((series) => series.values);
+      return {
+        dataCount: values.length,
+        seriesCount: spec.series.length,
+        seriesNames: seriesNames(spec.series),
+        yRange: range(values)
+      };
+    }
+    case 'histogram':
+      return {
+        dataCount: spec.bins.length,
+        seriesCount: 1,
+        seriesNames: '',
+        xRange: range(spec.bins.flatMap((bin) => [bin[0], bin[1]])),
+        yRange: range(spec.bins.map((bin) => bin[2]))
+      };
+    case 'heatmap':
+      return {
+        dataCount: spec.data.length,
+        seriesCount: 1,
+        seriesNames: '',
+        xRange: range(spec.data.map((item) => item[0])),
+        yRange: range(spec.data.map((item) => item[2]))
+      };
+  }
+}
+
+function seriesNames(series: readonly { name?: string }[]): string {
+  return series.flatMap((item) => (item.name ? [item.name] : [])).join(', ');
+}
+
+function numericRange(values: readonly unknown[], numberFormat: Intl.NumberFormat): string | undefined {
+  const numbers = values.filter((value): value is number => typeof value === 'number' && Number.isFinite(value));
+  if (numbers.length === 0) return undefined;
+  const minimum = Math.min(...numbers);
+  const maximum = Math.max(...numbers);
+  return minimum === maximum
+    ? numberFormat.format(minimum)
+    : `${numberFormat.format(minimum)}–${numberFormat.format(maximum)}`;
 }
 
 function chartSeries(spec: ChartSpec): readonly Record<string, unknown>[] {
