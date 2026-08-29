@@ -216,6 +216,7 @@ Generated output includes:
 - `examples/docs-site/public/oxiquill/pyodide`
 - `examples/docs-site/public/oxiquill/rust-wasm`
 - `examples/docs-site/public/oxiquill/haskell-wasm`
+- `examples/docs-site/public/oxiquill/licenses`
 - `examples/docs-site/dist`
 
 Do not edit generated output directly. Regenerate it with existing commands such as `pnpm docgen`, `pnpm wasm:dev`, `pnpm wasm:build`, `pnpm check`, or `pnpm build`.
@@ -246,9 +247,15 @@ For docs-only prose changes, `pnpm check` is usually enough. For interactive cel
 
 `test:unit:coverage` requires 85% statement, branch, function, and line coverage for handwritten TypeScript, Preact, and Node runtime code, excluding generated output. `test:rust:coverage` requires 85% line/function/region coverage for optional helper crates under `examples/docs-site/crates/` through `cargo-llvm-cov`. If no helper crates exist, Rust helper commands skip cleanly.
 
+### License
+
+Oxiquill is available under your choice of the [MIT License](./LICENSE-MIT) or the [Apache License, Version 2.0](./LICENSE-APACHE). Generated sites automatically include both Oxiquill license files and third-party notices under `oxiquill/licenses/`. No visible attribution or “Powered by Oxiquill” notice is required.
+
+See the [licensing guide](./examples/docs-site/content/docs/guides/licensing.mdx) for the generated-file scope and downstream responsibilities. Historical releases remain under the license recorded in their tags.
+
 ### Contributing
 
-Contributions are welcome. Please open issues for bug reports, questions, and proposals, and send focused pull requests for fixes or documentation improvements.
+Contributions are welcome. Please open issues for bug reports, questions, and proposals, and send focused pull requests for fixes or documentation improvements. Contributions are accepted under the inbound dual-license terms in [CONTRIBUTING.md](./CONTRIBUTING.md).
 
 ### Troubleshooting
 
@@ -477,6 +484,7 @@ putStrLn ("scaled = " <> show (scale * sum [1..5]))
 - `examples/docs-site/public/oxiquill/pyodide`
 - `examples/docs-site/public/oxiquill/rust-wasm`
 - `examples/docs-site/public/oxiquill/haskell-wasm`
+- `examples/docs-site/public/oxiquill/licenses`
 - `examples/docs-site/dist`
 
 生成物を直接編集しないでください。`pnpm docgen`、`pnpm wasm:dev`、`pnpm wasm:build`、`pnpm check`、`pnpm build` などの既存 command で再生成します。
@@ -507,9 +515,15 @@ docs-only の本文変更では、通常 `pnpm check` で十分です。実行�
 
 `test:unit:coverage` は Vitest の V8 coverage を使い、生成物を除いた手書きの TypeScript、Preact、Node runtime code に statement/branch/function/line 85% coverage を要求します。`test:rust:coverage` は `cargo-llvm-cov` で `examples/docs-site/crates/` 配下の任意の helper crate に line/function/region 85% を要求します。helper crate がない場合、Rust helper 用 command は正常終了で skip します。
 
+### ライセンス
+
+Oxiquill は [MIT License](./LICENSE-MIT) または [Apache License, Version 2.0](./LICENSE-APACHE) のいずれかを選んで利用できます。生成サイトには、Oxiquill の2つのライセンスファイルと third-party notice が `oxiquill/licenses/` 配下へ自動的に含まれます。画面上の attribution や「Powered by Oxiquill」の表示は必要ありません。
+
+生成ファイルの対象範囲と利用側の責任は[ライセンスガイド](./examples/docs-site/content/docs/ja/guides/licensing.mdx)を参照してください。過去の release には、それぞれの tag に記録されたライセンスが引き続き適用されます。
+
 ### コントリビューション
 
-バグ報告、質問、提案は issue で歓迎します。小さな修正やドキュメント改善の pull request も歓迎します。
+バグ報告、質問、提案は issue で歓迎します。小さな修正やドキュメント改善の pull request も歓迎します。Contribution は [CONTRIBUTING.md](./CONTRIBUTING.md) の inbound dual-license 条項に基づいて受け入れます。
 
 ### トラブルシュート
 

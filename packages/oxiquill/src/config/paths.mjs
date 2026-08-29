@@ -23,6 +23,7 @@ export function createOxiquillPaths(options = {}) {
     publicDir,
     publicAssetsDir,
     haskellWasmPublicDir: directoryUrl(options.haskellWasmPublicDir ?? 'haskell-wasm', publicAssetsDir),
+    licensesPublicDir: directoryUrl(options.licensesPublicDir ?? 'licenses', publicAssetsDir),
     pyodidePublicDir: directoryUrl(options.pyodidePublicDir ?? 'pyodide', publicAssetsDir),
     rustWasmPublicDir: directoryUrl(options.rustWasmPublicDir ?? 'rust-wasm', publicAssetsDir),
     cellsModulePath: fileUrl('cells.ts', generatedDir),

@@ -34,6 +34,7 @@ export default defineOxiquillConfig({
           { label: 'Getting Started', translations: { ja: 'はじめに' }, slug: 'guides/getting-started' },
           { label: 'Authoring Guide', translations: { ja: '執筆ガイド' }, slug: 'guides/authoring' },
           { label: 'Templates', translations: { ja: 'テンプレート' }, slug: 'guides/templates' },
+          { label: 'Licensing', translations: { ja: 'ライセンス' }, slug: 'guides/licensing' },
           { label: 'Validation', translations: { ja: '検証' }, slug: 'guides/validation' }
         ]
       },
