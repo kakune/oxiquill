@@ -7,39 +7,48 @@ description: 静的サイト上で動く Rust、Python、Haskell のセルを設
 
 Rust セルは build 時に WebAssembly に compile されます。Python セルは browser の Pyodide worker で動きます。Haskell セルは build 時に WASI WebAssembly module に compile されます。3つの言語は同じ input metadata と run mode model を使います。
 
-## セル metadata
+## Fence と metadata grammar
 
-共通 field:
+interactive fence は `rust`、`python`、`haskell`（Markdown の `{.rust}` form を含む）を使い、legal backtick/tilde fence と indentation に対応します。metadata は fence 先頭の一つの contiguous な language-specific option-comment block です。Rust は `//|`/`///|`、Python は `#|`、Haskell は `--|` を使います。最初の source line より後にある option 風 comment は source code のままです。
 
-- `id`: 必須のページ内 identifier。
-- `title`: cell header に表示する label。
-- `run`: `button`、`reactive`、`autorun`、`hidden`。
-- `inputs`: cell 内の変数になる入力 UI。
-- `timeoutMs`: millisecond の実行 timeout。
-- `showSource`: `false` にすると source を初期状態で隠します。
+許可される top-level field は次だけで、unknown field は error です。
 
-Rust 専用 field:
+| Field | Type と rule | Default |
+| --- | --- | --- |
+| `id` | 必須の lowercase kebab-case `^[a-z][a-z0-9]*(?:-[a-z0-9]+)*$`。page 内と route scope 後で unique。 | — |
+| `title` | cell header に表示する string。 | `id` |
+| `run` | `button`、`reactive`、`autorun`。 | `button` |
+| `inputs` | `^[a-z][a-z0-9_]*$` に一致する lowercase cross-language identifier から input spec への mapping。`autorun` では禁止。 | `{}` |
+| `packages` | unique non-empty Pyodide package name。Python 専用。 | `[]` |
+| `crates` | `cratesDir` 直下の helper package name の unique non-empty list。Rust 専用。 | `[]` |
+| `timeoutMs` | positive integer millisecond。 | `30000` |
+| `showSource` | initial source visibility を指定する boolean。 | `true` |
 
-- `crates`: `crates/*` 配下の helper crate package name。helper が不要な場合は `crates: []`。
+source には metadata 以外の code が必要です。malformed YAML、wrong scalar/collection type、duplicate normalized ID/binding/function、unknown package/crate、language-mismatched dependency field は output を書く前に失敗します。diagnostic は page path、fence start line、可能なら cell ID、正確な field path を含みます。
 
-Python 専用 field:
+Haskell cell は standard-library code のみで `packages`/`crates` を受け付けません。helper 不要の Rust example では `crates: []` を明示します。package/crate list は strict validation 後に deduplicate/sort されます。
 
-- `packages`: `numpy`、`pandas`、`matplotlib` などの vendored Pyodide package name。
+## Run mode
 
-Haskell セルは standard library の code のみ対応します。`packages` や外部 helper module は使いません。
+- `button`: input と Run button を表示し、mount 時は実行しません。
+- `reactive`: input を表示して Run button を隠し、mount 時に一度実行します。その後は 150 ms trailing debounce を使い、active execution 一つと最新 replacement 一つだけを保持します。
+- `autorun`: input/Run button を表示せず、各 `cell.id + runtimeVersion` について正確に一度だけ実行します。
 
-## run mode
+superseded queued work は破棄され、stale result が新しい state を上書きしません。通常の reactive update は shared language worker を維持します。timeout/worker fault はその worker 所有 request を reject し timer を除去して、次回用 fresh worker を作ります。unmount は pending UI work を cancel し、late state update を防ぎます。
 
-- `button`: 読者が明示的に実行します。
-- `reactive`: 初回表示時に実行し、input 変更時に再実行します。
-- `autorun`: run button を表示せず、1回自動実行します。
-- `hidden`: run button を表示しません。意図的に隠す例だけで使います。
+## Input schema
 
-## 入力
+各 input が受け取るのは type に関係する field だけです。共通 field は `type`、`label`、`value`。numeric input は `min`、`max`、`step`、`integer`、`select`/`radio` は `options` も使います。
 
-対応 input type は `range`、`number`、`integer`、`text`、`textarea`、`checkbox`、`select`、`radio` です。
+| Type | Value と constraint |
+| --- | --- |
+| `range`, `number` | finite number。`step > 0`、`min <= max`、default が bound 内。 |
+| `integer` | integer value と integer bound/step。同じ numeric constraint。 |
+| `text`, `textarea` | string value。 |
+| `checkbox` | boolean value。 |
+| `select`, `radio` | non-empty unique string option または `{ label, value }` object。default は option value と一致。 |
 
-input name は cell 内の変数として使えます。Rust と Haskell セルでは安全な identifier に変換されます。記号だけが違う name は同じ binding に変換される可能性があるため避けます。
+visible `label` が control の accessible name で、input key は generated language binding にだけ使います。normalization で二つの Rust/Haskell binding が衝突してはなりません。label、description、current value、validation message、grouped control は stable ID で関連付けられ、keyboard focus を表示し、run/error status は focus を奪わず announce されます。
 
 ## Rust とグラフ
 
