@@ -23,6 +23,7 @@ describe('oxiquill virtual modules', () => {
     const { paths, plugin } = createPlugin();
     const cellsNode = { id: 'cells' };
     const freshCellsNode = { id: 'fresh-cells' };
+    const singleCellNode = { id: 'single-cell' };
     const watchedFreshCellsNode = { url: '/@id/__x00__virtual:oxiquill/cells?oxiquill-fresh=2' };
     const unrelatedNode = { id: '/repo/src/lib/doc-runtime/manifest.ts' };
     const versionNode = { id: 'version' };
@@ -30,6 +31,7 @@ describe('oxiquill virtual modules', () => {
     const idToModuleMap = new Map([
       ['\0virtual:oxiquill/cells', cellsNode],
       ['\0virtual:oxiquill/cells?oxiquill-fresh=1', freshCellsNode],
+      ['\0virtual:oxiquill/cell?cellId=page__one', singleCellNode],
       ['\0virtual:oxiquill/runtime-version', versionNode],
       ['\0virtual:oxiquill/rust-wasm', rustNode]
     ]);
@@ -37,6 +39,7 @@ describe('oxiquill virtual modules', () => {
       getModuleById: vi.fn((id) =>
         new Map([
           ['\0virtual:oxiquill/cells', cellsNode],
+          ['\0virtual:oxiquill/cell', undefined],
           ['\0virtual:oxiquill/runtime-version', versionNode],
           ['\0virtual:oxiquill/rust-wasm', rustNode]
         ]).get(id)
@@ -58,6 +61,7 @@ describe('oxiquill virtual modules', () => {
       data: { module: 'cells' }
     });
     expect(plugin.hotUpdate.call(context, { file: pathFromUrl(paths.runtimeVersionPath) })).toEqual([versionNode]);
+    expect(plugin.hotUpdate.call(context, { file: pathFromUrl(paths.cellsJsonPath) })).toEqual([singleCellNode]);
     expect(plugin.hotUpdate.call(context, { file: rustWasmFile(paths) })).toEqual([rustNode]);
     expect(plugin.hotUpdate.call(context, { file: '/repo/content/docs/index.mdx' })).toBeUndefined();
   });
@@ -93,6 +97,36 @@ describe('oxiquill virtual modules', () => {
     expect(plugin.load('\0virtual:oxiquill/runtime-paths')).toContain('runtime%20assets/python%20runtime/');
   });
 
+  it('serves one generated cell per page import', () => {
+    const root = mkdtempSync(path.join(os.tmpdir(), 'oxiquill-virtual-cell-'));
+
+    try {
+      const paths = createDocRuntimePaths(root);
+      mkdirSync(path.dirname(pathFromUrl(paths.cellsJsonPath)), { recursive: true });
+      writeFileSync(
+        pathFromUrl(paths.cellsJsonPath),
+        JSON.stringify([
+          { id: 'page__first', source: 'first' },
+          { id: 'page__second', source: 'second' }
+        ])
+      );
+      const plugin = oxiquillVirtualModulesPlugin(paths);
+      const context = { addWatchFile: vi.fn() };
+      const moduleId = 'virtual:oxiquill/cell?cellId=page__second';
+
+      expect(plugin.resolveId(moduleId)).toBe('\0virtual:oxiquill/cell?cellId=page__second');
+      expect(plugin.load.call(context, plugin.resolveId(moduleId))).toBe(
+        'export const cell = {"id":"page__second","source":"second"};\n'
+      );
+      expect(context.addWatchFile).toHaveBeenCalledWith(pathFromUrl(paths.cellsJsonPath));
+      expect(() => plugin.load.call(context, '\0virtual:oxiquill/cell?cellId=page__missing')).toThrow(
+        'Oxiquill could not find generated interactive cell "page__missing".'
+      );
+    } finally {
+      rmSync(root, { force: true, recursive: true });
+    }
+  });
+
   it('watches generated files without forcing full-page reloads', () => {
     const { paths, plugin } = createPlugin();
     const hot = { send: vi.fn() };
@@ -114,6 +148,7 @@ describe('oxiquill virtual modules', () => {
     expect(server.watcher.add).toHaveBeenCalledWith([
       pathFromUrl(paths.cellsModulePath),
       pathFromUrl(paths.runtimeVersionPath),
+      pathFromUrl(paths.cellsJsonPath),
       rustWasmFile(paths)
     ]);
     expect(server.watcher.on).toHaveBeenCalledWith('change', expect.any(Function));

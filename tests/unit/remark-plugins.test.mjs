@@ -25,6 +25,12 @@ describe('remark interactive cells', () => {
     });
 
     expect(tree.children[0].value).toContain('import InteractiveCell');
+    expect(tree.children[0].value).toContain(
+      'import { cell as __oxiquillCell0 } from "virtual:oxiquill/cell?cellId=page__rust-one";'
+    );
+    expect(tree.children[0].value).toContain(
+      'import { cell as __oxiquillCell1 } from "virtual:oxiquill/cell?cellId=page__python-one";'
+    );
     expect(tree.children[1]).toMatchObject({
       type: 'paragraph'
     });
@@ -33,7 +39,15 @@ describe('remark interactive cells', () => {
       name: 'InteractiveCell',
       attributes: [
         { type: 'mdxJsxAttribute', name: 'client:visible', value: null },
-        { type: 'mdxJsxAttribute', name: 'cellId', value: 'page__rust-one' }
+        { type: 'mdxJsxAttribute', name: 'cellId', value: 'page__rust-one' },
+        {
+          type: 'mdxJsxAttribute',
+          name: 'cell',
+          value: {
+            type: 'mdxJsxAttributeValueExpression',
+            value: '__oxiquillCell0'
+          }
+        }
       ],
       children: []
     });
@@ -55,7 +69,10 @@ describe('remark interactive cells', () => {
 
     remarkInteractiveCells({ root: '/repo' })(tree, {});
 
-    expect(tree.children[0].value).toBe("import InteractiveCell from 'oxiquill/runtime/InteractiveCell';");
+    expect(tree.children[0].value).toContain('import InteractiveCell from "oxiquill/runtime/InteractiveCell";');
+    expect(tree.children[0].value).toContain(
+      'import { cell as __oxiquillCell0 } from "virtual:oxiquill/cell?cellId=rust-one";'
+    );
     expect(tree.children[1].attributes[1]).toEqual({
       type: 'mdxJsxAttribute',
       name: 'cellId',
@@ -90,7 +107,7 @@ describe('remark interactive cells', () => {
       path: '/repo/src/components/doc-runtime/example.mdx'
     });
 
-    expect(tree.children[0].value).toBe("import InteractiveCell from 'oxiquill/runtime/InteractiveCell';");
+    expect(tree.children[0].value).toContain('import InteractiveCell from "oxiquill/runtime/InteractiveCell";');
   });
 
   it('leaves trees without interactive cells unchanged', () => {

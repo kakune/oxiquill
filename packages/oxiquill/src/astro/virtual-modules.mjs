@@ -2,6 +2,7 @@ import { existsSync, readFileSync } from 'node:fs';
 import { normalizePath, pathFromUrl, pathInUrl, relativePathFromUrl } from '../config/paths.mjs';
 
 const moduleIds = new Map([
+  ['virtual:oxiquill/cell', '\0virtual:oxiquill/cell'],
   ['virtual:oxiquill/cells', '\0virtual:oxiquill/cells'],
   ['virtual:oxiquill/runtime-version', '\0virtual:oxiquill/runtime-version'],
   ['virtual:oxiquill/runtime-paths', '\0virtual:oxiquill/runtime-paths'],
@@ -27,8 +28,9 @@ export function oxiquillVirtualModulesPlugin(paths) {
     ]
   ]);
   const rustWasmFile = pathInUrl(paths.rustWasmPublicDir, 'doc_rust_cells.js');
-  const watchedFiles = [...Array.from(generatedModules.values()).map(({ file }) => file), rustWasmFile];
+  const watchedFiles = [...Array.from(generatedModules.values()).map(({ file }) => file), cellsJsonFile, rustWasmFile];
   const changedFileModuleIds = new Map([
+    [normalizePath(cellsJsonFile), '\0virtual:oxiquill/cell'],
     [normalizePath(pathFromUrl(paths.cellsModulePath)), '\0virtual:oxiquill/cells'],
     [normalizePath(pathFromUrl(paths.runtimeVersionPath)), '\0virtual:oxiquill/runtime-version'],
     [normalizePath(rustWasmFile), '\0virtual:oxiquill/rust-wasm']
@@ -41,6 +43,17 @@ export function oxiquillVirtualModulesPlugin(paths) {
     },
     load(id) {
       const baseId = baseVirtualModuleId(id);
+      if (baseId === '\0virtual:oxiquill/cell') {
+        this.addWatchFile(cellsJsonFile);
+        const cellId = new URLSearchParams(moduleQuery(id)).get('cellId');
+        const cell = readGeneratedCellsJson(cellsJsonFile).find((candidate) => candidate.id === cellId);
+        if (!cell) {
+          throw new Error(`Oxiquill could not find generated interactive cell ${JSON.stringify(cellId)}.`);
+        }
+
+        return `export const cell = ${JSON.stringify(cell)};\n`;
+      }
+
       const generated = generatedModules.get(baseId);
       if (generated) {
         this.addWatchFile(generated.file);
@@ -127,6 +140,11 @@ function baseVirtualModuleId(id) {
 function splitModuleQuery(id) {
   const queryIndex = id.indexOf('?');
   return queryIndex === -1 ? [id] : [id.slice(0, queryIndex), id.slice(queryIndex)];
+}
+
+function moduleQuery(id) {
+  const query = splitModuleQuery(id)[1] ?? '';
+  return query.startsWith('?') ? query.slice(1) : query;
 }
 
 function loadedVirtualModuleNodes(moduleGraph, resolvedId, watchedModules = []) {

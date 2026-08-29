@@ -1,11 +1,6 @@
-import { cells as generatedCells } from 'virtual:oxiquill/cells';
 import { runtimeVersion as generatedRuntimeVersion } from 'virtual:oxiquill/runtime-version';
 import { resetInteractiveRuntime } from './runtime-client.js';
 import type { CellManifest } from './types.js';
-
-type GeneratedCellsModule = {
-  cells: readonly CellManifest[];
-};
 
 type RuntimeVersionModule = {
   runtimeVersion: string;
@@ -52,12 +47,6 @@ if (import.meta.hot?.data) {
     scheduleGeneratedManifestRefresh();
   });
 
-  import.meta.hot.accept('virtual:oxiquill/cells', (module) => {
-    if (module) {
-      applyCellsSnapshot((module as unknown as GeneratedCellsModule).cells);
-    }
-  });
-
   import.meta.hot.accept('virtual:oxiquill/runtime-version', (module) => {
     if (module) {
       applyRuntimeVersionSnapshot((module as unknown as RuntimeVersionModule).runtimeVersion);
@@ -66,7 +55,7 @@ if (import.meta.hot?.data) {
 }
 
 function initialCellsSnapshot(data: ManifestHotData | undefined): readonly CellManifest[] {
-  return data?.cells && data.version ? data.cells : (generatedCells as readonly CellManifest[]);
+  return data?.cells && data.version ? data.cells : [];
 }
 
 function initialVersionSnapshot(data: ManifestHotData | undefined): string {

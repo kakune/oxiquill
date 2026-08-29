@@ -29,6 +29,12 @@ declare module 'virtual:oxiquill/cells' {
   export const cells: readonly CellManifest[];
 }
 
+declare module 'virtual:oxiquill/cell?*' {
+  import type { CellManifest } from './lib/doc-runtime/types';
+
+  export const cell: CellManifest;
+}
+
 declare module 'virtual:oxiquill/runtime-version' {
   export const runtimeVersion: string;
 }
