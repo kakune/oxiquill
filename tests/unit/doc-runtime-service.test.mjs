@@ -497,7 +497,7 @@ describe('doc runtime service', () => {
           'pyodide.asm.wasm',
           'python_stdlib.zip',
           ['pyodide-lock.json', JSON.stringify(lockFile)]
-        ].map((file) => Array.isArray(file) ? [`${packageDir}/${file[0]}`, file[1]] : [`${packageDir}/${file}`, file])
+        ].map((file) => (Array.isArray(file) ? [`${packageDir}/${file[0]}`, file[1]] : [`${packageDir}/${file}`, file]))
       )
     );
     const fetched = {
@@ -507,38 +507,50 @@ describe('doc runtime service', () => {
     const fetchPackage = async (fileName) => fetched[fileName];
 
     const resolvePackageJson = () => `${packageDir}/package.json`;
-    await expect(copyPyodideAssets({ fetchPackage, fileSystem: present, paths, resolvePackageJson })).resolves.toBe(true);
+    await expect(copyPyodideAssets({ fetchPackage, fileSystem: present, paths, resolvePackageJson })).resolves.toBe(
+      true
+    );
     expect(present.files.get('/repo/public/oxiquill/pyodide/matplotlib.whl')).toEqual(Buffer.from('matplotlib bytes'));
     expect(present.files.get('/repo/public/oxiquill/pyodide/pandas.whl')).toEqual(Buffer.from('pandas bytes'));
-    await expect(copyPyodideAssets({ fetchPackage, fileSystem: present, paths, resolvePackageJson })).resolves.toBe(false);
+    await expect(copyPyodideAssets({ fetchPackage, fileSystem: present, paths, resolvePackageJson })).resolves.toBe(
+      false
+    );
   });
 
   it('fails clearly when Pyodide or a required source asset is missing', async () => {
     const paths = createDocRuntimePaths('/repo');
-    await expect(copyPyodideAssets({
-      fileSystem: createMemoryFileSystem(),
-      paths,
-      resolvePackageJson: () => {
-        throw new Error('MODULE_NOT_FOUND');
-      }
-    })).rejects.toThrow('Unable to resolve required Pyodide package "pyodide" from Oxiquill');
+    await expect(
+      copyPyodideAssets({
+        fileSystem: createMemoryFileSystem(),
+        paths,
+        resolvePackageJson: () => {
+          throw new Error('MODULE_NOT_FOUND');
+        }
+      })
+    ).rejects.toThrow('Unable to resolve required Pyodide package "pyodide" from Oxiquill');
 
     const packageDir = '/repo/installed/pyodide';
-    const missingWasm = createMemoryFileSystem(Object.fromEntries(
-      [
-        'pyodide.mjs',
-        'pyodide.mjs.map',
-        'pyodide.asm.js',
-        'python_stdlib.zip',
-        ['pyodide-lock.json', JSON.stringify({ packages: {} })]
-      ].map((file) => Array.isArray(file) ? [`${packageDir}/${file[0]}`, file[1]] : [`${packageDir}/${file}`, file])
-    ));
+    const missingWasm = createMemoryFileSystem(
+      Object.fromEntries(
+        [
+          'pyodide.mjs',
+          'pyodide.mjs.map',
+          'pyodide.asm.js',
+          'python_stdlib.zip',
+          ['pyodide-lock.json', JSON.stringify({ packages: {} })]
+        ].map((file) => (Array.isArray(file) ? [`${packageDir}/${file[0]}`, file[1]] : [`${packageDir}/${file}`, file]))
+      )
+    );
 
-    await expect(copyPyodideAssets({
-      fileSystem: missingWasm,
-      paths,
-      resolvePackageJson: () => `${packageDir}/package.json`
-    })).rejects.toThrow(`Required Pyodide asset "pyodide.asm.wasm" is missing from package "pyodide" at "${packageDir}/pyodide.asm.wasm"`);
+    await expect(
+      copyPyodideAssets({
+        fileSystem: missingWasm,
+        paths,
+        resolvePackageJson: () => `${packageDir}/package.json`
+      })
+    ).rejects.toThrow(
+      `Required Pyodide asset "pyodide.asm.wasm" is missing from package "pyodide" at "${packageDir}/pyodide.asm.wasm"`
+    );
   });
 
   it('resolves and verifies vendored Pyodide packages recursively', async () => {
