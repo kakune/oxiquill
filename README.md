@@ -255,7 +255,7 @@ See the [licensing guide](./examples/docs-site/content/docs/guides/licensing.mdx
 
 ### Contributing
 
-Contributions are welcome. Please open issues for bug reports, questions, and proposals, and send focused pull requests for fixes or documentation improvements. Contributions are accepted under the inbound dual-license terms in [CONTRIBUTING.md](./CONTRIBUTING.md).
+Contributions are welcome. Please open issues for bug reports, questions, and proposals, and send focused pull requests to `main` from topic branches for fixes or documentation improvements. Pull requests are squash-merged after the required checks pass. Contributions are accepted under the inbound dual-license terms in [CONTRIBUTING.md](./CONTRIBUTING.md).
 
 ### Troubleshooting
 
@@ -523,7 +523,7 @@ Oxiquill は [MIT License](./LICENSE-MIT) または [Apache License, Version 2.0
 
 ### コントリビューション
 
-バグ報告、質問、提案は issue で歓迎します。小さな修正やドキュメント改善の pull request も歓迎します。Contribution は [CONTRIBUTING.md](./CONTRIBUTING.md) の inbound dual-license 条項に基づいて受け入れます。
+バグ報告、質問、提案は issue で歓迎します。修正やドキュメント改善は topic branch から `main` への小さな pull request として送ってください。必須 check が成功した pull request は squash merge します。Contribution は [CONTRIBUTING.md](./CONTRIBUTING.md) の inbound dual-license 条項に基づいて受け入れます。
 
 ### トラブルシュート
 
