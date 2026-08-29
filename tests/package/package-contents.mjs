@@ -9,11 +9,15 @@ const packageRoot = path.join(repositoryRoot, 'packages/oxiquill');
 const licenseDataRoot = path.join(packageRoot, 'src/generator/license-data');
 const runtimeManifest = readJson('runtime-artifacts.json');
 const packageOverrides = readJson('bundled-package-overrides.json');
-const result = spawnSync('npm', ['pack', '--dry-run', '--json'], {
+const isWindows = process.platform === 'win32';
+const executable = isWindows ? (process.env.ComSpec ?? 'cmd.exe') : 'npm';
+const args = isWindows ? ['/d', '/s', '/c', 'npm.cmd', 'pack', '--dry-run', '--json'] : ['pack', '--dry-run', '--json'];
+const result = spawnSync(executable, args, {
   cwd: packageRoot,
   encoding: 'utf8'
 });
 
+assert.ifError(result.error);
 assert.equal(result.status, 0, result.stderr || result.stdout);
 const [packResult] = JSON.parse(result.stdout);
 const files = packResult.files.map(({ path: filePath }) => filePath).sort();

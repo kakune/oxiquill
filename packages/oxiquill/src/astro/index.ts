@@ -382,7 +382,10 @@ function oxiquillPreactJsxPlugin(paths: OxiquillPaths): Plugin {
     name: 'oxiquill-preact-jsx',
     async transform(code, id) {
       const filePath = id.split('?', 1)[0];
-      if (!filePath.endsWith('.tsx') || !isPathWithin(sourceRoot, filePath)) return undefined;
+      if (!filePath.endsWith('.tsx')) return undefined;
+
+      const realFilePath = existsSync(filePath) ? realpathSync(filePath) : filePath;
+      if (!isPathWithin(sourceRoot, realFilePath)) return undefined;
 
       return transformWithOxc(code, filePath, {
         jsx: {

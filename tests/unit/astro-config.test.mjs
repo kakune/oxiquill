@@ -246,9 +246,20 @@ describe('defineOxiquillConfig', () => {
     const componentPath = fileURLToPath(
       new URL('../../packages/oxiquill/src/components/doc-runtime/InteractiveCell.tsx', import.meta.url)
     );
+    const linkedComponentPath = fileURLToPath(
+      new URL(
+        '../../examples/docs-site/node_modules/oxiquill/src/components/doc-runtime/InteractiveCell.tsx',
+        import.meta.url
+      )
+    );
 
     const transformed = await plugin.transform('export default () => <section>ok</section>;', componentPath);
+    const linkedTransformed = await plugin.transform(
+      'export default () => <section>ok</section>;',
+      linkedComponentPath
+    );
     expect(transformed.code).toContain('preact/jsx-runtime');
+    expect(linkedTransformed.code).toContain('preact/jsx-runtime');
     await expect(plugin.transform('export default () => <div />;', '/consumer/Component.tsx')).resolves.toBeUndefined();
   });
 

@@ -3,7 +3,7 @@ import { spawnSync } from 'node:child_process';
 import { appendFile, cp, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
-import { fileURLToPath, pathToFileURL } from 'node:url';
+import { fileURLToPath } from 'node:url';
 
 const packageManagerArgument = process.argv.indexOf('--package-manager');
 const packageManager = process.argv[packageManagerArgument + 1];
@@ -24,7 +24,8 @@ try {
 
   await cp(path.join(repositoryRoot, 'templates/basic'), consumerRoot, { recursive: true });
   const packageJson = JSON.parse(await readFile(path.join(consumerRoot, 'package.json'), 'utf8'));
-  packageJson.dependencies.oxiquill = pathToFileURL(tarballPath).href;
+  const tarballReference = path.relative(consumerRoot, tarballPath).split(path.sep).join('/');
+  packageJson.dependencies.oxiquill = `file:${tarballReference}`;
   packageJson.scripts['wasm:dev'] = 'oxiquill docgen --wasm dev';
   await writeFile(path.join(consumerRoot, 'package.json'), `${JSON.stringify(packageJson, null, 2)}\n`);
   await appendFile(
@@ -58,12 +59,16 @@ try {
 }
 
 function run(command, args, cwd, capture = false) {
-  const result = spawnSync(command, args, {
+  const isWindows = process.platform === 'win32';
+  const executable = isWindows ? (process.env.ComSpec ?? 'cmd.exe') : command;
+  const commandArgs = isWindows ? ['/d', '/s', '/c', `${command}.cmd`, ...args] : args;
+  const result = spawnSync(executable, commandArgs, {
     cwd,
     encoding: 'utf8',
     env: process.env,
     stdio: capture ? ['ignore', 'pipe', 'pipe'] : 'inherit'
   });
+  assert.ifError(result.error);
   assert.equal(result.status, 0, capture ? result.stderr || result.stdout : `${command} failed`);
   return result;
 }
