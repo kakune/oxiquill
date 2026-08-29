@@ -69,7 +69,7 @@
       "name": "Pyodide",
       "version": "0.29.4",
       "license": "MPL-2.0",
-      "licenseFiles": ["MPL-2.0.txt"],
+      "licenseFiles": ["MPL-2.0.json"],
       "files": ["pyodide/pyodide.asm.wasm"],
       "source": "copied Pyodide runtime"
     },
@@ -88,6 +88,14 @@
       "licenseFiles": ["rust/itoa-1.0.18-LICENSE-MIT.txt"],
       "files": ["rust-wasm/doc_rust_cells_bg.wasm"],
       "source": "generated Rust/Wasm runtime"
+    },
+    {
+      "name": "rustversion",
+      "version": "1.0.22",
+      "license": "MIT",
+      "licenseFiles": ["rust/itoa-1.0.18-LICENSE-MIT.txt"],
+      "files": ["rust-wasm/doc_rust_cells_bg.wasm"],
+      "source": "generated Rust/Wasm runtime build"
     },
     {
       "name": "serde",

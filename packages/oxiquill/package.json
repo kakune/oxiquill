@@ -4,6 +4,23 @@
   "private": false,
   "type": "module",
   "license": "MIT OR Apache-2.0",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/kakune/oxiquill.git",
+    "directory": "packages/oxiquill"
+  },
+  "homepage": "https://kakune.github.io/oxiquill/",
+  "bugs": {
+    "url": "https://github.com/kakune/oxiquill/issues"
+  },
+  "engines": {
+    "node": ">=24.0.0"
+  },
+  "publishConfig": {
+    "access": "public",
+    "provenance": true,
+    "registry": "https://registry.npmjs.org/"
+  },
   "bin": {
     "oxiquill": "./src/cli/index.mjs"
   },
@@ -29,8 +46,12 @@
     "./env": "./src/env.d.ts"
   },
   "files": [
+    "LICENSE-APACHE",
+    "LICENSE-MIT",
+    "README.md",
     "src",
-    "tsconfigs"
+    "tsconfigs",
+    "!src/**/AGENTS.md"
   ],
   "keywords": [
     "astro",

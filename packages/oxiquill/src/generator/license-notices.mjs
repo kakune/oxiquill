@@ -222,6 +222,14 @@ export async function syncLicenseArtifacts({
         copyFileIfChanged(sourcePath, pathInUrl(paths.rustCellsDir, fileName), { fileSystem })
       )
     ));
+    const rustLockPath = pathInUrl(paths.rustCellsDir, 'Cargo.lock');
+    if (!fileSystem.existsSync(rustLockPath)) {
+      copied.push(await copyFileIfChanged(
+        path.join(licenseDataDir, 'rust/runtime-Cargo.lock'),
+        rustLockPath,
+        { fileSystem }
+      ));
+    }
   }
 
   const [runtimeNotices, bundleNotices] = await Promise.all([
@@ -323,11 +331,24 @@ async function readManifestLicenseText(licenseFiles, { fileSystem, licenseDataDi
       } catch (error) {
         throw new Error(`License text ${fileName} is missing for runtime artifact ${name}.`, { cause: error });
       }
-      return `[${fileName}]\n${assertKnownText(content, `License text ${fileName} for runtime artifact ${name} is empty`).trim()}`;
+      const licenseText = fileName.endsWith('.json')
+        ? licenseTextFromJson(content, fileName, name)
+        : content;
+      return `[${fileName}]\n${assertKnownText(licenseText, `License text ${fileName} for runtime artifact ${name} is empty`).trim()}`;
     })
   );
 
   return texts.join('\n\n');
+}
+
+function licenseTextFromJson(content, fileName, artifactName) {
+  let parsed;
+  try {
+    parsed = JSON.parse(content);
+  } catch (error) {
+    throw new Error(`License text ${fileName} for runtime artifact ${artifactName} is invalid JSON.`, { cause: error });
+  }
+  return parsed.licenseText;
 }
 
 async function readJsonFile(filePath, { fileSystem }) {

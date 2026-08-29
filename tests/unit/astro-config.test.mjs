@@ -182,6 +182,21 @@ describe('defineOxiquillConfig', () => {
     }
   });
 
+  it('transforms installed Oxiquill TSX with the Preact JSX runtime', async () => {
+    const config = defineOxiquillConfig({ sidebar: [], title: 'Docs' });
+    const update = runConfigSetup(config, linkedConsumerRoot);
+    const plugin = update.vite.plugins.find((entry) => entry.name === 'oxiquill-preact-jsx');
+    const componentPath = fileURLToPath(new URL(
+      '../../packages/oxiquill/src/components/doc-runtime/InteractiveCell.tsx',
+      import.meta.url
+    ));
+
+    const transformed = await plugin.transform('export default () => <section>ok</section>;', componentPath);
+    expect(transformed.code).toContain('preact/jsx-runtime');
+    await expect(plugin.transform('export default () => <div />;', '/consumer/Component.tsx'))
+      .resolves.toBeUndefined();
+  });
+
   it('keeps Oxiquill Preact runtime dependencies bundled for dev SSR', () => {
     const config = defineOxiquillConfig({
       sidebar: [],

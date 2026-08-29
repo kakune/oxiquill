@@ -6,7 +6,7 @@ import preact from '@astrojs/preact';
 import starlight from '@astrojs/starlight';
 import rehypeKatex from 'rehype-katex';
 import remarkMath from 'remark-math';
-import { mergeAlias } from 'vite';
+import { mergeAlias, transformWithEsbuild } from 'vite';
 import type {
   AstroIntegration,
   AstroUserConfig,
@@ -358,9 +358,30 @@ function mergeViteConfig(
     plugins: [
       oxiquillDependencyResolverPlugin(paths),
       oxiquillVirtualModulesPlugin(paths),
+      oxiquillPreactJsxPlugin(paths),
       bundledModuleCollectorPlugin(bundledModules, 'main'),
       ...(vite.plugins ?? [])
     ]
+  };
+}
+
+function oxiquillPreactJsxPlugin(paths: OxiquillPaths): Plugin {
+  const sourceRoot = realpathSync(pathInUrl(paths.frameworkRoot, 'src'));
+
+  return {
+    enforce: 'pre',
+    name: 'oxiquill-preact-jsx',
+    async transform(code, id) {
+      const filePath = id.split('?', 1)[0];
+      if (!filePath.endsWith('.tsx') || !isPathWithin(sourceRoot, filePath)) return undefined;
+
+      return transformWithEsbuild(code, filePath, {
+        jsx: 'automatic',
+        jsxImportSource: 'preact',
+        loader: 'tsx',
+        sourcemap: true
+      });
+    }
   };
 }
 
@@ -677,6 +698,11 @@ function existingRealPaths(paths: string[]): string[] {
   }
 
   return realPaths;
+}
+
+function isPathWithin(directory: string, filePath: string): boolean {
+  const relative = path.relative(directory, filePath);
+  return relative !== '' && !relative.startsWith(`..${path.sep}`) && !path.isAbsolute(relative);
 }
 
 function mergeServerFsAllow(allow: string[] | undefined, additions: string[]): string[] {
