@@ -5,10 +5,17 @@ import type {
   ValidatedOutputArtifact
 } from '../../lib/doc-runtime/output-artifact-validation';
 import type { ComponentChildren } from 'preact';
-import type { TextArtifact } from '../../lib/doc-runtime/types';
+import { useEffect, useState } from 'preact/hooks';
+import type { ChartSpec, TextArtifact } from '../../lib/doc-runtime/types';
 import ArtifactErrorBoundary, { ArtifactError } from './ArtifactErrorBoundary';
-import ChartOutput from './ChartOutput';
 import TableOutput from './TableOutput';
+
+type ChartOutputModule = typeof import('./ChartOutput');
+type LoadChartOutput = () => Promise<ChartOutputModule>;
+type ChartRendererState =
+  { status: 'loading' } | { status: 'ready'; module: ChartOutputModule } | { status: 'error'; message: string };
+
+let chartOutputModuleReady: Promise<ChartOutputModule> | undefined;
 
 interface OutputRendererProps {
   outputs: readonly ValidatedArtifactResult[];
@@ -39,12 +46,58 @@ function ArtifactOutput({ output }: { output: ValidatedArtifactResult }) {
     case 'html':
       return <HtmlOutput output={output.artifact} />;
     case 'chart':
-      return <ChartOutput spec={output.artifact.spec} />;
+      return <LazyChartOutput spec={output.artifact.spec} />;
     case 'table':
       return <TableOutput table={output.artifact} />;
     case 'image':
       return <ImageOutput output={output.artifact} />;
   }
+}
+
+export function LazyChartOutput({ load = loadChartOutput, spec }: { load?: LoadChartOutput; spec: ChartSpec }) {
+  const [state, setState] = useState<ChartRendererState>({ status: 'loading' });
+
+  useEffect(() => {
+    let cancelled = false;
+    setState({ status: 'loading' });
+
+    Promise.resolve()
+      .then(load)
+      .then((module) => {
+        if (!cancelled) setState({ status: 'ready', module });
+      })
+      .catch((caught: unknown) => {
+        if (!cancelled) {
+          setState({
+            status: 'error',
+            message: caught instanceof Error ? caught.message : String(caught)
+          });
+        }
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [load]);
+
+  if (state.status === 'loading') {
+    return (
+      <p class="empty-state" data-testid="chart-loading" role="status">
+        Loading chart renderer...
+      </p>
+    );
+  }
+
+  if (state.status === 'error') {
+    return (
+      <p class="error-state" data-testid="artifact-error" role="alert">
+        Chart renderer could not be loaded: {state.message}
+      </p>
+    );
+  }
+
+  const ChartOutput = state.module.default;
+  return <ChartOutput spec={spec} />;
 }
 
 function TextOutput({ output }: { output: TextArtifact }) {
@@ -120,4 +173,12 @@ export function imageArtifactSource(output: ValidatedImageArtifact): string {
 
 function artifactKey(output: ValidatedArtifactResult, index: number): string {
   return output.status === 'valid' && output.artifact.id ? `${output.artifact.id}:${index}` : String(index);
+}
+
+function loadChartOutput(): Promise<ChartOutputModule> {
+  chartOutputModuleReady ??= import('./ChartOutput').catch((error: unknown) => {
+    chartOutputModuleReady = undefined;
+    throw error;
+  });
+  return chartOutputModuleReady;
 }

@@ -37,7 +37,7 @@ const cliPath = fileURLToPath(new URL('../../packages/oxiquill/src/cli/index.mjs
 const actualRepoRoot = fileURLToPath(new URL('../..', import.meta.url));
 const actualPaths = createOxiquillPaths({ workspaceRoot: actualRepoRoot });
 const repoRoot = path.resolve('/repo');
-const { canLoadNativePackage, isCliEntrypoint, nodeExecutableCandidates, runCli, selectFrameworkNode } =
+const { canLoadNativePackage, frameworkEnv, isCliEntrypoint, nodeExecutableCandidates, runCli, selectFrameworkNode } =
   await import('../../packages/oxiquill/src/cli/commands.mjs');
 const testRoot = path.parse(process.cwd()).root;
 
@@ -105,19 +105,27 @@ describe('oxiquill CLI', () => {
 
   it('checks whether a node executable can load a native package', () => {
     const spawn = vi.fn(() => ({ status: 0 }));
+    const packagePath = path.join(repoRoot, 'node_modules', 'rollup');
 
-    expect(canLoadNativePackage('/usr/bin/node', '/repo/node_modules/rollup', { cwd: '/repo', env: {}, spawn })).toBe(
-      true
-    );
+    expect(canLoadNativePackage('/usr/bin/node', packagePath, { cwd: repoRoot, env: {}, spawn })).toBe(true);
     expect(spawn).toHaveBeenCalledWith(
       '/usr/bin/node',
-      ['-e', expect.stringContaining('import(process.argv[1])'), '/repo/node_modules/rollup'],
+      ['-e', expect.stringContaining('import(process.argv[1])'), pathToFileURL(packagePath).href],
       {
-        cwd: '/repo',
+        cwd: repoRoot,
         env: {},
         stdio: 'ignore'
       }
     );
+  });
+
+  it('preserves case-insensitive PATH keys in the framework environment', () => {
+    const nodePath = fakeNodeExecutable(path.join(testRoot, 'node', 'bin'));
+    const toolPath = path.join(testRoot, 'tools', 'bin');
+    const env = frameworkEnv(actualPaths, { env: { Path: toolPath }, nodePath });
+
+    expect(env.Path).toBe(`${path.dirname(nodePath)}${path.delimiter}${toolPath}`);
+    expect(env.PATH).toBeUndefined();
   });
 
   it('uses a later PATH node for Astro when the current node cannot load native addons', () => {
@@ -225,7 +233,7 @@ describe('oxiquill CLI', () => {
 
     expect(runCommand).toHaveBeenCalledWith(
       'wasm-pack',
-      ['test', '--node', expect.stringContaining('.oxiquill/rust-cells')],
+      ['test', '--node', path.join(repoRoot, '.oxiquill', 'rust-cells')],
       { cwd: repoRoot }
     );
     expect(cliMocks.buildRustWasm).toHaveBeenCalledWith(expect.objectContaining({ mode: 'dev' }));

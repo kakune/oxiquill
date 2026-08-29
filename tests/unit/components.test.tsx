@@ -44,9 +44,13 @@ vi.mock('../../packages/oxiquill/src/lib/doc-runtime/runtime-client', () => ({
 const { default: InteractiveCell } = await import('../../packages/oxiquill/src/components/doc-runtime/InteractiveCell');
 const { default: MermaidDiagram, getMermaidColorScheme } =
   await import('../../packages/oxiquill/src/components/doc-runtime/MermaidDiagram');
-const { default: OutputRenderer, imageArtifactSource } =
-  await import('../../packages/oxiquill/src/components/doc-runtime/OutputRenderer');
-const { chartSpecToEChartsOptions } = await import('../../packages/oxiquill/src/components/doc-runtime/ChartOutput');
+const {
+  default: OutputRenderer,
+  imageArtifactSource,
+  LazyChartOutput
+} = await import('../../packages/oxiquill/src/components/doc-runtime/OutputRenderer');
+const chartOutputModule = await import('../../packages/oxiquill/src/components/doc-runtime/ChartOutput');
+const { chartSpecToEChartsOptions } = chartOutputModule;
 const {
   default: TableOutput,
   formatTableCell,
@@ -554,6 +558,7 @@ describe('MermaidDiagram', () => {
     );
 
     const { unmount } = render(<MermaidDiagram diagramId="late" source="flowchart LR\nA-->B" />);
+    await waitFor(() => expect(mocks.mermaidRender).toHaveBeenCalledTimes(1));
     unmount();
     resolveRender({ svg: '<svg><text>late</text></svg>' });
     await Promise.resolve();
@@ -566,12 +571,54 @@ describe('MermaidDiagram', () => {
     );
 
     const lateError = render(<MermaidDiagram diagramId="late-error" source="bad" />);
+    await waitFor(() => expect(mocks.mermaidRender).toHaveBeenCalledTimes(2));
     lateError.unmount();
     rejectRender(new Error('late error'));
     await Promise.resolve();
 
     expect(screen.queryByText('late')).not.toBeInTheDocument();
     expect(screen.queryByText('late error')).not.toBeInTheDocument();
+  });
+});
+
+describe('lazy chart renderer', () => {
+  const spec = {
+    kind: 'line' as const,
+    series: [{ points: [[0, 1]] as const }]
+  };
+
+  it('shows loading UI until the chart module resolves', async () => {
+    let resolveModule: (module: typeof chartOutputModule) => void = () => undefined;
+    const moduleReady = new Promise<typeof chartOutputModule>((resolve) => {
+      resolveModule = resolve;
+    });
+
+    render(<LazyChartOutput spec={spec} load={() => moduleReady} />);
+
+    expect(screen.getByRole('status')).toHaveTextContent('Loading chart renderer...');
+    resolveModule(chartOutputModule);
+
+    await waitFor(() => expect(screen.getByTestId('doc-plot')).toBeVisible());
+  });
+
+  it('shows import failures and ignores completion after unmount', async () => {
+    const failed = render(
+      <LazyChartOutput spec={spec} load={() => Promise.reject(new Error('missing chart chunk'))} />
+    );
+
+    await waitFor(() => expect(screen.getByRole('alert')).toHaveTextContent('missing chart chunk'));
+    failed.unmount();
+
+    let resolveModule: (module: typeof chartOutputModule) => void = () => undefined;
+    const moduleReady = new Promise<typeof chartOutputModule>((resolve) => {
+      resolveModule = resolve;
+    });
+    const late = render(<LazyChartOutput spec={spec} load={() => moduleReady} />);
+    late.unmount();
+    resolveModule(chartOutputModule);
+    await Promise.resolve();
+
+    expect(screen.queryByTestId('doc-plot')).not.toBeInTheDocument();
   });
 });
 

@@ -218,6 +218,7 @@ Generated output includes:
 - `examples/docs-site/public/oxiquill/haskell-wasm`
 - `examples/docs-site/public/oxiquill/licenses`
 - `examples/docs-site/dist`
+- `examples/docs-site/dist/oxiquill/bundle-report.json`
 
 Do not edit generated output directly. Regenerate it with existing commands such as `pnpm docgen`, `pnpm wasm:dev`, `pnpm wasm:build`, `pnpm check`, or `pnpm build`.
 
@@ -241,6 +242,7 @@ pnpm test:rust
 pnpm test:rust:coverage
 pnpm test:wasm
 pnpm test:haskell
+pnpm test:bundle
 pnpm test:e2e
 pnpm test:consumer:npm
 pnpm test:consumer:pnpm
@@ -251,6 +253,8 @@ pnpm doc:rust
 For docs-only prose changes, `pnpm check` is usually enough. For interactive cell metadata, generated Rust/Wasm or Haskell/WASI behavior, or browser-visible examples, also run `pnpm wasm:dev`, `pnpm test:wasm`, and `pnpm test:e2e` as appropriate.
 
 `pnpm lint` runs ESLint with zero warnings, checks Prettier formatting, and runs strict Rust linting. `test:unit:coverage` requires 85% statement, branch, function, and line coverage across handwritten CLI, Astro integration, generator, manifest, worker, TypeScript, Preact, and Node runtime code; only generated output and type-only declarations are excluded. `test:rust:coverage` requires 85% line/function/region coverage for optional helper crates under `examples/docs-site/crates/` through `cargo-llvm-cov`. If no helper crates exist, Rust helper commands skip cleanly.
+
+Production builds write `dist/oxiquill/bundle-report.json` and fail when any emitted client or worker JavaScript chunk exceeds 650 KiB uncompressed. Run `pnpm test:bundle` after `pnpm build` to verify the budget and the ECharts and Mermaid dynamic import boundaries.
 
 `test:e2e` runs the full suite in Chromium, Firefox, and WebKit. `test:consumer:npm` and `test:consumer:pnpm` install the packed package tarball into a temporary standalone project, generate a Rust/Wasm cell, run static checks, and build the site without workspace links.
 
@@ -497,6 +501,7 @@ putStrLn ("scaled = " <> show (scale * sum [1..5]))
 - `examples/docs-site/public/oxiquill/haskell-wasm`
 - `examples/docs-site/public/oxiquill/licenses`
 - `examples/docs-site/dist`
+- `examples/docs-site/dist/oxiquill/bundle-report.json`
 
 生成物を直接編集しないでください。`pnpm docgen`、`pnpm wasm:dev`、`pnpm wasm:build`、`pnpm check`、`pnpm build` などの既存 command で再生成します。
 
@@ -520,6 +525,7 @@ pnpm test:rust
 pnpm test:rust:coverage
 pnpm test:wasm
 pnpm test:haskell
+pnpm test:bundle
 pnpm test:e2e
 pnpm test:consumer:npm
 pnpm test:consumer:pnpm
@@ -530,6 +536,8 @@ pnpm doc:rust
 docs-only の本文変更では、通常 `pnpm check` で十分です。実行可能セルの metadata、生成 Rust/Wasm や Haskell/WASI の動作、ブラウザ上の表示例を変更した場合は、必要に応じて `pnpm wasm:dev`、`pnpm test:wasm`、`pnpm test:e2e` も実行します。
 
 `pnpm lint` は ESLint を warning なしで実行し、Prettier format と strict Rust lint も確認します。`test:unit:coverage` は Vitest の V8 coverage を使い、手書きの CLI、Astro integration、generator、manifest、worker、TypeScript、Preact、Node runtime code に statement/branch/function/line 85% coverage を要求します。除外するのは生成物と type-only declaration だけです。`test:rust:coverage` は `cargo-llvm-cov` で `examples/docs-site/crates/` 配下の任意の helper crate に line/function/region 85% を要求します。helper crate がない場合、Rust helper 用 command は正常終了で skip します。
+
+production build は `dist/oxiquill/bundle-report.json` を生成し、出力された client または worker の JavaScript chunk が uncompressed で 650 KiB を超えると失敗します。`pnpm build` の後に `pnpm test:bundle` を実行すると、budget と ECharts/Mermaid の dynamic import boundary を検証できます。
 
 `test:e2e` は Chromium、Firefox、WebKit で full suite を実行します。`test:consumer:npm` と `test:consumer:pnpm` は packed tarball を一時的な standalone project に installし、workspace link を使わずに Rust/Wasm cell の生成、static check、site build を確認します。
 

@@ -38,10 +38,14 @@ pnpm test
 pnpm wasm:dev
 pnpm test:wasm
 pnpm test:haskell
+pnpm build
+pnpm test:bundle
 pnpm test:e2e
 ```
 
 `pnpm wasm:dev` は local development 用 runtime を再生成します。Haskell セルがある場合は `wasm32-wasi-ghc` が必要で、`pnpm build`、`pnpm check`、`pnpm wasm:build`、`pnpm test:wasm` でも同じです。`pnpm dev` と `pnpm dev:runtime` は意図的により寛容で、Haskell compiler がない、または Haskell compile に失敗しても Astro の serving を続け、browser 上の Haskell セルに error を表示します。`pnpm test:wasm` は生成 Rust cell の動作を確認し、`pnpm test:haskell` は生成 Haskell/WASI runtime を実行します。`pnpm test:e2e` は Chromium、Firefox、WebKit で full browser suite を実行します。
+
+production build は `dist/oxiquill/bundle-report.json` を生成し、出力された client または worker の JavaScript chunk が uncompressed で 650 KiB を超えると失敗します。`pnpm build` の後に `pnpm test:bundle` を実行すると、budget と ECharts/Mermaid の dynamic import boundary を検証できます。
 
 ## unit と coverage check
 
