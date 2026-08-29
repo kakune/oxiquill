@@ -147,6 +147,7 @@ describe('Oxiquill project configuration', () => {
       `import { defineOxiquillConfig } from ${JSON.stringify(astroModuleUrl)};`,
       'export default defineOxiquillConfig({',
       '  cacheDir: "custom cache",',
+      '  framework: { starlight: () => ({ name: "starlight", hooks: {} }) },',
       '  paths: { docsDir: "written docs", generatedDir: "generated runtime" }',
       '});',
       ''

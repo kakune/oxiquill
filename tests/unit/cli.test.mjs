@@ -261,7 +261,7 @@ describe('oxiquill CLI', () => {
     await runCli('clean', [], { cwd: repoRoot });
 
     expect(cliMocks.cleanOxiquillWorkspace).toHaveBeenCalledWith({
-      paths: expect.objectContaining({ workspaceRoot: expect.any(URL) })
+      paths: expect.objectContaining({ workspaceRoot: repoRoot })
     });
   });
 
