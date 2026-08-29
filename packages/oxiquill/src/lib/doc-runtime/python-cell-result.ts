@@ -1,10 +1,6 @@
-import {
-  isOutputArtifact,
-  legacyResultToOutputs
-} from './output-artifacts';
+import { legacyResultToOutputs } from './output-artifacts';
 import type {
-  CellExecutionResult,
-  OutputArtifact
+  RawCellExecutionResult
 } from './types';
 
 export function createPythonCellResult({
@@ -14,12 +10,12 @@ export function createPythonCellResult({
   stdout,
   value
 }: {
-  displayOutputs: readonly OutputArtifact[];
-  plots: CellExecutionResult['plots'];
+  displayOutputs: readonly unknown[];
+  plots: NonNullable<RawCellExecutionResult['plots']>;
   stderr: string;
   stdout: string;
   value: unknown;
-}): CellExecutionResult {
+}): RawCellExecutionResult {
   const streamOutputs = legacyResultToOutputs({ stdout, stderr, plots: [] });
   const valueOutputs = legacyResultToOutputs({ value, plots: [] });
 
@@ -32,6 +28,6 @@ export function createPythonCellResult({
   };
 }
 
-export function toOutputArtifacts(value: unknown): readonly OutputArtifact[] {
-  return Array.isArray(value) ? value.filter(isOutputArtifact) : [];
+export function toOutputArtifacts(value: unknown): readonly unknown[] {
+  return Array.isArray(value) ? value : [];
 }

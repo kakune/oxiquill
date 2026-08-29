@@ -65,12 +65,8 @@ struct JsonArtifact {
     value: Value,
 }
 
-fn json_artifact(value: Value) -> Result<JsonArtifact, String> {
-    let byte_count = serde_json::to_string(&value)
-        .map_err(|error| error.to_string())?
-        .len();
-    ensure_output_size("JSON output", byte_count, 500_000)?;
-    Ok(JsonArtifact { value })
+fn json_artifact(value: Value) -> JsonArtifact {
+    JsonArtifact { value }
 }
 ` : ''}
 ${capabilities.html ? `#[derive(Debug, Serialize)]
@@ -79,12 +75,11 @@ struct HtmlArtifact {
     sandboxed: bool,
 }
 
-fn html_artifact(html: String) -> Result<HtmlArtifact, String> {
-    ensure_output_size("HTML output", html.len(), 500_000)?;
-    Ok(HtmlArtifact {
+fn html_artifact(html: String) -> HtmlArtifact {
+    HtmlArtifact {
         html,
         sandboxed: true,
-    })
+    }
 }
 ` : ''}
 ${capabilities.image ? `#[derive(Debug, Serialize)]
@@ -99,21 +94,8 @@ fn image_artifact(
     mime: &'static str,
     data: String,
     alt: Option<String>,
-) -> Result<ImageArtifact, String> {
-    ensure_output_size("image output", data.len(), 2_000_000)?;
-    Ok(ImageArtifact { mime, data, alt })
-}
-` : ''}
-${capabilities.json || capabilities.html || capabilities.image ? `fn ensure_output_size(
-    label: &str,
-    byte_count: usize,
-    limit: usize,
-) -> Result<(), String> {
-    if byte_count > limit {
-        Err(format!("{label} is {byte_count} bytes, exceeding the {limit} byte limit"))
-    } else {
-        Ok(())
-    }
+) -> ImageArtifact {
+    ImageArtifact { mime, data, alt }
 }
 ` : ''}
 ${capabilities.table ? generateRustTableTypes() : ''}
@@ -180,8 +162,8 @@ fn table_artifact_from_value(value: Value) -> Result<TableArtifact, String> {
         _ => return Err("emit_table! expects a serializable array".to_owned()),
     };
     let row_count = rows.len();
-    let truncated = row_count > 1_000;
-    let preview: Vec<Value> = rows.into_iter().take(1_000).collect();
+    let truncated = row_count > 10_000;
+    let preview: Vec<Value> = rows.into_iter().take(10_000).collect();
     let columns = infer_table_columns(&preview);
     let table_rows = table_rows_for_columns(preview, &columns);
     Ok(TableArtifact {
@@ -199,8 +181,8 @@ fn table_artifact_with_columns(columns: Value, rows: Value) -> Result<TableArtif
         _ => return Err("emit_table_with_columns! expects rows to serialize as an array".to_owned()),
     };
     let row_count = rows.len();
-    let truncated = row_count > 1_000;
-    let preview: Vec<Value> = rows.into_iter().take(1_000).collect();
+    let truncated = row_count > 10_000;
+    let preview: Vec<Value> = rows.into_iter().take(10_000).collect();
     let table_rows = table_rows_for_columns(preview, &columns);
     Ok(TableArtifact {
         columns,
