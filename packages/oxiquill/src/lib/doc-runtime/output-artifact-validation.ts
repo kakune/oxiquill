@@ -69,7 +69,6 @@ type BaseArtifact = {
   byteLength: number;
 };
 
-type JsonContainer = unknown[] | Record<string, unknown>;
 type JsonVisitTask = {
   assign: (value: unknown) => void;
   depth: number;
@@ -574,7 +573,8 @@ function safeJsonFormat(value: unknown, maxBytes: number, context: string): Json
   ];
 
   while (tasks.length > 0) {
-    const task = tasks.pop()!;
+    const task = tasks.pop();
+    if (task == null) break;
     if (task.kind === 'array') {
       if (estimatedBytes >= maxBytes) {
         task.output.push('[Truncated]');
@@ -612,7 +612,8 @@ function safeJsonFormat(value: unknown, maxBytes: number, context: string): Json
         active.delete(task.input);
         continue;
       }
-      const key = task.keys[task.index]!;
+      const key = task.keys[task.index];
+      if (key == null) continue;
       const descriptor = dataDescriptor(task.input, key, `${context} at ${task.path}`);
       estimatedBytes += utf8ByteLength(key) + 4;
       tasks.push({ ...task, index: task.index + 1 });
@@ -793,7 +794,12 @@ function parseDataUrl(data: string): { base64: boolean; mime: string; payload: s
   if (!data.startsWith('data:')) return undefined;
   const match = /^data:([^;,]+)(?:;charset=[^;,]+)?(;base64)?,([\s\S]*)$/u.exec(data);
   if (!match) throw new ArtifactValidationError('Image artifact data URL is malformed.');
-  return { mime: match[1]!, base64: match[2] === ';base64', payload: match[3]! };
+  const mime = match[1];
+  const payload = match[3];
+  if (mime == null || payload == null) {
+    throw new ArtifactValidationError('Image artifact data URL is malformed.');
+  }
+  return { mime, base64: match[2] === ';base64', payload };
 }
 
 function validateBase64(payload: string): number {
@@ -856,7 +862,8 @@ function truncateUtf8(value: string, maxBytes: number): { byteLength: number; tr
     if (utf8ByteLength(candidate) + markerBytes <= maxBytes) low = middle;
     else high = middle - 1;
   }
-  if (low > 0 && /[\uD800-\uDBFF]/u.test(value[low - 1]!)) low -= 1;
+  const lastCodeUnit = value.charCodeAt(low - 1);
+  if (low > 0 && lastCodeUnit >= 0xd800 && lastCodeUnit <= 0xdbff) low -= 1;
   const bounded = `${value.slice(0, low)}${marker}`;
   return { value: bounded, byteLength: utf8ByteLength(bounded), truncated: true };
 }

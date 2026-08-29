@@ -116,14 +116,18 @@ function ownDataField(record: object, key: PropertyKey): { present: boolean; val
 
 function publicOutputArtifact(artifact: ValidatedOutputArtifact): OutputArtifact {
   if (artifact.kind === 'json') {
-    const { formattedValue: _formattedValue, ...output } = artifact;
-    return output;
+    return withoutProperty(artifact, 'formattedValue');
   }
   if (artifact.kind === 'image') {
-    const { source: _source, ...output } = artifact;
-    return output;
+    return withoutProperty(artifact, 'source');
   }
   return artifact;
+}
+
+function withoutProperty<Value extends object, Key extends keyof Value>(value: Value, key: Key): Omit<Value, Key> {
+  const output = { ...value };
+  Reflect.deleteProperty(output, key);
+  return output;
 }
 
 export function isOutputArtifact(value: unknown): value is OutputArtifact {

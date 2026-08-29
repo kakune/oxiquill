@@ -8,7 +8,8 @@ import {
 } from '../../packages/oxiquill/src/lib/doc-runtime/output-artifacts';
 
 function publicResult(result: NormalizedCellExecutionResult) {
-  const { outputResults: _outputResults, ...publicFields } = result;
+  const publicFields = { ...result };
+  Reflect.deleteProperty(publicFields, 'outputResults');
   return publicFields;
 }
 
