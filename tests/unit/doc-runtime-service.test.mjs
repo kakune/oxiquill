@@ -493,7 +493,7 @@ describe('doc runtime service', () => {
           ['package.json', JSON.stringify({ version: '314.0.6' })],
           'pyodide.mjs',
           'pyodide.mjs.map',
-          'pyodide.asm.js',
+          'pyodide.asm.mjs',
           'pyodide.asm.wasm',
           'python_stdlib.zip',
           ['pyodide-lock.json', JSON.stringify(lockFile)]
@@ -535,7 +535,7 @@ describe('doc runtime service', () => {
         [
           'pyodide.mjs',
           'pyodide.mjs.map',
-          'pyodide.asm.js',
+          'pyodide.asm.mjs',
           'python_stdlib.zip',
           ['pyodide-lock.json', JSON.stringify({ packages: {} })]
         ].map((file) => (Array.isArray(file) ? [`${packageDir}/${file[0]}`, file[1]] : [`${packageDir}/${file}`, file]))

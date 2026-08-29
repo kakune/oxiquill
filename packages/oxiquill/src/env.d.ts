@@ -1,6 +1,28 @@
 /// <reference types="astro/client" />
 /// <reference types="@astrojs/starlight/locals" />
 
+declare module 'virtual:starlight/user-config' {
+  const config: import('@astrojs/starlight/types').StarlightConfig;
+  export default config;
+}
+
+declare module 'virtual:starlight/plugin-translations' {
+  const translations: Record<string, Record<string, string>>;
+  export default translations;
+}
+
+declare module 'virtual:starlight/project-context' {
+  const project: {
+    root: string;
+    srcDir: string;
+    trailingSlash: import('astro').AstroConfig['trailingSlash'];
+    build: {
+      format: import('astro').AstroConfig['build']['format'];
+    };
+  };
+  export default project;
+}
+
 declare module 'virtual:oxiquill/cells' {
   import type { CellManifest } from './lib/doc-runtime/types.js';
 

@@ -22,11 +22,7 @@ export function createOxiquillCollections<
   defineCollection,
   docsLoader,
   docsSchema
-}: OxiquillContentDependencies<
-  DefineCollection,
-  DocsLoader,
-  DocsSchema
->): OxiquillCollections<DefineCollection> {
+}: OxiquillContentDependencies<DefineCollection, DocsLoader, DocsSchema>): OxiquillCollections<DefineCollection> {
   const createCollection = defineCollection as unknown as (options: {
     loader: ReturnType<DocsLoader>;
     schema: ReturnType<DocsSchema>;

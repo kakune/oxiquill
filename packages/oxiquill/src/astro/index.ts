@@ -95,8 +95,10 @@ interface OxiquillStarlightOptions {
   [option: string]: unknown;
 }
 
-export interface OxiquillConfig<StarlightOptions extends object = object>
-  extends Omit<BaseAstroUserConfig, 'integrations' | 'markdown' | 'vite'> {
+export interface OxiquillConfig<StarlightOptions extends object = object> extends Omit<
+  BaseAstroUserConfig,
+  'integrations' | 'markdown' | 'vite'
+> {
   description?: StarlightOption<StarlightOptions, 'description', string>;
   framework: OxiquillFrameworkOptions<StarlightOptions>;
   integrations?: AstroIntegrations;

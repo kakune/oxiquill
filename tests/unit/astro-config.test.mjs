@@ -307,11 +307,7 @@ describe('defineOxiquillConfig', () => {
 
       const update = runConfigSetup(config, linkedConsumerRoot);
 
-      expect(update.vite.ssr.noExternal).toEqual(expect.arrayContaining([
-        noExternal,
-        '@astrojs/preact',
-        'oxiquill'
-      ]));
+      expect(update.vite.ssr.noExternal).toEqual(expect.arrayContaining([noExternal, '@astrojs/preact', 'oxiquill']));
     }
   });
 

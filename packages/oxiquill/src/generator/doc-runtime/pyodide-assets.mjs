@@ -9,7 +9,7 @@ const require = createRequire(import.meta.url);
 const requiredPyodideFiles = [
   'pyodide.mjs',
   'pyodide.mjs.map',
-  'pyodide.asm.js',
+  'pyodide.asm.mjs',
   'pyodide.asm.wasm',
   'python_stdlib.zip',
   'pyodide-lock.json'

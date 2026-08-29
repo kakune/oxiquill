@@ -89,7 +89,7 @@ try {
   const numpyWheel = lockFile.packages.numpy.file_name;
   const requiredPyodideFiles = [
     'pyodide.mjs',
-    'pyodide.asm.js',
+    'pyodide.asm.mjs',
     'pyodide.asm.wasm',
     'python_stdlib.zip',
     'pyodide-lock.json',

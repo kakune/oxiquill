@@ -11,15 +11,15 @@ const assetFiles = [
   ['tsconfigs/strict.json', 'dist/tsconfigs/strict.json']
 ];
 
-await Promise.all(assetFiles.map(async ([source, target]) => {
-  const targetPath = path.join(packageRoot, target);
-  await mkdir(path.dirname(targetPath), { recursive: true });
-  await copyFile(path.join(packageRoot, source), targetPath);
-}));
-
-await cp(
-  path.join(packageRoot, 'src/generator/license-data'),
-  path.join(packageRoot, 'dist/generator/license-data'),
-  { recursive: true }
+await Promise.all(
+  assetFiles.map(async ([source, target]) => {
+    const targetPath = path.join(packageRoot, target);
+    await mkdir(path.dirname(targetPath), { recursive: true });
+    await copyFile(path.join(packageRoot, source), targetPath);
+  })
 );
+
+await cp(path.join(packageRoot, 'src/generator/license-data'), path.join(packageRoot, 'dist/generator/license-data'), {
+  recursive: true
+});
 await chmod(path.join(packageRoot, 'dist/cli/index.mjs'), 0o755);
