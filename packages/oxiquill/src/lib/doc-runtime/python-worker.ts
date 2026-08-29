@@ -1,3 +1,4 @@
+import { pyodidePath } from 'virtual:oxiquill/runtime-paths';
 import { pythonDisplaySupportCode } from './python-display-support';
 import {
   createPythonCellResult,
@@ -109,12 +110,16 @@ async function importPyodideModule(): Promise<{ loadPyodide: LoadPyodide }> {
   }
 }
 
-export function resolvePyodideUrls(baseUrl = import.meta.env.BASE_URL): {
+export function resolvePyodideUrls(
+  baseUrl = import.meta.env.BASE_URL,
+  runtimePath = pyodidePath
+): {
   indexUrl: string;
   moduleUrl: string;
 } {
   const base = baseUrl.endsWith('/') ? baseUrl : `${baseUrl}/`;
-  const indexUrl = `${base}oxiquill/pyodide/`;
+  const normalizedRuntimePath = runtimePath.replace(/^\/+|\/+$/gu, '');
+  const indexUrl = `${base}${normalizedRuntimePath}/`;
 
   return {
     indexUrl,
