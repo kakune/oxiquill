@@ -189,7 +189,7 @@ export interface RawCellExecutionResult {
   stderr?: string;
   value?: unknown;
   plots?: readonly PlotSpec[];
-  outputs?: readonly OutputArtifact[];
+  outputs?: readonly unknown[];
 }
 
 export interface CellExecutionResult {

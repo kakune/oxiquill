@@ -1,8 +1,8 @@
 import { useEffect, useMemo, useRef, useState } from 'preact/hooks';
 import { initialValues } from '../../lib/doc-runtime/interactive-cell-model';
 import { runInteractiveCell } from '../../lib/doc-runtime/runtime-client';
+import type { NormalizedCellExecutionResult } from '../../lib/doc-runtime/output-artifacts';
 import type {
-  CellExecutionResult,
   CellManifest,
   InputValues
 } from '../../lib/doc-runtime/types';
@@ -11,7 +11,7 @@ type InputValue = InputValues[string];
 
 export function useInteractiveCellRun(cell: CellManifest, runtimeVersion: string) {
   const [values, setValues] = useState<InputValues>(() => initialValues(cell.inputs));
-  const [result, setResult] = useState<CellExecutionResult>();
+  const [result, setResult] = useState<NormalizedCellExecutionResult>();
   const [error, setError] = useState<string>();
   const [isRunning, setIsRunning] = useState(false);
   const latestRunId = useRef(0);
