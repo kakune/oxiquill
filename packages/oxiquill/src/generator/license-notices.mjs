@@ -148,13 +148,27 @@ export async function collectRuntimeArtifactNotices({
         `${context} (${name}) is missing license text files`
       );
       const licenseText = await readManifestLicenseText(licenseFiles, { fileSystem, licenseDataDir, name });
-      const included = files.some((filePath) => fileSystem.existsSync(pathInUrl(paths.publicAssetsDir, filePath)));
+      const included = files.some((filePath) => fileSystem.existsSync(runtimeArtifactPath(paths, filePath)));
 
       return included ? { license, licenseText, name, sources: [source], version } : undefined;
     })
   );
 
   return mergeNotices(notices.filter(Boolean));
+}
+
+function runtimeArtifactPath(paths, filePath) {
+  const normalizedPath = String(filePath).replaceAll('\\', '/');
+  const [directory, ...segments] = normalizedPath.split('/');
+  const runtimeDirectories = {
+    'haskell-wasm': paths.haskellWasmPublicDir,
+    pyodide: paths.pyodidePublicDir,
+    'rust-wasm': paths.rustWasmPublicDir
+  };
+  const configuredDirectory = runtimeDirectories[directory];
+  return configuredDirectory
+    ? pathInUrl(configuredDirectory, ...segments)
+    : pathInUrl(paths.publicAssetsDir, normalizedPath);
 }
 
 export function generateThirdPartyLicenseReport(notices) {

@@ -1,6 +1,8 @@
 import chokidar from 'chokidar';
 import { pathToFileURL } from 'node:url';
+import { parseConfigOption } from '../cli/config-option.mjs';
 import { pathFromUrl } from '../config/paths.mjs';
+import { loadOxiquillProjectConfig } from '../config/project-config.mjs';
 import {
   buildHaskellWasm,
   buildRustWasm,
@@ -22,9 +24,21 @@ import {
 } from './doc-runtime-watch-core.mjs';
 
 export async function main(argv = process.argv.slice(2)) {
-  const root = process.cwd();
-  const skipInitial = argv.includes('--skip-initial');
-  const initialContext = await createDocRuntimeContext({ root });
+  const { commandArgs, configFile } = parseConfigOption(argv);
+  const unexpectedArgs = commandArgs.filter((argument) => argument !== '--skip-initial');
+  if (unexpectedArgs.length > 0) {
+    throw new Error(`Unknown runtime watcher option: ${unexpectedArgs[0]}.`);
+  }
+  const projectConfig = await loadOxiquillProjectConfig({ cwd: process.cwd(), configFile });
+  return watchDocRuntime({
+    projectConfig,
+    skipInitial: commandArgs.includes('--skip-initial')
+  });
+}
+
+export async function watchDocRuntime({ projectConfig, skipInitial = false }) {
+  const { paths } = projectConfig;
+  const initialContext = await createDocRuntimeContext({ paths });
   const workspaceRoot = pathFromUrl(initialContext.paths.workspaceRoot);
   let previous;
   let changeKinds = skipInitial ? new Set() : new Set(['docs']);
@@ -39,7 +53,7 @@ export async function main(argv = process.argv.slice(2)) {
 
     const currentKinds = changeKinds;
     changeKinds = new Set();
-    const context = await createDocRuntimeContext({ root, highlighter: initialContext.highlighter });
+    const context = await createDocRuntimeContext({ paths, highlighter: initialContext.highlighter });
 
     console.log(`[runtime] syncing after ${describeChangeKinds(currentKinds)}`);
     const current = await syncDocRuntime(context);
@@ -96,6 +110,8 @@ export async function main(argv = process.argv.slice(2)) {
   watcher.on('ready', () => {
     console.log('[runtime] watching MDX, Rust, and Haskell cell sources');
   });
+
+  return watcher;
 }
 
 if (import.meta.url === pathToFileURL(process.argv[1] ?? '').href) {
