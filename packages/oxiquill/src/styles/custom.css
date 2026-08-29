@@ -3,6 +3,29 @@
   --rn-panel-bg: color-mix(in srgb, var(--sl-color-bg), var(--sl-color-gray-6) 14%);
   --rn-accent: #0f766e;
   --rn-danger: #b91c1c;
+  --rn-focus: var(--sl-color-text-accent);
+}
+
+.doc-visually-hidden {
+  position: absolute !important;
+  width: 1px !important;
+  height: 1px !important;
+  padding: 0 !important;
+  margin: -1px !important;
+  overflow: hidden !important;
+  clip: rect(0, 0, 0, 0) !important;
+  white-space: nowrap !important;
+  border: 0 !important;
+}
+
+.doc-cell button:focus-visible,
+.doc-cell input:focus-visible,
+.doc-cell select:focus-visible,
+.doc-cell textarea:focus-visible,
+.doc-table-output button:focus-visible,
+.doc-table-output select:focus-visible {
+  outline: 3px solid var(--rn-focus);
+  outline-offset: 3px;
 }
 
 .doc-cell,
@@ -72,7 +95,9 @@
   cursor: pointer;
 }
 
-.run-button:disabled {
+.run-button:disabled,
+.run-button[aria-disabled='true'],
+.doc-table-output button[aria-disabled='true'] {
   cursor: wait;
   opacity: 0.72;
 }
@@ -126,6 +151,10 @@
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 0.85rem;
+  min-width: 0;
+  margin: 0;
+  padding: 0;
+  border: 0;
 }
 
 .doc-input {
@@ -137,12 +166,24 @@
   border: 0;
 }
 
-.doc-input span,
-.doc-input legend {
+.doc-input label,
+.doc-input legend,
+.doc-input__label-row {
   display: flex;
   justify-content: space-between;
   gap: 0.5rem;
   font-size: 0.9rem;
+}
+
+.doc-input__label-row output {
+  font-weight: 650;
+}
+
+.doc-input__description,
+.doc-input__validation {
+  margin: 0;
+  color: var(--sl-color-gray-2);
+  font-size: 0.8rem;
 }
 
 .doc-input input:not([type='checkbox']):not([type='radio']),
@@ -184,6 +225,30 @@
 .doc-cell__outputs {
   display: grid;
   gap: 0.85rem;
+}
+
+.doc-cell__output-region {
+  display: grid;
+  gap: 0.85rem;
+}
+
+.doc-chart-output {
+  display: grid;
+  gap: 0.45rem;
+  min-width: 0;
+  margin: 0;
+}
+
+.doc-chart-output figcaption {
+  display: grid;
+  gap: 0.2rem;
+}
+
+.doc-chart-output figcaption span,
+.doc-chart-output__summary {
+  margin: 0;
+  color: var(--sl-color-gray-2);
+  font-size: 0.85rem;
 }
 
 .doc-plot {
@@ -304,6 +369,10 @@
   justify-content: space-between;
   gap: 0.6rem;
   flex-wrap: wrap;
+  min-width: 0;
+  margin: 0;
+  padding: 0;
+  border: 0;
 }
 
 .doc-table-output__controls label {

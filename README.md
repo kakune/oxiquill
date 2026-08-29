@@ -289,7 +289,7 @@ For docs-only prose changes, `pnpm check` is usually enough. For interactive cel
 
 Production builds write `dist/oxiquill/bundle-report.json` and fail when any emitted client or worker JavaScript chunk exceeds 650 KiB uncompressed. Run `pnpm test:bundle` after `pnpm build` to verify the budget and the ECharts and Mermaid dynamic import boundaries.
 
-`test:e2e` runs the full suite in Chromium, Firefox, and WebKit. `test:consumer:npm` and `test:consumer:pnpm` install the packed package tarball into a temporary standalone project, generate a Rust/Wasm cell, run static checks, and build the site without workspace links.
+`test:e2e` runs the full suite in Chromium, Firefox, and WebKit. `test:consumer:npm` and `test:consumer:pnpm` install the packed package tarball into a temporary standalone project, check and build a zero-cell site with only Node on `PATH`, then generate Rust and Python runtimes without workspace links.
 
 ### License
 
@@ -607,7 +607,7 @@ docs-only の本文変更では、通常 `pnpm check` で十分です。実行�
 
 production build は `dist/oxiquill/bundle-report.json` を生成し、出力された client または worker の JavaScript chunk が uncompressed で 650 KiB を超えると失敗します。`pnpm build` の後に `pnpm test:bundle` を実行すると、budget と ECharts/Mermaid の dynamic import boundary を検証できます。
 
-`test:e2e` は Chromium、Firefox、WebKit で full suite を実行します。`test:consumer:npm` と `test:consumer:pnpm` は packed tarball を一時的な standalone project に installし、workspace link を使わずに Rust/Wasm cell の生成、static check、site build を確認します。
+`test:e2e` は Chromium、Firefox、WebKit で full suite を実行します。`test:consumer:npm` と `test:consumer:pnpm` は packed tarball を一時的な standalone project に install し、`PATH` に Node だけがある zero-cell site を check/build した後、workspace link を使わずに Rust/Python runtime の生成を確認します。
 
 ### ライセンス
 

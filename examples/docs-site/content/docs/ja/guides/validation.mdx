@@ -76,7 +76,7 @@ pnpm test:consumer:npm
 pnpm test:consumer:pnpm
 ```
 
-各 command は `oxiquill` を pack し、tarball を一時的な standalone project に installして、CLI と static check、Rust/Wasm cell generation、site build を実行します。
+各 command は `oxiquill` を pack し、tarball を一時的な standalone project に install して、`PATH` に Node だけがある状態で zero-cell site を check/build します。その後 Rust/Python cell を追加し、workspace link なしで対応 runtime の生成を検証します。
 
 pull request では Linux、macOS、Windows の compatibility job、Linux/macOS の Haskell runtime job、Chromium、Firefox、WebKit の full browser job が必須です。supported matrix の全 cell が merge-blocking です。
 

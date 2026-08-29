@@ -42,7 +42,7 @@ This button cell waits for an explicit run even when its input changes.
 //| run: button
 //| crates: []
 //| inputs:
-//|   value: { type: integer, label: value, min: 1, max: 10, step: 1, value: 3 }
+//|   value: { type: integer, label: Input value, description: Choose an integer from 1 through 10., min: 1, max: 10, step: 1, value: 3 }
 println!("button value = {value}");
 ```
 
@@ -60,7 +60,7 @@ Superseded queued work is discarded, stale results cannot replace newer state, a
 
 ## Input Schema
 
-Every input accepts only fields relevant to its type. Common fields are `type`, `label`, and `value`; numeric inputs also use `min`, `max`, `step`, and `integer`, while `select` and `radio` use `options`.
+Every input accepts only fields relevant to its type. Common fields are `type`, `label`, `description`, and `value`; numeric inputs also use `min`, `max`, `step`, and `integer`, while `select` and `radio` use `options`.
 
 | Type               | Value and constraints                                                                                  |
 | ------------------ | ------------------------------------------------------------------------------------------------------ |
@@ -70,7 +70,7 @@ Every input accepts only fields relevant to its type. Common fields are `type`, 
 | `checkbox`         | Boolean value.                                                                                         |
 | `select`, `radio`  | Non-empty unique string options or `{ label, value }` objects; the default must equal an option value. |
 
-`type` defaults to `text`, and `label` defaults to the input name. Default values are `false` for checkbox, `0` for numeric inputs, and an empty string for text inputs. Numeric-only fields are rejected on non-numeric controls, and `options` is rejected outside `select` and `radio`.
+`type` defaults to `text`, and `label` defaults to the input name. `description` is an optional non-empty string associated with the control for assistive technology. Default values are `false` for checkbox, `0` for numeric inputs, and an empty string for text inputs. Numeric-only fields are rejected on non-numeric controls, and `options` is rejected outside `select` and `radio`.
 
 The visible `label` is the control's accessible name; the input key is only the generated language binding. Normalization must not make two Rust or Haskell bindings collide. Labels, descriptions, current values, validation messages, and grouped controls use stable IDs, keyboard focus remains visible, and run/error status is announced without stealing focus.
 

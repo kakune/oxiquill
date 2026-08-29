@@ -1,7 +1,10 @@
 import { useEffect, useMemo, useState } from 'preact/hooks';
+import { labelsForLanguage, type RuntimeLabels } from '../../lib/doc-runtime/runtime-localization.js';
 import type { TableArtifact, TableColumn } from '../../lib/doc-runtime/types.js';
 
 interface TableOutputProps {
+  idPrefix?: string;
+  labels?: RuntimeLabels;
   table: TableArtifact;
 }
 
@@ -14,13 +17,17 @@ type SortState = {
 export type TableCsvResult = { ok: true; csv: string } | { ok: false; error: string };
 
 type CopyStatus = {
-  kind: 'success' | 'error';
+  kind: 'copying' | 'success' | 'error';
   message: string;
 };
 
 const pageSizes = [10, 25, 50, 100] as const;
 
-export default function TableOutput({ table }: TableOutputProps) {
+export default function TableOutput({
+  idPrefix = 'doc-table',
+  labels = labelsForLanguage(globalThis.document?.documentElement.lang),
+  table
+}: TableOutputProps) {
   const [pageSize, setPageSize] = useState<(typeof pageSizes)[number]>(pageSizes[0]);
   const [page, setPage] = useState(0);
   const [sort, setSort] = useState<SortState>();
@@ -31,6 +38,8 @@ export default function TableOutput({ table }: TableOutputProps) {
   const currentRows = visibleRows(sortedRows, safePage, pageSize);
   const firstRow = sortedRows.length === 0 ? 0 : safePage * pageSize + 1;
   const lastRow = Math.min(sortedRows.length, (safePage + 1) * pageSize);
+  const captionId = `${idPrefix}-title`;
+  const descriptionId = table.caption ? `${idPrefix}-description` : undefined;
 
   useEffect(() => setCopyStatus(undefined), [table]);
 
@@ -43,33 +52,41 @@ export default function TableOutput({ table }: TableOutputProps) {
   }
 
   async function copyVisibleCsv(): Promise<void> {
-    const converted = tableToCsv(table.columns, currentRows);
+    if (copyStatus?.kind === 'copying') return;
+    setCopyStatus({ kind: 'copying', message: labels.copyingCsv });
+    const converted = tableToCsv(table.columns, currentRows, labels);
     if (!converted.ok) {
-      setCopyStatus({ kind: 'error', message: `Unable to copy CSV: ${converted.error}` });
+      setCopyStatus({ kind: 'error', message: labels.copyCsvError(converted.error) });
       return;
     }
     try {
       const clipboard = globalThis.navigator.clipboard;
       if (!clipboard) {
-        setCopyStatus({ kind: 'error', message: 'Unable to copy CSV: Clipboard access is unavailable.' });
+        setCopyStatus({ kind: 'error', message: labels.copyCsvError(labels.clipboardUnavailable) });
         return;
       }
       await clipboard.writeText(converted.csv);
-      setCopyStatus({ kind: 'success', message: 'Copied visible rows as CSV.' });
+      setCopyStatus({ kind: 'success', message: labels.copyCsvSuccess });
     } catch (error) {
       setCopyStatus({
         kind: 'error',
-        message: `Unable to copy CSV: ${error instanceof Error ? error.message : String(error)}`
+        message: labels.copyCsvError(error instanceof Error ? error.message : String(error))
       });
     }
   }
 
   return (
-    <section class="doc-table-output" data-testid="table-output">
-      {table.caption ? <p class="doc-table-output__caption">{table.caption}</p> : null}
+    <section class="doc-table-output" aria-labelledby={captionId} data-testid="table-output">
+      {table.caption ? (
+        <p id={descriptionId} class="doc-table-output__caption">
+          {table.caption}
+        </p>
+      ) : null}
       <div class="doc-table-output__scroller">
-        <table>
-          {table.title ? <caption>{table.title}</caption> : null}
+        <table aria-describedby={descriptionId}>
+          <caption id={captionId} class={table.title ? undefined : 'doc-visually-hidden'}>
+            {table.title ?? labels.tableOutput}
+          </caption>
           <thead>
             <tr>
               {table.columns.map((column, columnIndex) => (
@@ -86,7 +103,7 @@ export default function TableOutput({ table }: TableOutputProps) {
               <tr key={`${safePage}:${rowIndex}`}>
                 {table.columns.map((column, columnIndex) => (
                   <td key={column.key} data-type={column.type ?? 'unknown'}>
-                    {formatTableCell(row[columnIndex])}
+                    {formatTableCell(row[columnIndex], labels)}
                   </td>
                 ))}
               </tr>
@@ -95,13 +112,11 @@ export default function TableOutput({ table }: TableOutputProps) {
         </table>
       </div>
       <div class="doc-table-output__footer">
-        <p>
-          Rows {firstRow}-{lastRow} of {table.rowCount ?? sortedRows.length}
-          {table.truncated ? ' (truncated)' : ''}
-        </p>
-        <div class="doc-table-output__controls">
+        <p>{labels.rowsRange(firstRow, lastRow, table.rowCount ?? sortedRows.length, Boolean(table.truncated))}</p>
+        <fieldset class="doc-table-output__controls">
+          <legend class="doc-visually-hidden">{labels.tableControls}</legend>
           <label>
-            <span>Rows</span>
+            <span>{labels.rowsPerPage}</span>
             <select
               data-testid="table-page-size"
               value={String(pageSize)}
@@ -117,8 +132,14 @@ export default function TableOutput({ table }: TableOutputProps) {
               ))}
             </select>
           </label>
-          <button type="button" data-testid="table-copy-csv" onClick={copyVisibleCsv}>
-            Copy CSV
+          <button
+            type="button"
+            aria-busy={copyStatus?.kind === 'copying'}
+            aria-disabled={copyStatus?.kind === 'copying'}
+            data-testid="table-copy-csv"
+            onClick={copyVisibleCsv}
+          >
+            {copyStatus?.kind === 'copying' ? labels.copyingCsv : labels.copyCsv}
           </button>
           <button
             type="button"
@@ -126,7 +147,7 @@ export default function TableOutput({ table }: TableOutputProps) {
             disabled={safePage === 0}
             onClick={() => setPage((current) => Math.max(0, current - 1))}
           >
-            Prev
+            {labels.previousPage}
           </button>
           <button
             type="button"
@@ -134,14 +155,15 @@ export default function TableOutput({ table }: TableOutputProps) {
             disabled={safePage >= pageCount - 1}
             onClick={() => setPage((current) => Math.min(pageCount - 1, current + 1))}
           >
-            Next
+            {labels.nextPage}
           </button>
-        </div>
+        </fieldset>
       </div>
       {copyStatus ? (
         <p
           class={copyStatus.kind === 'error' ? 'error-state' : 'doc-table-output__status'}
           data-testid="table-copy-status"
+          aria-live={copyStatus.kind === 'error' ? 'assertive' : 'polite'}
           role={copyStatus.kind === 'error' ? 'alert' : 'status'}
         >
           {copyStatus.message}
@@ -167,17 +189,21 @@ export function visibleRows(rows: readonly unknown[][], page: number, pageSize: 
   return rows.slice(page * pageSize, (page + 1) * pageSize);
 }
 
-export function tableToCsv(columns: readonly TableColumn[], rows: readonly unknown[][]): TableCsvResult {
+export function tableToCsv(
+  columns: readonly TableColumn[],
+  rows: readonly unknown[][],
+  labels: RuntimeLabels = labelsForLanguage('en')
+): TableCsvResult {
   try {
     return {
       ok: true,
       csv: [
-        columns.map((column) => csvCell(column.label)).join(','),
+        columns.map((column) => csvCell(column.label, labels)).join(','),
         ...rows.map((row, rowIndex) => {
           if (row.length !== columns.length) {
-            throw new Error(`Row ${rowIndex + 1} has ${row.length} cells; expected ${columns.length}.`);
+            throw new Error(labels.tableRowWidthError(rowIndex + 1, row.length, columns.length));
           }
-          return columns.map((_, index) => csvCell(row[index])).join(',');
+          return columns.map((_, index) => csvCell(row[index], labels)).join(',');
         })
       ].join('\n')
     };
@@ -186,17 +212,17 @@ export function tableToCsv(columns: readonly TableColumn[], rows: readonly unkno
   }
 }
 
-export function formatTableCell(value: unknown): string {
+export function formatTableCell(value: unknown, labels: RuntimeLabels = labelsForLanguage('en')): string {
   if (value === null) return 'null';
-  if (value === undefined) return 'missing';
+  if (value === undefined) return labels.tableMissingValue;
   if (typeof value === 'number') {
     return Number.isFinite(value)
-      ? new Intl.NumberFormat('en-US', { maximumSignificantDigits: 6 }).format(value)
+      ? new Intl.NumberFormat(labels.locale === 'ja' ? 'ja-JP' : 'en-US', { maximumSignificantDigits: 6 }).format(value)
       : String(value);
   }
   if (typeof value === 'boolean') return value ? 'true' : 'false';
   if (typeof value === 'string') return value;
-  throw new Error(`Unsupported validated table cell type: ${typeof value}.`);
+  throw new Error(labels.tableCellTypeError(typeof value));
 }
 
 function compareCellValues(left: unknown, right: unknown): number {
@@ -208,13 +234,13 @@ function compareCellValues(left: unknown, right: unknown): number {
   return String(left).localeCompare(String(right));
 }
 
-function csvCell(value: unknown): string {
+function csvCell(value: unknown, labels: RuntimeLabels): string {
   if (value == null) return '';
   if (!['string', 'number', 'boolean'].includes(typeof value)) {
-    throw new Error(`Unsupported validated table cell type: ${typeof value}.`);
+    throw new Error(labels.tableCellTypeError(typeof value));
   }
   if (typeof value === 'number' && !Number.isFinite(value)) {
-    throw new Error('Validated table cells must contain finite numbers.');
+    throw new Error(labels.tableFiniteNumberError);
   }
   const text = String(value);
   return /[",\n\r]/u.test(text) ? `"${text.replace(/"/gu, '""')}"` : text;

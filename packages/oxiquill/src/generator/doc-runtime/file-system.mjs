@@ -1,5 +1,5 @@
 import { existsSync } from 'node:fs';
-import { copyFile, mkdir, readFile, readdir, rm, writeFile } from 'node:fs/promises';
+import { copyFile, mkdir, readFile, readdir, rename, rm, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import { pathFromUrl } from '../../config/paths.mjs';
 import { hashBytes } from './hashing.mjs';
@@ -10,6 +10,7 @@ export const defaultFileSystem = {
   mkdir,
   readFile,
   readdir,
+  rename,
   rm,
   writeFile
 };

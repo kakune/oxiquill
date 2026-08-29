@@ -6,10 +6,7 @@ on:
       - main
   workflow_dispatch:
 
-permissions:
-  contents: read
-  pages: write
-  id-token: write
+permissions: {}
 
 concurrency:
   group: pages
@@ -17,6 +14,8 @@ concurrency:
 
 env:
   CARGO_TERM_COLOR: always
+  GHC_WASM_ARCHIVE_SHA256: 82453d58b0ec5e1be8f162cb71f2c236ae96d5d81e18bf4574edc50883354e40
+  GHC_WASM_FLAVOUR: '9.14'
   GHC_WASM_REVISION: 8fd59591635cb47ad7db124562039bea8441cae8
   NODE_VERSION: '24'
   PNPM_VERSION: '11.2.2'
@@ -28,19 +27,23 @@ jobs:
   build:
     name: Build Pages artifact
     runs-on: ubuntu-latest
+    permissions:
+      contents: read # Required to check out the site sources.
 
     steps:
       - name: Check out repository
-        uses: actions/checkout@v6
+        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6.1.0
+        with:
+          persist-credentials: false
 
       - name: Set up pnpm
-        uses: pnpm/action-setup@v4
+        uses: pnpm/action-setup@b906affcce14559ad1aafd4ab0e942779e9f58b1 # v4.3.0
         with:
           version: ${{ env.PNPM_VERSION }}
           run_install: false
 
       - name: Set up Node.js
-        uses: actions/setup-node@v6
+        uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6.5.0
         with:
           node-version: ${{ env.NODE_VERSION }}
           cache: pnpm
@@ -53,32 +56,20 @@ jobs:
           rustup default "$RUST_TOOLCHAIN"
 
       - name: Install wasm-pack
-        uses: taiki-e/install-action@wasm-pack
+        uses: taiki-e/install-action@742a3317eac7bd62f91cd888b4eead5e784ba833 # v2.87.1
+        with:
+          fallback: none
+          tool: wasm-pack@0.15.0
 
       - name: Cache ghc-wasm
-        uses: actions/cache@v5
+        uses: actions/cache@caa296126883cff596d87d8935842f9db880ef25 # v5.1.0
         with:
           path: ~/.ghc-wasm
-          key: ghc-wasm-${{ runner.os }}-${{ runner.arch }}-9.14-${{ env.GHC_WASM_REVISION }}
+          key: ghc-wasm-${{ runner.os }}-${{ runner.arch }}-${{ env.GHC_WASM_FLAVOUR }}-${{ env.GHC_WASM_REVISION }}-${{ env.GHC_WASM_ARCHIVE_SHA256 }}
 
       - name: Install ghc-wasm
         shell: bash
-        run: |
-          set -euo pipefail
-          if [ ! -x "$HOME/.ghc-wasm/wasm32-wasi-ghc/bin/wasm32-wasi-ghc" ]; then
-            sudo apt-get update
-            sudo apt-get install -y jq unzip zstd
-            source_dir="$(mktemp -d)"
-            curl --fail --location --retry 5 --silent --show-error \
-              "https://gitlab.haskell.org/haskell-wasm/ghc-wasm-meta/-/archive/$GHC_WASM_REVISION/ghc-wasm-meta-$GHC_WASM_REVISION.tar.gz" \
-              | tar xz -C "$source_dir" --strip-components=1
-            (
-              cd "$source_dir"
-              FLAVOUR=9.14 PREFIX="$HOME/.ghc-wasm" ./setup.sh
-            )
-          fi
-          echo "OXIQUILL_HASKELL_GHC=$HOME/.ghc-wasm/wasm32-wasi-ghc/bin/wasm32-wasi-ghc" >> "$GITHUB_ENV"
-          "$HOME/.ghc-wasm/wasm32-wasi-ghc/bin/wasm32-wasi-ghc" --version
+        run: bash .github/scripts/install-ghc-wasm.sh
 
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
@@ -87,7 +78,7 @@ jobs:
         run: pnpm build
 
       - name: Upload Pages artifact
-        uses: actions/upload-pages-artifact@v3
+        uses: actions/upload-pages-artifact@56afc609e74202658d3ffba0e8f6dda462b719fa # v3.0.1
         with:
           path: examples/docs-site/dist
 
@@ -98,8 +89,11 @@ jobs:
     environment:
       name: github-pages
       url: ${{ steps.deployment.outputs.page_url }}
+    permissions:
+      id-token: write # Required to authenticate the Pages deployment.
+      pages: write # Required to deploy the Pages artifact.
 
     steps:
       - name: Deploy Pages artifact
         id: deployment
-        uses: actions/deploy-pages@v4
+        uses: actions/deploy-pages@d6db90164ac5ed86f2b6aed7e0febac5b3c0c03e # v4.0.5

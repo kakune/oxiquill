@@ -47,6 +47,7 @@
   },
   "devDependencies": {
     "@arethetypeswrong/cli": "0.18.5",
+    "@axe-core/playwright": "4.13.0",
     "@bjorn3/browser_wasi_shim": "0.4.2",
     "@eslint/js": "9.39.5",
     "@playwright/test": "1.61.1",

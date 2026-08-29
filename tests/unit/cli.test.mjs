@@ -59,7 +59,8 @@ beforeEach(() => {
   cliMocks.syncDocRuntime.mockResolvedValue({
     cellCount: 1,
     haskellCellCount: 1,
-    haskellFingerprint: 'haskell-fingerprint'
+    haskellFingerprint: 'haskell-fingerprint',
+    rustCellCount: 1
   });
   cliMocks.buildHaskellWasm.mockResolvedValue({ ok: true });
 });
@@ -179,10 +180,11 @@ describe('oxiquill CLI', () => {
   it('preserves case-insensitive PATH keys in the framework environment', () => {
     const nodePath = fakeNodeExecutable(path.join(testRoot, 'node', 'bin'));
     const toolPath = path.join(testRoot, 'tools', 'bin');
-    const env = frameworkEnv(actualPaths, { env: { Path: toolPath }, nodePath });
+    const env = frameworkEnv(actualPaths, { env: { Path: toolPath }, nodePath, runtimeOwner: 'cli' });
 
     expect(env.Path).toBe(`${path.dirname(nodePath)}${path.delimiter}${toolPath}`);
     expect(env.PATH).toBeUndefined();
+    expect(env.OXIQUILL_RUNTIME_OWNER).toBe('cli');
   });
 
   it('uses a later PATH node for Astro when the current node cannot load native addons', () => {
@@ -275,14 +277,14 @@ describe('oxiquill CLI', () => {
     await runCli('docgen', [], { cwd: repoRoot });
     expect(cliMocks.syncDocRuntime).toHaveBeenCalledTimes(1);
     expect(cliMocks.buildRustWasm).not.toHaveBeenCalled();
-    expect(cliMocks.markRuntimeReady).toHaveBeenCalledTimes(1);
+    expect(cliMocks.syncDocRuntime).toHaveBeenLastCalledWith(
+      expect.objectContaining({ mode: undefined, tolerateHaskellBuildFailure: false })
+    );
 
     await runCli('docgen', ['--wasm', 'dev'], { cwd: repoRoot });
-    expect(cliMocks.buildRustWasm).toHaveBeenCalledWith(expect.objectContaining({ mode: 'dev' }));
-    expect(cliMocks.buildHaskellWasm).toHaveBeenCalledWith(
-      expect.objectContaining({ haskellFingerprint: 'haskell-fingerprint', mode: 'dev' })
+    expect(cliMocks.syncDocRuntime).toHaveBeenLastCalledWith(
+      expect.objectContaining({ mode: 'dev', tolerateHaskellBuildFailure: false })
     );
-    expect(cliMocks.syncLicenseArtifacts).toHaveBeenCalledTimes(1);
     expect(log).toHaveBeenCalledWith('Generated 1 interactive cell(s).');
   });
 
@@ -304,8 +306,19 @@ describe('oxiquill CLI', () => {
       ['test', '--node', path.join(repoRoot, '.oxiquill', 'rust-cells')],
       { cwd: repoRoot }
     );
-    expect(cliMocks.buildRustWasm).toHaveBeenCalledWith(expect.objectContaining({ mode: 'dev' }));
+    expect(cliMocks.syncDocRuntime).toHaveBeenCalledWith(expect.objectContaining({ mode: 'dev' }));
     expect(log).toHaveBeenCalled();
+  });
+
+  it('skips wasm-pack tests when the manifest contains no Rust cells', async () => {
+    cliMocks.syncDocRuntime.mockResolvedValue({ cellCount: 0, rustCellCount: 0 });
+    const log = vi.spyOn(console, 'log').mockImplementation(() => {});
+    const runCommand = vi.fn(async () => undefined);
+
+    await runCli('test-wasm', [], { cwd: repoRoot, runCommand });
+
+    expect(runCommand).not.toHaveBeenCalledWith('wasm-pack', expect.anything(), expect.anything());
+    expect(log).toHaveBeenCalledWith('[runtime] no Rust cells; skipping wasm-pack test');
   });
 
   it('reports missing CLI entrypoints and unusable Node overrides', () => {

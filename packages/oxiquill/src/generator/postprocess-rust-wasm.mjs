@@ -10,6 +10,9 @@ const defaultFileSystem = {
 export async function postprocessRustWasm({ fileSystem = defaultFileSystem, rustWasmDir }) {
   await Promise.all([
     fileSystem.rm(path.join(rustWasmDir, '.gitignore'), { force: true }),
+    fileSystem.rm(path.join(rustWasmDir, 'doc_rust_cells.d.ts'), { force: true }),
+    fileSystem.rm(path.join(rustWasmDir, 'doc_rust_cells_bg.wasm.d.ts'), { force: true }),
+    fileSystem.rm(path.join(rustWasmDir, 'package.json'), { force: true }),
     stripUnusedWasmPackState(path.join(rustWasmDir, 'doc_rust_cells.js'), { fileSystem })
   ]);
 }

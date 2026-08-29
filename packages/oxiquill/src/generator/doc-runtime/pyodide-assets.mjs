@@ -6,7 +6,7 @@ import { copyFileIfChanged, defaultFileSystem, hasPackageContent } from './file-
 import { hashBytes } from './hashing.mjs';
 
 const require = createRequire(import.meta.url);
-const requiredPyodideFiles = [
+export const requiredPyodideFiles = [
   'pyodide.mjs',
   'pyodide.mjs.map',
   'pyodide.asm.mjs',
