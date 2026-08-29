@@ -1,47 +1,53 @@
-import { isOutputArtifact } from '../../lib/doc-runtime/output-artifacts';
-import type { ImageArtifact, OutputArtifact, TextArtifact } from '../../lib/doc-runtime/types';
+import type {
+  ValidatedArtifactResult,
+  ValidatedImageArtifact,
+  ValidatedJsonArtifact,
+  ValidatedOutputArtifact
+} from '../../lib/doc-runtime/output-artifact-validation';
+import type { ComponentChildren } from 'preact';
+import type { TextArtifact } from '../../lib/doc-runtime/types';
+import ArtifactErrorBoundary, { ArtifactError } from './ArtifactErrorBoundary';
 import ChartOutput from './ChartOutput';
 import TableOutput from './TableOutput';
 
 interface OutputRendererProps {
-  outputs: readonly unknown[];
+  outputs: readonly ValidatedArtifactResult[];
 }
 
 export default function OutputRenderer({ outputs }: OutputRendererProps) {
   return (
     <>
       {outputs.map((output, index) => (
-        <ArtifactOutput key={artifactKey(output, index)} output={output} />
+        <ArtifactErrorBoundary
+          key={artifactKey(output, index)}
+          index={output.index}
+          resetKey={output}
+        >
+          <ArtifactOutput output={output} />
+        </ArtifactErrorBoundary>
       ))}
     </>
   );
 }
 
-function ArtifactOutput({ output }: { output: unknown }) {
-  if (!isOutputArtifact(output)) {
-    return <UnknownOutput message="Unsupported output artifact." />;
+function ArtifactOutput({ output }: { output: ValidatedArtifactResult }) {
+  if (output.status === 'error') {
+    return <ArtifactError message={`Artifact ${output.index + 1}: ${output.message}`} />;
   }
 
-  switch (output.kind) {
+  switch (output.artifact.kind) {
     case 'text':
-      return <TextOutput output={output} />;
+      return <TextOutput output={output.artifact} />;
     case 'json':
-      return (
-        <pre class="run-output" data-testid="value-output">
-          <code>{JSON.stringify(output.value, null, 2)}</code>
-        </pre>
-      );
+      return <JsonOutput output={output.artifact} />;
     case 'html':
-      return <HtmlOutput output={output} />;
+      return <HtmlOutput output={output.artifact} />;
     case 'chart':
-      return <ChartOutput spec={output.spec} />;
+      return <ChartOutput spec={output.artifact.spec} />;
     case 'table':
-      return <TableOutput table={output} />;
+      return <TableOutput table={output.artifact} />;
     case 'image':
-      return <ImageOutput output={output} />;
-    /* v8 ignore next -- isOutputArtifact rejects unknown artifact kinds before this switch. */
-    default:
-      return <UnknownOutput message="Unsupported output artifact." />;
+      return <ImageOutput output={output.artifact} />;
   }
 }
 
@@ -49,14 +55,22 @@ function TextOutput({ output }: { output: TextArtifact }) {
   const isError = output.stream === 'stderr';
   const className = isError ? 'error-output' : 'run-output';
 
-  return (
+  return <OutputWithTruncation truncated={output.truncated}>
     <pre class={className} data-testid={isError ? undefined : 'run-output'}>
       <code>{output.content}</code>
     </pre>
-  );
+  </OutputWithTruncation>;
 }
 
-function ImageOutput({ output }: { output: ImageArtifact }) {
+function JsonOutput({ output }: { output: ValidatedJsonArtifact }) {
+  return <OutputWithTruncation truncated={output.truncated}>
+    <pre class="run-output" data-testid="value-output">
+      <code>{output.formattedValue}</code>
+    </pre>
+  </OutputWithTruncation>;
+}
+
+function ImageOutput({ output }: { output: ValidatedImageArtifact }) {
   return (
     <figure class="doc-image-output">
       <img
@@ -75,7 +89,7 @@ function ImageOutput({ output }: { output: ImageArtifact }) {
   );
 }
 
-function HtmlOutput({ output }: { output: Extract<OutputArtifact, { kind: 'html' }> }) {
+function HtmlOutput({ output }: { output: Extract<ValidatedOutputArtifact, { kind: 'html' }> }) {
   return (
     <iframe
       class="doc-html-output"
@@ -87,23 +101,21 @@ function HtmlOutput({ output }: { output: Extract<OutputArtifact, { kind: 'html'
   );
 }
 
-function UnknownOutput({ message }: { message: string }) {
+function OutputWithTruncation({ children, truncated }: { children: ComponentChildren; truncated?: boolean }) {
   return (
-    <p class="error-state" data-testid="artifact-error">
-      {message}
-    </p>
+    <div class="doc-output-artifact">
+      {children}
+      {truncated ? <p class="doc-output-artifact__notice" data-testid="artifact-truncated">Output truncated.</p> : null}
+    </div>
   );
 }
 
-export function imageArtifactSource(output: ImageArtifact): string {
-  if (output.data.startsWith('data:')) return output.data;
-  if (output.mime === 'image/svg+xml') {
-    return `data:${output.mime};charset=utf-8,${encodeURIComponent(output.data)}`;
-  }
-  return `data:${output.mime};base64,${output.data}`;
+export function imageArtifactSource(output: ValidatedImageArtifact): string {
+  return output.source;
 }
 
-function artifactKey(output: unknown, index: number): string {
-  if (isOutputArtifact(output) && output.id) return output.id;
-  return String(index);
+function artifactKey(output: ValidatedArtifactResult, index: number): string {
+  return output.status === 'valid' && output.artifact.id
+    ? `${output.artifact.id}:${index}`
+    : String(index);
 }

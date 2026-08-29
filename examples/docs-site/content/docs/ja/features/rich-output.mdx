@@ -16,7 +16,20 @@ Oxiquill は次の出力を表示します。
 - SVG、PNG、JPEG data から作る image。
 - iframe 内の sandboxed HTML。
 
-大きな出力は UI thread に届く前に制限されます。text は約 200 KB、JSON と HTML は約 500 KB、image は約 2 MB、table preview は 1,000 row までです。
+Oxiquill は各 artifact を render 前に検証し、次の runtime 上限を適用します。
+
+- 1 run あたり100 artifact。
+- text、format 済み JSON、HTML は1 artifact あたり UTF-8 で1 MiB。
+- table は10,000 row、100 column。
+- chart は data point、bin、cell の合計が100,000。
+- image は decode 後の data が10 MiB。
+- 1 run 全体で検証済み output data が16 MiB。
+
+Text、JSON、table artifact は安全な境界で切り詰められ、truncated と表示されます。上限を超えた chart、image、HTML は、その artifact だけの error を表示します。不正な output や renderer failure も artifact 内に分離されるため、正常な sibling output は引き続き利用できます。
+
+JSON formatting は cycle を扱えます。Cycle は `[Circular -> path]` marker、BigInt は `{ "$bigint": "value" }`、深すぎる、または大きすぎる subtree は `[Truncated]` marker で表します。Table の structured cell も同じ安全な formatting を使います。Image data は宣言した SVG、PNG、JPEG MIME type と一致する必要があり、PNG/JPEG payload は対応する file signature を持つ正しい base64 でなければなりません。
+
+HTML は常に空の `sandbox` attribute を持つ iframe 内で render されます。Script permission と same-origin permission は付与されません。Table の CSV control は copy 成功に加え、conversion、permission、clipboard の失敗も表示します。
 
 ## Python display helper
 

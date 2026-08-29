@@ -408,7 +408,8 @@ describe('doc runtime core', () => {
     expect(generateRustLib([preludeCell])).toContain('Json(JsonArtifact)');
     expect(generateRustLib([preludeCell])).toContain('Html(HtmlArtifact)');
     expect(generateRustLib([preludeCell])).toContain('Image(ImageArtifact)');
-    expect(generateRustLib([preludeCell])).toContain('fn ensure_output_size');
+    expect(generateRustLib([preludeCell])).not.toContain('fn ensure_output_size');
+    expect(generateRustLib([tableCell])).toContain('row_count > 10_000');
     expect(generateRustLib([preludeCell])).toContain('fn json_artifact');
     expect(generateRustLib([preludeCell])).toContain('fn html_artifact');
     expect(generateRustLib([preludeCell])).toContain('fn image_artifact');

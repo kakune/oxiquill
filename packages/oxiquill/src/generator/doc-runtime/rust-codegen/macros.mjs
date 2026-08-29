@@ -56,7 +56,7 @@ function generateJsonMacro() {
         ($value:expr) => {{
             let artifact = json_artifact(
                 serde_json::to_value(&$value).map_err(|error| error.to_string())?,
-            )?;
+            );
             __outputs.borrow_mut().push(OutputArtifact::Json(artifact));
         }};
     }`;
@@ -65,7 +65,7 @@ function generateJsonMacro() {
 function generateHtmlMacro() {
   return `    macro_rules! emit_html {
         ($html:expr) => {{
-            let artifact = html_artifact(($html).to_string())?;
+            let artifact = html_artifact(($html).to_string());
             __outputs.borrow_mut().push(OutputArtifact::Html(artifact));
         }};
     }`;
@@ -74,7 +74,7 @@ function generateHtmlMacro() {
 function generateImageSvgMacro() {
   return `    macro_rules! emit_image_svg {
         ($svg:expr) => {{
-            let artifact = image_artifact("image/svg+xml", ($svg).to_string(), None)?;
+            let artifact = image_artifact("image/svg+xml", ($svg).to_string(), None);
             __outputs.borrow_mut().push(OutputArtifact::Image(artifact));
         }};
         ($svg:expr, $alt:expr) => {{
@@ -82,7 +82,7 @@ function generateImageSvgMacro() {
                 "image/svg+xml",
                 ($svg).to_string(),
                 Some(($alt).to_string()),
-            )?;
+            );
             __outputs.borrow_mut().push(OutputArtifact::Image(artifact));
         }};
     }`;
@@ -91,7 +91,7 @@ function generateImageSvgMacro() {
 function generateImagePngMacro() {
   return `    macro_rules! emit_image_png {
         ($base64:expr) => {{
-            let artifact = image_artifact("image/png", ($base64).to_string(), None)?;
+            let artifact = image_artifact("image/png", ($base64).to_string(), None);
             __outputs.borrow_mut().push(OutputArtifact::Image(artifact));
         }};
         ($base64:expr, $alt:expr) => {{
@@ -99,7 +99,7 @@ function generateImagePngMacro() {
                 "image/png",
                 ($base64).to_string(),
                 Some(($alt).to_string()),
-            )?;
+            );
             __outputs.borrow_mut().push(OutputArtifact::Image(artifact));
         }};
     }`;

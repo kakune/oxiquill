@@ -2,7 +2,10 @@ import {
   idleOutputMessage,
   labelsForLanguage
 } from '../../lib/doc-runtime/interactive-cell-model';
-import { normalizeCellExecutionResult } from '../../lib/doc-runtime/output-artifacts';
+import {
+  normalizeCellExecutionResult,
+  type NormalizedCellExecutionResult
+} from '../../lib/doc-runtime/output-artifacts';
 import type {
   CellExecutionResult,
   CellManifest
@@ -21,7 +24,7 @@ export function CellOutput({
   error?: string;
   isRunning: boolean;
   labels: RuntimeLabels;
-  result?: CellExecutionResult;
+  result?: CellExecutionResult | NormalizedCellExecutionResult;
   runMode: CellManifest['run'];
 }) {
   if (error) return <p class="error-state">{error}</p>;
@@ -34,11 +37,13 @@ export function CellOutput({
     );
   }
 
-  const normalizedResult = normalizeCellExecutionResult(result);
+  const outputResults = 'outputResults' in result
+    ? result.outputResults
+    : normalizeCellExecutionResult(result).outputResults;
 
   return (
     <div class="doc-cell__outputs">
-      <OutputRenderer outputs={normalizedResult.outputs} />
+      <OutputRenderer outputs={outputResults} />
     </div>
   );
 }

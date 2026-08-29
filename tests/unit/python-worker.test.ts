@@ -114,6 +114,7 @@ describe('python rich display support', () => {
   });
 
   it('converts pandas dataframes and series to table artifacts', () => {
+    expect(pythonDisplaySupportCode).toContain('__oxiquill_table_limit = 10000');
     expect(pythonDisplaySupportCode).toContain('def __oxiquill_is_pandas_dataframe');
     expect(pythonDisplaySupportCode).toContain('def __oxiquill_is_pandas_series');
     expect(pythonDisplaySupportCode).toContain('def __oxiquill_pandas_dataframe_artifact');
@@ -161,10 +162,10 @@ describe('python rich display support', () => {
     });
   });
 
-  it('filters Python display values to valid output artifacts', () => {
+  it('preserves Python display values for validation at the runtime boundary', () => {
     const artifact = { kind: 'text' as const, stream: 'display' as const, content: 'ok' };
 
-    expect(toOutputArtifacts([artifact, { kind: 'unknown' }, null])).toEqual([artifact]);
+    expect(toOutputArtifacts([artifact, { kind: 'unknown' }, null])).toEqual([artifact, { kind: 'unknown' }, null]);
     expect(toOutputArtifacts({ kind: 'text', stream: 'display', content: 'ok' })).toEqual([]);
   });
 });

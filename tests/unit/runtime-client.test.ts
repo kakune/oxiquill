@@ -5,6 +5,7 @@ import {
   runtimeHaskellFingerprintHash,
   runInteractiveCell
 } from '../../packages/oxiquill/src/lib/doc-runtime/runtime-client';
+import { normalizeCellExecutionResult } from '../../packages/oxiquill/src/lib/doc-runtime/output-artifacts';
 import type {
   CellExecutionResult,
   CellLanguage,
@@ -51,6 +52,7 @@ const result: CellExecutionResult = {
   plots: [],
   outputs: [{ kind: 'text', stream: 'stdout', content: 'ok' }]
 };
+const normalizedResult = normalizeCellExecutionResult(result);
 
 type DefaultFakeWorker = FakeWorker & {
   options: WorkerOptions;
@@ -114,9 +116,9 @@ describe('runtime client', () => {
     defaultWorkers[1].emitMessage({ requestId: 2, ok: true, result });
     defaultWorkers[2].emitMessage({ requestId: 3, ok: true, result });
 
-    await expect(rust).resolves.toEqual(result);
-    await expect(python).resolves.toEqual(result);
-    await expect(haskell).resolves.toEqual(result);
+    await expect(rust).resolves.toEqual(normalizedResult);
+    await expect(python).resolves.toEqual(normalizedResult);
+    await expect(haskell).resolves.toEqual(normalizedResult);
 
     resetInteractiveRuntime('rust');
     expect(defaultWorkers[0].terminated).toBe(true);
@@ -145,7 +147,7 @@ describe('runtime client', () => {
     workers[0].emitMessage({ requestId: 999, ok: true, result });
     workers[0].emitMessage({ requestId: 1, ok: true, result });
 
-    await expect(promise).resolves.toEqual(result);
+    await expect(promise).resolves.toEqual(normalizedResult);
   });
 
   it('normalizes legacy worker responses before resolving', async () => {
@@ -200,8 +202,8 @@ describe('runtime client', () => {
     workers[0].emitMessage({ requestId: 1, ok: true, result });
     workers[0].emitMessage({ requestId: 2, ok: true, result });
 
-    await expect(first).resolves.toEqual(result);
-    await expect(second).resolves.toEqual(result);
+    await expect(first).resolves.toEqual(normalizedResult);
+    await expect(second).resolves.toEqual(normalizedResult);
   });
 
   it('sends Haskell input arguments in manifest order', async () => {
@@ -233,8 +235,8 @@ describe('runtime client', () => {
     workers[0].emitMessage({ requestId: 1, ok: true, result });
     workers[0].emitMessage({ requestId: 2, ok: true, result });
 
-    await expect(first).resolves.toEqual(result);
-    await expect(second).resolves.toEqual(result);
+    await expect(first).resolves.toEqual(normalizedResult);
+    await expect(second).resolves.toEqual(normalizedResult);
   });
 
   it('extracts the Haskell fingerprint hash from generated runtime versions', () => {
@@ -292,6 +294,6 @@ describe('runtime client', () => {
 
     await expect(rust).rejects.toThrow('worker failed');
     workers[1].emitMessage({ requestId: 2, ok: true, result });
-    await expect(python).resolves.toEqual(result);
+    await expect(python).resolves.toEqual(normalizedResult);
   });
 });

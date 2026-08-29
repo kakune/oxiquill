@@ -16,7 +16,20 @@ Oxiquill renders these output kinds:
 - Images from SVG, PNG, or JPEG data.
 - Sandboxed HTML in an iframe.
 
-Large outputs are limited before they reach the UI thread. Text is capped at about 200 KB, JSON and HTML at about 500 KB, images at about 2 MB, and table previews at 1,000 rows.
+Oxiquill validates every artifact before rendering it and applies these runtime limits:
+
+- 100 artifacts per run.
+- 1 MiB of UTF-8 data per text, formatted JSON, or HTML artifact.
+- 10,000 rows and 100 columns per table.
+- 100,000 data points, bins, or cells per chart.
+- 10 MiB of decoded data per image.
+- 16 MiB of validated output data across one run.
+
+Text, JSON, and table artifacts are truncated at safe boundaries and marked as truncated. Oversized charts, images, and HTML artifacts display an artifact-local error instead. Invalid output or a renderer failure also stays local to that artifact, so valid sibling outputs remain usable.
+
+JSON formatting is cycle-aware. Cycles use a `[Circular -> path]` marker, BigInt values use `{ "$bigint": "value" }`, and excessively nested or oversized subtrees use a `[Truncated]` marker. Tables use the same safe formatting for structured cells. Image data must match its declared SVG, PNG, or JPEG MIME type, and PNG/JPEG payloads must be valid base64 with the matching file signature.
+
+HTML always renders in an iframe with an empty `sandbox` attribute. Oxiquill does not grant script or same-origin permission. Table CSV controls report successful copies as well as conversion, permission, and clipboard failures.
 
 ## Python Display Helpers
 

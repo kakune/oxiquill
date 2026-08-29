@@ -2,6 +2,10 @@ import { act, cleanup, fireEvent, render, screen, waitFor, within } from '@testi
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { CellExecutionResult, CellManifest, InputSpec } from '../../packages/oxiquill/src/lib/doc-runtime/types';
 import {
+  validateOutputArtifacts,
+  type ValidatedImageArtifact
+} from '../../packages/oxiquill/src/lib/doc-runtime/output-artifact-validation';
+import {
   chart,
   echartsInit,
   echartsUse,
@@ -57,6 +61,17 @@ const {
   tableToCsv,
   visibleRows
 } = await import('../../packages/oxiquill/src/components/doc-runtime/TableOutput');
+
+const pngBase64 = 'iVBORw0KGgo=';
+const jpegBase64 = '/9j/';
+
+function validatedImage(value: unknown): ValidatedImageArtifact {
+  const result = validateOutputArtifacts([value])[0];
+  if (result?.status !== 'valid' || result.artifact.kind !== 'image') {
+    throw new Error('Expected a valid image artifact fixture.');
+  }
+  return result.artifact;
+}
 
 class TestResizeObserver {
   static instances: TestResizeObserver[] = [];
@@ -305,13 +320,25 @@ describe('InteractiveCell', () => {
     await waitFor(() => expect(pending).toHaveLength(2));
 
     await act(async () => {
-      pending[1].resolve({ stdout: 'newer result', stderr: '', value: null, plots: [], outputs: [] });
+      pending[1].resolve({
+        stdout: 'newer result',
+        stderr: '',
+        value: null,
+        plots: [],
+        outputs: [{ kind: 'text', stream: 'stdout', content: 'newer result' }]
+      });
       await pending[1].promise;
     });
     await waitFor(() => expect(screen.getByTestId('run-output')).toHaveTextContent('newer result'));
 
     await act(async () => {
-      pending[0].resolve({ stdout: 'older result', stderr: '', value: null, plots: [], outputs: [] });
+      pending[0].resolve({
+        stdout: 'older result',
+        stderr: '',
+        value: null,
+        plots: [],
+        outputs: [{ kind: 'text', stream: 'stdout', content: 'older result' }]
+      });
       await pending[0].promise;
     });
 
@@ -337,7 +364,13 @@ describe('InteractiveCell', () => {
     await waitFor(() => expect(pending).toHaveLength(2));
 
     await act(async () => {
-      pending[1].resolve({ stdout: 'newer result', stderr: '', value: null, plots: [], outputs: [] });
+      pending[1].resolve({
+        stdout: 'newer result',
+        stderr: '',
+        value: null,
+        plots: [],
+        outputs: [{ kind: 'text', stream: 'stdout', content: 'newer result' }]
+      });
       await pending[1].promise;
     });
     await waitFor(() => expect(screen.getByTestId('run-output')).toHaveTextContent('newer result'));
@@ -644,17 +677,17 @@ describe('OutputRenderer', () => {
   it('renders sandboxed HTML, images, tables, and reports unsupported artifacts', () => {
     render(
       <OutputRenderer
-        outputs={[
+        outputs={validateOutputArtifacts([
           { id: 'html-preview', kind: 'html', html: '<strong>safe</strong>', sandboxed: true, title: 'HTML preview' },
           { kind: 'html', html: '<em>default</em>', sandboxed: true },
-          { kind: 'image', mime: 'image/png', data: 'abc', alt: 'plot image' },
+          { kind: 'image', mime: 'image/png', data: pngBase64, alt: 'plot image' },
           {
             kind: 'table',
             columns: [{ key: 'name', label: 'Name', type: 'string' }],
             rows: [['Ada']]
           },
           { kind: 'unknown' }
-        ]}
+        ])}
       />
     );
 
@@ -663,21 +696,21 @@ describe('OutputRenderer', () => {
     expect(htmlOutputs[0]).toHaveAttribute('srcdoc', '<strong>safe</strong>');
     expect(htmlOutputs[0]).toHaveAttribute('title', 'HTML preview');
     expect(htmlOutputs[1]).toHaveAttribute('title', 'HTML output');
-    expect(screen.getByTestId('image-output')).toHaveAttribute('src', 'data:image/png;base64,abc');
+    expect(screen.getByTestId('image-output')).toHaveAttribute('src', `data:image/png;base64,${pngBase64}`);
     expect(screen.getByTestId('image-output')).toHaveAttribute('alt', 'plot image');
     expect(screen.getByTestId('table-output')).toBeVisible();
     expect(screen.getAllByTestId('artifact-error')).toHaveLength(1);
-    expect(screen.getByText('Unsupported output artifact.')).toBeVisible();
+    expect(screen.getByText(/Unsupported artifact kind/)).toBeVisible();
   });
 
   it('renders image fallback text and captions', () => {
     render(
       <OutputRenderer
-        outputs={[
-          { kind: 'image', mime: 'image/png', data: 'abc', title: 'Figure one', caption: 'caption' },
-          { kind: 'image', mime: 'image/png', data: 'def', caption: 'caption only' },
-          { kind: 'image', mime: 'image/png', data: 'ghi' }
-        ]}
+        outputs={validateOutputArtifacts([
+          { kind: 'image', mime: 'image/png', data: pngBase64, title: 'Figure one', caption: 'caption' },
+          { kind: 'image', mime: 'image/png', data: pngBase64, caption: 'caption only' },
+          { kind: 'image', mime: 'image/png', data: pngBase64 }
+        ])}
       />
     );
 
@@ -690,21 +723,55 @@ describe('OutputRenderer', () => {
   });
 
   it('builds data URLs for raw SVG and base64 image artifacts', () => {
-    expect(imageArtifactSource({
+    expect(imageArtifactSource(validatedImage({
       kind: 'image',
       mime: 'image/svg+xml',
       data: '<svg><text>plot</text></svg>'
-    })).toBe('data:image/svg+xml;charset=utf-8,%3Csvg%3E%3Ctext%3Eplot%3C%2Ftext%3E%3C%2Fsvg%3E');
-    expect(imageArtifactSource({
+    }))).toBe('data:image/svg+xml;charset=utf-8,%3Csvg%3E%3Ctext%3Eplot%3C%2Ftext%3E%3C%2Fsvg%3E');
+    expect(imageArtifactSource(validatedImage({
       kind: 'image',
       mime: 'image/jpeg',
-      data: 'abc'
-    })).toBe('data:image/jpeg;base64,abc');
-    expect(imageArtifactSource({
+      data: jpegBase64
+    }))).toBe(`data:image/jpeg;base64,${jpegBase64}`);
+    expect(imageArtifactSource(validatedImage({
       kind: 'image',
       mime: 'image/png',
-      data: 'data:image/png;base64,existing'
-    })).toBe('data:image/png;base64,existing');
+      data: `data:image/png;base64,${pngBase64}`
+    }))).toBe(`data:image/png;base64,${pngBase64}`);
+  });
+
+  it('isolates renderer failures and resets the boundary for replacement output', async () => {
+    mocks.chart.setOption.mockImplementationOnce(() => {
+      throw new Error('chart renderer failed');
+    });
+    const { rerender } = render(
+      <OutputRenderer outputs={validateOutputArtifacts([
+        { kind: 'text', stream: 'stdout', content: 'before' },
+        { kind: 'chart', spec: { kind: 'line', series: [] } },
+        { kind: 'text', stream: 'stdout', content: 'after' }
+      ])} />
+    );
+
+    await waitFor(() => expect(screen.getByText(/chart renderer failed/)).toBeVisible());
+    expect(screen.getByText('before')).toBeVisible();
+    expect(screen.getByText('after')).toBeVisible();
+
+    rerender(<OutputRenderer outputs={validateOutputArtifacts([
+      { kind: 'text', stream: 'stdout', content: 'replacement' }
+    ])} />);
+    await waitFor(() => expect(screen.getByText('replacement')).toBeVisible());
+    expect(screen.queryByText(/chart renderer failed/)).not.toBeInTheDocument();
+  });
+
+  it('shows truncation without hiding the validated artifact', () => {
+    render(<OutputRenderer outputs={validateOutputArtifacts([{
+      kind: 'text',
+      stream: 'stdout',
+      content: 'x'.repeat(1024 * 1024 + 1)
+    }])} />);
+
+    expect(screen.getByTestId('run-output')).toBeVisible();
+    expect(screen.getByTestId('artifact-truncated')).toHaveTextContent('Output truncated.');
   });
 });
 
@@ -761,7 +828,43 @@ describe('TableOutput', () => {
 
     fireEvent.click(screen.getByTestId('table-copy-csv'));
     await waitFor(() => expect(writeText).toHaveBeenCalledWith(expect.stringContaining('Score,Label,Enabled')));
+    expect(screen.getByTestId('table-copy-status')).toHaveTextContent('Copied visible rows as CSV.');
     expect(rows[0]).toEqual([12, 'row 1', true]);
+  });
+
+  it('surfaces clipboard and CSV conversion failures', async () => {
+    const writeText = vi.fn().mockRejectedValue(new Error('permission denied'));
+    Object.defineProperty(globalThis.navigator, 'clipboard', {
+      configurable: true,
+      value: { writeText }
+    });
+    const { rerender } = render(
+      <TableOutput table={{
+        kind: 'table',
+        columns: [{ key: 'value', label: 'Value' }],
+        rows: [['safe']]
+      }} />
+    );
+
+    fireEvent.click(screen.getByTestId('table-copy-csv'));
+    await waitFor(() => expect(screen.getByRole('alert')).toHaveTextContent('permission denied'));
+
+    rerender(<TableOutput table={{
+      kind: 'table',
+      columns: [{ key: 'value', label: 'Value' }],
+      rows: [[1, 2]]
+    }} />);
+    fireEvent.click(screen.getByTestId('table-copy-csv'));
+    await waitFor(() => expect(screen.getByRole('alert')).toHaveTextContent('Row 1 has 2 cells; expected 1.'));
+
+    Object.defineProperty(globalThis.navigator, 'clipboard', { configurable: true, value: undefined });
+    rerender(<TableOutput table={{
+      kind: 'table',
+      columns: [{ key: 'value', label: 'Value' }],
+      rows: [['safe again']]
+    }} />);
+    fireEvent.click(screen.getByTestId('table-copy-csv'));
+    expect(screen.getByRole('alert')).toHaveTextContent('Clipboard access is unavailable.');
   });
 
   it('renders empty tables with a stable row range', () => {
@@ -793,7 +896,7 @@ describe('TableOutput', () => {
     expect(formatTableCell(Number.POSITIVE_INFINITY)).toBe('Infinity');
     expect(formatTableCell(null)).toBe('null');
     expect(formatTableCell(undefined)).toBe('missing');
-    expect(formatTableCell({ nested: true })).toBe('{"nested":true}');
+    expect(() => formatTableCell({ nested: true })).toThrow('Unsupported validated table cell type');
   });
 
   it('copies visible table data as escaped CSV', () => {
@@ -806,9 +909,16 @@ describe('TableOutput', () => {
         [
           ['comma,value', 'quote "value"'],
           ['line\nbreak', null],
-          [true, { nested: true }]
+          [true, '{"nested":true}']
         ]
       )
-    ).toBe('A,B\n"comma,value","quote ""value"""\n"line\nbreak",\ntrue,"{""nested"":true}"');
+    ).toEqual({
+      ok: true,
+      csv: 'A,B\n"comma,value","quote ""value"""\n"line\nbreak",\ntrue,"{""nested"":true}"'
+    });
+    expect(tableToCsv([{ key: 'a', label: 'A' }], [[1, 2]])).toEqual({
+      ok: false,
+      error: 'Row 1 has 2 cells; expected 1.'
+    });
   });
 });

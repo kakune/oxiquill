@@ -230,10 +230,18 @@
 }
 
 .doc-table-output__caption,
-.doc-table-output__footer p {
+.doc-table-output__footer p,
+.doc-table-output__status,
+.doc-output-artifact__notice {
   margin: 0;
   color: var(--sl-color-gray-2);
   font-size: 0.85rem;
+}
+
+.doc-output-artifact {
+  display: grid;
+  gap: 0.35rem;
+  min-width: 0;
 }
 
 .doc-table-output__scroller {
