@@ -25,17 +25,7 @@ import {
   generateRustLib,
   generateRustReaders,
   helperCratesFromManifests,
-  normalizeCrates,
-  normalizeInputType,
-  normalizeInputValue,
-  normalizeInputs,
-  normalizeOptionalNumber,
-  normalizeOptions,
-  normalizePackages,
-  normalizeRunMode,
-  normalizeStringArray,
-  normalizeTimeout,
-  parseCell,
+  parseCellsFromMarkdown,
   parseLanguage,
   packageNameFromCargoToml,
   haskellFunctionName,
@@ -76,226 +66,168 @@ describe('doc runtime core', () => {
   });
 
   it('splits metadata lines from executable source lines', () => {
-    expect(splitCellSource('//| id: sample\nprintln!("ok");')).toEqual({
+    expect(splitCellSource('//| id: sample\nprintln!("ok");\n//| title: source', 'rust')).toEqual({
+      kind: 'cell',
       metadataLines: ['id: sample'],
-      sourceLines: ['println!("ok");']
+      sourceLines: ['println!("ok");', '//| title: source']
     });
-    expect(splitCellSource('///| id: doc\n#| title: py\nprint("ok")')).toEqual({
-      metadataLines: ['id: doc', 'title: py'],
-      sourceLines: ['print("ok")']
+    expect(splitCellSource('///| id: doc\n///| title: Rust docs\n#| title: source', 'rust')).toEqual({
+      kind: 'cell',
+      metadataLines: ['id: doc', 'title: Rust docs'],
+      sourceLines: ['#| title: source']
     });
-    expect(splitCellSource('--| id: hs\nputStrLn "ok"')).toEqual({
+    expect(splitCellSource('--| id: hs\nputStrLn "ok"', 'haskell')).toEqual({
+      kind: 'cell',
       metadataLines: ['id: hs'],
       sourceLines: ['putStrLn "ok"']
     });
+    expect(splitCellSource('println!("plain");', 'rust')).toEqual({ kind: 'skip' });
+    expect(splitCellSource('#| id: wrong\nprintln!("wrong");', 'rust')).toMatchObject({
+      kind: 'invalid',
+      diagnostics: [{ fieldPath: 'metadata' }]
+    });
   });
 
-  it('parses cells and extracts cells from markdown fences', async () => {
-    const cell = await parseCell(
-      [
-        '//| id: rust-cell',
-        '//| title: Rust cell',
-        '//| run: reactive',
-        '//| crates: [doc-rust, doc-rust]',
-        '//| timeoutMs: 42.8',
-        '//| showSource: false',
-        '//| inputs:',
-        '//|   r: { type: range, label: r, min: 0, max: 4, step: 0.1, value: 3.2 }',
-        'println!("{r}");'
-      ].join('\n'),
-      'rust',
-      'page.mdx',
-      { helperCrates, highlighter }
-    );
+  it('parses legal Markdown fences through the shared AST boundary', async () => {
+    const source = [
+      '   ````{.rust} title',
+      '   //| id: rust-cell',
+      '   //| title: Rust cell',
+      '   //| run: reactive',
+      '   //| crates: [doc-rust]',
+      '   //| timeoutMs: 42',
+      '   //| showSource: false',
+      '   //| inputs:',
+      '   //|   r: { type: range, label: r, min: 0, max: 4, step: 0.1, value: 3.2 }',
+      '   println!("{r}");',
+      '   `````',
+      '~~~python',
+      '#| id: python-cell',
+      'print("ok")',
+      '~~~~',
+      '```haskell',
+      '--| id: haskell-cell',
+      'putStrLn "ok"',
+      '```',
+      '```rust',
+      'println!("plain");',
+      '```'
+    ].join('\n');
 
-    expect(cell).toMatchObject({
+    const parsed = parseCellsFromMarkdown(source, 'content/docs/page.mdx');
+    expect(parsed.diagnostics).toEqual([]);
+    expect(parsed.cells).toMatchObject([
+      { id: 'page__rust-cell', language: 'rust', fenceStartLine: 1, timeoutMs: 42 },
+      { id: 'page__python-cell', language: 'python', fenceStartLine: 12 },
+      { id: 'page__haskell-cell', language: 'haskell', fenceStartLine: 16 }
+    ]);
+
+    const cells = await extractCellsFromMarkdown(source, 'content/docs/page.mdx', { helperCrates, highlighter });
+    expect(cells).toHaveLength(3);
+    expect(cells[0]).toMatchObject({
       id: 'page__rust-cell',
-      language: 'rust',
       title: 'Rust cell',
       run: 'reactive',
       crates: ['doc-rust'],
       packages: [],
-      timeoutMs: 42,
       showSource: false,
-      pagePath: 'page.mdx'
+      pagePath: 'content/docs/page.mdx'
     });
-    expect(cell.inputs).toHaveLength(1);
-    expect(cell.sourceHtml).toContain('data-lang="rust"');
-
-    await expect(
-      extractCellsFromMarkdown(
-        [
-          '```rust',
-          '//| id: one',
-          '//| crates: []',
-          'println!("one");',
-          '```',
-          '```txt',
-          'ignored',
-          '```',
-          '~~~python',
-          '#| id: two',
-          'print("two")',
-          '~~~',
-          '```haskell',
-          '--| id: three',
-          'putStrLn "three"',
-          '```',
-          '```rust',
-          'println!("no metadata");',
-          '```'
-        ].join('\n'),
-        'page.mdx',
-        { helperCrates, highlighter }
-      )
-    ).resolves.toHaveLength(3);
+    expect(cells[0].inputs).toHaveLength(1);
+    expect(cells[0].sourceHtml).toContain('data-lang="rust"');
   });
 
-  it('returns no cell without metadata and rejects invalid cell metadata', async () => {
-    await expect(parseCell('println!("ok");', 'rust', 'page.mdx', { helperCrates, highlighter })).resolves.toBeUndefined();
-    await expect(parseCell('//|\nprintln!("ok");', 'rust', 'page.mdx', { helperCrates, highlighter })).rejects.toThrow(
-      'missing an id option'
-    );
-    await expect(parseCell('//| title: missing\nprintln!("ok");', 'rust', 'page.mdx', { helperCrates, highlighter })).rejects.toThrow(
-      'missing an id option'
-    );
-    await expect(parseCell('//| id: empty', 'rust', 'page.mdx', { helperCrates, highlighter })).rejects.toThrow(
-      'does not contain code'
-    );
-    await expect(parseCell('//| id: bad\n//| run: sometimes\nprintln!("ok");', 'rust', 'page.mdx', {
-      helperCrates,
-      highlighter
-    })).rejects.toThrow('Allowed values: button, reactive, autorun, hidden');
-    await expect(parseCell('//| id: bad\n//| timeoutMs: 0\nprintln!("ok");', 'rust', 'page.mdx', {
-      helperCrates,
-      highlighter
-    })).rejects.toThrow('invalid timeoutMs value 0');
-    await expect(parseCell('//| id: bad\n//| inputs:\n//|   mode: { type: knob }\nprintln!("ok");', 'rust', 'page.mdx', {
-      helperCrates,
-      highlighter
-    })).rejects.toThrow('for input "mode". Allowed values');
+  it.each([
+    ['malformed YAML', '//| id: [', 'metadata'],
+    ['invalid id', '//| id: Bad.id', 'id'],
+    ['unknown field', '//| id: bad\n//| mystery: true', 'mystery'],
+    ['non-string title', '//| id: bad\n//| title: 12', 'title'],
+    ['non-boolean source flag', '//| id: bad\n//| showSource: "false"', 'showSource'],
+    ['hidden run mode', '//| id: bad\n//| run: hidden', 'run'],
+    ['fractional timeout', '//| id: bad\n//| timeoutMs: 1.5', 'timeoutMs'],
+    ['wrong crates collection', '//| id: bad\n//| crates: doc-rust', 'crates'],
+    ['duplicate crates', '//| id: bad\n//| crates: [doc-rust, doc-rust]', 'crates[1]'],
+    ['language mismatch', '//| id: bad\n//| packages: [numpy]', 'packages'],
+    ['autorun inputs', '//| id: bad\n//| run: autorun\n//| inputs: {}', 'inputs'],
+    ['invalid input name', '//| id: bad\n//| inputs:\n//|   camelCase: { value: text }', 'inputs.camelCase'],
+    ['scalar input definition', '//| id: bad\n//| inputs:\n//|   label: text', 'inputs.label'],
+    ['wrong inputs collection', '//| id: bad\n//| inputs: []', 'inputs'],
+    ['unknown input type', '//| id: bad\n//| inputs:\n//|   count: { type: knob, value: text }', 'inputs.count.type'],
+    ['wrong input value type', '//| id: bad\n//| inputs:\n//|   count: { type: number, value: text }', 'inputs.count.value'],
+    ['wrong input label type', '//| id: bad\n//| inputs:\n//|   count: { label: 2, value: text }', 'inputs.count.label'],
+    ['wrong integer flag type', '//| id: bad\n//| inputs:\n//|   count: { type: number, integer: yes, value: 1 }', 'inputs.count.integer'],
+    ['integer flag on text', '//| id: bad\n//| inputs:\n//|   label: { integer: false, value: text }', 'inputs.label.integer'],
+    ['numeric field on text', '//| id: bad\n//| inputs:\n//|   label: { value: text, min: 1 }', 'inputs.label.min'],
+    ['non-finite bound', '//| id: bad\n//| inputs:\n//|   count: { type: number, value: 1, max: .nan }', 'inputs.count.max'],
+    ['non-positive step', '//| id: bad\n//| inputs:\n//|   count: { type: number, value: 1, step: 0 }', 'inputs.count.step'],
+    ['reversed bounds', '//| id: bad\n//| inputs:\n//|   count: { type: number, value: 2, min: 3, max: 1 }', 'inputs.count.min'],
+    ['default below bounds', '//| id: bad\n//| inputs:\n//|   count: { type: number, value: 0, min: 1 }', 'inputs.count.value'],
+    ['fractional integer', '//| id: bad\n//| inputs:\n//|   count: { type: integer, value: 1.5 }', 'inputs.count.value'],
+    ['empty options', '//| id: bad\n//| inputs:\n//|   mode: { type: select, value: a, options: [] }', 'inputs.mode.options'],
+    ['duplicate options', '//| id: bad\n//| inputs:\n//|   mode: { type: radio, value: a, options: [a, a] }', 'inputs.mode.options[1].value'],
+    ['missing option default', '//| id: bad\n//| inputs:\n//|   mode: { type: select, value: b, options: [a] }', 'inputs.mode.value'],
+    ['options on text', '//| id: bad\n//| inputs:\n//|   mode: { value: a, options: [a] }', 'inputs.mode.options'],
+    ['invalid option mapping', '//| id: bad\n//| inputs:\n//|   mode: { type: select, value: a, options: [{ label: A }] }', 'inputs.mode.options[0].value'],
+    ['unknown option field', '//| id: bad\n//| inputs:\n//|   mode: { type: select, value: a, options: [{ label: A, value: a, extra: true }] }', 'inputs.mode.options[0].extra'],
+    ['unknown input field', '//| id: bad\n//| inputs:\n//|   mode: { value: text, unknown: true }', 'inputs.mode.unknown']
+  ])('reports strict metadata diagnostics for %s', (_name, metadata, fieldPath) => {
+    const source = ['before', '```rust', metadata, 'println!("ok");', '```'].join('\n');
+    const parsed = parseCellsFromMarkdown(source, 'content/docs/page.mdx');
+
+    expect(parsed.cells).toEqual([]);
+    expect(parsed.diagnostics).toContainEqual(expect.objectContaining({
+      pagePath: 'content/docs/page.mdx',
+      fenceStartLine: 2,
+      fieldPath
+    }));
   });
 
-  it('normalizes run modes, timeouts, package lists, and crate lists', () => {
-    expect(normalizeRunMode(undefined)).toBe('button');
-    expect(normalizeRunMode('button')).toBe('button');
-    expect(normalizeRunMode('autorun')).toBe('autorun');
-    expect(normalizeRunMode('hidden')).toBe('hidden');
-    expect(normalizeRunMode('reactive')).toBe('reactive');
-    expect(() => normalizeRunMode('unknown', 'cell', 'page')).toThrow(
-      'Allowed values: button, reactive, autorun, hidden'
-    );
+  it('normalizes strict input defaults and option mappings', () => {
+    const source = [
+      '```python',
+      '#| id: inputs',
+      '#| packages: [pandas, matplotlib]',
+      '#| inputs:',
+      '#|   plain: {}',
+      '#|   enabled: { type: checkbox }',
+      '#|   count: { type: number, integer: true, value: 2, min: 1, max: 3, step: 1 }',
+      '#|   mode: { type: select, value: b, options: [a, { label: Bee, value: b }] }',
+      'print(plain, enabled, count, mode)',
+      '```'
+    ].join('\n');
+    const parsed = parseCellsFromMarkdown(source, 'content/docs/page.mdx');
 
-    expect(normalizeTimeout(undefined)).toBe(30_000);
-    expect(normalizeTimeout(10.8)).toBe(10);
-    expect(() => normalizeTimeout(0, 'cell', 'page')).toThrow('Expected a positive number');
-    expect(() => normalizeTimeout(Number.NaN, 'cell', 'page')).toThrow('Expected a positive number');
-    expect(() => normalizeTimeout('bad', 'cell', 'page')).toThrow('Expected a positive number');
-
-    expect(normalizePackages(null, 'python', 'cell', 'page')).toEqual([]);
-    expect(normalizePackages([], 'python', 'cell', 'page')).toEqual([]);
-    expect(normalizePackages(['numpy', 'numpy', 'pandas'], 'python', 'cell', 'page')).toEqual(['numpy', 'pandas']);
-    expect(() => normalizePackages(['scipy'], 'python', 'cell', 'page')).toThrow('unsupported packages: scipy');
-    expect(() => normalizePackages(['numpy'], 'rust', 'cell', 'page')).toThrow('cannot specify packages');
-    expect(() => normalizePackages(['numpy'], 'haskell', 'cell', 'page')).toThrow('Haskell cell');
-
-    expect(normalizeCrates(null, 'rust', 'cell', 'page', helperCrates)).toEqual([]);
-    expect(normalizeCrates(['doc-rust-text', 'doc-rust'], 'rust', 'cell', 'page', helperCrates)).toEqual([
-      'doc-rust',
-      'doc-rust-text'
+    expect(parsed.diagnostics).toEqual([]);
+    expect(parsed.cells[0]).toMatchObject({ packages: ['matplotlib', 'pandas'] });
+    expect(parsed.cells[0].inputs).toEqual([
+      { name: 'plain', type: 'text', label: 'plain', value: '', min: undefined, max: undefined, step: undefined, integer: false, options: [] },
+      { name: 'enabled', type: 'checkbox', label: 'enabled', value: false, min: undefined, max: undefined, step: undefined, integer: false, options: [] },
+      { name: 'count', type: 'number', label: 'count', value: 2, min: 1, max: 3, step: 1, integer: true, options: [] },
+      { name: 'mode', type: 'select', label: 'mode', value: 'b', min: undefined, max: undefined, step: undefined, integer: false, options: [{ label: 'a', value: 'a' }, { label: 'Bee', value: 'b' }] }
     ]);
-    expect(() => normalizeCrates(['missing'], 'rust', 'cell', 'page', helperCrates)).toThrow('helper crate');
-    expect(() => normalizeCrates(['missing'], 'rust', 'cell', 'page', new Map())).toThrow('(none)');
-    expect(() => normalizeCrates(['doc-rust'], 'python', 'cell', 'page', helperCrates)).toThrow('cannot specify crates');
-    expect(() => normalizeCrates(['doc-rust'], 'haskell', 'cell', 'page', helperCrates)).toThrow('Haskell cell');
   });
 
-  it('validates string arrays and normalizes input specifications', () => {
-    expect(normalizeStringArray([' b ', 'a', 'a'], 'field', 'cell', 'page')).toEqual(['a', 'b']);
-    expect(() => normalizeStringArray('bad', 'field', 'cell', 'page')).toThrow('expected an array');
-    expect(() => normalizeStringArray([''], 'field', 'cell', 'page')).toThrow('non-empty strings');
+  it('rejects a language-mismatched leading option block before generation', async () => {
+    const source = '```rust\n#| id: wrong-language\nprintln!("wrong");\n```';
+    const parsed = parseCellsFromMarkdown(source, 'content/docs/page.mdx');
 
-    expect(normalizeInputType('range')).toBe('range');
-    expect(normalizeInputType('number')).toBe('number');
-    expect(normalizeInputType('integer')).toBe('integer');
-    expect(normalizeInputType('text')).toBe('text');
-    expect(normalizeInputType('textarea')).toBe('textarea');
-    expect(normalizeInputType('checkbox')).toBe('checkbox');
-    expect(normalizeInputType('select')).toBe('select');
-    expect(normalizeInputType('radio')).toBe('radio');
-    expect(normalizeInputType(undefined)).toBe('text');
-    expect(() => normalizeInputType('unknown', 'mode', 'cell', 'page')).toThrow('for input "mode"');
-
-    expect(normalizeInputValue('checkbox', 1)).toBe(true);
-    expect(normalizeInputValue('range', 2)).toBe(2);
-    expect(normalizeInputValue('range', 'bad')).toBe(0);
-    expect(normalizeInputValue('number', 2)).toBe(2);
-    expect(normalizeInputValue('integer', 2.9)).toBe(2);
-    expect(normalizeInputValue('integer', 'bad')).toBe(0);
-    expect(normalizeInputValue('text', null)).toBe('');
-    expect(normalizeInputValue('text', 12)).toBe('12');
-
-    expect(normalizeOptionalNumber(3)).toBe(3);
-    expect(normalizeOptionalNumber(Number.NaN)).toBeUndefined();
-    expect(normalizeOptionalNumber('3')).toBeUndefined();
-
-    expect(normalizeOptions(null)).toEqual([]);
-    expect(normalizeOptions(['a', { label: 'Bee', value: 'b' }, { label: 'Only label' }, { value: 'only-value' }])).toEqual([
-      { label: 'a', value: 'a' },
-      { label: 'Bee', value: 'b' },
-      { label: 'Only label', value: 'Only label' },
-      { label: 'only-value', value: 'only-value' }
-    ]);
-
-    expect(normalizeInputs(null)).toEqual([]);
-    expect(normalizeInputs([])).toEqual([]);
-    expect(
-      normalizeInputs({
-        plain: 'hello',
-        count: { type: 'integer', value: 2.7, min: 1, max: 9, step: 1, integer: false },
-        choice: { type: 'select', value: 'a', options: ['a'] }
-      })
-    ).toEqual([
+    expect(parsed.diagnostics).toEqual([
       {
-        name: 'plain',
-        type: 'text',
-        label: 'plain',
-        value: 'hello',
-        min: undefined,
-        max: undefined,
-        step: undefined,
-        integer: false,
-        options: []
-      },
-      {
-        name: 'count',
-        type: 'integer',
-        label: 'count',
-        value: 2,
-        min: 1,
-        max: 9,
-        step: 1,
-        integer: true,
-        options: []
-      },
-      {
-        name: 'choice',
-        type: 'select',
-        label: 'choice',
-        value: 'a',
-        min: undefined,
-        max: undefined,
-        step: undefined,
-        integer: false,
-        options: [{ label: 'a', value: 'a' }]
+        pagePath: 'content/docs/page.mdx',
+        fenceStartLine: 1,
+        fieldPath: 'metadata',
+        message: 'Expected Rust option comments at the start of the cell.'
       }
     ]);
+    await expect(
+      extractCellsFromMarkdown(source, 'content/docs/page.mdx', { helperCrates, highlighter })
+    ).rejects.toThrow('content/docs/page.mdx:1 metadata: Expected Rust option comments');
   });
 
   it('validates uniqueness and derives helper crates from manifests', () => {
     expect(() => assertUniqueCellIds([{ id: 'one__a', pagePath: 'one' }, { id: 'two__a', pagePath: 'two' }])).not.toThrow();
     expect(() => assertUniqueCellIds([{ id: 'page__a', pagePath: 'page' }, { id: 'page__a', pagePath: 'page' }])).toThrow(
-      'Duplicate interactive cell id'
+      'Scoped cell id'
     );
 
     expect(() =>

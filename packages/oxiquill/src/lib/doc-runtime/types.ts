@@ -1,5 +1,5 @@
 export type CellLanguage = 'rust' | 'python' | 'haskell';
-export type RunMode = 'button' | 'reactive' | 'autorun' | 'hidden';
+export type RunMode = 'button' | 'reactive' | 'autorun';
 export type InputType =
   | 'range'
   | 'number'

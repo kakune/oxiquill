@@ -1,86 +1,60 @@
-import YAML from 'yaml';
-import { scopedCellId } from '../../lib/doc-runtime/authoring-ids.mjs';
+import { unified } from 'unified';
+import remarkMdx from 'remark-mdx';
+import remarkParse from 'remark-parse';
 import {
-  normalizeCrates,
-  normalizeInputs,
-  normalizePackages,
-  normalizeRunMode,
-  normalizeTimeout
-} from './cell-metadata.mjs';
-import {
-  sourceThemes,
-  supportedLanguages
-} from './constants.mjs';
+  parseInteractiveCellNode,
+  throwInteractiveCellDiagnostics,
+  validateCellDependencies
+} from '../../lib/doc-runtime/cell-authoring.mjs';
+import { visit } from '../../lib/doc-runtime/remark-mdx-helpers.mjs';
+import { sourceThemes } from './constants.mjs';
+import { assertUniqueCellIds } from './validators.mjs';
 
-const fencePattern = /(^|\n)(`{3,}|~{3,})([^\n]*)\n([\s\S]*?)\n\2(?=\n|$)/g;
-const optionPattern = /^\s*(?:(?:\/\/\/|\/\/|#|--)\|)\s?(.*)$/;
+const markdownParser = unified().use(remarkParse);
+const mdxParser = unified().use(remarkParse).use(remarkMdx);
+
+export function parseCellsFromMarkdown(source, pagePath) {
+  const parser = String(pagePath).endsWith('.mdx') ? mdxParser : markdownParser;
+  const tree = parser.parse(source);
+  const cells = [];
+  const diagnostics = [];
+
+  visit(tree, (node) => {
+    const result = parseInteractiveCellNode(node, pagePath);
+    if (result.kind === 'cell') cells.push(result.cell);
+    if (result.kind === 'invalid') diagnostics.push(...result.diagnostics);
+  });
+
+  return { cells, diagnostics, tree };
+}
 
 export async function extractCellsFromMarkdown(source, pagePath, context) {
-  const cells = [];
-
-  for (const match of source.matchAll(fencePattern)) {
-    const language = parseLanguage(match[3]);
-    if (!language) continue;
-
-    const parsed = await parseCell(match[4], language, pagePath, context);
-    if (parsed) cells.push(parsed);
-  }
-
-  return cells;
+  const parsed = parseCellsFromMarkdown(source, pagePath);
+  const diagnostics = [
+    ...parsed.diagnostics,
+    ...parsed.cells.flatMap((cell) => validateCellDependencies(cell, context.helperCrates))
+  ];
+  throwInteractiveCellDiagnostics(diagnostics);
+  assertUniqueCellIds(parsed.cells);
+  return Promise.all(parsed.cells.map((cell) => createCellManifest(cell, context.highlighter)));
 }
 
-export function parseLanguage(info) {
-  const raw = info.trim().split(/\s+/u)[0].replace(/[{}]/gu, '').replace(/^\./u, '');
-  return supportedLanguages.get(raw);
-}
-
-export async function parseCell(rawSource, language, pagePath, context) {
-  const { metadataLines, sourceLines } = splitCellSource(rawSource);
-
-  if (metadataLines.length === 0) return undefined;
-
-  const metadata = YAML.parse(metadataLines.join('\n')) ?? {};
-  const localId = metadata.id;
-  if (!localId || typeof localId !== 'string') {
-    throw new Error(`Interactive ${language} cell in ${pagePath} is missing an id option.`);
-  }
-
-  const source = sourceLines.join('\n').trim();
-  if (!source) {
-    throw new Error(`Interactive cell "${localId}" in ${pagePath} does not contain code.`);
-  }
-
+export async function createCellManifest(cell, highlighter) {
   return {
-    id: scopedCellId(pagePath, localId),
-    language,
-    title: String(metadata.title ?? localId),
-    run: normalizeRunMode(metadata.run, localId, pagePath),
-    source,
-    sourceHtml: await context.highlighter.codeToHtml(source, {
-      lang: language,
+    id: cell.id,
+    language: cell.language,
+    title: cell.title,
+    run: cell.run,
+    source: cell.source,
+    sourceHtml: await highlighter.codeToHtml(cell.source, {
+      lang: cell.language,
       themes: sourceThemes
     }),
-    inputs: normalizeInputs(metadata.inputs, localId, pagePath),
-    packages: normalizePackages(metadata.packages, language, metadata.id, pagePath),
-    crates: normalizeCrates(metadata.crates, language, metadata.id, pagePath, context.helperCrates),
-    timeoutMs: normalizeTimeout(metadata.timeoutMs, localId, pagePath),
-    showSource: metadata.showSource !== false,
-    pagePath
+    inputs: cell.inputs,
+    packages: cell.packages,
+    crates: cell.crates,
+    timeoutMs: cell.timeoutMs,
+    showSource: cell.showSource,
+    pagePath: cell.pagePath
   };
-}
-
-export function splitCellSource(rawSource) {
-  const metadataLines = [];
-  const sourceLines = [];
-
-  for (const line of rawSource.split('\n')) {
-    const optionMatch = line.match(optionPattern);
-    if (optionMatch) {
-      metadataLines.push(optionMatch[1]);
-    } else {
-      sourceLines.push(line);
-    }
-  }
-
-  return { metadataLines, sourceLines };
 }
