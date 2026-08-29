@@ -138,6 +138,16 @@ describe('defineOxiquillConfig', () => {
     expect(update.markdown.processor).toBe(processor);
   });
 
+  it('installs package-owned main and worker bundle reporters', () => {
+    const update = runConfigSetup(defineOxiquillConfig({ sidebar: [], title: 'Docs' }));
+    const mainPlugins = update.vite.plugins.map((plugin) => plugin.name);
+    const workerPlugins = update.vite.worker.plugins().map((plugin) => plugin.name);
+
+    expect(mainPlugins).toContain('oxiquill-browser-bundle-main');
+    expect(workerPlugins).toContain('oxiquill-browser-bundle-worker');
+    expect(update.vite.build.chunkSizeWarningLimit).toBe(675);
+  });
+
   it('passes top-level shorthand options to Starlight', () => {
     const starlight = vi.fn(() => ({ hooks: {}, name: 'custom-starlight' }));
 
@@ -236,9 +246,27 @@ describe('defineOxiquillConfig', () => {
     const componentPath = fileURLToPath(
       new URL('../../packages/oxiquill/src/components/doc-runtime/InteractiveCell.tsx', import.meta.url)
     );
+    const linkedComponentPath = fileURLToPath(
+      new URL(
+        '../../examples/docs-site/node_modules/oxiquill/src/components/doc-runtime/InteractiveCell.tsx',
+        import.meta.url
+      )
+    );
+    const windowsPnpmComponentPath =
+      'C:/Users/RUNNER~1/AppData/Local/Temp/consumer/node_modules/.pnpm/oxiquill@file+..+oxiquill/node_modules/oxiquill/src/components/doc-runtime/InteractiveCell.tsx';
 
     const transformed = await plugin.transform('export default () => <section>ok</section>;', componentPath);
+    const linkedTransformed = await plugin.transform(
+      'export default () => <section>ok</section>;',
+      linkedComponentPath
+    );
+    const windowsPnpmTransformed = await plugin.transform(
+      'export default () => <section>ok</section>;',
+      windowsPnpmComponentPath
+    );
     expect(transformed.code).toContain('preact/jsx-runtime');
+    expect(linkedTransformed.code).toContain('preact/jsx-runtime');
+    expect(windowsPnpmTransformed.code).toContain('preact/jsx-runtime');
     await expect(plugin.transform('export default () => <div />;', '/consumer/Component.tsx')).resolves.toBeUndefined();
   });
 

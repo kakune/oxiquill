@@ -266,7 +266,8 @@ export function canLoadNativePackage(
   packagePath,
   { cwd = process.cwd(), env = process.env, spawn = spawnSync } = {}
 ) {
-  const result = spawn(nodePath, ['-e', 'import(process.argv[1]).catch(() => process.exit(1));', packagePath], {
+  const packageUrl = pathToFileURL(packagePath).href;
+  const result = spawn(nodePath, ['-e', 'import(process.argv[1]).catch(() => process.exit(1));', packageUrl], {
     cwd,
     env,
     stdio: 'ignore'
@@ -287,7 +288,7 @@ function frameworkBinScript(paths, packageName, binName = packageName) {
   return path.resolve(path.dirname(packageJsonPath), binPath);
 }
 
-function frameworkEnv(paths, { env = process.env, nodePath } = {}) {
+export function frameworkEnv(paths, { env = process.env, nodePath } = {}) {
   const frameworkNodePath = pathInUrl(paths.frameworkRoot, 'node_modules');
   const currentNodePath = env.NODE_PATH;
   const nextEnv = {
@@ -296,7 +297,11 @@ function frameworkEnv(paths, { env = process.env, nodePath } = {}) {
   };
 
   if (nodePath) {
-    nextEnv.PATH = nextEnv.PATH ? `${path.dirname(nodePath)}${path.delimiter}${nextEnv.PATH}` : path.dirname(nodePath);
+    const pathKey = Object.keys(nextEnv).find((key) => key.toUpperCase() === 'PATH') ?? 'PATH';
+    const currentPath = nextEnv[pathKey];
+    nextEnv[pathKey] = currentPath
+      ? `${path.dirname(nodePath)}${path.delimiter}${currentPath}`
+      : path.dirname(nodePath);
   }
 
   return nextEnv;

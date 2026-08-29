@@ -1,5 +1,5 @@
 import { expect, test } from '@playwright/test';
-import type { Locator } from '@playwright/test';
+import type { Locator, Page } from '@playwright/test';
 
 test('desktop sidebar toggle collapses, expands, and persists across navigation', async ({ page }) => {
   await page.setViewportSize({ width: 1280, height: 900 });
@@ -69,15 +69,65 @@ test('desktop sidebar preference does not affect the mobile menu', async ({ page
   expect(await page.evaluate(() => sessionStorage.getItem('oxiquill-sidebar-collapsed'))).toBe('true');
 });
 
+test('static pages do not reference optional browser runtimes', async ({ page }) => {
+  const requests = captureRequestPaths(page);
+
+  await page.goto('/guides/licensing/', { waitUntil: 'networkidle' });
+
+  await expect(page.getByRole('heading', { name: 'Licensing', exact: true })).toBeVisible();
+  await expect(page.locator('astro-island[component-url*="InteractiveCell"]')).toHaveCount(0);
+  await expect(page.locator('astro-island[component-url*="MermaidDiagram"]')).toHaveCount(0);
+  expect(requests.filter(isOptionalRuntimeRequest)).toEqual([]);
+});
+
+test('off-screen reactive cells wait for visible hydration', async ({ page }) => {
+  await page.setViewportSize({ width: 800, height: 240 });
+  const requests = captureRequestPaths(page);
+
+  await page.goto('/features/interactive-cells/', { waitUntil: 'networkidle' });
+
+  const cell = page.getByTestId('cell-features__interactive-cells__logistic-rust');
+  const cellBounds = await cell.boundingBox();
+  expect(cellBounds?.y).toBeGreaterThan(240);
+  expect(requests.some((request) => request.includes('/rust-worker-'))).toBe(false);
+  expect(requests.some((request) => request.includes('/rust-wasm/'))).toBe(false);
+
+  await cell.scrollIntoViewIfNeeded();
+  await expect(cell.getByTestId('run-output')).toContainText('n=0 x=0.200000');
+
+  expect(requests.some((request) => request.includes('/rust-worker-'))).toBe(true);
+  expect(requests.some((request) => request.includes('/rust-wasm/'))).toBe(true);
+  expect(requests.some((request) => request.includes('/python-worker-'))).toBe(false);
+  expect(requests.some((request) => request.includes('/haskell-worker-'))).toBe(false);
+});
+
+test('text-only Haskell cells do not load chart or unrelated runtimes', async ({ page }) => {
+  const requests = captureRequestPaths(page);
+
+  await page.goto('/samples/haskell-series/');
+  const cell = page.getByTestId('cell-samples__haskell-series__haskell-series-note');
+  await cell.scrollIntoViewIfNeeded();
+  await expect(cell.getByTestId('run-output')).toContainText('series: 2, 6, 12, 20, 30, 42');
+
+  expect(requests.some((request) => request.includes('/haskell-worker-'))).toBe(true);
+  expect(requests.some((request) => request.includes('/haskell-wasm/'))).toBe(true);
+  expect(requests.some((request) => request.includes('/ChartOutput.'))).toBe(false);
+  expect(requests.some((request) => request.includes('/rust-worker-'))).toBe(false);
+  expect(requests.some((request) => request.includes('/python-worker-'))).toBe(false);
+  expect(requests.some((request) => request.includes('/pyodide/'))).toBe(false);
+});
+
 test('Rust cells run from MDX code fences and redraw plots', async ({ page }) => {
   await page.goto('/samples/logistic-map/');
 
   await expect(page.getByRole('heading', { name: 'Logistic Map', exact: true })).toBeVisible();
 
-  await expect(page.getByTestId('run-output')).toContainText('x_120');
-  await expect(page.getByTestId('cell-source')).toContainText('doc_rust::logistic_series');
+  const cell = page.getByTestId('cell-samples__logistic-map__logistic-map-note');
+  await hydrateCell(cell);
+  await expect(cell.getByTestId('run-output')).toContainText('x_120');
+  await expect(cell.getByTestId('cell-source')).toContainText('doc_rust::logistic_series');
 
-  const chart = page.getByTestId('doc-plot');
+  const chart = cell.getByTestId('doc-plot');
   await expect(chart).toBeVisible();
   await expect(chart.locator('canvas')).toHaveCount(1);
   const canvas = chart.locator('canvas');
@@ -125,6 +175,7 @@ test('interactive cells and math rendering are available', async ({ page }) => {
   ).toBeVisible();
 
   const rustControls = page.getByTestId('cell-features__interactive-cells__rust-controls');
+  await hydrateCell(rustControls);
   await expect(rustControls.getByTestId('run-output')).toContainText('score = 19');
   await rustControls.getByLabel('operation').selectOption('triple');
   await rustControls.getByLabel('include bonus').uncheck();
@@ -133,19 +184,23 @@ test('interactive cells and math rendering are available', async ({ page }) => {
   await expect(rustControls.getByTestId('run-output')).toContainText('score = 21');
 
   const multipleCrates = page.getByTestId('cell-features__interactive-cells__rust-multiple-crates');
+  await hydrateCell(multipleCrates);
   await expect(multipleCrates.getByTestId('run-output')).toContainText('final step: 8');
   await expect(multipleCrates.getByTestId('run-output')).toContainText('compact output keeps only the essentials');
   await multipleCrates.getByLabel('verbose').check();
   await expect(multipleCrates.getByTestId('run-output')).toContainText('verbose output includes explanatory labels');
 
-  await expect(page.getByTestId('run-output').filter({ hasText: 'SAMPLE: mean = 7.5' })).toBeVisible({
+  const python = page.getByTestId('cell-features__interactive-cells__python-controls');
+  await hydrateCell(python);
+  await expect(python.getByTestId('run-output')).toContainText('SAMPLE: mean = 7.5', {
     timeout: 45_000
   });
 
-  await page.getByLabel('method').selectOption('sum');
-  await expect(page.getByTestId('run-output').filter({ hasText: 'SAMPLE: sum = 30' })).toBeVisible();
+  await python.getByLabel('method').selectOption('sum');
+  await expect(python.getByTestId('run-output')).toContainText('SAMPLE: sum = 30');
 
   const haskell = page.getByTestId('cell-features__interactive-cells__haskell-controls');
+  await hydrateCell(haskell);
   await expect(haskell.getByTestId('run-output')).toContainText('sample: 9, 36, 81, 144', {
     timeout: 45_000
   });
@@ -163,6 +218,7 @@ test('rich output examples render browser-visible artifacts', async ({ page }) =
   await page.goto('/features/rich-output/');
 
   const rust = page.getByTestId('cell-features__rich-output__rust-rich-outputs');
+  await hydrateCell(rust);
   await rust.getByRole('button', { name: 'Run' }).click();
 
   await expect(rust.getByTestId('value-output').filter({ hasText: '"status": "ok"' })).toBeVisible();
@@ -180,6 +236,7 @@ test('rich output examples render browser-visible artifacts', async ({ page }) =
   await expect(rust.getByTestId('html-output')).toHaveAttribute('srcdoc', /Sandboxed HTML/);
 
   const python = page.getByTestId('cell-features__rich-output__python-rich-outputs');
+  await hydrateCell(python);
   await python.getByRole('button', { name: 'Run' }).click();
 
   await expect(python.getByTestId('table-output')).toBeVisible({ timeout: 150_000 });
@@ -208,7 +265,7 @@ test('theme note and Mermaid examples are available without author-side TSX impo
   await expect(page.getByRole('heading', { name: 'Diagrams' })).toBeVisible();
   const diagrams = page.getByTestId('mermaid-diagram');
   await expect(diagrams).toHaveCount(3);
-  await expect(diagrams.first().locator('svg')).toBeVisible();
+  await expect(diagrams.first().locator('svg')).toBeVisible({ timeout: 30_000 });
   await expect(diagrams.nth(1).locator('svg')).toBeVisible();
   await expect(diagrams.nth(2).locator('svg')).toBeVisible();
 
@@ -236,11 +293,9 @@ test('localized pages and media examples are available', async ({ page }) => {
 
   await page.goto('/ja/features/interactive-cells/');
   await expect(page.getByRole('heading', { name: '実行可能セル' })).toBeVisible();
-  await expect(
-    page
-      .getByTestId('cell-ja__features__interactive-cells__rust-controls')
-      .getByRole('button', { name: 'コードを隠す' })
-  ).toBeVisible();
+  const localizedCell = page.getByTestId('cell-ja__features__interactive-cells__rust-controls');
+  await hydrateCell(localizedCell);
+  await expect(localizedCell.getByRole('button', { name: 'コードを隠す' })).toBeVisible();
 });
 
 async function sidebarPadding(mainFrame: Locator): Promise<number> {
@@ -277,4 +332,33 @@ async function canvasStats(canvas: Locator): Promise<{
 
     return { height: canvasElement.height, inkPixels, width: canvasElement.width };
   });
+}
+
+function captureRequestPaths(page: Page): string[] {
+  const requests: string[] = [];
+  page.on('request', (request) => {
+    requests.push(new URL(request.url()).pathname);
+  });
+  return requests;
+}
+
+function isOptionalRuntimeRequest(requestPath: string): boolean {
+  return [
+    '/InteractiveCell.',
+    '/MermaidDiagram.',
+    '/ChartOutput.',
+    '/rust-worker-',
+    '/python-worker-',
+    '/haskell-worker-',
+    '/mermaid.core.',
+    '/oxiquill/pyodide/',
+    '/oxiquill/rust-wasm/',
+    '/oxiquill/haskell-wasm/'
+  ].some((fragment) => requestPath.includes(fragment));
+}
+
+async function hydrateCell(cell: Locator): Promise<void> {
+  await cell.scrollIntoViewIfNeeded();
+  const island = cell.locator('xpath=ancestor::astro-island');
+  await expect.poll(() => island.getAttribute('ssr')).toBeNull();
 }

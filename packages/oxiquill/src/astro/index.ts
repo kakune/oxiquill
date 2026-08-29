@@ -21,6 +21,7 @@ import {
   syncDocRuntime,
   syncLicenseArtifacts
 } from '../generator/doc-runtime-service.mjs';
+import { createBrowserBundleCollector, syncBrowserBundleReport } from '../generator/browser-bundle-report.mjs';
 import { buildHaskellWasm, buildRustWasm } from '../generator/doc-runtime/wasm-build.mjs';
 import remarkInteractiveCells from '../lib/doc-runtime/remark-interactive-cells.mjs';
 import remarkMermaidDiagrams from '../lib/doc-runtime/remark-mermaid-diagrams.mjs';
@@ -54,6 +55,7 @@ type SyntaxHighlightObject = Extract<AstroMarkdownConfig['syntaxHighlight'], obj
 type ViteWorkerPlugins = PluginOption[] | (() => PluginOption[]);
 type DocRuntimeContext = Awaited<ReturnType<typeof createDocRuntimeContext>>;
 type BundledModuleCollector = ReturnType<typeof createBundledModuleCollector>;
+type BrowserBundleCollector = ReturnType<typeof createBrowserBundleCollector>;
 
 const frameworkPackageNames = ['astro', '@astrojs/markdown-remark', '@astrojs/preact', '@astrojs/starlight'];
 const viteManagedPackageNames = [
@@ -175,6 +177,7 @@ export function oxiquillIntegration({
 }: OxiquillIntegrationOptions = {}): AstroIntegration {
   let paths: OxiquillPaths | undefined;
   const bundledModules = createBundledModuleCollector();
+  const browserBundle = createBrowserBundleCollector();
 
   return {
     name: 'oxiquill',
@@ -186,7 +189,7 @@ export function oxiquillIntegration({
 
         const update = {
           markdown: mergeMarkdownConfig(base, paths, markdown),
-          vite: mergeViteConfig(paths, vite, bundledModules)
+          vite: mergeViteConfig(paths, vite, bundledModules, browserBundle)
         } as unknown as Parameters<typeof updateConfig>[0];
 
         updateConfig(update);
@@ -213,6 +216,7 @@ export function oxiquillIntegration({
         if (!paths) return;
 
         bundledModules.reset();
+        browserBundle.reset();
         const context = await createDocRuntimeContextForPaths({ paths });
         const summary = await syncDocRuntime(context);
         await buildRustWasm({ mode: 'build', paths });
@@ -229,6 +233,12 @@ export function oxiquillIntegration({
           moduleGroups: bundledModules.snapshot(),
           outputDirectory: pathInUrl(dir, 'oxiquill/licenses'),
           paths
+        });
+        await syncBrowserBundleReport({
+          chunks: browserBundle.snapshot(),
+          frameworkRoot: paths.frameworkRoot,
+          outputDirectory: dir,
+          workspaceRoot: paths.workspaceRoot
         });
       }
     }
@@ -301,7 +311,8 @@ function syntaxHighlightConfig(value: AstroMarkdownConfig['syntaxHighlight']): P
 function mergeViteConfig(
   paths: OxiquillPaths,
   vite: ViteUserConfig,
-  bundledModules: BundledModuleCollector
+  bundledModules: BundledModuleCollector,
+  browserBundle: BrowserBundleCollector
 ): ViteUserConfig {
   const worker = vite.worker ?? {};
   const server = vite.server ?? {};
@@ -335,6 +346,7 @@ function mergeViteConfig(
         oxiquillDependencyResolverPlugin(paths),
         oxiquillVirtualModulesPlugin(paths),
         bundledModuleCollectorPlugin(bundledModules, 'worker'),
+        browserBundleCollectorPlugin(browserBundle, 'worker'),
         ...resolveWorkerPlugins(worker.plugins as ViteWorkerPlugins | undefined)
       ]
     },
@@ -347,20 +359,33 @@ function mergeViteConfig(
       oxiquillVirtualModulesPlugin(paths),
       oxiquillPreactJsxPlugin(paths),
       bundledModuleCollectorPlugin(bundledModules, 'main'),
+      browserBundleCollectorPlugin(browserBundle, 'main'),
       ...(vite.plugins ?? [])
     ]
   };
 }
 
+function browserBundleCollectorPlugin(collector: BrowserBundleCollector, source: 'main' | 'worker'): Plugin {
+  return {
+    name: `oxiquill-browser-bundle-${source}`,
+    generateBundle(_options, bundle) {
+      collector.add(source, bundle);
+    }
+  };
+}
+
 function oxiquillPreactJsxPlugin(paths: OxiquillPaths): Plugin {
-  const sourceRoot = realpathSync(pathInUrl(paths.frameworkRoot, 'src'));
+  const sourceRoot = realpathSync.native(pathInUrl(paths.frameworkRoot, 'src'));
 
   return {
     enforce: 'pre',
     name: 'oxiquill-preact-jsx',
     async transform(code, id) {
       const filePath = id.split('?', 1)[0];
-      if (!filePath.endsWith('.tsx') || !isPathWithin(sourceRoot, filePath)) return undefined;
+      if (!filePath.endsWith('.tsx')) return undefined;
+
+      const realFilePath = existsSync(filePath) ? realpathSync.native(filePath) : filePath;
+      if (!isPathWithin(sourceRoot, realFilePath) && !isInstalledOxiquillSource(filePath)) return undefined;
 
       return transformWithOxc(code, filePath, {
         jsx: {
@@ -662,6 +687,11 @@ function existingRealPaths(paths: string[]): string[] {
 function isPathWithin(directory: string, filePath: string): boolean {
   const relative = path.relative(directory, filePath);
   return relative !== '' && !relative.startsWith(`..${path.sep}`) && !path.isAbsolute(relative);
+}
+
+function isInstalledOxiquillSource(filePath: string): boolean {
+  const normalizedPath = filePath.replaceAll('\\', '/').toLowerCase();
+  return normalizedPath.includes('/node_modules/oxiquill/src/');
 }
 
 function mergeServerFsAllow(allow: string[] | undefined, additions: string[]): string[] {
