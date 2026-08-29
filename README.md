@@ -32,9 +32,9 @@ English is the root documentation language. Japanese pages are published under `
 - `wasm-pack`
 - `cargo-llvm-cov`
 - `wasm32-wasi-ghc` 9.14 when authoring Haskell cells
-- Chromium for Playwright e2e tests
+- Chromium, Firefox, and WebKit for the full Playwright e2e suite
 
-On NixOS or any Linux system with Nix, use the checked-in flake to enter a shell with Node, pnpm, Rust, `wasm-pack`, `cargo-llvm-cov`, `wasm32-wasi-ghc`, and Chromium already wired up:
+On NixOS or any Linux system with Nix, use the checked-in flake to enter a shell with Node, pnpm, Rust, `wasm-pack`, `cargo-llvm-cov`, `wasm32-wasi-ghc`, and the Chromium/Firefox/WebKit Playwright bundle already wired up:
 
 ```sh
 nix develop
@@ -232,20 +232,27 @@ pnpm test
 Useful focused commands:
 
 ```sh
+pnpm lint
+pnpm format:check
 pnpm check
 pnpm test:unit
 pnpm test:unit:coverage
 pnpm test:rust
 pnpm test:rust:coverage
 pnpm test:wasm
+pnpm test:haskell
 pnpm test:e2e
+pnpm test:consumer:npm
+pnpm test:consumer:pnpm
 pnpm lint:rust
 pnpm doc:rust
 ```
 
 For docs-only prose changes, `pnpm check` is usually enough. For interactive cell metadata, generated Rust/Wasm or Haskell/WASI behavior, or browser-visible examples, also run `pnpm wasm:dev`, `pnpm test:wasm`, and `pnpm test:e2e` as appropriate.
 
-`test:unit:coverage` requires 85% statement, branch, function, and line coverage for handwritten TypeScript, Preact, and Node runtime code, excluding generated output. `test:rust:coverage` requires 85% line/function/region coverage for optional helper crates under `examples/docs-site/crates/` through `cargo-llvm-cov`. If no helper crates exist, Rust helper commands skip cleanly.
+`pnpm lint` runs ESLint with zero warnings, checks Prettier formatting, and runs strict Rust linting. `test:unit:coverage` requires 85% statement, branch, function, and line coverage across handwritten CLI, Astro integration, generator, manifest, worker, TypeScript, Preact, and Node runtime code; only generated output and type-only declarations are excluded. `test:rust:coverage` requires 85% line/function/region coverage for optional helper crates under `examples/docs-site/crates/` through `cargo-llvm-cov`. If no helper crates exist, Rust helper commands skip cleanly.
+
+`test:e2e` runs the full suite in Chromium, Firefox, and WebKit. `test:consumer:npm` and `test:consumer:pnpm` install the packed package tarball into a temporary standalone project, generate a Rust/Wasm cell, run static checks, and build the site without workspace links.
 
 ### License
 
@@ -304,9 +311,9 @@ Oxiquill は、MDX で書いた技術ノートを静的サイトとして公開�
 - `wasm-pack`
 - `cargo-llvm-cov`
 - Haskell セルを書く場合は `wasm32-wasi-ghc` 9.14
-- Playwright e2e test 用の Chromium
+- Playwright e2e full suite 用の Chromium、Firefox、WebKit
 
-NixOS または Nix を使える Linux では、このリポジトリの flake で shell に入ると、Node、pnpm、Rust、`wasm-pack`、`cargo-llvm-cov`、`wasm32-wasi-ghc`、Chromium が設定済みになります。
+NixOS または Nix を使える Linux では、このリポジトリの flake で shell に入ると、Node、pnpm、Rust、`wasm-pack`、`cargo-llvm-cov`、`wasm32-wasi-ghc`、Playwright 用 Chromium/Firefox/WebKit bundle が設定済みになります。
 
 ```sh
 nix develop
@@ -504,20 +511,27 @@ pnpm test
 よく使う個別 command:
 
 ```sh
+pnpm lint
+pnpm format:check
 pnpm check
 pnpm test:unit
 pnpm test:unit:coverage
 pnpm test:rust
 pnpm test:rust:coverage
 pnpm test:wasm
+pnpm test:haskell
 pnpm test:e2e
+pnpm test:consumer:npm
+pnpm test:consumer:pnpm
 pnpm lint:rust
 pnpm doc:rust
 ```
 
 docs-only の本文変更では、通常 `pnpm check` で十分です。実行可能セルの metadata、生成 Rust/Wasm や Haskell/WASI の動作、ブラウザ上の表示例を変更した場合は、必要に応じて `pnpm wasm:dev`、`pnpm test:wasm`、`pnpm test:e2e` も実行します。
 
-`test:unit:coverage` は Vitest の V8 coverage を使い、生成物を除いた手書きの TypeScript、Preact、Node runtime code に statement/branch/function/line 85% coverage を要求します。`test:rust:coverage` は `cargo-llvm-cov` で `examples/docs-site/crates/` 配下の任意の helper crate に line/function/region 85% を要求します。helper crate がない場合、Rust helper 用 command は正常終了で skip します。
+`pnpm lint` は ESLint を warning なしで実行し、Prettier format と strict Rust lint も確認します。`test:unit:coverage` は Vitest の V8 coverage を使い、手書きの CLI、Astro integration、generator、manifest、worker、TypeScript、Preact、Node runtime code に statement/branch/function/line 85% coverage を要求します。除外するのは生成物と type-only declaration だけです。`test:rust:coverage` は `cargo-llvm-cov` で `examples/docs-site/crates/` 配下の任意の helper crate に line/function/region 85% を要求します。helper crate がない場合、Rust helper 用 command は正常終了で skip します。
+
+`test:e2e` は Chromium、Firefox、WebKit で full suite を実行します。`test:consumer:npm` と `test:consumer:pnpm` は packed tarball を一時的な standalone project に installし、workspace link を使わずに Rust/Wasm cell の生成、static check、site build を確認します。
 
 ### ライセンス
 
