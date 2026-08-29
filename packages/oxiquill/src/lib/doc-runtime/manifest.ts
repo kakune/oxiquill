@@ -45,7 +45,7 @@ export function subscribeManifest(listener: () => void): () => void {
   return () => listeners.delete(listener);
 }
 
-if (import.meta.hot) {
+if (import.meta.hot?.data) {
   persistHotData();
   scheduleGeneratedManifestRefresh();
   import.meta.hot.on('oxiquill:manifest-changed', () => {
@@ -74,14 +74,14 @@ function initialVersionSnapshot(data: ManifestHotData | undefined): string {
 }
 
 function persistHotData(): void {
-  if (!import.meta.hot) return;
+  if (!import.meta.hot?.data) return;
 
   const data = import.meta.hot.data as ManifestHotData;
   data.cells = cellsSnapshot;
   data.version = versionSnapshot;
 }
 
-function applyCellsSnapshot(nextCells: readonly CellManifest[]): void {
+export function applyCellsSnapshot(nextCells: readonly CellManifest[]): void {
   if (nextCells === cellsSnapshot) return;
 
   cellsSnapshot = nextCells;
@@ -90,7 +90,7 @@ function applyCellsSnapshot(nextCells: readonly CellManifest[]): void {
   syncRenderedSourceBlocks();
 }
 
-function applyRuntimeVersionSnapshot(nextVersion: string): void {
+export function applyRuntimeVersionSnapshot(nextVersion: string): void {
   if (nextVersion === versionSnapshot) return;
 
   versionSnapshot = nextVersion;
@@ -100,7 +100,7 @@ function applyRuntimeVersionSnapshot(nextVersion: string): void {
   syncRenderedSourceBlocks();
 }
 
-function applyGeneratedSnapshot(nextSnapshot: ManifestSnapshot): void {
+export function applyGeneratedSnapshot(nextSnapshot: ManifestSnapshot): void {
   const cellsChanged = nextSnapshot.cells !== cellsSnapshot;
   const versionChanged = nextSnapshot.version !== versionSnapshot;
   if (!cellsChanged && !versionChanged) return;
@@ -124,16 +124,28 @@ function resetGeneratedWasmRuntimes(): void {
   resetInteractiveRuntime('haskell');
 }
 
-export async function refreshGeneratedManifest(): Promise<void> {
-  if (!import.meta.hot || typeof window === 'undefined' || typeof fetch !== 'function') return;
+type ManifestRefreshOptions = {
+  fetchImpl?: typeof fetch;
+  hasHotRuntime?: boolean;
+  now?: () => number;
+  windowObject?: Window;
+};
+
+export async function refreshGeneratedManifest({
+  fetchImpl = globalThis.fetch,
+  hasHotRuntime = Boolean(import.meta.hot),
+  now = Date.now,
+  windowObject = globalThis.window
+}: ManifestRefreshOptions = {}): Promise<void> {
+  if (!hasHotRuntime || !windowObject || typeof fetchImpl !== 'function') return;
 
   try {
-    const response = await fetch(freshManifestUrl(), { cache: 'no-store' });
+    const response = await fetchImpl(freshManifestUrl(now), { cache: 'no-store' });
     if (!response.ok) {
       throw new Error(`Received ${response.status} from the generated manifest endpoint.`);
     }
 
-    const payload = await response.json() as GeneratedManifestPayload;
+    const payload = (await response.json()) as GeneratedManifestPayload;
 
     applyGeneratedSnapshot({
       cells: payload.cells,
@@ -145,25 +157,35 @@ export async function refreshGeneratedManifest(): Promise<void> {
   }
 }
 
-function scheduleGeneratedManifestRefresh(): void {
-  if (typeof window === 'undefined') return;
+type ManifestScheduleOptions = {
+  refresh?: () => Promise<void>;
+  windowObject?: Pick<Window, 'setTimeout'>;
+};
+
+export function scheduleGeneratedManifestRefresh({
+  refresh = refreshGeneratedManifest,
+  windowObject = globalThis.window
+}: ManifestScheduleOptions = {}): void {
+  if (!windowObject) return;
 
   for (const delay of [0, 250, 1_000, 2_500, 5_000]) {
-    window.setTimeout(() => {
-      void refreshGeneratedManifest();
+    windowObject.setTimeout(() => {
+      void refresh();
     }, delay);
   }
 }
 
-function freshManifestUrl(): string {
+export function freshManifestUrl(now: () => number = Date.now): string {
   freshImportSequence += 1;
-  return `/__oxiquill/manifest.json?oxiquill-fresh=${Date.now()}-${freshImportSequence}`;
+  return `/__oxiquill/manifest.json?oxiquill-fresh=${now()}-${freshImportSequence}`;
 }
 
-function syncRenderedSourceBlocks(): void {
-  if (typeof document === 'undefined') return;
+export function syncRenderedSourceBlocks(documentObject: Document | undefined = globalThis.document): void {
+  if (!documentObject) return;
 
-  for (const sourceBlock of document.querySelectorAll<HTMLElement>('.doc-cell[data-cell-id] [data-testid="cell-source"]')) {
+  for (const sourceBlock of documentObject.querySelectorAll<HTMLElement>(
+    '.doc-cell[data-cell-id] [data-testid="cell-source"]'
+  )) {
     const cellId = sourceBlock.closest<HTMLElement>('.doc-cell[data-cell-id]')?.dataset.cellId;
     const cell = cellId ? getCell(cellId) : undefined;
     if (cell && sourceBlock.innerHTML !== cell.sourceHtml) {

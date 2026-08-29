@@ -3,11 +3,7 @@ import { pathFromUrl } from '../../config/paths.mjs';
 import { helperCratesFromManifests } from './helper-crates.mjs';
 import { defaultFileSystem } from './file-system.mjs';
 
-export async function listHelperCrates({
-  fileSystem = defaultFileSystem,
-  paths,
-  readManifests = readHelperManifests
-}) {
+export async function listHelperCrates({ fileSystem = defaultFileSystem, paths, readManifests = readHelperManifests }) {
   return helperCratesFromManifests(await readManifests({ fileSystem, paths }), {
     rustCellsDir: pathFromUrl(paths.rustCellsDir)
   });

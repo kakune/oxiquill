@@ -18,11 +18,7 @@ import { runHelperCargo } from '../generator/run-helper-cargo.mjs';
 export async function runCli(
   command,
   args = [],
-  {
-    cwd = process.cwd(),
-    runCommand = runCommandWithInheritedStdio,
-    selectNode = frameworkNode
-  } = {}
+  { cwd = process.cwd(), runCommand = runCommandWithInheritedStdio, selectNode = frameworkNode } = {}
 ) {
   const paths = createOxiquillPaths({ workspaceRoot: cwd });
 
@@ -218,16 +214,16 @@ export function selectFrameworkNode(
   const vitePath = resolveFromFramework(paths, 'vite');
   const probeEnv = frameworkEnv(paths, { env });
   const overridePath = env.OXIQUILL_NODE;
-  const candidates = overridePath ? [overridePath] : nodeExecutableCandidates({ execPath, exists, pathValue: env.PATH });
+  const candidates = overridePath
+    ? [overridePath]
+    : nodeExecutableCandidates({ execPath, exists, pathValue: env.PATH });
   const selected = candidates.find((candidate) =>
     canLoadNativePackage(candidate, vitePath, { cwd: pathFromUrl(paths.workspaceRoot), env: probeEnv, spawn })
   );
 
   if (selected) {
     if (!overridePath && realpathSafe(selected) !== realpathSafe(execPath)) {
-      warn(
-        `[oxiquill] Using ${selected} for Astro/Vite because ${execPath} cannot load Rollup native addons.`
-      );
+      warn(`[oxiquill] Using ${selected} for Astro/Vite because ${execPath} cannot load Rollup native addons.`);
     }
     return selected;
   }
@@ -270,19 +266,11 @@ export function canLoadNativePackage(
   packagePath,
   { cwd = process.cwd(), env = process.env, spawn = spawnSync } = {}
 ) {
-  const result = spawn(
-    nodePath,
-    [
-      '-e',
-      "import(process.argv[1]).catch(() => process.exit(1));",
-      packagePath
-    ],
-    {
-      cwd,
-      env,
-      stdio: 'ignore'
-    }
-  );
+  const result = spawn(nodePath, ['-e', 'import(process.argv[1]).catch(() => process.exit(1));', packagePath], {
+    cwd,
+    env,
+    stdio: 'ignore'
+  });
 
   return result.status === 0;
 }
@@ -308,9 +296,7 @@ function frameworkEnv(paths, { env = process.env, nodePath } = {}) {
   };
 
   if (nodePath) {
-    nextEnv.PATH = nextEnv.PATH
-      ? `${path.dirname(nodePath)}${path.delimiter}${nextEnv.PATH}`
-      : path.dirname(nodePath);
+    nextEnv.PATH = nextEnv.PATH ? `${path.dirname(nodePath)}${path.delimiter}${nextEnv.PATH}` : path.dirname(nodePath);
   }
 
   return nextEnv;

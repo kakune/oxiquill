@@ -6,8 +6,7 @@ export function generateRustCargoToml(rustCells, helperCrates) {
     .filter((crateName, index, crates) => crates.indexOf(crateName) === index)
     .sort()
     .map((crateName) => generateRustDependency(crateName, helperCrates));
-  const localDependencies =
-    dependencyLines.length > 0 ? `${dependencyLines.join('\n')}\n` : '';
+  const localDependencies = dependencyLines.length > 0 ? `${dependencyLines.join('\n')}\n` : '';
 
   return `${generatedTomlBanner()}[package]
 name = "doc-rust-cells"

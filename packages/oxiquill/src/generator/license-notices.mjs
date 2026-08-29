@@ -1,11 +1,5 @@
 import { existsSync } from 'node:fs';
-import {
-  copyFile,
-  mkdir,
-  readFile,
-  readdir,
-  writeFile
-} from 'node:fs/promises';
+import { copyFile, mkdir, readFile, readdir, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { pathFromUrl, pathInUrl } from '../config/paths.mjs';
@@ -20,9 +14,10 @@ const defaultFileSystem = {
   writeFile
 };
 const licenseDataUrl = new URL('./license-data/', import.meta.url);
-const defaultLicenseDataDir = licenseDataUrl.protocol === 'file:'
-  ? fileURLToPath(licenseDataUrl)
-  : path.resolve(process.cwd(), 'packages/oxiquill/src/generator/license-data');
+const defaultLicenseDataDir =
+  licenseDataUrl.protocol === 'file:'
+    ? fileURLToPath(licenseDataUrl)
+    : path.resolve(process.cwd(), 'packages/oxiquill/src/generator/license-data');
 const bundledOverridesFile = 'bundled-package-overrides.json';
 const runtimeManifestFile = 'runtime-artifacts.json';
 const unknownLicensePattern = /^(?:none|unknown|unlicensed)$/iu;
@@ -40,19 +35,19 @@ export function createBundledModuleCollector() {
       groups.clear();
     },
     snapshot() {
-      return new Map(
-        Array.from(groups, ([source, moduleIds]) => [source, Array.from(moduleIds).sort()])
-      );
+      return new Map(Array.from(groups, ([source, moduleIds]) => [source, Array.from(moduleIds).sort()]));
     }
   };
 }
 
 export function collectBundleModuleIds(bundle) {
-  return Array.from(new Set(
-    Object.values(bundle)
-      .filter((output) => output.type === 'chunk')
-      .flatMap((chunk) => Object.keys(chunk.modules ?? {}))
-  )).sort();
+  return Array.from(
+    new Set(
+      Object.values(bundle)
+        .filter((output) => output.type === 'chunk')
+        .flatMap((chunk) => Object.keys(chunk.modules ?? {}))
+    )
+  ).sort();
 }
 
 export function packageRootFromModuleId(moduleId) {
@@ -113,7 +108,7 @@ export async function collectBundledPackageNotices(
   );
   const failures = results.filter((result) => result.status === 'rejected');
   if (failures.length > 0) {
-    const messages = failures.map(({ reason }) => reason instanceof Error ? reason.message : String(reason)).sort();
+    const messages = failures.map(({ reason }) => (reason instanceof Error ? reason.message : String(reason))).sort();
     throw new AggregateError(
       failures.map(({ reason }) => reason),
       `Bundled package license collection failed:\n- ${messages.join('\n- ')}`
@@ -130,7 +125,8 @@ export async function collectRuntimeArtifactNotices({
   manifest,
   paths
 }) {
-  const resolvedManifest = manifest ?? await readJsonFile(path.join(licenseDataDir, runtimeManifestFile), { fileSystem });
+  const resolvedManifest =
+    manifest ?? (await readJsonFile(path.join(licenseDataDir, runtimeManifestFile), { fileSystem }));
   if (resolvedManifest.schemaVersion !== 1 || !Array.isArray(resolvedManifest.artifacts)) {
     throw new Error('Runtime license manifest must use schemaVersion 1 and contain an artifacts array.');
   }
@@ -172,18 +168,22 @@ export function generateThirdPartyLicenseReport(notices) {
     return `${introduction.join('\n')}No third-party runtime artifacts were included.\n`;
   }
 
-  const components = merged.map((notice) => [
-    `${notice.name} ${notice.version}`,
-    `License: ${notice.license}`,
-    `Included from: ${notice.sources.join(', ')}`
-  ].join('\n'));
-  const licenseTexts = groupLicenseTexts(merged).map((group) => [
-    '='.repeat(80),
-    `Used by: ${group.packages.join(', ')}`,
-    `License expression(s): ${group.licenses.join(', ')}`,
-    '-'.repeat(80),
-    group.licenseText.trim()
-  ].join('\n'));
+  const components = merged.map((notice) =>
+    [
+      `${notice.name} ${notice.version}`,
+      `License: ${notice.license}`,
+      `Included from: ${notice.sources.join(', ')}`
+    ].join('\n')
+  );
+  const licenseTexts = groupLicenseTexts(merged).map((group) =>
+    [
+      '='.repeat(80),
+      `Used by: ${group.packages.join(', ')}`,
+      `License expression(s): ${group.licenses.join(', ')}`,
+      '-'.repeat(80),
+      group.licenseText.trim()
+    ].join('\n')
+  );
 
   return [
     introduction.join('\n'),
@@ -202,7 +202,7 @@ export async function syncLicenseArtifacts({
   fileSystem = defaultFileSystem,
   licenseDataDir = defaultLicenseDataDir,
   moduleGroups = new Map(),
-  outputDirectory,
+  outputDirectory = /** @type {string | undefined} */ (undefined),
   paths
 }) {
   const licensesDirectory = outputDirectory ?? pathFromUrl(paths.licensesPublicDir);
@@ -217,18 +217,18 @@ export async function syncLicenseArtifacts({
   );
 
   if (!outputDirectory) {
-    copied.push(...await Promise.all(
-      ownLicenseCopies.map(([fileName, sourcePath]) =>
-        copyFileIfChanged(sourcePath, pathInUrl(paths.rustCellsDir, fileName), { fileSystem })
-      )
-    ));
+    copied.push(
+      ...(await Promise.all(
+        ownLicenseCopies.map(([fileName, sourcePath]) =>
+          copyFileIfChanged(sourcePath, pathInUrl(paths.rustCellsDir, fileName), { fileSystem })
+        )
+      ))
+    );
     const rustLockPath = pathInUrl(paths.rustCellsDir, 'Cargo.lock');
     if (!fileSystem.existsSync(rustLockPath)) {
-      copied.push(await copyFileIfChanged(
-        path.join(licenseDataDir, 'rust/runtime-Cargo.lock'),
-        rustLockPath,
-        { fileSystem }
-      ));
+      copied.push(
+        await copyFileIfChanged(path.join(licenseDataDir, 'rust/runtime-Cargo.lock'), rustLockPath, { fileSystem })
+      );
     }
   }
 
@@ -253,8 +253,10 @@ async function readPackageLicenseText(packageRoot, license, { fileSystem, licens
   const entries = await fileSystem.readdir(packageRoot);
   const referencedFile = /^SEE LICEN[CS]E IN (.+)$/iu.exec(license)?.[1];
   const licenseFiles = entries
-    .map((entry) => typeof entry === 'string' ? entry : entry.name)
-    .filter((fileName) => /^(?:licen[cs]e|copying)(?:$|[._-])/iu.test(fileName) || /^notice(?:$|[._-])/iu.test(fileName));
+    .map((entry) => (typeof entry === 'string' ? entry : entry.name))
+    .filter(
+      (fileName) => /^(?:licen[cs]e|copying)(?:$|[._-])/iu.test(fileName) || /^notice(?:$|[._-])/iu.test(fileName)
+    );
 
   if (referencedFile && !licenseFiles.includes(referencedFile)) licenseFiles.push(referencedFile);
   licenseFiles.sort();
@@ -292,11 +294,17 @@ async function readBundledLicenseOverride({ fileSystem, licenseDataDir, license,
   const override = manifest.packages.find((entry) => entry.name === name && entry.version === version);
   if (!override) throw new Error(`Package license text is missing for ${packageRoot}.`);
 
-  const overrideLicense = assertKnownText(override.license, `Bundled package override for ${name} has an unknown license`);
+  const overrideLicense = assertKnownText(
+    override.license,
+    `Bundled package override for ${name} has an unknown license`
+  );
   if (typeof license === 'string' && license.trim() && license.trim() !== overrideLicense) {
     throw new Error(`Bundled package override for ${name} ${version} conflicts with package license ${license}.`);
   }
-  const licenseFile = assertKnownText(override.licenseFile, `Bundled package override for ${name} is missing a license file`);
+  const licenseFile = assertKnownText(
+    override.licenseFile,
+    `Bundled package override for ${name} is missing a license file`
+  );
   const text = await fileSystem.readFile(path.join(licenseDataDir, licenseFile), 'utf8');
   return `[${licenseFile}]\n${assertKnownText(text, `Bundled package override license text for ${name} is empty`)}`;
 }
@@ -331,9 +339,7 @@ async function readManifestLicenseText(licenseFiles, { fileSystem, licenseDataDi
       } catch (error) {
         throw new Error(`License text ${fileName} is missing for runtime artifact ${name}.`, { cause: error });
       }
-      const licenseText = fileName.endsWith('.json')
-        ? licenseTextFromJson(content, fileName, name)
-        : content;
+      const licenseText = fileName.endsWith('.json') ? licenseTextFromJson(content, fileName, name) : content;
       return `[${fileName}]\n${assertKnownText(licenseText, `License text ${fileName} for runtime artifact ${name} is empty`).trim()}`;
     })
   );
@@ -374,7 +380,11 @@ function assertKnownText(value, message) {
 }
 
 function assertStringArray(value, message) {
-  if (!Array.isArray(value) || value.length === 0 || value.some((item) => typeof item !== 'string' || item.trim() === '')) {
+  if (
+    !Array.isArray(value) ||
+    value.length === 0 ||
+    value.some((item) => typeof item !== 'string' || item.trim() === '')
+  ) {
     throw new Error(`${message}.`);
   }
   return Array.from(new Set(value.map((item) => item.trim()))).sort();
@@ -397,8 +407,8 @@ function mergeNotices(notices) {
     current.sources = Array.from(new Set([...current.sources, ...notice.sources])).sort();
   }
 
-  return Array.from(merged.values()).sort((left, right) =>
-    compareText(left.name, right.name) || compareText(left.version, right.version)
+  return Array.from(merged.values()).sort(
+    (left, right) => compareText(left.name, right.name) || compareText(left.version, right.version)
   );
 }
 
@@ -430,13 +440,12 @@ function compareText(left, right) {
 function resolvePackageRoot(packageRoot, { fileSystem, searchRoots }) {
   if (path.isAbsolute(packageRoot)) return packageRoot;
 
-  const ancestors = Array.from(new Set(
-    searchRoots.flatMap((searchRoot) => pathAncestors(path.resolve(searchRoot)))
-  ));
-  return ancestors
-    .map((ancestor) => path.resolve(ancestor, packageRoot))
-    .find((candidate) => fileSystem.existsSync(path.join(candidate, 'package.json')))
-    ?? packageRoot;
+  const ancestors = Array.from(new Set(searchRoots.flatMap((searchRoot) => pathAncestors(path.resolve(searchRoot)))));
+  return (
+    ancestors
+      .map((ancestor) => path.resolve(ancestor, packageRoot))
+      .find((candidate) => fileSystem.existsSync(path.join(candidate, 'package.json'))) ?? packageRoot
+  );
 }
 
 function pathAncestors(startPath) {

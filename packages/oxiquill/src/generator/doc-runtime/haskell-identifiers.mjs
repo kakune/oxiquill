@@ -12,7 +12,10 @@ export function haskellFunctionName(id) {
 }
 
 export function haskellIdentifier(value) {
-  const identifier = String(value).replace(/[^a-zA-Z0-9_]/gu, '_').replace(/_+/gu, '_') || 'cell';
+  const identifier =
+    String(value)
+      .replace(/[^a-zA-Z0-9_]/gu, '_')
+      .replace(/_+/gu, '_') || 'cell';
   const variable = /^[a-z_]/u.test(identifier) && identifier !== '_' ? identifier : `cell_${identifier}`;
 
   return haskellReservedIdentifiers.has(variable) ? `cell_${variable}` : variable;

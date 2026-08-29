@@ -7,6 +7,15 @@ description: ドキュメント、runtime、Rust helper、ブラウザ表示の�
 
 ## よく使う check
 
+code または config を変更した場合は、必須の lint と format gate を実行します。
+
+```sh
+pnpm lint
+pnpm format:check
+```
+
+`pnpm lint` は JavaScript、MJS、TypeScript、TSX、Astro に ESLint を warning なしで実行し、Prettier format と strict Rust lint も確認します。設定済みの source、config、Markdown/MDX、JSON、YAML format を適用するには `pnpm format` を使います。
+
 通常のドキュメント変更では `pnpm check` を実行します。
 
 ```sh
@@ -28,10 +37,11 @@ pnpm test
 ```sh
 pnpm wasm:dev
 pnpm test:wasm
+pnpm test:haskell
 pnpm test:e2e
 ```
 
-`pnpm wasm:dev` は local development 用 runtime を再生成します。Haskell セルがある場合は `wasm32-wasi-ghc` が必要で、`pnpm build`、`pnpm check`、`pnpm wasm:build`、`pnpm test:wasm` でも同じです。`pnpm dev` と `pnpm dev:runtime` は意図的により寛容で、Haskell compiler がない、または Haskell compile に失敗しても Astro の serving を続け、browser 上の Haskell セルに error を表示します。`pnpm test:wasm` は生成 Rust cell の動作を確認します。`pnpm test:e2e` は Haskell セルを含む build 済み site を browser で確認します。
+`pnpm wasm:dev` は local development 用 runtime を再生成します。Haskell セルがある場合は `wasm32-wasi-ghc` が必要で、`pnpm build`、`pnpm check`、`pnpm wasm:build`、`pnpm test:wasm` でも同じです。`pnpm dev` と `pnpm dev:runtime` は意図的により寛容で、Haskell compiler がない、または Haskell compile に失敗しても Astro の serving を続け、browser 上の Haskell セルに error を表示します。`pnpm test:wasm` は生成 Rust cell の動作を確認し、`pnpm test:haskell` は生成 Haskell/WASI runtime を実行します。`pnpm test:e2e` は Chromium、Firefox、WebKit で full browser suite を実行します。
 
 ## unit と coverage check
 
@@ -42,7 +52,20 @@ pnpm test:unit
 pnpm test:unit:coverage
 ```
 
-coverage は statement/branch/function/line 85% を要求し、生成 runtime output を除外します。生成物を編集するのではなく、未 covered の手書き code に focused test を追加します。
+coverage は手書きの CLI、Astro integration、config/path、manifest、worker、generator、runtime module に statement/branch/function/line 85% を要求します。除外するのは生成物と type-only declaration だけです。生成物を編集するのではなく、未 covered の手書き code に focused test を追加します。
+
+## packed consumer check
+
+workspace link を使わない install を、両方の supported package manager で確認します。
+
+```sh
+pnpm test:consumer:npm
+pnpm test:consumer:pnpm
+```
+
+各 command は `oxiquill` を pack し、tarball を一時的な standalone project に installして、CLI と static check、Rust/Wasm cell generation、site build を実行します。
+
+pull request では Linux、macOS、Windows の compatibility job、Linux/macOS の Haskell runtime job、Chromium、Firefox、WebKit の full browser job が必須です。supported matrix の全 cell が merge-blocking です。
 
 ## Rust helper check
 

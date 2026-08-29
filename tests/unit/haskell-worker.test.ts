@@ -18,10 +18,12 @@ describe('haskell worker helpers', () => {
   });
 
   it('maps captured stdout and stderr to text artifacts', () => {
-    expect(createHaskellCellResult({
-      stdout: 'value = 42',
-      stderr: 'warning'
-    })).toEqual({
+    expect(
+      createHaskellCellResult({
+        stdout: 'value = 42',
+        stderr: 'warning'
+      })
+    ).toEqual({
       stdout: 'value = 42',
       stderr: 'warning',
       plots: [],
@@ -44,14 +46,15 @@ describe('haskell worker helpers', () => {
       'Haskell WASI runtime is not available: generated runtime is stale; rerun pnpm wasm:dev.'
     );
     expect(() =>
-      assertReadyHaskellRuntimeStatus({
-        status: 'unavailable',
-        haskellFingerprintHash: 'hash-one',
-        message: 'install wasm32-wasi-ghc and rerun pnpm wasm:dev.'
-      }, 'hash-one')
-    ).toThrow(
-      'Haskell WASI runtime is not available: install wasm32-wasi-ghc and rerun pnpm wasm:dev.'
-    );
+      assertReadyHaskellRuntimeStatus(
+        {
+          status: 'unavailable',
+          haskellFingerprintHash: 'hash-one',
+          message: 'install wasm32-wasi-ghc and rerun pnpm wasm:dev.'
+        },
+        'hash-one'
+      )
+    ).toThrow('Haskell WASI runtime is not available: install wasm32-wasi-ghc and rerun pnpm wasm:dev.');
     expect(() => parseHaskellRuntimeStatus({ status: 'ready' })).toThrow(
       'Haskell WASI runtime is not available: generated runtime status is invalid.'
     );
@@ -77,10 +80,11 @@ describe('haskell worker helpers', () => {
     });
     expect(requests).toEqual([['/status.json', { cache: 'no-store' }]]);
 
-    const missing = async () => ({
-      ok: false,
-      json: async () => ({})
-    }) as Response;
+    const missing = async () =>
+      ({
+        ok: false,
+        json: async () => ({})
+      }) as Response;
     await expect(fetchHaskellRuntimeStatus('/missing.json', missing as typeof fetch)).rejects.toThrow(
       'Haskell WASI runtime is not available: generated runtime status is missing; rerun pnpm wasm:dev.'
     );
@@ -101,9 +105,9 @@ describe('haskell worker helpers', () => {
       }),
       clone: vi.fn(() => cloned)
     };
-    const compileStreaming = vi.spyOn(WebAssembly, 'compileStreaming').mockRejectedValue(
-      new TypeError('unsupported content type')
-    );
+    const compileStreaming = vi
+      .spyOn(WebAssembly, 'compileStreaming')
+      .mockRejectedValue(new TypeError('unsupported content type'));
     const compile = vi.spyOn(WebAssembly, 'compile').mockResolvedValue(module);
 
     try {

@@ -1,8 +1,5 @@
 import { pythonDisplaySupportCode } from './python-display-support';
-import {
-  createPythonCellResult,
-  toOutputArtifacts
-} from './python-cell-result';
+import { createPythonCellResult, toOutputArtifacts } from './python-cell-result';
 import { createSerialRequestQueue } from './python-worker-queue';
 import type { RuntimeWorkerRequest, RuntimeWorkerResponse } from './types';
 
@@ -53,9 +50,7 @@ async function handleRequest(request: RuntimeWorkerRequest): Promise<void> {
     } finally {
       globals.destroy();
     }
-    const displayOutputs = toOutputArtifacts(
-      toSerializable(pyodide.runPython('__oxiquill_take_outputs()'))
-    );
+    const displayOutputs = toOutputArtifacts(toSerializable(pyodide.runPython('__oxiquill_take_outputs()')));
     const matplotlibOutputs = toOutputArtifacts(
       toSerializable(pyodide.runPython('__oxiquill_collect_matplotlib_outputs()'))
     );
@@ -98,9 +93,7 @@ async function importPyodideModule(): Promise<{ loadPyodide: LoadPyodide }> {
     throw new Error(`Failed to load ${pyodideUrls.moduleUrl}: ${response.status} ${response.statusText}`);
   }
 
-  const moduleUrl = URL.createObjectURL(
-    new Blob([await response.text()], { type: 'text/javascript' })
-  );
+  const moduleUrl = URL.createObjectURL(new Blob([await response.text()], { type: 'text/javascript' }));
 
   try {
     return (await import(/* @vite-ignore */ moduleUrl)) as { loadPyodide: LoadPyodide };

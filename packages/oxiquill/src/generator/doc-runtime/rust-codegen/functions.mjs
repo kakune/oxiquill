@@ -32,9 +32,7 @@ mod tests {
 
     #[wasm_bindgen_test]
     fn first_generated_cell_runs() {
-        let output = super::run_rust_cell(${JSON.stringify(cell.id)}, ${JSON.stringify(
-          JSON.stringify(defaultInputs)
-        )})
+        let output = super::run_rust_cell(${JSON.stringify(cell.id)}, ${JSON.stringify(JSON.stringify(defaultInputs))})
         .expect("generated Rust cell should run");
 
         assert!(

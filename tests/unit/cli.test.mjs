@@ -4,17 +4,53 @@ import { mkdtemp, rm, symlink } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
-import { afterEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { createOxiquillPaths } from '../../packages/oxiquill/src/config/paths.mjs';
+
+const cliMocks = vi.hoisted(() => ({
+  buildHaskellWasm: vi.fn(),
+  buildRustWasm: vi.fn(),
+  cleanOxiquillWorkspace: vi.fn(),
+  createDocRuntimeContext: vi.fn(),
+  markRuntimeReady: vi.fn(),
+  runHelperCargo: vi.fn(),
+  syncDocRuntime: vi.fn(),
+  syncLicenseArtifacts: vi.fn()
+}));
+
+vi.mock('../../packages/oxiquill/src/generator/doc-runtime-service.mjs', () => ({
+  buildHaskellWasm: cliMocks.buildHaskellWasm,
+  buildRustWasm: cliMocks.buildRustWasm,
+  createDocRuntimeContext: cliMocks.createDocRuntimeContext,
+  markRuntimeReady: cliMocks.markRuntimeReady,
+  syncDocRuntime: cliMocks.syncDocRuntime,
+  syncLicenseArtifacts: cliMocks.syncLicenseArtifacts
+}));
+vi.mock('../../packages/oxiquill/src/generator/clean.mjs', () => ({
+  cleanOxiquillWorkspace: cliMocks.cleanOxiquillWorkspace
+}));
+vi.mock('../../packages/oxiquill/src/generator/run-helper-cargo.mjs', () => ({
+  runHelperCargo: cliMocks.runHelperCargo
+}));
 
 const cliPath = fileURLToPath(new URL('../../packages/oxiquill/src/cli/index.mjs', import.meta.url));
 const actualRepoRoot = fileURLToPath(new URL('../..', import.meta.url));
 const actualPaths = createOxiquillPaths({ workspaceRoot: actualRepoRoot });
 const repoRoot = path.resolve('/repo');
-const { canLoadNativePackage, isCliEntrypoint, nodeExecutableCandidates, runCli, selectFrameworkNode } = await import(
-  '../../packages/oxiquill/src/cli/commands.mjs'
-);
+const { canLoadNativePackage, isCliEntrypoint, nodeExecutableCandidates, runCli, selectFrameworkNode } =
+  await import('../../packages/oxiquill/src/cli/commands.mjs');
 const testRoot = path.parse(process.cwd()).root;
+
+beforeEach(() => {
+  vi.clearAllMocks();
+  cliMocks.createDocRuntimeContext.mockResolvedValue({ paths: createOxiquillPaths({ workspaceRoot: repoRoot }) });
+  cliMocks.syncDocRuntime.mockResolvedValue({
+    cellCount: 1,
+    haskellCellCount: 1,
+    haskellFingerprint: 'haskell-fingerprint'
+  });
+  cliMocks.buildHaskellWasm.mockResolvedValue({ ok: true });
+});
 
 afterEach(() => {
   vi.restoreAllMocks();
@@ -23,9 +59,11 @@ afterEach(() => {
 describe('oxiquill CLI', () => {
   it('can be imported without running the command dispatcher', async () => {
     const log = vi.spyOn(console, 'log').mockImplementation(() => {});
+    const cli = await import('../../packages/oxiquill/src/cli/index.mjs');
 
     await runCli('help', [], { cwd: repoRoot, runCommand: vi.fn() });
 
+    expect(cli.runCli).toBe(runCli);
     expect(log).toHaveBeenCalledWith(expect.stringContaining('Usage: oxiquill'));
   });
 
@@ -68,9 +106,9 @@ describe('oxiquill CLI', () => {
   it('checks whether a node executable can load a native package', () => {
     const spawn = vi.fn(() => ({ status: 0 }));
 
-    expect(
-      canLoadNativePackage('/usr/bin/node', '/repo/node_modules/rollup', { cwd: '/repo', env: {}, spawn })
-    ).toBe(true);
+    expect(canLoadNativePackage('/usr/bin/node', '/repo/node_modules/rollup', { cwd: '/repo', env: {}, spawn })).toBe(
+      true
+    );
     expect(spawn).toHaveBeenCalledWith(
       '/usr/bin/node',
       ['-e', expect.stringContaining('import(process.argv[1])'), '/repo/node_modules/rollup'],
@@ -109,9 +147,7 @@ describe('oxiquill CLI', () => {
     const firstNode = fakeNodeExecutable(path.join(testRoot, 'first', 'bin'));
     const secondNode = fakeNodeExecutable(path.join(testRoot, 'second', 'bin'));
     const commands = [];
-    const selectNode = vi.fn()
-      .mockReturnValueOnce(firstNode)
-      .mockReturnValueOnce(secondNode);
+    const selectNode = vi.fn().mockReturnValueOnce(firstNode).mockReturnValueOnce(secondNode);
     const runCommand = async (command) => {
       commands.push(command);
     };
@@ -121,6 +157,94 @@ describe('oxiquill CLI', () => {
 
     expect(selectNode).toHaveBeenCalledTimes(2);
     expect(commands).toEqual([firstNode, secondNode]);
+  });
+
+  it('dispatches helper crate commands with strict coverage and lint arguments', async () => {
+    await runCli('test-rust', [], { cwd: repoRoot });
+    await runCli('test-rust-coverage', [], { cwd: repoRoot });
+    await runCli('lint-rust', [], { cwd: repoRoot });
+    await runCli('doc-rust', [], { cwd: repoRoot });
+
+    expect(cliMocks.runHelperCargo).toHaveBeenNthCalledWith(1, expect.objectContaining({ argv: ['test'] }));
+    expect(cliMocks.runHelperCargo).toHaveBeenNthCalledWith(
+      2,
+      expect.objectContaining({
+        argv: expect.arrayContaining([
+          'llvm-cov',
+          '--fail-under-lines',
+          '85',
+          '--fail-under-functions',
+          '--fail-under-regions'
+        ])
+      })
+    );
+    expect(cliMocks.runHelperCargo).toHaveBeenNthCalledWith(
+      3,
+      expect.objectContaining({ argv: ['clippy', '--all-targets', '--', '-D', 'warnings'] })
+    );
+    expect(cliMocks.runHelperCargo).toHaveBeenNthCalledWith(4, expect.objectContaining({ argv: ['doc', '--no-deps'] }));
+  });
+
+  it('cleans generated workspace output through the owned cleaner', async () => {
+    await runCli('clean', [], { cwd: repoRoot });
+
+    expect(cliMocks.cleanOxiquillWorkspace).toHaveBeenCalledWith({
+      paths: expect.objectContaining({ workspaceRoot: expect.any(URL) })
+    });
+  });
+
+  it('generates manifests without Wasm unless a valid mode is requested', async () => {
+    const log = vi.spyOn(console, 'log').mockImplementation(() => {});
+
+    await runCli('docgen', [], { cwd: repoRoot });
+    expect(cliMocks.syncDocRuntime).toHaveBeenCalledTimes(1);
+    expect(cliMocks.buildRustWasm).not.toHaveBeenCalled();
+    expect(cliMocks.markRuntimeReady).toHaveBeenCalledTimes(1);
+
+    await runCli('docgen', ['--wasm', 'dev'], { cwd: repoRoot });
+    expect(cliMocks.buildRustWasm).toHaveBeenCalledWith(expect.objectContaining({ mode: 'dev' }));
+    expect(cliMocks.buildHaskellWasm).toHaveBeenCalledWith(
+      expect.objectContaining({ haskellFingerprint: 'haskell-fingerprint', mode: 'dev' })
+    );
+    expect(cliMocks.syncLicenseArtifacts).toHaveBeenCalledTimes(1);
+    expect(log).toHaveBeenCalledWith('Generated 1 interactive cell(s).');
+  });
+
+  it('rejects invalid Wasm generation modes before creating a runtime', async () => {
+    await expect(runCli('docgen', ['--wasm', 'release'], { cwd: repoRoot })).rejects.toThrow(
+      '--wasm must be followed by "dev" or "build".'
+    );
+    expect(cliMocks.createDocRuntimeContext).not.toHaveBeenCalled();
+  });
+
+  it('runs generated Rust cells through wasm-pack', async () => {
+    const log = vi.spyOn(console, 'log').mockImplementation(() => {});
+    const runCommand = vi.fn(async () => undefined);
+
+    await runCli('test-wasm', [], { cwd: repoRoot, runCommand });
+
+    expect(runCommand).toHaveBeenCalledWith(
+      'wasm-pack',
+      ['test', '--node', expect.stringContaining('.oxiquill/rust-cells')],
+      { cwd: repoRoot }
+    );
+    expect(cliMocks.buildRustWasm).toHaveBeenCalledWith(expect.objectContaining({ mode: 'dev' }));
+    expect(log).toHaveBeenCalled();
+  });
+
+  it('reports missing CLI entrypoints and unusable Node overrides', () => {
+    expect(isCliEntrypoint(undefined, pathToFileURL(cliPath).href)).toBe(false);
+    expect(canLoadNativePackage('/bad/node', '/bad/package', { spawn: vi.fn(() => ({ status: 1 })) })).toBe(false);
+
+    expect(() =>
+      selectFrameworkNode(actualPaths, {
+        env: { OXIQUILL_NODE: '/bad/node', PATH: '' },
+        execPath: '/bad/node',
+        exists: () => true,
+        spawn: vi.fn(() => ({ status: 1 })),
+        warn: vi.fn()
+      })
+    ).toThrow('OXIQUILL_NODE is set to /bad/node');
   });
 });
 

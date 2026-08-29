@@ -21,16 +21,29 @@ import {
   toWatchEventRelativePath
 } from './doc-runtime-watch-core.mjs';
 
-export async function main(argv = process.argv.slice(2)) {
+const defaultServices = {
+  buildHaskellWasm,
+  buildRustWasm,
+  createDocRuntimeContext,
+  markRuntimeReady,
+  shouldBuildHaskellWasm,
+  shouldBuildWasm,
+  syncDocRuntime,
+  syncLicenseArtifacts,
+  watch: chokidar.watch
+};
+
+export async function main(argv = process.argv.slice(2), serviceOverrides = {}) {
+  const services = { ...defaultServices, ...serviceOverrides };
   const root = process.cwd();
   const skipInitial = argv.includes('--skip-initial');
-  const initialContext = await createDocRuntimeContext({ root });
+  const initialContext = await services.createDocRuntimeContext({ root });
   const workspaceRoot = pathFromUrl(initialContext.paths.workspaceRoot);
   let previous;
   let changeKinds = skipInitial ? new Set() : new Set(['docs']);
 
   if (skipInitial) {
-    previous = await syncDocRuntime(initialContext);
+    previous = await services.syncDocRuntime(initialContext);
     console.log(`[runtime] baseline ready: ${previous.cellCount} interactive cell(s)`);
   }
 
@@ -39,18 +52,18 @@ export async function main(argv = process.argv.slice(2)) {
 
     const currentKinds = changeKinds;
     changeKinds = new Set();
-    const context = await createDocRuntimeContext({ root, highlighter: initialContext.highlighter });
+    const context = await services.createDocRuntimeContext({ root, highlighter: initialContext.highlighter });
 
     console.log(`[runtime] syncing after ${describeChangeKinds(currentKinds)}`);
-    const current = await syncDocRuntime(context);
+    const current = await services.syncDocRuntime(context);
 
-    if (shouldBuildWasm({ changeKinds: currentKinds, current, previous })) {
+    if (services.shouldBuildWasm({ changeKinds: currentKinds, current, previous })) {
       console.log('[runtime] rebuilding Rust/Wasm cells');
-      await buildRustWasm({ mode: 'dev', paths: context.paths });
+      await services.buildRustWasm({ mode: 'dev', paths: context.paths });
     }
-    if (shouldBuildHaskellWasm({ current, previous })) {
+    if (services.shouldBuildHaskellWasm({ current, previous })) {
       console.log('[runtime] rebuilding Haskell/WASI cells');
-      const result = await buildHaskellWasm({
+      const result = await services.buildHaskellWasm({
         haskellFingerprint: current.haskellFingerprint,
         mode: 'dev',
         paths: context.paths,
@@ -61,9 +74,9 @@ export async function main(argv = process.argv.slice(2)) {
       }
     }
 
-    await syncLicenseArtifacts({ paths: context.paths });
+    await services.syncLicenseArtifacts({ paths: context.paths });
 
-    await markRuntimeReady({ paths: context.paths, summary: current });
+    await services.markRuntimeReady({ paths: context.paths, summary: current });
     previous = current;
     console.log(`[runtime] ready: ${current.cellCount} interactive cell(s)`);
   }
@@ -80,7 +93,7 @@ export async function main(argv = process.argv.slice(2)) {
   }
 
   // Chokidar v4 does not expand globs, so watch stable roots and classify events ourselves.
-  const watcher = chokidar.watch(createRuntimeWatchPaths(initialContext.paths), {
+  const watcher = services.watch(createRuntimeWatchPaths(initialContext.paths), {
     cwd: workspaceRoot,
     ignoreInitial: true
   });

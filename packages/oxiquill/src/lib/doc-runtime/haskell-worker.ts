@@ -1,15 +1,5 @@
-import {
-  ConsoleStdout,
-  File,
-  OpenFile,
-  WASI
-} from '@bjorn3/browser_wasi_shim';
-import type {
-  RawCellExecutionResult,
-  RuntimeWorkerRequest,
-  RuntimeWorkerResponse,
-  TextArtifact
-} from './types';
+import { ConsoleStdout, File, OpenFile, WASI } from '@bjorn3/browser_wasi_shim';
+import type { RawCellExecutionResult, RuntimeWorkerRequest, RuntimeWorkerResponse, TextArtifact } from './types';
 
 type WorkerScope = {
   addEventListener(type: 'message', listener: (event: MessageEvent<RuntimeWorkerRequest>) => void): void;
@@ -69,15 +59,11 @@ export async function runHaskellCell(
   const wasi = new WASI(
     ['doc_haskell_cells', request.cellId, ...(request.inputArgs ?? [])],
     [],
-    [
-      new OpenFile(new File([])),
-      stdout.file,
-      stderr.file
-    ]
+    [new OpenFile(new File([])), stdout.file, stderr.file]
   );
-  const instance = await WebAssembly.instantiate(module, {
+  const instance = (await WebAssembly.instantiate(module, {
     wasi_snapshot_preview1: wasi.wasiImport
-  }) as WasiInstance;
+  })) as WasiInstance;
   const exitCode = wasi.start(instance);
   const result = createHaskellCellResult({
     stdout: stdout.take(),
@@ -153,9 +139,7 @@ export async function fetchHaskellRuntimeStatus(
 ): Promise<HaskellRuntimeStatus> {
   const response = await fetchImpl(url, { cache: 'no-store' });
   if (!response.ok) {
-    throw new Error(
-      `Haskell WASI runtime is not available: generated runtime status is missing; rerun pnpm wasm:dev.`
-    );
+    throw new Error(`Haskell WASI runtime is not available: generated runtime status is missing; rerun pnpm wasm:dev.`);
   }
 
   return parseHaskellRuntimeStatus(await response.json());
@@ -191,10 +175,7 @@ export function parseHaskellRuntimeStatus(value: unknown): HaskellRuntimeStatus 
   return { haskellFingerprintHash, message, status };
 }
 
-export async function fetchHaskellModule(
-  url: string,
-  fetchImpl: typeof fetch = fetch
-): Promise<WebAssembly.Module> {
+export async function fetchHaskellModule(url: string, fetchImpl: typeof fetch = fetch): Promise<WebAssembly.Module> {
   const response = await fetchImpl(url, { cache: 'no-store' });
   if (!response.ok) {
     throw new Error(`Failed to load ${url}: ${response.status} ${response.statusText}`);

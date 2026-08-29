@@ -1,14 +1,6 @@
 export type CellLanguage = 'rust' | 'python' | 'haskell';
 export type RunMode = 'button' | 'reactive' | 'autorun';
-export type InputType =
-  | 'range'
-  | 'number'
-  | 'integer'
-  | 'text'
-  | 'textarea'
-  | 'checkbox'
-  | 'select'
-  | 'radio';
+export type InputType = 'range' | 'number' | 'integer' | 'text' | 'textarea' | 'checkbox' | 'select' | 'radio';
 
 export interface InputOption {
   label: string;
@@ -54,30 +46,11 @@ export interface LinePlotSpec {
 export type PlotSpec = LinePlotSpec;
 
 export type ArtifactStream = 'stdout' | 'stderr' | 'display';
-export type TableColumnType =
-  | 'string'
-  | 'number'
-  | 'integer'
-  | 'boolean'
-  | 'date'
-  | 'datetime'
-  | 'null'
-  | 'unknown';
+export type TableColumnType = 'string' | 'number' | 'integer' | 'boolean' | 'date' | 'datetime' | 'null' | 'unknown';
 export type ChartAxisType = 'value' | 'category' | 'time' | 'log';
 export type ChartSpec =
-  | LineChartSpec
-  | ScatterChartSpec
-  | BarChartSpec
-  | HistogramChartSpec
-  | AreaChartSpec
-  | HeatmapChartSpec;
-export type OutputArtifact =
-  | TextArtifact
-  | JsonArtifact
-  | TableArtifact
-  | ChartArtifact
-  | ImageArtifact
-  | HtmlArtifact;
+  LineChartSpec | ScatterChartSpec | BarChartSpec | HistogramChartSpec | AreaChartSpec | HeatmapChartSpec;
+export type OutputArtifact = TextArtifact | JsonArtifact | TableArtifact | ChartArtifact | ImageArtifact | HtmlArtifact;
 
 export interface BaseArtifact {
   id?: string;

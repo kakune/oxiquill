@@ -42,12 +42,14 @@ export function outputsToLegacyResult(outputs: readonly OutputArtifact[]): CellE
 export function normalizeCellExecutionResult(result: RawCellExecutionResult): NormalizedCellExecutionResult {
   const rawOutputs = ownDataField(result, 'outputs');
   const outputCandidates = rawOutputs.present
-    ? Array.isArray(rawOutputs.value) ? rawOutputs.value : [rawOutputs.value]
+    ? Array.isArray(rawOutputs.value)
+      ? rawOutputs.value
+      : [rawOutputs.value]
     : legacyResultToOutputCandidates(result);
   const outputResults = validateOutputArtifacts(outputCandidates);
-  const outputs = outputResults.flatMap((output) => output.status === 'valid'
-    ? [publicOutputArtifact(output.artifact)]
-    : []);
+  const outputs = outputResults.flatMap((output) =>
+    output.status === 'valid' ? [publicOutputArtifact(output.artifact)] : []
+  );
   const legacy = outputsToLegacyResult(outputs);
   const rawStdout = ownDataField(result, 'stdout').value;
   const rawStderr = ownDataField(result, 'stderr').value;
@@ -58,9 +60,7 @@ export function normalizeCellExecutionResult(result: RawCellExecutionResult): No
     stdout: typeof rawStdout === 'string' ? rawStdout : legacy.stdout,
     ...(typeof rawStderr === 'string' ? { stderr: rawStderr } : legacy.stderr ? { stderr: legacy.stderr } : {}),
     ...(rawValue.present ? { value: rawValue.value } : Object.hasOwn(legacy, 'value') ? { value: legacy.value } : {}),
-    plots: rawPlots.present && Array.isArray(rawPlots.value)
-      ? validatedLegacyPlots(rawPlots.value)
-      : legacy.plots,
+    plots: rawPlots.present && Array.isArray(rawPlots.value) ? validatedLegacyPlots(rawPlots.value) : legacy.plots,
     outputs,
     outputResults
   };
@@ -72,22 +72,17 @@ function legacyResultToOutputCandidates(result: RawCellExecutionResult): readonl
   const value = ownDataField(result, 'value');
   const plots = ownDataField(result, 'plots').value;
   return [
-    typeof stdout === 'string' && stdout.length > 0
-      ? [{ kind: 'text', stream: 'stdout', content: stdout }]
-      : [],
-    typeof stderr === 'string' && stderr.length > 0
-      ? [{ kind: 'text', stream: 'stderr', content: stderr }]
-      : [],
-    value.present && value.value != null && value.value !== ''
-      ? [{ kind: 'json', value: value.value }]
-      : [],
+    typeof stdout === 'string' && stdout.length > 0 ? [{ kind: 'text', stream: 'stdout', content: stdout }] : [],
+    typeof stderr === 'string' && stderr.length > 0 ? [{ kind: 'text', stream: 'stderr', content: stderr }] : [],
+    value.present && value.value != null && value.value !== '' ? [{ kind: 'json', value: value.value }] : [],
     ...(Array.isArray(plots) ? plots.map((plot) => [legacyPlotCandidate(plot)]) : [])
   ].flat();
 }
 
 function validatedLegacyPlots(values: readonly unknown[]): readonly PlotSpec[] {
-  return validateOutputArtifacts(values.map(legacyPlotCandidate))
-    .flatMap((result) => result.status === 'valid' ? chartArtifactToLegacyPlot(result.artifact) : []);
+  return validateOutputArtifacts(values.map(legacyPlotCandidate)).flatMap((result) =>
+    result.status === 'valid' ? chartArtifactToLegacyPlot(result.artifact) : []
+  );
 }
 
 function legacyPlotCandidate(value: unknown): unknown {
@@ -112,10 +107,7 @@ function legacyPlotCandidate(value: unknown): unknown {
   };
 }
 
-function ownDataField(
-  record: object,
-  key: PropertyKey
-): { present: boolean; value: unknown } {
+function ownDataField(record: object, key: PropertyKey): { present: boolean; value: unknown } {
   const descriptor = Object.getOwnPropertyDescriptor(record, key);
   return descriptor && Object.hasOwn(descriptor, 'value')
     ? { present: true, value: descriptor.value }
@@ -124,14 +116,18 @@ function ownDataField(
 
 function publicOutputArtifact(artifact: ValidatedOutputArtifact): OutputArtifact {
   if (artifact.kind === 'json') {
-    const { formattedValue: _formattedValue, ...output } = artifact;
-    return output;
+    return withoutProperty(artifact, 'formattedValue');
   }
   if (artifact.kind === 'image') {
-    const { source: _source, ...output } = artifact;
-    return output;
+    return withoutProperty(artifact, 'source');
   }
   return artifact;
+}
+
+function withoutProperty<Value extends object, Key extends keyof Value>(value: Value, key: Key): Omit<Value, Key> {
+  const output = { ...value };
+  Reflect.deleteProperty(output, key);
+  return output;
 }
 
 export function isOutputArtifact(value: unknown): value is OutputArtifact {

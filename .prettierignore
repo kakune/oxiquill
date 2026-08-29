@@ -1,0 +1,16 @@
+# Generated project output
+**/.astro/
+**/.oxiquill/
+**/coverage/
+**/dist/
+**/node_modules/
+**/playwright-report/
+**/public/oxiquill/
+**/target/
+**/test-results/
+**/pkg/
+
+# Generated lockfiles
+flake.lock
+**/Cargo.lock
+pnpm-lock.yaml

@@ -33,7 +33,9 @@ export function generateRustOutputTypes(rustCells) {
     .join('\n');
 
   return `
-${capabilities.legacyPlot ? `#[derive(Debug, Serialize)]
+${
+  capabilities.legacyPlot
+    ? `#[derive(Debug, Serialize)]
 #[serde(tag = "kind")]
 enum PlotSpec {
     #[serde(rename = "line")]
@@ -46,8 +48,10 @@ struct LinePlotSpec {
     y_label: String,
     points: Vec<[f64; 2]>,
 }
-` : `type PlotSpec = Value;
-`}
+`
+    : `type PlotSpec = Value;
+`
+}
 #[derive(Debug, Serialize)]
 #[serde(tag = "kind")]
 enum OutputArtifact {
@@ -60,7 +64,9 @@ struct TextArtifact {
     content: String,
 }
 
-${capabilities.json ? `#[derive(Debug, Serialize)]
+${
+  capabilities.json
+    ? `#[derive(Debug, Serialize)]
 struct JsonArtifact {
     value: Value,
 }
@@ -68,8 +74,12 @@ struct JsonArtifact {
 fn json_artifact(value: Value) -> JsonArtifact {
     JsonArtifact { value }
 }
-` : ''}
-${capabilities.html ? `#[derive(Debug, Serialize)]
+`
+    : ''
+}
+${
+  capabilities.html
+    ? `#[derive(Debug, Serialize)]
 struct HtmlArtifact {
     html: String,
     sandboxed: bool,
@@ -81,8 +91,12 @@ fn html_artifact(html: String) -> HtmlArtifact {
         sandboxed: true,
     }
 }
-` : ''}
-${capabilities.image ? `#[derive(Debug, Serialize)]
+`
+    : ''
+}
+${
+  capabilities.image
+    ? `#[derive(Debug, Serialize)]
 struct ImageArtifact {
     mime: &'static str,
     data: String,
@@ -97,15 +111,21 @@ fn image_artifact(
 ) -> ImageArtifact {
     ImageArtifact { mime, data, alt }
 }
-` : ''}
+`
+    : ''
+}
 ${capabilities.table ? generateRustTableTypes() : ''}
-${capabilities.chart ? `#[derive(Debug, Serialize)]
+${
+  capabilities.chart
+    ? `#[derive(Debug, Serialize)]
 struct ChartArtifact {
     spec: Value,
 }
 
 ${generateRustChartHelpers(capabilities)}
-` : ''}
+`
+    : ''
+}
 #[derive(Debug, Serialize)]
 struct CellOutput {
     stdout: String,

@@ -15,6 +15,7 @@ concurrency:
 
 env:
   CARGO_TERM_COLOR: always
+  GHC_WASM_REVISION: 8fd59591635cb47ad7db124562039bea8441cae8
   NODE_VERSION: '24'
   PNPM_VERSION: '11.2.2'
   RUST_TOOLCHAIN: '1.95.0'
@@ -91,7 +92,7 @@ jobs:
         uses: actions/cache@v5
         with:
           path: ~/.ghc-wasm
-          key: ghc-wasm-${{ runner.os }}-9.14-v1
+          key: ghc-wasm-${{ runner.os }}-${{ runner.arch }}-9.14-${{ env.GHC_WASM_REVISION }}
 
       - name: Install ghc-wasm
         shell: bash
@@ -100,7 +101,14 @@ jobs:
           if [ ! -x "$HOME/.ghc-wasm/wasm32-wasi-ghc/bin/wasm32-wasi-ghc" ]; then
             sudo apt-get update
             sudo apt-get install -y jq unzip zstd
-            curl -sS https://gitlab.haskell.org/haskell-wasm/ghc-wasm-meta/-/raw/master/bootstrap.sh | FLAVOUR=9.14 sh
+            source_dir="$(mktemp -d)"
+            curl --fail --location --retry 5 --silent --show-error \
+              "https://gitlab.haskell.org/haskell-wasm/ghc-wasm-meta/-/archive/$GHC_WASM_REVISION/ghc-wasm-meta-$GHC_WASM_REVISION.tar.gz" \
+              | tar xz -C "$source_dir" --strip-components=1
+            (
+              cd "$source_dir"
+              FLAVOUR=9.14 PREFIX="$HOME/.ghc-wasm" ./setup.sh
+            )
           fi
           echo "OXIQUILL_HASKELL_GHC=$HOME/.ghc-wasm/wasm32-wasi-ghc/bin/wasm32-wasi-ghc" >> "$GITHUB_ENV"
           "$HOME/.ghc-wasm/wasm32-wasi-ghc/bin/wasm32-wasi-ghc" --version
@@ -111,21 +119,11 @@ jobs:
       - name: Audit production dependencies
         run: pnpm audit --prod --audit-level=low
 
-      - name: Install Playwright browser
-        run: pnpm exec playwright install --with-deps chromium
+      - name: Install Playwright browsers
+        run: pnpm exec playwright install --with-deps chromium firefox webkit
 
       - name: Run release validation
-        run: |
-          pnpm check
-          pnpm lint:rust
-          pnpm wasm:dev
-          pnpm test
-
-      - name: Verify package tarball
-        run: pnpm test:package
-
-      - name: Test packed consumer
-        run: pnpm test:consumer
+        run: pnpm test
 
       - name: Publish package
         working-directory: packages/oxiquill

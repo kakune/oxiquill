@@ -48,7 +48,11 @@ export class InteractiveCellValidationError extends Error {
 }
 
 export function parseLanguage(info) {
-  const raw = String(info ?? '').trim().split(/\s+/u)[0].replace(/[{}]/gu, '').replace(/^\./u, '');
+  const raw = String(info ?? '')
+    .trim()
+    .split(/\s+/u)[0]
+    .replace(/[{}]/gu, '')
+    .replace(/^\./u, '');
   return supportedLanguages.get(raw);
 }
 
@@ -127,7 +131,11 @@ export function splitCellSource(rawSource, language, location = { fenceStartLine
   if (!firstMatch) {
     if (anyOptionPattern.test(lines[0] ?? '')) {
       return invalidResult([
-        diagnostic(location, 'metadata', `Expected ${languageLabel(language)} option comments at the start of the cell.`)
+        diagnostic(
+          location,
+          'metadata',
+          `Expected ${languageLabel(language)} option comments at the start of the cell.`
+        )
       ]);
     }
     return { kind: 'skip' };
@@ -218,7 +226,11 @@ export function throwInteractiveCellDiagnostics(diagnostics) {
 function normalizeLocalId(value, context, diagnostics) {
   if (typeof value !== 'string' || !localIdPattern.test(value)) {
     diagnostics.push(
-      diagnostic(context, 'id', 'Expected a required lowercase kebab-case identifier matching /^[a-z][a-z0-9]*(?:-[a-z0-9]+)*$/.')
+      diagnostic(
+        context,
+        'id',
+        'Expected a required lowercase kebab-case identifier matching /^[a-z][a-z0-9]*(?:-[a-z0-9]+)*$/.'
+      )
     );
     return undefined;
   }
@@ -351,11 +363,12 @@ function normalizeInputValue(value, type, inputPath, context, diagnostics) {
   const fallback = defaultInputValue(type);
   if (!hasOwn(value, 'value')) return fallback;
   const candidate = value.value;
-  const valid = type === 'checkbox'
-    ? typeof candidate === 'boolean'
-    : isNumericInput(type)
-      ? typeof candidate === 'number' && Number.isFinite(candidate)
-      : typeof candidate === 'string';
+  const valid =
+    type === 'checkbox'
+      ? typeof candidate === 'boolean'
+      : isNumericInput(type)
+        ? typeof candidate === 'number' && Number.isFinite(candidate)
+        : typeof candidate === 'string';
   if (valid) return candidate;
   diagnostics.push(diagnostic(context, `${inputPath}.value`, `Expected ${inputValueType(type)}.`));
   return fallback;
@@ -396,7 +409,9 @@ function normalizeOptions(value, type, inputPath, context, diagnostics) {
     const normalized = normalizeOption(option, fieldPath, context, diagnostics);
     if (!normalized) return [];
     if (seen.has(normalized.value)) {
-      diagnostics.push(diagnostic(context, `${fieldPath}.value`, `Duplicate option value ${JSON.stringify(normalized.value)}.`));
+      diagnostics.push(
+        diagnostic(context, `${fieldPath}.value`, `Duplicate option value ${JSON.stringify(normalized.value)}.`)
+      );
       return [];
     }
     seen.add(normalized.value);
@@ -436,10 +451,14 @@ function validateNumericConstraints(input, inputPath, context, diagnostics) {
     diagnostics.push(diagnostic(context, `${inputPath}.min`, 'Expected min to be less than or equal to max.'));
   }
   if (input.min !== undefined && input.value < input.min) {
-    diagnostics.push(diagnostic(context, `${inputPath}.value`, 'Expected the default value to be greater than or equal to min.'));
+    diagnostics.push(
+      diagnostic(context, `${inputPath}.value`, 'Expected the default value to be greater than or equal to min.')
+    );
   }
   if (input.max !== undefined && input.value > input.max) {
-    diagnostics.push(diagnostic(context, `${inputPath}.value`, 'Expected the default value to be less than or equal to max.'));
+    diagnostics.push(
+      diagnostic(context, `${inputPath}.value`, 'Expected the default value to be less than or equal to max.')
+    );
   }
   if (input.integer) {
     for (const field of ['value', 'min', 'max', 'step']) {
@@ -459,10 +478,14 @@ function validateOptionDefault(type, value, options, inputPath, context, diagnos
 
 function validateDependencyFields(metadata, language, packages, context, diagnostics) {
   if (hasOwn(metadata, 'packages') && language !== 'python') {
-    diagnostics.push(diagnostic(context, 'packages', `This field is not supported for ${languageLabel(language)} cells.`));
+    diagnostics.push(
+      diagnostic(context, 'packages', `This field is not supported for ${languageLabel(language)} cells.`)
+    );
   }
   if (hasOwn(metadata, 'crates') && language !== 'rust') {
-    diagnostics.push(diagnostic(context, 'crates', `This field is not supported for ${languageLabel(language)} cells.`));
+    diagnostics.push(
+      diagnostic(context, 'crates', `This field is not supported for ${languageLabel(language)} cells.`)
+    );
   }
   if (language === 'python') {
     packages.forEach((packageName, index) => {
