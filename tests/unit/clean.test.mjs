@@ -84,6 +84,31 @@ describe('Oxiquill cleanup', () => {
     expect(existsSync(sentinel)).toBe(true);
   });
 
+  it('rejects a public asset root nested below an authored public subtree', async () => {
+    const root = await temporaryDirectory();
+    const paths = createOxiquillPaths({ publicAssetsDir: 'media/generated', workspaceRoot: root });
+    const sentinel = path.join(paths.publicDir, 'media/photo.txt');
+    await writeSentinel(sentinel);
+
+    await expect(prepareCleanupOwnership({ paths })).rejects.toThrow(
+      `paths.publicAssetsDir at ${paths.publicAssetsDir}: it is a descendant of authored public subtree`
+    );
+    expect(existsSync(sentinel)).toBe(true);
+    expect(existsSync(paths.publicAssetsDir)).toBe(false);
+  });
+
+  it('supports a nested custom public asset root when its ancestors contain only generated output', async () => {
+    const root = await temporaryDirectory();
+    const paths = createOxiquillPaths({ publicAssetsDir: 'generated/runtime', workspaceRoot: root });
+
+    await prepareCleanupOwnership({ paths });
+    await prepareCleanupOwnership({ paths });
+    await writeSentinel(path.join(paths.publicAssetsDir, 'runtime.js'));
+    await cleanOxiquillWorkspace({ paths });
+
+    expect(existsSync(paths.publicAssetsDir)).toBe(false);
+  });
+
   it('restores ownership after a build tool empties a verified custom output root', async () => {
     const root = await temporaryDirectory();
     const paths = createOxiquillPaths({ outDir: 'custom-output', workspaceRoot: root });

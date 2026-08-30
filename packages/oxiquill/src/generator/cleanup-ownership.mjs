@@ -3,6 +3,7 @@ import path from 'node:path';
 import {
   cleanupPathRoles,
   cleanupRootFields,
+  discoverAuthoredPublicPathRoles,
   discoverProtectedPathRoles,
   validateProjectPathSafety
 } from '../config/path-safety.mjs';
@@ -80,7 +81,10 @@ async function validatedCleanupRoots({ configFile, fields, fileSystem, paths }) 
 
   const roots = cleanupPathRoles(paths).filter(({ property }) => selectedFields.has(property));
   validateProjectPathSafety({ configFile, paths });
-  const protectedPaths = await discoverProtectedPathRoles({ fileSystem, roots });
+  const protectedPaths = [
+    ...(await discoverProtectedPathRoles({ fileSystem, roots })),
+    ...(await discoverAuthoredPublicPathRoles({ fileSystem, paths }))
+  ];
   validateProjectPathSafety({ configFile, paths, protectedPaths });
   return roots;
 }

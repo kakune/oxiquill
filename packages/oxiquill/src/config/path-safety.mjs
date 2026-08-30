@@ -45,8 +45,11 @@ const protectedEntryRoles = Object.freeze(
   new Map([
     ['.git', 'Git repository metadata'],
     ['.hg', 'Mercurial repository metadata'],
+    ['.jj', 'Jujutsu repository metadata'],
     ['.pnp.cjs', 'Yarn dependency state'],
     ['.pnp.loader.mjs', 'Yarn dependency state'],
+    ['.pnpm', 'pnpm dependency state'],
+    ['.pnpm-store', 'pnpm dependency state'],
     ['.svn', 'Subversion repository metadata'],
     ['.yarn', 'Yarn dependency state'],
     ['node_modules', 'installed package dependencies']
@@ -119,6 +122,29 @@ export async function discoverProtectedPathRoles({ fileSystem = { readdir }, roo
   return protectedPaths.flat();
 }
 
+export async function discoverAuthoredPublicPathRoles({ fileSystem = { readdir }, paths }) {
+  const publicDir = canonicalPath(paths.publicDir);
+  const publicAssetsDir = canonicalPath(paths.publicAssetsDir);
+  const relative = path.relative(publicDir, publicAssetsDir);
+  if (relative === '' || relative.startsWith(`..${path.sep}`) || path.isAbsolute(relative)) return [];
+
+  const segments = relative.split(path.sep);
+  const ancestors = segments.slice(0, -1).map((_, index) => ({
+    expectedChild: segments[index + 1],
+    path: path.join(publicDir, ...segments.slice(0, index + 1))
+  }));
+  const authoredAncestors = await Promise.all(
+    ancestors.map(async (ancestor) => {
+      const entries = await directoryEntryNames(ancestor.path, fileSystem);
+      return entries.some((entryName) => entryName !== ancestor.expectedChild)
+        ? [role('authored public subtree', ancestor.path, 'authored public asset subtree')]
+        : [];
+    })
+  );
+
+  return authoredAncestors.flat();
+}
+
 async function findProtectedEntries(rootPath, fileSystem) {
   let entries;
   try {
@@ -141,6 +167,16 @@ async function findProtectedEntries(rootPath, fileSystem) {
   );
 
   return [...discovered, ...nested.flat()];
+}
+
+async function directoryEntryNames(directory, fileSystem) {
+  try {
+    const entries = await fileSystem.readdir(directory);
+    return entries.map((entry) => (typeof entry === 'string' ? entry : entry.name));
+  } catch (error) {
+    if (error?.code === 'ENOENT' || error?.code === 'ENOTDIR') return [];
+    throw error;
+  }
 }
 
 function assertStrictlyWithin(parentPath, candidatePath, fieldName, parentField) {
