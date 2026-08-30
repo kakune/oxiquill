@@ -65,7 +65,11 @@ export async function runCli(commandOrArgs = [], argsOrOptions = {}, legacyOptio
       await runAstro(projectConfig, ['preview', ...astroArgs], { runCommand, selectNode });
       return;
     case 'build':
-      await generateRuntime({ projectConfig, wasmMode: 'build' });
+      await generateRuntime({
+        ownershipFields: ['cacheDir', 'outDir', 'publicAssetsDir'],
+        projectConfig,
+        wasmMode: 'build'
+      });
       await runOxiquillCheck(projectConfig, [], { runCommand, selectNode });
       await runAstro(projectConfig, ['build', ...astroArgs], { runCommand, runtimeOwner: 'cli', selectNode });
       return;
@@ -138,11 +142,16 @@ function normalizeRunCliArguments(commandOrArgs, argsOrOptions, legacyOptions) {
   return { args: commandOrArgs, options: argsOrOptions };
 }
 
-async function generateRuntime({ projectConfig, tolerateHaskellBuildFailure = false, wasmMode }) {
+async function generateRuntime({
+  ownershipFields = ['cacheDir', 'publicAssetsDir'],
+  projectConfig,
+  tolerateHaskellBuildFailure = false,
+  wasmMode
+}) {
   const { paths } = projectConfig;
   await prepareCleanupOwnership({
     configFile: projectConfig.configFile,
-    fields: ['cacheDir', 'publicAssetsDir'],
+    fields: ownershipFields,
     paths
   });
   const context = await createDocRuntimeContext({ paths, pythonOptions: projectConfig.python });

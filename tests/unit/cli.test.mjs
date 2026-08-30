@@ -455,6 +455,39 @@ describe('oxiquill CLI', () => {
     });
   });
 
+  it('preflights outDir ownership before starting an Oxiquill build', async () => {
+    const runCommand = vi.fn(async () => undefined);
+
+    await runCli('build', [], {
+      cwd: repoRoot,
+      runCommand,
+      selectNode: () => 'node'
+    });
+
+    expect(cliMocks.prepareCleanupOwnership).toHaveBeenCalledWith({
+      configFile: undefined,
+      fields: ['cacheDir', 'outDir', 'publicAssetsDir'],
+      paths: expect.objectContaining({ workspaceRoot: repoRoot })
+    });
+    expect(runCommand).toHaveBeenCalled();
+  });
+
+  it('does not start generation or Astro when build output ownership is invalid', async () => {
+    const runCommand = vi.fn(async () => undefined);
+    cliMocks.prepareCleanupOwnership.mockRejectedValueOnce(new Error('unowned outDir'));
+
+    await expect(
+      runCli('build', [], {
+        cwd: repoRoot,
+        runCommand,
+        selectNode: () => 'node'
+      })
+    ).rejects.toThrow('unowned outDir');
+
+    expect(cliMocks.createDocRuntimeContext).not.toHaveBeenCalled();
+    expect(runCommand).not.toHaveBeenCalled();
+  });
+
   it('generates manifests without Wasm unless a valid mode is requested', async () => {
     const log = vi.spyOn(console, 'log').mockImplementation(() => {});
 
