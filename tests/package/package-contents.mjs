@@ -29,7 +29,11 @@ try {
   assert.ok(actualFiles.every((filePath) => !filePath.startsWith('src/')));
   assert.ok(
     actualFiles.every(
-      (filePath) => !filePath.endsWith('.ts') || filePath.endsWith('.d.ts') || filePath.endsWith('.d.mts')
+      (filePath) =>
+        !filePath.endsWith('.ts') ||
+        filePath.startsWith('dist/cli/starter/') ||
+        filePath.endsWith('.d.ts') ||
+        filePath.endsWith('.d.mts')
     )
   );
   assert.ok(actualFiles.every((filePath) => !filePath.endsWith('.tsx')));
@@ -98,6 +102,11 @@ async function expectedPackageFiles() {
   const runtimeDataFiles = (await listFiles(runtimeDataRoot)).map(
     (filePath) => `dist/generator/runtime-data/${normalizePath(path.relative(runtimeDataRoot, filePath))}`
   );
+  const starterRoot = path.join(repositoryRoot, 'templates/basic');
+  const starterFiles = (await listFiles(starterRoot)).map(
+    (filePath) =>
+      `dist/cli/starter/v1/${normalizePath(path.relative(starterRoot, filePath)) === '.gitignore' ? 'gitignore' : normalizePath(path.relative(starterRoot, filePath))}`
+  );
   const copiedFiles = [
     'dist/components/starlight/PageFrame.astro',
     'dist/env.d.ts',
@@ -114,7 +123,8 @@ async function expectedPackageFiles() {
     ...compiledFiles,
     ...copiedFiles,
     ...licenseDataFiles,
-    ...runtimeDataFiles
+    ...runtimeDataFiles,
+    ...starterFiles
   ].sort();
 }
 

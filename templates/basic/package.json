@@ -3,11 +3,15 @@
   "version": "0.2.0",
   "private": true,
   "type": "module",
+  "packageManager": "pnpm@11.2.2",
+  "engines": {
+    "node": ">=24.0.0"
+  },
   "scripts": {
     "dev": "oxiquill dev",
     "build": "oxiquill build",
     "check": "oxiquill check",
-    "docgen": "oxiquill docgen",
+    "preview": "oxiquill preview",
     "clean": "oxiquill clean"
   },
   "dependencies": {

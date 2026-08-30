@@ -25,4 +25,11 @@ await cp(path.join(packageRoot, 'src/generator/license-data'), path.join(package
 await cp(path.join(packageRoot, 'src/generator/runtime-data'), path.join(packageRoot, 'dist/generator/runtime-data'), {
   recursive: true
 });
+await cp(path.resolve(packageRoot, '../../templates/basic'), path.join(packageRoot, 'dist/cli/starter/v1'), {
+  recursive: true
+});
+await copyFile(
+  path.resolve(packageRoot, '../../templates/basic/.gitignore'),
+  path.join(packageRoot, 'dist/cli/starter/v1/gitignore')
+);
 await chmod(path.join(packageRoot, 'dist/cli/index.mjs'), 0o755);
