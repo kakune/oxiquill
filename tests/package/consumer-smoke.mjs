@@ -392,6 +392,17 @@ async function runInstalledBrowserSmoke({ consumerRoot, installedCliPath, projec
     });
     const page = await browser.newPage();
     await page.goto(`http://127.0.0.1:${port}/`);
+    const tableOfContentsToggle = page.locator('starlight-table-of-contents-toggle button');
+    await tableOfContentsToggle.waitFor({ state: 'visible' });
+    assert.equal(await tableOfContentsToggle.getAttribute('aria-expanded'), 'true');
+    await tableOfContentsToggle.click();
+    assert.equal(await tableOfContentsToggle.getAttribute('aria-expanded'), 'false');
+    assert.equal(await page.locator('#starlight__right-sidebar').getAttribute('inert'), '');
+    assert.equal(
+      await page.locator('html').getAttribute('data-table-of-contents-collapsed'),
+      '',
+      'packed consumer did not enable the configured desktop table-of-contents toggle'
+    );
     const manifest = JSON.parse(await readFile(path.join(projectRoot, 'state cache/generated runtime/cells.json')));
     const pythonCell = manifest.find((cell) => cell.id.endsWith('__package-python'));
     assert.deepEqual(pythonCell?.packages, supportedPythonPackages);
@@ -490,6 +501,7 @@ function packedAstroConfig({ offline }) {
     "const projectRoot = fileURLToPath(new URL('./site root/', import.meta.url));",
     '',
     'export default defineOxiquillConfig({',
+    '  desktopTableOfContentsToggle: true,',
     '  framework: { starlight },',
     '  root: projectRoot,',
     "  publicDir: 'static files',",
