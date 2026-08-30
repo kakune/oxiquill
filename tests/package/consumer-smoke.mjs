@@ -44,8 +44,16 @@ const packageApiSource = `
 import starlight from '@astrojs/starlight';
 import { defineOxiquillConfig as defineRootConfig, oxiquillIntegration } from 'oxiquill';
 import { defineOxiquillConfig } from 'oxiquill/astro';
-import type { OxiquillMarkdownConfig, OxiquillPathOptions, OxiquillPythonOptions } from 'oxiquill/astro';
+import type {
+  OxiquillConfig,
+  OxiquillFrameworkOptions,
+  OxiquillIntegrationOptions,
+  OxiquillMarkdownConfig,
+  OxiquillPathOptions,
+  OxiquillPythonOptions
+} from 'oxiquill/astro';
 import { createOxiquillCollections } from 'oxiquill/content';
+import type { OxiquillCollections, OxiquillContentDependencies } from 'oxiquill/content';
 import InteractiveCell from 'oxiquill/runtime/InteractiveCell';
 import MermaidDiagram from 'oxiquill/runtime/MermaidDiagram';
 import type { CellManifest } from 'oxiquill/runtime/types';
@@ -53,6 +61,14 @@ import type { CellManifest } from 'oxiquill/runtime/types';
 const cell = {} as CellManifest;
 const paths = { downloadCacheDir: new URL('./verified downloads/', import.meta.url) } satisfies OxiquillPathOptions;
 const python = { offline: true, packageMirror: new URL('https://packages.example/pyodide/') } satisfies OxiquillPythonOptions;
+const publicTypes = {} as [
+  OxiquillConfig,
+  OxiquillFrameworkOptions,
+  OxiquillIntegrationOptions,
+  OxiquillPathOptions,
+  OxiquillCollections<(...args: never[]) => unknown>,
+  OxiquillContentDependencies<(...args: never[]) => unknown, (...args: never[]) => unknown, (...args: never[]) => unknown>
+];
 const markdownConfigs: OxiquillMarkdownConfig[] = [
   { syntaxHighlight: false },
   { syntaxHighlight: 'prism' },
@@ -76,7 +92,8 @@ void [
   MermaidDiagram,
   cell,
   paths,
-  python
+  python,
+  publicTypes
 ];
 `;
 

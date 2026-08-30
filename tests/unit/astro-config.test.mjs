@@ -19,7 +19,8 @@ vi.mock('@astrojs/starlight', () => ({
   default: () => ({ hooks: {}, name: '@astrojs/starlight' })
 }));
 
-const { defineOxiquillConfig: definePackageConfig } = await import('../../packages/oxiquill/src/astro/index.ts');
+const { defineOxiquillConfig: definePackageConfig, oxiquillIntegration } =
+  await import('../../packages/oxiquill/src/astro/index.ts');
 const { readOxiquillMetadata } = await import('../../packages/oxiquill/src/config/metadata.mjs');
 const { canonicalPath } = await import('../../packages/oxiquill/src/config/paths.mjs');
 const linkedConsumerRoot = new URL('../fixtures/linked-consumer/', import.meta.url);
@@ -179,10 +180,14 @@ describe('defineOxiquillConfig', () => {
     const remarkPlugins = update.markdown.processor.options.remarkPlugins;
     const rehypePlugins = update.markdown.processor.options.rehypePlugins;
 
-    expect(remarkPlugins).toHaveLength(5);
-    expect(remarkPlugins.at(-1)).toBe(remarkPlugin);
-    expect(rehypePlugins).toHaveLength(2);
-    expect(rehypePlugins.at(-1)).toBe(rehypePlugin);
+    expect(remarkPlugins.map(pluginName)).toEqual([
+      'remarkMath',
+      'remarkPublicAssetBase',
+      'remarkInteractiveCells',
+      'remarkMermaidDiagrams',
+      'remarkPlugin'
+    ]);
+    expect(rehypePlugins.map(pluginName)).toEqual(['rehypeKatex', 'rehypePlugin']);
     expect(update.markdown).not.toHaveProperty('remarkPlugins');
     expect(update.markdown).not.toHaveProperty('rehypePlugins');
   });
@@ -251,12 +256,12 @@ describe('defineOxiquillConfig', () => {
 
   it('rejects a custom Markdown processor before configuration setup', () => {
     const markdown = { processor: { createRenderer: vi.fn(), name: 'custom', options: {} } };
-
-    expect(() => defineOxiquillConfig({ markdown, sidebar: [], title: 'Docs' })).toThrow(
-      new TypeError(
-        'Oxiquill does not support markdown.processor because it owns the Markdown processor pipeline required for its transforms.'
-      )
+    const expectedError = new TypeError(
+      'Oxiquill does not support markdown.processor because it owns the Markdown processor pipeline required for its transforms.'
     );
+
+    expect(() => defineOxiquillConfig({ markdown, sidebar: [], title: 'Docs' })).toThrow(expectedError);
+    expect(() => oxiquillIntegration({ markdown })).toThrow(expectedError);
   });
 
   it('installs package-owned main and worker bundle reporters', () => {
@@ -472,3 +477,7 @@ describe('defineOxiquillConfig', () => {
     expect(resolved['astro/runtime/server/index.js']).toEqual(expect.any(String));
   });
 });
+
+function pluginName(plugin) {
+  return (Array.isArray(plugin) ? plugin[0] : plugin).name;
+}
