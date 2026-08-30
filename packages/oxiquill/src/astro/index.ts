@@ -33,6 +33,7 @@ import {
   syncLicenseArtifacts
 } from '../generator/doc-runtime-service.mjs';
 import { createBrowserBundleCollector, syncBrowserBundleReport } from '../generator/browser-bundle-report.mjs';
+import { maintainCleanupOwnership, prepareCleanupOwnership } from '../generator/cleanup-ownership.mjs';
 import remarkInteractiveCells from '../lib/doc-runtime/remark-interactive-cells.mjs';
 import remarkMermaidDiagrams from '../lib/doc-runtime/remark-mermaid-diagrams.mjs';
 import remarkPublicAssetBase from '../lib/doc-runtime/remark-public-asset-base.mjs';
@@ -243,6 +244,7 @@ function createOxiquillIntegration(
   const metadata = createOxiquillIntegrationMetadata({ astro: astroOptions, paths: pathOptions, python });
   let paths: OxiquillPaths | undefined;
   let pythonOptions: Readonly<{ offline: boolean; packageMirror?: string }> | undefined;
+  let buildOwnership: Awaited<ReturnType<typeof prepareCleanupOwnership>> = Object.freeze([]);
   const bundledModules = createBundledModuleCollector();
   const browserBundle = createBrowserBundleCollector();
 
@@ -300,6 +302,7 @@ function createOxiquillIntegration(
       'astro:build:start': async () => {
         if (!paths) return;
 
+        buildOwnership = await prepareCleanupOwnership({ paths });
         bundledModules.reset();
         browserBundle.reset();
         if (process.env.OXIQUILL_RUNTIME_OWNER === 'cli') return;
@@ -321,6 +324,7 @@ function createOxiquillIntegration(
           outputDirectory: dir,
           workspaceRoot: paths.workspaceRoot
         });
+        await maintainCleanupOwnership({ ownership: buildOwnership });
       }
     }
   };

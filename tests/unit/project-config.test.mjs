@@ -147,17 +147,109 @@ describe('Oxiquill project configuration', () => {
     expect(() => resolveProject({ root, paths: { docsDir: new URL('https://example.com/docs') } })).toThrow(
       'docsDir must be a path string or file URL'
     );
-    expect(() => resolveProject({ root, astro: { cacheDir: '.' } })).toThrow(
-      'cacheDir must resolve to a directory inside'
-    );
+    expect(() => resolveProject({ root, astro: { cacheDir: '.' } })).toThrow('Unsafe path cacheDir');
     expect(() => resolveProject({ root, paths: { publicAssetsDir: '..' } })).toThrow(
-      'paths.publicAssetsDir must resolve to a directory inside'
+      'Unsafe path paths.publicAssetsDir'
     );
     expect(() => resolveProject({ root, paths: { downloadCacheDir: '../shared-cache' } })).toThrow(
-      'paths.downloadCacheDir must resolve to a directory inside'
+      'Unsafe path paths.downloadCacheDir'
     );
     expect(() => resolveProject({ root, paths: { downloadCacheDir: '.oxiquill/downloads' } })).toThrow(
-      'paths.downloadCacheDir must resolve outside directories removed by oxiquill clean'
+      'cacheDir at ' + path.join(root, '.oxiquill') + ': it is an ancestor of paths.downloadCacheDir'
+    );
+  });
+
+  it.each([
+    {
+      conflict: 'docsDir (authored documentation input)',
+      name: 'cacheDir containing docsDir',
+      options: { astro: { cacheDir: 'content' } },
+      relationship: 'an ancestor of'
+    },
+    {
+      conflict: 'cratesDir (authored helper-crate input)',
+      name: 'outDir equal to cratesDir',
+      options: { astro: { outDir: 'crates' } },
+      relationship: 'equal to'
+    },
+    {
+      conflict: 'paths.publicDir (authored public asset root)',
+      name: 'outDir equal to publicDir',
+      options: { astro: { outDir: 'public' } },
+      relationship: 'equal to'
+    },
+    {
+      conflict: '.git (Git repository metadata)',
+      name: 'cacheDir equal to Git metadata',
+      options: { astro: { cacheDir: '.git' } },
+      relationship: 'equal to'
+    },
+    {
+      conflict: 'node_modules (installed package dependencies)',
+      name: 'outDir equal to installed dependencies',
+      options: { astro: { outDir: 'node_modules' } },
+      relationship: 'equal to'
+    },
+    {
+      conflict: 'docsDir (authored documentation input)',
+      name: 'outDir nested below docsDir',
+      options: { astro: { outDir: 'content/docs/generated' } },
+      relationship: 'a descendant of'
+    },
+    {
+      conflict: 'paths.frameworkRoot (Oxiquill framework input)',
+      name: 'outDir containing frameworkRoot',
+      options: { astro: { outDir: 'packages' }, paths: { frameworkRoot: 'packages/oxiquill' } },
+      relationship: 'an ancestor of'
+    },
+    {
+      conflict: 'paths.downloadCacheDir (persistent verified download cache)',
+      name: 'outDir containing the persistent cache',
+      options: { astro: { outDir: '.cache' } },
+      relationship: 'an ancestor of'
+    }
+  ])('rejects $name', ({ conflict, options, relationship }) => {
+    const root = path.resolve('/repo');
+    expect(() => resolveProject({ root, ...options })).toThrow(
+      expect.objectContaining({
+        message: expect.stringContaining(`${relationship} ${conflict}`)
+      })
+    );
+  });
+
+  it('rejects equal and nested cleanup roots with absolute diagnostics', () => {
+    const root = path.resolve('/repo');
+    expect(() => resolveProject({ astro: { cacheDir: 'dist', outDir: 'dist' }, root })).toThrow(
+      `cacheDir at ${path.join(root, 'dist')}: it is equal to outDir`
+    );
+    expect(() => resolveProject({ astro: { cacheDir: 'build', outDir: 'build/site' }, root })).toThrow(
+      `cacheDir at ${path.join(root, 'build')}: it is an ancestor of outDir`
+    );
+  });
+
+  it('rejects equality and nesting between generated subdirectory roles', () => {
+    const root = path.resolve('/repo');
+    expect(() => resolveProject({ paths: { generatedDir: 'rust-cells' }, root })).toThrow(
+      'paths.generatedDir at ' + path.join(root, '.oxiquill/rust-cells') + ': it is equal to paths.rustCellsDir'
+    );
+    expect(() =>
+      resolveProject({ paths: { licensesPublicDir: 'runtime', rustWasmPublicDir: 'runtime/rust' }, root })
+    ).toThrow('paths.licensesPublicDir at ' + path.join(root, 'public/oxiquill/runtime'));
+  });
+
+  it('keeps the intentional publicAssetsDir child relationship but rejects equality with publicDir', () => {
+    const root = path.resolve('/repo');
+    expect(() => resolveProject({ root })).not.toThrow();
+    expect(() => resolveProject({ paths: { publicAssetsDir: '.' }, root })).toThrow(
+      `Unsafe path paths.publicAssetsDir at ${path.join(root, 'public')}`
+    );
+  });
+
+  it('protects the selected Astro config from ancestor cleanup roots', () => {
+    const root = path.resolve('/repo');
+    const configFile = path.join(root, 'config/astro.custom.mjs');
+    expect(() => resolveProject({ astro: { outDir: 'config' }, configFile, root })).toThrow(
+      `outDir at ${path.join(root, 'config')}: it is an ancestor of configFile (selected Astro configuration) at ${configFile}`
     );
   });
 
@@ -229,10 +321,11 @@ describe('Oxiquill project configuration', () => {
   });
 });
 
-function resolveProject({ astro = {}, paths = {}, python = {}, root }) {
+function resolveProject({ astro = {}, configFile, paths = {}, python = {}, root }) {
   return resolveOxiquillProjectConfig({
     astroConfig: { root, ...astro },
     astroExplicitFields: ['root', ...Object.keys(astro)],
+    configFile,
     cwd: root,
     integrationMetadata: createOxiquillIntegrationMetadata({ paths, python })
   });

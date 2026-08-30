@@ -7,6 +7,7 @@ import { pathFromUrl, pathInUrl } from '../config/paths.mjs';
 import { loadOxiquillProjectConfig } from '../config/project-config.mjs';
 import { createDocRuntimeContext, syncDocRuntime } from '../generator/doc-runtime-service.mjs';
 import { cleanOxiquillWorkspace } from '../generator/clean.mjs';
+import { prepareCleanupOwnership } from '../generator/cleanup-ownership.mjs';
 import { runHelperCargo } from '../generator/run-helper-cargo.mjs';
 import { testGeneratedHaskellCells } from '../generator/doc-runtime/haskell-runtime-test.mjs';
 import { formatCliHelp, parseCliArguments } from './arguments.mjs';
@@ -76,7 +77,7 @@ export async function runCli(commandOrArgs = [], argsOrOptions = {}, legacyOptio
       await generateRuntime({ projectConfig, wasmMode: values.wasm });
       return;
     case 'clean':
-      await cleanOxiquillWorkspace({ paths });
+      await cleanOxiquillWorkspace({ configFile: projectConfig.configFile, paths });
       return;
     case 'test-rust':
       await runHelperCargo({ argv: ['test'], paths });
@@ -139,6 +140,11 @@ function normalizeRunCliArguments(commandOrArgs, argsOrOptions, legacyOptions) {
 
 async function generateRuntime({ projectConfig, tolerateHaskellBuildFailure = false, wasmMode }) {
   const { paths } = projectConfig;
+  await prepareCleanupOwnership({
+    configFile: projectConfig.configFile,
+    fields: ['cacheDir', 'publicAssetsDir'],
+    paths
+  });
   const context = await createDocRuntimeContext({ paths, pythonOptions: projectConfig.python });
   const summary = await syncDocRuntime({
     ...context,
