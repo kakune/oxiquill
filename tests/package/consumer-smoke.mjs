@@ -116,6 +116,7 @@ try {
   const packageJsonPath = path.join(consumerRoot, 'package.json');
   const packageJson = JSON.parse(await readFile(packageJsonPath, 'utf8'));
   assert.equal(packageJson.dependencies.oxiquill, `^${expectedVersion}`, 'starter Oxiquill version is stale');
+  assert.equal(packageJson.dependencies.preact, undefined, 'starter must not declare Preact directly');
   packageJson.dependencies.oxiquill = registryMode
     ? expectedVersion
     : `file:${path.relative(consumerRoot, packageSource).split(path.sep).join('/')}`;
@@ -162,6 +163,14 @@ try {
     ['--input-type=module', '--eval', "await import('oxiquill'); await import('oxiquill/astro');"],
     consumerRoot
   );
+
+  if (packageManager === 'pnpm') {
+    await appendFile(
+      path.join(consumerRoot, 'content/docs/index.mdx'),
+      ['', '```mermaid', 'graph TD', '  core --> linalg', '```', ''].join('\n')
+    );
+    await runInstalledDevSmoke({ consumerRoot });
+  }
 
   const nodeOnlyEnvironment = createNodeOnlyEnvironment();
   run(process.execPath, [installedCliPath, 'check'], consumerRoot, false, nodeOnlyEnvironment);
@@ -405,6 +414,42 @@ async function runInstalledBrowserSmoke({ consumerRoot, installedCliPath, projec
   }
 }
 
+async function runInstalledDevSmoke({ consumerRoot }) {
+  const port = 4_386;
+
+  try {
+    run(
+      packageManager,
+      ['run', 'dev', '--', '--background', '--host', '127.0.0.1', '--port', String(port)],
+      consumerRoot
+    );
+    const response = await waitForHttpResponse(`http://127.0.0.1:${port}/`, 60_000);
+    const html = await response.text();
+
+    assert.equal(response.status, 200, `packed development server returned ${response.status}`);
+    assert.ok(html.includes('data-testid="mermaid-diagram"'), 'packed development response omitted Mermaid SSR markup');
+    assert.ok(
+      !/Cannot read properties of undefined|__H/u.test(html),
+      'packed development response contained a Preact hook error'
+    );
+  } finally {
+    stopAstroDev(packageManager, consumerRoot);
+  }
+}
+
+async function waitForHttpResponse(url, timeoutMs) {
+  const deadline = Date.now() + timeoutMs;
+  while (Date.now() < deadline) {
+    try {
+      return await fetch(url);
+    } catch {
+      // The development server is still starting.
+    }
+    await new Promise((resolve) => setTimeout(resolve, 250));
+  }
+  throw new Error(`Timed out waiting for packed development server at ${url}.`);
+}
+
 async function waitForHttp(url, timeoutMs, server, output, readServerError) {
   const deadline = Date.now() + timeoutMs;
   while (Date.now() < deadline) {
@@ -472,6 +517,11 @@ function initializeConsumer(packageManager, packageSource, target, cwd) {
 function stopAstroPreview(packageManager, cwd) {
   const args =
     packageManager === 'npm' ? ['exec', '--', 'astro', 'preview', 'stop'] : ['exec', 'astro', 'preview', 'stop'];
+  run(packageManager, args, cwd);
+}
+
+function stopAstroDev(packageManager, cwd) {
+  const args = packageManager === 'npm' ? ['exec', '--', 'astro', 'dev', 'stop'] : ['exec', 'astro', 'dev', 'stop'];
   run(packageManager, args, cwd);
 }
 
