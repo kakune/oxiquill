@@ -17,13 +17,16 @@ import {
 import {
   assertPackManifest,
   assertPublishEnvironment,
+  assertReleaseManifest,
   CHECKSUM_FILE,
   MANIFEST_FILE,
   verifyReleaseArchive
 } from '../../.github/scripts/release-archive.mjs';
+import { uploadReleaseAssets } from '../../.github/scripts/release-assets.mjs';
 import { verifyReleaseVersions } from '../../.github/scripts/verify-release-version.mjs';
 
 const repositoryRoot = fileURLToPath(new URL('../..', import.meta.url));
+const releaseCommit = 'a'.repeat(40);
 const temporaryDirectories = [];
 
 afterEach(async () => {
@@ -196,6 +199,7 @@ describe('release archive verification', () => {
     await expect(
       verifyReleaseArchive(directory, '1.2.3', {
         environment: oidcEnvironment(),
+        expectedCommit: releaseCommit,
         outputFile: null,
         requireOidc: true
       })
@@ -205,13 +209,32 @@ describe('release archive verification', () => {
   it('rejects a changed archive and unexpected artifact files', async () => {
     const changedArchive = await createArtifact();
     await writeFile(path.join(changedArchive, 'oxiquill-1.2.3.tgz'), 'changed');
-    await expect(verifyReleaseArchive(changedArchive, '1.2.3', { outputFile: null })).rejects.toThrow(
-      'SHA-256 mismatch'
-    );
+    await expect(
+      verifyReleaseArchive(changedArchive, '1.2.3', { expectedCommit: releaseCommit, outputFile: null })
+    ).rejects.toThrow('SHA-256 mismatch');
 
     const extraFile = await createArtifact();
     await writeFile(path.join(extraFile, 'substitute.tgz'), 'substitute');
-    await expect(verifyReleaseArchive(extraFile, '1.2.3', { outputFile: null })).rejects.toThrow('unexpected files');
+    await expect(
+      verifyReleaseArchive(extraFile, '1.2.3', { expectedCommit: releaseCommit, outputFile: null })
+    ).rejects.toThrow('unexpected files');
+  });
+
+  it('rejects a manifest from a different commit', async () => {
+    const directory = await createArtifact();
+    await expect(
+      verifyReleaseArchive(directory, '1.2.3', { expectedCommit: 'b'.repeat(40), outputFile: null })
+    ).rejects.toThrow('does not match');
+  });
+
+  it('requires complete release manifest identity fields', () => {
+    const pack = packManifest(Buffer.from('archive'));
+    expect(() =>
+      assertReleaseManifest(
+        { archiveSha256: '0'.repeat(64), commit: releaseCommit, name: 'oxiquill', pack, schemaVersion: 2 },
+        { commit: releaseCommit, name: 'oxiquill', version: '1.2.3' }
+      )
+    ).toThrow('identity mismatch');
   });
 
   it('rejects incomplete, duplicate, and unsafe npm manifests', () => {
@@ -236,6 +259,84 @@ describe('release archive verification', () => {
       'NODE_AUTH_TOKEN'
     );
     expect(() => assertPublishEnvironment(oidcEnvironment())).not.toThrow();
+  });
+});
+
+describe('GitHub Release asset upload', () => {
+  it('uploads each missing verified file without overwrite behavior', async () => {
+    const directory = await createArtifact();
+    const fetchImplementation = vi
+      .fn()
+      .mockResolvedValueOnce(jsonResponse({ id: 42, tag_name: 'v1.2.3' }))
+      .mockResolvedValueOnce(jsonResponse([]))
+      .mockResolvedValue(jsonResponse({ id: 100 }));
+
+    await expect(
+      uploadReleaseAssets({
+        directory,
+        expectedCommit: releaseCommit,
+        expectedVersion: '1.2.3',
+        fetchImplementation,
+        repository: 'kakune/oxiquill',
+        tag: 'v1.2.3',
+        token: 'token'
+      })
+    ).resolves.toEqual([
+      { filename: CHECKSUM_FILE, status: 'uploaded' },
+      { filename: 'oxiquill-1.2.3.tgz', status: 'uploaded' },
+      { filename: MANIFEST_FILE, status: 'uploaded' }
+    ]);
+    const uploads = fetchImplementation.mock.calls.filter(([, options]) => options?.method === 'POST');
+    expect(uploads).toHaveLength(3);
+    uploads.forEach(([, options]) => expect(options.headers).not.toHaveProperty('If-Match'));
+  });
+
+  it('accepts an idempotent rerun when every existing asset has identical bytes', async () => {
+    const directory = await createArtifact();
+    const filenames = (await readdir(directory)).sort();
+    const fetchImplementation = vi
+      .fn()
+      .mockResolvedValueOnce(jsonResponse({ id: 42, tag_name: 'v1.2.3' }))
+      .mockResolvedValueOnce(
+        jsonResponse(filenames.map((name, index) => ({ name, url: `https://api.github.test/assets/${index}` })))
+      );
+    for (const filename of filenames) {
+      fetchImplementation.mockResolvedValueOnce(bytesResponse(await readFile(path.join(directory, filename))));
+    }
+
+    await expect(
+      uploadReleaseAssets({
+        directory,
+        expectedCommit: releaseCommit,
+        expectedVersion: '1.2.3',
+        fetchImplementation,
+        repository: 'kakune/oxiquill',
+        tag: 'v1.2.3',
+        token: 'token'
+      })
+    ).resolves.toEqual(filenames.map((filename) => ({ filename, status: 'unchanged' })));
+    expect(fetchImplementation.mock.calls.some(([, options]) => options?.method === 'POST')).toBe(false);
+  });
+
+  it('fails instead of replacing an existing asset with different bytes', async () => {
+    const directory = await createArtifact();
+    const fetchImplementation = vi
+      .fn()
+      .mockResolvedValueOnce(jsonResponse({ id: 42, tag_name: 'v1.2.3' }))
+      .mockResolvedValueOnce(jsonResponse([{ name: CHECKSUM_FILE, url: 'https://api.github.test/assets/1' }]))
+      .mockResolvedValueOnce(bytesResponse(Buffer.from('conflicting bytes')));
+
+    await expect(
+      uploadReleaseAssets({
+        directory,
+        expectedCommit: releaseCommit,
+        expectedVersion: '1.2.3',
+        fetchImplementation,
+        repository: 'kakune/oxiquill',
+        tag: 'v1.2.3',
+        token: 'token'
+      })
+    ).rejects.toThrow('conflicts with the verified artifact');
   });
 });
 
@@ -269,11 +370,16 @@ describe('workflow supply-chain policy', () => {
 
   it('keeps release OIDC and staged publishing isolated to the protected publish job', async () => {
     const source = await readFile(path.join(repositoryRoot, '.github/workflows/npm-publish.yml'), 'utf8');
-    const [verifySource, publishSource] = source.split('\n  publish:\n');
+    const [verifySource, releaseAndPublishSource] = source.split('\n  release-assets:\n');
+    const [releaseAssetsSource, publishSource] = releaseAndPublishSource.split('\n  publish:\n');
 
     expect(verifySource).not.toContain('id-token: write');
+    expect(verifySource).not.toContain('contents: write');
+    expect(releaseAssetsSource).toContain('contents: write');
+    expect(releaseAssetsSource).not.toContain('id-token: write');
     expect(publishSource).toContain('id-token: write');
     expect(source.match(/id-token: write/gu)).toHaveLength(1);
+    expect(source.match(/contents: write/gu)).toHaveLength(1);
     expect(publishSource).toContain('name: npm-publish');
     expect(publishSource).toContain("needs.verify.outputs.release_version != '0.3.0'");
     expect(publishSource).toContain('npm stage publish');
@@ -308,7 +414,18 @@ async function createArtifact() {
   await writeFile(path.join(directory, pack.filename), archive);
   await writeFile(
     path.join(directory, MANIFEST_FILE),
-    `${JSON.stringify({ archiveSha256, pack, schemaVersion: 1 }, null, 2)}\n`
+    `${JSON.stringify(
+      {
+        archiveSha256,
+        commit: releaseCommit,
+        name: pack.name,
+        pack,
+        schemaVersion: 2,
+        version: pack.version
+      },
+      null,
+      2
+    )}\n`
   );
   await writeFile(path.join(directory, CHECKSUM_FILE), `${archiveSha256}  ${pack.filename}\n`);
   return directory;
@@ -363,6 +480,15 @@ function jsonResponse(value) {
     ok: true,
     status: 200,
     text: async () => JSON.stringify(value)
+  };
+}
+
+function bytesResponse(value) {
+  return {
+    arrayBuffer: async () => value,
+    ok: true,
+    status: 200,
+    text: async () => value.toString('utf8')
   };
 }
 
