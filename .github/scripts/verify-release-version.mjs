@@ -18,7 +18,22 @@ export async function verifyReleaseVersions({ repositoryRoot = process.cwd() } =
   assertEqual(starter.dependencies?.oxiquill, `^${version}`, 'templates/basic/package.json oxiquill dependency');
 
   assertAllVersions(sources.readme, /"oxiquill": "(\d+\.\d+\.\d+)"/gu, version, 'README.md', 2);
+  assertAllVersions(sources.readme, /\boxiquill@(\d+\.\d+\.\d+)\b/gu, version, 'README.md install commands', 4);
   assertAllVersions(sources.packageReadme, /\boxiquill@(\d+\.\d+\.\d+)\b/gu, version, 'package README');
+  assertAllVersions(
+    sources.gettingStarted,
+    /\boxiquill@(\d+\.\d+\.\d+)\b/gu,
+    version,
+    'English getting-started guide',
+    2
+  );
+  assertAllVersions(
+    sources.gettingStartedJa,
+    /\boxiquill@(\d+\.\d+\.\d+)\b/gu,
+    version,
+    'Japanese getting-started guide',
+    2
+  );
 
   assertCargoManifestVersion(sources.docRustManifest, 'doc-rust', version);
   assertCargoManifestVersion(sources.docRustTextManifest, 'doc-rust-text', version);
@@ -66,6 +81,8 @@ async function readSources(repositoryRoot) {
     docRustManifest: 'examples/docs-site/crates/doc-rust/Cargo.toml',
     docRustTextManifest: 'examples/docs-site/crates/doc-rust-text/Cargo.toml',
     docsPackage: 'examples/docs-site/package.json',
+    gettingStarted: 'examples/docs-site/content/docs/guides/getting-started.mdx',
+    gettingStartedJa: 'examples/docs-site/content/docs/ja/guides/getting-started.mdx',
     helperLock: 'examples/docs-site/crates/Cargo.lock',
     package: 'packages/oxiquill/package.json',
     packageReadme: 'packages/oxiquill/README.md',

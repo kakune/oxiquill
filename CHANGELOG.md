@@ -34,7 +34,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ### Added
 
-- A compiled ESM package with declarations, an `oxiquill init` starter, strict project configuration, and complete npm and pnpm consumer validation.
+- A compiled ESM package with declarations, an `oxiquill init` starter, strict project configuration, and npm and pnpm consumer validation.
 - Reproducible Rust, Python, and Haskell runtime generation with pinned inputs, toolchain preflight checks, cache validation, and generated-cell smoke tests.
 - English and Japanese references for installation, configuration, CLI usage, interactive metadata, rich outputs, runtime downloads, security, troubleshooting, and releases.
 - Release-grade linting, coverage, cross-platform compatibility, browser, package, dependency-audit, and staged npm publication gates.

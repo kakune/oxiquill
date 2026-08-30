@@ -103,8 +103,8 @@ pnpm preview
 For an existing project, install Oxiquill together with the Astro and Starlight packages imported by the project:
 
 ```sh
-pnpm add oxiquill@0.2.0 astro@7.2.9 @astrojs/starlight@0.41.9
-npm install oxiquill@0.2.0 astro@7.2.9 @astrojs/starlight@0.41.9
+pnpm add oxiquill@0.3.0 astro@7.2.9 @astrojs/starlight@0.41.9
+npm install oxiquill@0.3.0 astro@7.2.9 @astrojs/starlight@0.41.9
 ```
 
 Route project scripts through the CLI:
@@ -420,8 +420,8 @@ pnpm preview
 既存 project では、project が直接 import する Astro および Starlight とともに Oxiquill を追加します。
 
 ```sh
-pnpm add oxiquill@0.2.0 astro@7.2.9 @astrojs/starlight@0.41.9
-npm install oxiquill@0.2.0 astro@7.2.9 @astrojs/starlight@0.41.9
+pnpm add oxiquill@0.3.0 astro@7.2.9 @astrojs/starlight@0.41.9
+npm install oxiquill@0.3.0 astro@7.2.9 @astrojs/starlight@0.41.9
 ```
 
 project script は CLI 経由にします。

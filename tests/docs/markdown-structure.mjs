@@ -3,19 +3,25 @@ import assert from 'node:assert/strict';
 export function checkMarkdownStructure(filePath, source) {
   const lines = visibleMarkdownLines(source);
   const headingLines = new Map();
+  const headingPath = [];
 
   for (const { line, lineNumber } of lines) {
-    const heading = line.match(/^#{1,6}\s+(.+?)\s*#*\s*$/u)?.[1];
-    if (!heading) continue;
+    const match = line.match(/^(#{1,6})\s+(.+?)\s*#*\s*$/u);
+    if (!match) continue;
 
+    const [, markers, heading] = match;
+    const level = markers.length;
     const slug = headingSlug(heading);
-    const previousLine = headingLines.get(slug);
+    const scopedSlug = [...headingPath.slice(0, level - 1), slug].filter(Boolean).join('/');
+    const previousLine = headingLines.get(scopedSlug);
     assert.equal(
       previousLine,
       undefined,
       `${filePath}:${lineNumber} duplicates heading ${JSON.stringify(heading)} from line ${previousLine}.`
     );
-    headingLines.set(slug, lineNumber);
+    headingLines.set(scopedSlug, lineNumber);
+    headingPath[level - 1] = slug;
+    headingPath.length = level;
   }
 
   lines.forEach((entry, index) => {

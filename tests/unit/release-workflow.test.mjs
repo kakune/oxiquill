@@ -48,6 +48,24 @@ describe('release-bound version verification', () => {
     ],
     ['README.md', '"oxiquill": "0.3.0"', '"oxiquill": "0.2.0"', 'README.md contains stale'],
     [
+      'packages/oxiquill/README.md',
+      'npm install oxiquill@0.3.0',
+      'npm install oxiquill@0.2.0',
+      'package README contains stale'
+    ],
+    [
+      'examples/docs-site/content/docs/guides/getting-started.mdx',
+      'pnpm add oxiquill@0.3.0',
+      'pnpm add oxiquill@0.2.0',
+      'English getting-started guide contains stale'
+    ],
+    [
+      'examples/docs-site/content/docs/ja/guides/getting-started.mdx',
+      'pnpm add oxiquill@0.3.0',
+      'pnpm add oxiquill@0.2.0',
+      'Japanese getting-started guide contains stale'
+    ],
+    [
       'examples/docs-site/crates/doc-rust/Cargo.toml',
       'version = "0.3.0"',
       'version = "0.2.0"',
@@ -438,6 +456,8 @@ async function createReleaseVersionFixture() {
     'CHANGELOG.md',
     'README.md',
     'SECURITY.md',
+    'examples/docs-site/content/docs/guides/getting-started.mdx',
+    'examples/docs-site/content/docs/ja/guides/getting-started.mdx',
     'examples/docs-site/crates/Cargo.lock',
     'examples/docs-site/crates/doc-rust-text/Cargo.toml',
     'examples/docs-site/crates/doc-rust/Cargo.toml',

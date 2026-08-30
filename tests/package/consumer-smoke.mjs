@@ -96,7 +96,7 @@ try {
   for (const lifecycleHook of ['prepare', 'install', 'postinstall']) {
     assert.ok(
       !Object.hasOwn(installedManifest.scripts, lifecycleHook),
-      `packed manifest must not define ${lifecycleHook}`
+      `installed manifest must not define ${lifecycleHook}`
     );
   }
   const installedCliPath = path.join(consumerRoot, 'node_modules/oxiquill/dist/cli/index.mjs');

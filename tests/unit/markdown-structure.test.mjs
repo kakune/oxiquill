@@ -23,9 +23,13 @@ describe('Markdown structure validation', () => {
   });
 
   it('rejects duplicate heading slugs', () => {
-    expect(() => checkMarkdownStructure('duplicate.md', '## Contributing\n\n## Contributing!\n')).toThrow(
-      'duplicates heading'
-    );
+    const source = '# Guide\n\n## Contributing\n\n## Contributing!\n';
+    expect(() => checkMarkdownStructure('duplicate.md', source)).toThrow('duplicates heading');
+  });
+
+  it('allows conventional subsection names under different parent headings', () => {
+    const source = '# Changelog\n\n## Unreleased\n\n### Added\n\n## 0.3.0\n\n### Added\n';
+    expect(() => checkMarkdownStructure('CHANGELOG.md', source)).not.toThrow();
   });
 
   it('rejects inconsistent table column counts', () => {
