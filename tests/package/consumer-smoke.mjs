@@ -176,6 +176,10 @@ try {
   await mkdir(projectRoot);
   await rename(path.join(consumerRoot, 'content'), path.join(projectRoot, 'content'));
   await rename(path.join(consumerRoot, 'crates'), path.join(projectRoot, 'helper crates'));
+  await writeFile(
+    path.join(projectRoot, 'helper crates/doc-rust/Cargo.toml'),
+    ["package.name = 'doc-rust'", "package.version = '0.1.0'", "package.edition = '2024'", ''].join('\n')
+  );
   await rename(path.join(consumerRoot, 'public'), path.join(projectRoot, 'static files'));
   await rename(path.join(consumerRoot, 'content.config.ts'), path.join(projectRoot, 'content.config.ts'));
   const tsconfigPath = path.join(projectRoot, 'tsconfig.json');

@@ -427,7 +427,7 @@ describe('doc runtime core', () => {
       'doc-rust'
     );
     expect(() => packageNameFromCargoToml('[dependencies]\nserde = "1"\n', '/repo/crates/bad/Cargo.toml')).toThrow(
-      'missing [package] name'
+      'missing a [package] table'
     );
     expect(() =>
       helperCratesFromManifests(
@@ -437,7 +437,7 @@ describe('doc runtime core', () => {
         ],
         { rustCellsDir: '/repo/.oxiquill/rust-cells' }
       )
-    ).toThrow('Duplicate helper crate');
+    ).toThrow('use duplicate package name');
   });
 
   it('generates manifest files and Rust support code', () => {
