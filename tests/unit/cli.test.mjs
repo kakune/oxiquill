@@ -456,13 +456,18 @@ describe('oxiquill CLI', () => {
   });
 
   it('preflights outDir ownership before starting an Oxiquill build', async () => {
-    const runCommand = vi.fn(async () => undefined);
-
-    await runCli('build', [], {
-      cwd: repoRoot,
-      runCommand,
-      selectNode: () => 'node'
+    const stopBeforeAstro = new Error('stop before Astro');
+    const runCommand = vi.fn(async () => {
+      throw stopBeforeAstro;
     });
+
+    await expect(
+      runCli('build', [], {
+        cwd: repoRoot,
+        runCommand,
+        selectNode: () => 'node'
+      })
+    ).rejects.toBe(stopBeforeAstro);
 
     expect(cliMocks.prepareCleanupOwnership).toHaveBeenCalledWith({
       configFile: undefined,
@@ -470,6 +475,9 @@ describe('oxiquill CLI', () => {
       paths: expect.objectContaining({ workspaceRoot: repoRoot })
     });
     expect(runCommand).toHaveBeenCalled();
+    expect(cliMocks.prepareCleanupOwnership.mock.invocationCallOrder[0]).toBeLessThan(
+      runCommand.mock.invocationCallOrder[0]
+    );
   });
 
   it('does not start generation or Astro when build output ownership is invalid', async () => {
