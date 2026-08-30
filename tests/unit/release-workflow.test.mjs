@@ -443,12 +443,16 @@ describe('workflow supply-chain policy', () => {
     const source = await readFile(path.join(repositoryRoot, '.github/workflows/ci.yml'), 'utf8');
     const packageJson = JSON.parse(await readFile(path.join(repositoryRoot, 'package.json'), 'utf8'));
 
-    expect(source).toContain('pnpm "test:consumer:${{ matrix.package-manager }}"');
+    expect(source).toContain("if: matrix.package-manager == 'npm'");
+    expect(source).toContain('run: pnpm test:consumer:npm');
+    expect(source).toContain("if: matrix.package-manager == 'pnpm'");
+    expect(source).toContain('run: pnpm test:consumer:pnpm -- --browser');
     expect(source).toContain('run: pnpm test:packed-browser');
     expect(source).toContain('run: pnpm exec playwright install --with-deps chromium');
     expect(source).not.toContain('${PACKAGE_MANAGER}');
+    expect(source).not.toContain('test:consumer:${{ matrix.package-manager }}');
     expect(packageJson.scripts['test:packed-browser']).toBe(
-      'node tests/package/consumer-smoke.mjs --package-manager npm --browser'
+      'node tests/package/consumer-smoke.mjs --package-manager pnpm --browser'
     );
   });
 
