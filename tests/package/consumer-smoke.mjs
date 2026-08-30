@@ -374,7 +374,7 @@ try {
   await assertFile(path.join(projectRoot, 'content/docs/index.mdx'));
   console.log(`Packed consumer smoke test passed with ${packageManager} in ${consumerRoot}.`);
 } finally {
-  await rm(temporaryRoot, { force: true, recursive: true });
+  await rm(temporaryRoot, { force: true, maxRetries: 10, recursive: true, retryDelay: 250 });
 }
 
 async function runInstalledBrowserSmoke({ consumerRoot, installedCliPath, projectRoot }) {
@@ -391,6 +391,7 @@ async function runInstalledBrowserSmoke({ consumerRoot, installedCliPath, projec
   const serverOutput = [];
   let serverError;
   let serverReady = false;
+  let serverPid;
   server.stdout.on('data', (chunk) => serverOutput.push(String(chunk)));
   server.stderr.on('data', (chunk) => serverOutput.push(String(chunk)));
   server.once('error', (error) => {
@@ -401,6 +402,7 @@ async function runInstalledBrowserSmoke({ consumerRoot, installedCliPath, projec
   try {
     await waitForHttp(`http://127.0.0.1:${port}/`, 60_000, server, serverOutput, () => serverError);
     serverReady = true;
+    serverPid = await readBackgroundServerPid(projectRoot, 'preview');
     const executablePath = process.env.PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH?.trim();
     browser = await chromium.launch({
       headless: true,
@@ -442,13 +444,18 @@ async function runInstalledBrowserSmoke({ consumerRoot, installedCliPath, projec
     assertNoPageErrors(pageErrors, 'packed production preview');
   } finally {
     await browser?.close();
-    if (serverReady) stopAstroPreview(packageManager, consumerRoot);
-    if (server.exitCode === null && !server.signalCode) {
-      server.kill('SIGTERM');
-      await Promise.race([
-        new Promise((resolve) => server.once('exit', resolve)),
-        new Promise((resolve) => setTimeout(resolve, 5_000))
-      ]);
+    try {
+      if (serverReady) {
+        await stopAstroBackgroundServer({ command: 'preview', cwd: consumerRoot, pid: serverPid, root: projectRoot });
+      }
+    } finally {
+      if (server.exitCode === null && !server.signalCode) {
+        server.kill('SIGTERM');
+        await Promise.race([
+          new Promise((resolve) => server.once('exit', resolve)),
+          new Promise((resolve) => setTimeout(resolve, 5_000))
+        ]);
+      }
     }
   }
 }
@@ -456,6 +463,7 @@ async function runInstalledBrowserSmoke({ consumerRoot, installedCliPath, projec
 async function runInstalledDevSmoke({ browserEnabled, consumerRoot }) {
   const port = 4_386;
   let browser;
+  let serverPid;
 
   try {
     run(
@@ -464,6 +472,7 @@ async function runInstalledDevSmoke({ browserEnabled, consumerRoot }) {
       consumerRoot
     );
     const response = await waitForHttpResponse(`http://127.0.0.1:${port}/`, 60_000);
+    serverPid = await readBackgroundServerPid(consumerRoot, 'dev');
     const html = await response.text();
 
     assert.equal(response.status, 200, `packed development server returned ${response.status}`);
@@ -487,7 +496,7 @@ async function runInstalledDevSmoke({ browserEnabled, consumerRoot }) {
     }
   } finally {
     await browser?.close();
-    stopAstroDev(packageManager, consumerRoot);
+    await stopAstroBackgroundServer({ command: 'dev', cwd: consumerRoot, pid: serverPid });
   }
 }
 
@@ -530,6 +539,58 @@ function assertNoPageErrors(errors, stage) {
     0,
     `${stage} emitted page errors:\n${errors.map((error) => error.stack ?? error.message).join('\n')}`
   );
+}
+
+async function readBackgroundServerPid(cwd, command) {
+  const state = JSON.parse(await readFile(path.join(cwd, '.astro', `${command}.json`), 'utf8'));
+  assert.ok(Number.isSafeInteger(state.pid) && state.pid > 0, `Astro ${command} state did not contain a valid PID`);
+  return state.pid;
+}
+
+async function stopAstroBackgroundServer({ command, cwd, pid, root }) {
+  let stopError;
+  try {
+    if (command === 'dev') stopAstroDev(packageManager, cwd);
+    else stopAstroPreview(packageManager, cwd, root);
+  } catch (error) {
+    stopError = error;
+  }
+
+  if (pid !== undefined && !(await waitForProcessExit(pid, 1_000))) {
+    try {
+      process.kill(pid, 'SIGTERM');
+    } catch {
+      // The process exited between the liveness check and the signal.
+    }
+    if (!(await waitForProcessExit(pid, 5_000))) {
+      try {
+        process.kill(pid, 'SIGKILL');
+      } catch {
+        // The process exited between the liveness check and the signal.
+      }
+      assert.ok(await waitForProcessExit(pid, 5_000), `Astro ${command} server process ${pid} did not exit`);
+    }
+  }
+
+  if (stopError) throw stopError;
+}
+
+async function waitForProcessExit(pid, timeoutMs) {
+  const deadline = Date.now() + timeoutMs;
+  while (Date.now() < deadline) {
+    if (!isProcessAlive(pid)) return true;
+    await new Promise((resolve) => setTimeout(resolve, 100));
+  }
+  return !isProcessAlive(pid);
+}
+
+function isProcessAlive(pid) {
+  try {
+    process.kill(pid, 0);
+    return true;
+  } catch {
+    return false;
+  }
 }
 
 async function waitForHttpResponse(url, timeoutMs) {
@@ -610,9 +671,11 @@ function initializeConsumer(packageManager, packageSource, target, cwd) {
   run(packageManager, args, cwd);
 }
 
-function stopAstroPreview(packageManager, cwd) {
+function stopAstroPreview(packageManager, cwd, root) {
   const args =
-    packageManager === 'npm' ? ['exec', '--', 'astro', 'preview', 'stop'] : ['exec', 'astro', 'preview', 'stop'];
+    packageManager === 'npm'
+      ? ['exec', '--', 'astro', 'preview', 'stop', ...(root ? ['--root', root] : [])]
+      : ['exec', 'astro', 'preview', 'stop', ...(root ? ['--root', root] : [])];
   run(packageManager, args, cwd);
 }
 
