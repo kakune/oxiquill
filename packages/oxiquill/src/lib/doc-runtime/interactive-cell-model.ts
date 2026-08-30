@@ -2,7 +2,12 @@ import type { RuntimeLabels } from './runtime-localization.js';
 import { labelsForLanguage } from './runtime-localization.js';
 import type { CellManifest, InputSpec, InputValues, RunMode } from './types.js';
 
-export { formatInputValue, parseNumericInput, validateNumericInputValue } from './interactive-input-validation.js';
+export {
+  formatInputValue,
+  parseNumericInput,
+  stepNumericInputValue,
+  validateNumericInputValue
+} from './interactive-input-validation.js';
 
 export { labelsForLanguage, localeFromLanguage } from './runtime-localization.js';
 export type { RuntimeLabels, RuntimeLocale } from './runtime-localization.js';

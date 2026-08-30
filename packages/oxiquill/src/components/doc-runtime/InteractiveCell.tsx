@@ -77,7 +77,7 @@ function InteractiveCellPanel({
               aria-busy={runtime.isRunning}
               aria-controls={ids.output}
               aria-disabled={runtime.isRunning || !runtime.inputsValid}
-              disabled={runtime.isRunning || !runtime.inputsValid}
+              disabled={!runtime.inputsValid}
               onClick={() => {
                 if (!runtime.isRunning && runtime.inputsValid) runtime.run();
               }}

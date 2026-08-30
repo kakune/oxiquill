@@ -68,6 +68,15 @@ export function effectiveStep(input: InputSpec): number {
   return input.step ?? 1;
 }
 
+export function stepNumericInputValue(input: InputSpec, value: number, direction: -1 | 1): number {
+  const precision = Math.min(
+    Math.max(decimalPlaces(effectiveStep(input)), decimalPlaces(value), decimalPlaces(input.min ?? 0)),
+    100
+  );
+  const stepped = Number((value + direction * effectiveStep(input)).toFixed(precision));
+  return Math.min(effectiveMaximum(input) ?? stepped, Math.max(effectiveMinimum(input) ?? stepped, stepped));
+}
+
 export function isIntegerInput(input: InputSpec): boolean {
   return input.type === 'integer' || input.integer === true;
 }

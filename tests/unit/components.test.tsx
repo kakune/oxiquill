@@ -376,6 +376,24 @@ describe('InteractiveCell', () => {
     expect(mocks.runInteractiveCell).toHaveBeenCalledWith(expect.anything(), { count: -1.5 }, 'v1', expect.anything());
   });
 
+  it('supports keyboard stepping for numeric spinbuttons and clamps at their bounds', () => {
+    setManifestCells([
+      makeCell({
+        inputs: [{ name: 'count', type: 'integer', label: 'count', value: 1, min: 0, max: 2, step: 1, options: [] }]
+      })
+    ]);
+
+    render(<InteractiveCell cellId="cell-one" />);
+    const input = screen.getByRole('spinbutton', { name: 'count' });
+    fireEvent.keyDown(input, { key: 'ArrowUp' });
+    expect(input).toHaveValue('2');
+    expect(input).toHaveAttribute('aria-valuenow', '2');
+    fireEvent.keyDown(input, { key: 'ArrowUp' });
+    expect(input).toHaveValue('2');
+    fireEvent.keyDown(input, { key: 'ArrowDown' });
+    expect(input).toHaveValue('1');
+  });
+
   it('formats range labels from fractional and exponential steps', () => {
     setManifestCells([
       makeCell({

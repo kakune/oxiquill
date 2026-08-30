@@ -5,6 +5,7 @@ import {
   formatInputValue,
   isIntegerInput,
   parseNumericInput,
+  stepNumericInputValue,
   type NumericInputValidation
 } from '../../lib/doc-runtime/interactive-input-validation.js';
 import type { RuntimeLabels } from '../../lib/doc-runtime/runtime-localization.js';
@@ -157,6 +158,7 @@ export function InputControl({
         aria-invalid={validation ? true : undefined}
         aria-valuemax={numeric ? effectiveMaximum(input) : undefined}
         aria-valuemin={numeric ? effectiveMinimum(input) : undefined}
+        aria-valuenow={numeric && !validation ? Number(editValue) : undefined}
         inputMode={numeric ? (isIntegerInput(input) ? 'numeric' : 'decimal') : undefined}
         role={numeric ? 'spinbutton' : undefined}
         type="text"
@@ -165,6 +167,18 @@ export function InputControl({
         step={numeric ? effectiveStep(input) : undefined}
         required={numeric}
         value={numeric ? editValue : String(value)}
+        onKeyDown={(event) => {
+          if (!numeric || (event.key !== 'ArrowUp' && event.key !== 'ArrowDown')) return;
+
+          event.preventDefault();
+          const parsed = parseNumericInput(input, editValue);
+          const currentValue = parsed.valid ? parsed.value : Number(value);
+          const nextValue = stepNumericInputValue(input, currentValue, event.key === 'ArrowUp' ? 1 : -1);
+          setEditValue(String(nextValue));
+          setValidation(undefined);
+          onValidityChange(true);
+          onChange(nextValue);
+        }}
         onInput={(event) => {
           const rawValue = event.currentTarget.value;
           if (!numeric) {

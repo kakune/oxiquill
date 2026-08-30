@@ -7,6 +7,7 @@ import {
   labelsForLanguage,
   localeFromLanguage,
   parseNumericInput,
+  stepNumericInputValue,
   shouldShowInputControls,
   shouldShowRunButton
 } from '../../packages/oxiquill/src/lib/doc-runtime/interactive-cell-model';
@@ -126,5 +127,13 @@ describe('interactive cell model', () => {
     expect(parseNumericInput(integerInput, '-2147483649')).toEqual({ valid: false, validation: 'integer' });
     expect(parseNumericInput(integerInput, '2147483648')).toEqual({ valid: false, validation: 'integer' });
     expect(parseNumericInput(integerInput, '9007199254740992')).toEqual({ valid: false, validation: 'integer' });
+  });
+
+  it('steps numeric spinbuttons without floating-point artifacts and clamps their range', () => {
+    const numberInput: InputSpec = { ...textInput, type: 'number', value: 0.2, min: 0, max: 0.3, step: 0.1 };
+
+    expect(stepNumericInputValue(numberInput, 0.2, 1)).toBe(0.3);
+    expect(stepNumericInputValue(numberInput, 0.3, 1)).toBe(0.3);
+    expect(stepNumericInputValue(numberInput, 0, -1)).toBe(0);
   });
 });
