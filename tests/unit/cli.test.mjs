@@ -57,7 +57,7 @@ const actualProjectConfig = Object.freeze({
 const repoRoot = path.resolve('/repo');
 const { canLoadNativePackage, frameworkEnv, isCliEntrypoint, nodeExecutableCandidates, runCli, selectFrameworkNode } =
   await import('../../packages/oxiquill/src/cli/commands.mjs');
-const { formatCliError, formatCliHelp, parseCliArguments } =
+const { debugRequested, formatCliError, formatCliHelp, parseCliArguments } =
   await import('../../packages/oxiquill/src/cli/arguments.mjs');
 const testRoot = path.parse(process.cwd()).root;
 
@@ -103,6 +103,21 @@ describe('oxiquill CLI', () => {
     );
     expect(() => parseCliArguments(['preview', '--config=a', '--config', 'b'])).toThrow(
       '--config may only be specified once'
+    );
+  });
+
+  it('forwards explicit optional Astro option values and rejects empty assignments', () => {
+    expect(parseCliArguments(['preview', '--host=127.0.0.1', '--open=/docs'])).toEqual(
+      expect.objectContaining({
+        commandArgs: ['--host=127.0.0.1', '--open=/docs'],
+        values: expect.objectContaining({ host: '127.0.0.1', open: '/docs' })
+      })
+    );
+    expect(() => parseCliArguments(['preview', '--host='])).toThrow(
+      expect.objectContaining({
+        message: '--host requires a non-empty value after =.',
+        usage: expect.stringContaining('Usage: oxiquill preview')
+      })
     );
   });
 
@@ -161,6 +176,21 @@ describe('oxiquill CLI', () => {
     });
   });
 
+  it('rejects unknown and extra help topics with useful usage', () => {
+    expect(() => parseCliArguments(['help', 'unknown'])).toThrow(
+      expect.objectContaining({
+        message: 'Unknown oxiquill command "unknown".',
+        usage: expect.stringContaining('Usage: oxiquill <command>')
+      })
+    );
+    expect(() => parseCliArguments(['help', 'build', 'preview'])).toThrow(
+      expect.objectContaining({
+        message: 'The help command accepts at most one command name.',
+        usage: expect.stringContaining('Usage: oxiquill help')
+      })
+    );
+  });
+
   it('prints the installed package version without loading project configuration', async () => {
     const log = vi.fn();
 
@@ -195,6 +225,21 @@ describe('oxiquill CLI', () => {
     expect(debug.stderr).toContain('CliUsageError: build received unexpected positional arguments');
     expect(debug.stderr).toContain('at parseCliArguments');
     expect(formatCliError(new Error('plain failure'))).toBe('Error: plain failure');
+  });
+
+  it('keeps forwarded debug flags scoped to Astro and renders nested causes only on request', () => {
+    const failure = new Error('project initialization failed', {
+      cause: new Error('starter read failed', { cause: 'permission denied' })
+    });
+    const detailedFailure = formatCliError(failure, { debug: true });
+
+    expect(debugRequested(['preview', '--', '--debug'])).toBe(false);
+    expect(debugRequested(['--debug', 'preview', '--', '--host', 'localhost'])).toBe(true);
+    expect(formatCliError(failure)).toBe('Error: project initialization failed');
+    expect(detailedFailure).toContain('Caused by: Error: starter read failed');
+    expect(detailedFailure).toContain('Caused by: permission denied');
+    expect(formatCliError('non-error failure')).toBe('Error: non-error failure');
+    expect(formatCliError('non-error failure', { debug: true })).toBe('non-error failure');
   });
 
   it('loads a selected config once and forwards the resolved Astro arguments', async () => {

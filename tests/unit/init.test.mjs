@@ -129,6 +129,57 @@ describe('oxiquill init', () => {
     await expect(access(path.join(cwd, 'missing'))).rejects.toMatchObject({ code: 'ENOENT' });
   });
 
+  it('validates starter metadata and file types before creating the target', async () => {
+    const cwd = await temporaryDirectory();
+    const invalidMetadataStarter = await temporaryDirectory();
+    const directoryStarter = await temporaryDirectory();
+    await writeFile(path.join(invalidMetadataStarter, 'package.json'), '{ invalid json');
+    await mkdir(path.join(directoryStarter, 'README.md'));
+
+    await expect(
+      initializeProject({
+        cwd,
+        directory: 'invalid-metadata',
+        files: ['package.json'],
+        starterRoot: invalidMetadataStarter
+      })
+    ).rejects.toThrow('Starter package metadata is invalid');
+    await expect(
+      initializeProject({ cwd, directory: 'directory-source', files: ['README.md'], starterRoot: directoryStarter })
+    ).rejects.toThrow('Starter source is not a regular file');
+
+    await expect(access(path.join(cwd, 'invalid-metadata'))).rejects.toMatchObject({ code: 'ENOENT' });
+    await expect(access(path.join(cwd, 'directory-source'))).rejects.toMatchObject({ code: 'ENOENT' });
+  });
+
+  it('does not overwrite a file created after the target emptiness check', async () => {
+    const cwd = await temporaryDirectory();
+    const targetPath = path.join(cwd, 'raced-target');
+    const racedFile = path.join(targetPath, '.gitignore');
+    let injectCollision = true;
+    await mkdir(targetPath);
+
+    await expect(
+      initializeProject({
+        cwd,
+        directory: 'raced-target',
+        fileSystem: {
+          writeFile: async (...args) => {
+            if (injectCollision) {
+              injectCollision = false;
+              await writeFile(racedFile, 'created concurrently\n');
+            }
+            return writeFile(...args);
+          }
+        },
+        starterRoot
+      })
+    ).rejects.toThrow('Could not initialize an Oxiquill project');
+
+    expect(await readFile(racedFile, 'utf8')).toBe('created concurrently\n');
+    expect(await relativeFiles(targetPath)).toEqual(['.gitignore']);
+  });
+
   it.each([
     ['My Docs', 'my-docs'],
     ['UPPER_case', 'upper_case'],
