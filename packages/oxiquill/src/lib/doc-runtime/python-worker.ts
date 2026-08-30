@@ -66,6 +66,9 @@ export function createPythonWorkerRequestHandler({
       let value: unknown = null;
 
       try {
+        for (const inputName of request.integerInputNames ?? []) {
+          pyodide.runPython(pythonIntegerConversionCode(inputName), { globals });
+        }
         value = toSerializable(await pyodide.runPythonAsync(request.source ?? '', { globals }));
       } finally {
         globals.destroy();
@@ -115,6 +118,11 @@ export function createPythonRuntimeLoader({
     });
     return pyodideReady;
   };
+}
+
+export function pythonIntegerConversionCode(inputName: string): string {
+  if (!/^[a-z][a-z0-9_]*$/u.test(inputName)) throw new Error(`Invalid integer input name: ${inputName}`);
+  return `${inputName} = int(${inputName})`;
 }
 
 export async function importPyodideModule(

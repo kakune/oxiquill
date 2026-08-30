@@ -56,7 +56,7 @@ This autorun cell has no execution controls and runs once for the current genera
 println!("autorun ready");
 ```
 
-Superseded queued work is discarded, stale results cannot replace newer state, and ordinary reactive updates keep the shared language worker alive. A timeout or worker fault rejects requests owned by that worker, clears their timers, and creates a fresh worker for future runs. Unmounting cancels pending UI work and prevents late state updates.
+Superseding a reactive run actively cancels its worker request, rejects every request affected by the worker recycle, clears their timers, and starts the latest complete values after the debounce. Cancellation is not shown as an execution error, and stale results cannot replace newer state. Timeout and worker-fault recovery use the same deterministic recycle boundary. Unmounting cancels pending and active work.
 
 ## Input Schema
 
@@ -65,12 +65,16 @@ Every input accepts only fields relevant to its type. Common fields are `type`, 
 | Type               | Value and constraints                                                                                  |
 | ------------------ | ------------------------------------------------------------------------------------------------------ |
 | `range`, `number`  | Finite number; `step > 0`, `min <= max`, and the default must be within bounds.                        |
-| `integer`          | Integer value and integer bounds/step; the same numeric constraints apply.                             |
+| `integer`          | Signed 32-bit integer from `-2147483648` through `2147483647`; bounds and step use the same domain.    |
 | `text`, `textarea` | String value.                                                                                          |
 | `checkbox`         | Boolean value.                                                                                         |
 | `select`, `radio`  | Non-empty unique string options or `{ label, value }` objects; the default must equal an option value. |
 
 `type` defaults to `text`, and `label` defaults to the input name. `description` is an optional non-empty string associated with the control for assistive technology. Default values are `false` for checkbox, `0` for numeric inputs, and an empty string for text inputs. Numeric-only fields are rejected on non-numeric controls, and `options` is rejected outside `select` and `radio`.
+
+The signed 32-bit integer domain is exactly representable by JavaScript and maps consistently to Rust `i32`, Haskell `Int`, and Python `int`. Authoring rejects an integer `value`, `min`, `max`, or `step` outside that domain. Browser controls apply the same domain before constructing a worker request, including for `integer: true` numeric inputs.
+
+Number and integer controls keep their raw edit text separate from committed runtime values. Empty, incomplete, non-finite, out-of-range, and step-mismatched text remains visible but cannot update cell inputs. The Run button is disabled while any control is invalid, and reactive execution resumes exactly once with the latest complete value set after validity returns. Range labels derive their displayed precision from `step`.
 
 The visible `label` is the control's accessible name; the input key is only the generated language binding. Normalization must not make two Rust or Haskell bindings collide. Labels, descriptions, current values, validation messages, and grouped controls use stable IDs, keyboard focus remains visible, and run/error status is announced without stealing focus.
 
@@ -110,9 +114,9 @@ A cell with `crates: []` does not depend on helper crates. This example shows ch
 //|   operation: { type: select, label: operation, value: double, options: [identity, double, triple] }
 //|   style: { type: radio, label: style, value: compact, options: [compact, verbose] }
 let base_score = match operation.as_str() {
-    "triple" => 21_u32,
-    "double" => 14_u32,
-    _ => 7_u32,
+    "triple" => 21_i32,
+    "double" => 14_i32,
+    _ => 7_i32,
 };
 let score = if include_bonus {
     base_score + 5

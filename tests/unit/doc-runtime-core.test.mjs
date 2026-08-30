@@ -225,6 +225,21 @@ describe('doc runtime core', () => {
       'inputs.count.value'
     ],
     [
+      'integer default below portable domain',
+      '//| id: bad\n//| inputs:\n//|   count: { type: integer, value: -2147483649 }',
+      'inputs.count.value'
+    ],
+    [
+      'integer maximum above portable domain',
+      '//| id: bad\n//| inputs:\n//|   count: { type: integer, value: 1, max: 2147483648 }',
+      'inputs.count.max'
+    ],
+    [
+      'integer step above portable domain',
+      '//| id: bad\n//| inputs:\n//|   count: { type: integer, value: 1, step: 2147483648 }',
+      'inputs.count.step'
+    ],
+    [
       'empty options',
       '//| id: bad\n//| inputs:\n//|   mode: { type: select, value: a, options: [] }',
       'inputs.mode.options'
@@ -450,8 +465,8 @@ describe('doc runtime core', () => {
     expect(rustFunctionName('cell-id')).toBe('run_cell_id');
     expect(rustFunctionName('page__cell')).toBe('run_page_cell');
     expect(rustReaderName({ type: 'checkbox' })).toBe('read_bool');
-    expect(rustReaderName({ type: 'integer' })).toBe('read_u32');
-    expect(rustReaderName({ type: 'text', integer: true })).toBe('read_u32');
+    expect(rustReaderName({ type: 'integer' })).toBe('read_i32');
+    expect(rustReaderName({ type: 'text', integer: true })).toBe('read_i32');
     expect(rustReaderName({ type: 'range' })).toBe('read_f64');
     expect(rustReaderName({ type: 'number' })).toBe('read_f64');
     expect(rustReaderName({ type: 'text' })).toBe('read_string');
@@ -520,6 +535,9 @@ describe('doc runtime core', () => {
       inputs: []
     };
     expect(generateRustReaders([rustCell])).toContain('fn read_f64');
+    expect(generateRustReaders([rustCell])).toContain('fn read_i32');
+    expect(generateRustReaders([rustCell])).toContain('.and_then(Value::as_i64)');
+    expect(generateHaskellMain([rustCell])).toContain('value >= -2147483648 && value <= 2147483647');
     expect(generateRustFunction(rustCell)).toContain('macro_rules! println');
     expect(generateRustFunction(rustCell)).toContain('macro_rules! emit_line_plot');
     expect(generateRustFunction(rustCell)).not.toContain('macro_rules! emit_json');

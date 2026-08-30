@@ -5,6 +5,7 @@ import {
   createPythonWorkerRequestHandler,
   createSerialRequestQueue,
   importPyodideModule,
+  pythonIntegerConversionCode,
   pythonDisplaySupportCode,
   resolvePyodideUrls
 } from '../../packages/oxiquill/src/lib/doc-runtime/python-worker';
@@ -81,6 +82,13 @@ describe('python worker request queue', () => {
     await flushMicrotasks();
 
     expect(events).toEqual(['start:first', 'start:second', 'finish:second']);
+  });
+});
+
+describe('python input conversion', () => {
+  it('converts validated integer bindings to Python ints without interpolating arbitrary names', () => {
+    expect(pythonIntegerConversionCode('negative_offset')).toBe('negative_offset = int(negative_offset)');
+    expect(() => pythonIntegerConversionCode('value; import os')).toThrow('Invalid integer input name');
   });
 });
 

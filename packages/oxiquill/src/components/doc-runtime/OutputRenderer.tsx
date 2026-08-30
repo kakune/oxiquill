@@ -23,18 +23,25 @@ interface OutputRendererProps {
   idPrefix?: string;
   labels?: RuntimeLabels;
   outputs: readonly ValidatedArtifactResult[];
+  resultIdentity?: object;
 }
 
 export default function OutputRenderer({
   idPrefix = 'doc-output',
   labels = labelsForLanguage(globalThis.document?.documentElement.lang),
-  outputs
+  outputs,
+  resultIdentity
 }: OutputRendererProps) {
   return (
     <>
       {outputs.map((output, index) => (
         <ArtifactErrorBoundary key={artifactKey(output, index)} index={output.index} labels={labels} resetKey={output}>
-          <ArtifactOutput idPrefix={`${idPrefix}-artifact-${output.index}`} labels={labels} output={output} />
+          <ArtifactOutput
+            idPrefix={`${idPrefix}-artifact-${output.index}`}
+            labels={labels}
+            output={output}
+            resultIdentity={resultIdentity}
+          />
         </ArtifactErrorBoundary>
       ))}
     </>
@@ -44,11 +51,13 @@ export default function OutputRenderer({
 function ArtifactOutput({
   idPrefix,
   labels,
-  output
+  output,
+  resultIdentity
 }: {
   idPrefix: string;
   labels: RuntimeLabels;
   output: ValidatedArtifactResult;
+  resultIdentity?: object;
 }) {
   if (output.status === 'error') {
     return <ArtifactError message={labels.artifactError(output.index + 1, labels.diagnosticDetail(output.message))} />;
@@ -64,7 +73,9 @@ function ArtifactOutput({
     case 'chart':
       return <LazyChartOutput artifact={output.artifact} idPrefix={idPrefix} labels={labels} />;
     case 'table':
-      return <TableOutput idPrefix={idPrefix} labels={labels} table={output.artifact} />;
+      return (
+        <TableOutput idPrefix={idPrefix} labels={labels} table={output.artifact} resultIdentity={resultIdentity} />
+      );
     case 'image':
       return <ImageOutput labels={labels} output={output.artifact} />;
   }

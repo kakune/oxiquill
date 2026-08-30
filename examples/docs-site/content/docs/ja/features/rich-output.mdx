@@ -134,3 +134,5 @@ emit_html!(r#"<p><strong>Sandboxed HTML</strong> emitted from Rust.</p>"#);
 短い説明文には stdout を使います。正確な構造を見せたい場合は JSON、比較可能な record には table、傾向や分布には chart、生成された視覚情報には image、他の artifact で表せない markup には sandboxed HTML を使います。
 
 copy、sort、pagination、validation、running、completion、failure state は keyboard 操作可能で、localized English/Japanese label とともに announce されます。sandboxed HTML には意図的に script/same-origin permission がありません。trust boundary は [サポートとセキュリティ](/ja/guides/support-and-security/) を参照してください。
+
+table interaction state は一つの execution result に限定されます。新しい result では page、sort、copy status を reset します。同じ result の rerender は互換性のある sort/page を維持しますが、row が減った場合は clamp 後の page を保存し、sort 対象 column が削除・置換された場合は sort を解除します。

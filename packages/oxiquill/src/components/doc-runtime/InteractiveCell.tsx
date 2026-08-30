@@ -76,9 +76,10 @@ function InteractiveCellPanel({
               class="run-button"
               aria-busy={runtime.isRunning}
               aria-controls={ids.output}
-              aria-disabled={runtime.isRunning}
+              aria-disabled={runtime.isRunning || !runtime.inputsValid}
+              disabled={runtime.isRunning || !runtime.inputsValid}
               onClick={() => {
-                if (!runtime.isRunning) runtime.run();
+                if (!runtime.isRunning && runtime.inputsValid) runtime.run();
               }}
             >
               {runtime.isRunning ? labels.running : labels.run}
@@ -100,6 +101,7 @@ function InteractiveCellPanel({
               labels={labels}
               value={runtime.values[input.name]}
               onChange={(value) => runtime.setInputValue(input.name, value)}
+              onValidityChange={(valid) => runtime.setInputValidity(input.name, valid)}
             />
           ))}
         </fieldset>

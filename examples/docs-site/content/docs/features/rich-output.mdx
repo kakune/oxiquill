@@ -134,3 +134,5 @@ emit_html!(r#"<p><strong>Sandboxed HTML</strong> emitted from Rust.</p>"#);
 Use stdout for short explanatory text. Use JSON when readers need the exact structured value. Use tables for comparable records, charts for trends or distributions, images for generated visuals, and sandboxed HTML only when the output needs markup that cannot be represented by the other artifact types.
 
 Copy, sort, pagination, validation, running, completion, and failure states are keyboard-operable and announced with localized English/Japanese labels. Sandboxed HTML intentionally has no script or same-origin permission; see [Support and Security](/guides/support-and-security/) for the full trust boundary.
+
+Table interaction state is scoped to one execution result. A new result resets the page, sort, and copy status. Rerenders of the same result preserve a compatible sort and page, but row shrinkage stores the clamped page and a removed or replaced sorted column clears the sort.

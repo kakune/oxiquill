@@ -1,7 +1,15 @@
-import { coerceInputValue, formatInputValue } from '../../lib/doc-runtime/interactive-cell-model.js';
+import {
+  effectiveMaximum,
+  effectiveMinimum,
+  effectiveStep,
+  formatInputValue,
+  isIntegerInput,
+  parseNumericInput,
+  type NumericInputValidation
+} from '../../lib/doc-runtime/interactive-input-validation.js';
 import type { RuntimeLabels } from '../../lib/doc-runtime/runtime-localization.js';
 import type { InputSpec } from '../../lib/doc-runtime/types.js';
-import { useState } from 'preact/hooks';
+import { useEffect, useState } from 'preact/hooks';
 
 type InputValue = string | number | boolean;
 
@@ -10,18 +18,26 @@ export function InputControl({
   input,
   labels,
   value,
-  onChange
+  onChange,
+  onValidityChange = () => undefined
 }: {
   cellId: string;
   input: InputSpec;
   labels: RuntimeLabels;
   onChange: (value: InputValue) => void;
+  onValidityChange?: (valid: boolean) => void;
   value: InputValue;
 }) {
   const ids = inputControlIds(cellId, input.name);
   const [validation, setValidation] = useState<string>();
+  const [editValue, setEditValue] = useState(() => String(value));
   const descriptionId = input.description ? ids.description : undefined;
   const validationId = validation ? ids.validation : undefined;
+  const numeric = input.type === 'number' || input.type === 'integer';
+
+  useEffect(() => {
+    setEditValue(String(value));
+  }, [value]);
 
   if (input.type === 'checkbox') {
     return (
@@ -111,7 +127,7 @@ export function InputControl({
             {input.label}
           </label>
           <output id={ids.value} for={ids.control} data-testid={`${input.name}-value`}>
-            {formatInputValue(value)}
+            {formatInputValue(value, effectiveStep(input))}
           </output>
         </div>
         <input
@@ -129,8 +145,6 @@ export function InputControl({
     );
   }
 
-  const numeric = input.type === 'number' || input.type === 'integer';
-
   return (
     <div class="doc-input">
       <label for={ids.control} id={ids.label}>
@@ -141,14 +155,29 @@ export function InputControl({
         aria-describedby={descriptionId}
         aria-errormessage={validationId}
         aria-invalid={validation ? true : undefined}
-        type={numeric ? 'number' : 'text'}
-        min={input.min}
-        max={input.max}
-        step={input.type === 'integer' ? (input.step ?? 1) : input.step}
-        value={String(value)}
+        aria-valuemax={numeric ? effectiveMaximum(input) : undefined}
+        aria-valuemin={numeric ? effectiveMinimum(input) : undefined}
+        inputMode={numeric ? (isIntegerInput(input) ? 'numeric' : 'decimal') : undefined}
+        role={numeric ? 'spinbutton' : undefined}
+        type="text"
+        min={numeric ? effectiveMinimum(input) : undefined}
+        max={numeric ? effectiveMaximum(input) : undefined}
+        step={numeric ? effectiveStep(input) : undefined}
+        required={numeric}
+        value={numeric ? editValue : String(value)}
         onInput={(event) => {
-          setValidation(numeric ? inputValidationMessage(event.currentTarget.validity, input, labels) : undefined);
-          onChange(coerceInputValue(input, event.currentTarget.value));
+          const rawValue = event.currentTarget.value;
+          if (!numeric) {
+            onChange(rawValue);
+            return;
+          }
+
+          setEditValue(rawValue);
+          const parsed = parseNumericInput(input, rawValue);
+          const nextValidation = parsed.valid ? undefined : inputValidationMessage(parsed.validation, input, labels);
+          setValidation(nextValidation);
+          onValidityChange(parsed.valid);
+          if (parsed.valid) onChange(parsed.value);
         }}
       />
       <InputDescription id={descriptionId} description={input.description} />
@@ -189,11 +218,10 @@ function describedBy(...ids: Array<string | undefined>): string | undefined {
   return value || undefined;
 }
 
-function inputValidationMessage(validity: ValidityState, input: InputSpec, labels: RuntimeLabels): string | undefined {
-  if (validity.valid) return undefined;
-  if (validity.badInput) return labels.inputNumber;
-  if (validity.rangeUnderflow && input.min !== undefined) return labels.inputMinimum(input.min);
-  if (validity.rangeOverflow && input.max !== undefined) return labels.inputMaximum(input.max);
-  if (validity.stepMismatch) return labels.inputStep;
+function inputValidationMessage(validation: NumericInputValidation, input: InputSpec, labels: RuntimeLabels): string {
+  if (validation === 'rangeUnderflow') return labels.inputMinimum(effectiveMinimum(input) as number);
+  if (validation === 'rangeOverflow') return labels.inputMaximum(effectiveMaximum(input) as number);
+  if (validation === 'stepMismatch') return labels.inputStep;
+  if (validation === 'integer' && isIntegerInput(input)) return labels.inputNumber;
   return labels.inputNumber;
 }

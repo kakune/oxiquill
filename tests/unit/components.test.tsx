@@ -238,7 +238,8 @@ describe('InteractiveCell', () => {
         count: 4,
         label: 'next'
       }),
-      'v1'
+      'v1',
+      expect.anything()
     );
   });
 
@@ -345,6 +346,58 @@ describe('InteractiveCell', () => {
     expect(input).toHaveAttribute('aria-invalid', 'true');
     expect(input).toHaveAttribute('aria-errormessage', 'doc-input-cell-one-count-validation');
     expect(screen.getByRole('alert')).toHaveTextContent('1 以上の値を入力してください。');
+    expect(screen.getByRole('button', { name: '実行' })).toBeDisabled();
+  });
+
+  it('preserves invalid numeric edits and never commits or runs them', async () => {
+    mocks.runInteractiveCell.mockResolvedValue({ stdout: 'ok', plots: [] });
+    setManifestCells([
+      makeCell({
+        inputs: [{ name: 'count', type: 'number', label: 'count', value: 1, min: -2, max: 2, step: 0.5, options: [] }]
+      })
+    ]);
+
+    render(<InteractiveCell cellId="cell-one" />);
+    const input = screen.getByRole('spinbutton', { name: 'count' });
+    const runButton = screen.getByRole('button', { name: 'Run' });
+
+    for (const invalidValue of ['', '-', '1e309', '-2.5', '2.5', '1.25']) {
+      fireEvent.input(input, { target: { value: invalidValue } });
+      expect(input).toHaveValue(invalidValue);
+      expect(runButton).toBeDisabled();
+      fireEvent.click(runButton);
+    }
+    expect(mocks.runInteractiveCell).not.toHaveBeenCalled();
+
+    fireEvent.input(input, { target: { value: '-1.5' } });
+    expect(runButton).toBeEnabled();
+    fireEvent.click(runButton);
+    await waitFor(() => expect(mocks.runInteractiveCell).toHaveBeenCalledOnce());
+    expect(mocks.runInteractiveCell).toHaveBeenCalledWith(expect.anything(), { count: -1.5 }, 'v1', expect.anything());
+  });
+
+  it('formats range labels from fractional and exponential steps', () => {
+    setManifestCells([
+      makeCell({
+        inputs: [
+          { name: 'fine', type: 'range', label: 'fine', value: 1.2, min: 0, max: 2, step: 0.001, options: [] },
+          {
+            name: 'tiny',
+            type: 'range',
+            label: 'tiny',
+            value: 0.0000003,
+            min: 0,
+            max: 0.000001,
+            step: 1e-7,
+            options: []
+          }
+        ]
+      })
+    ]);
+
+    render(<InteractiveCell cellId="cell-one" />);
+    expect(screen.getByTestId('fine-value')).toHaveTextContent('1.200');
+    expect(screen.getByTestId('tiny-value')).toHaveTextContent('0.0000003');
   });
 
   it('shows running and error states', async () => {
@@ -459,15 +512,41 @@ describe('InteractiveCell', () => {
     expect(mocks.runInteractiveCell).toHaveBeenLastCalledWith(
       expect.objectContaining({ id: 'cell-one' }),
       expect.objectContaining({ ratio: 2.5 }),
-      'v1'
+      'v1',
+      expect.anything()
     );
   });
 
-  it('runs at most one active reactive request and one final replacement', async () => {
+  it('blocks invalid reactive edits and schedules the latest values once validity returns', async () => {
+    mocks.runInteractiveCell.mockResolvedValue({ stdout: 'auto', plots: [] });
+    setManifestCells([
+      makeCell({
+        run: 'reactive',
+        inputs: [{ name: 'count', type: 'number', label: 'count', value: 1, min: 0, max: 4, step: 0.5, options: [] }]
+      })
+    ]);
+
+    render(<InteractiveCell cellId="cell-one" />);
+    await waitFor(() => expect(mocks.runInteractiveCell).toHaveBeenCalledOnce());
+    const input = screen.getByRole('spinbutton', { name: 'count' });
+
+    fireEvent.input(input, { target: { value: '' } });
+    await new Promise((resolve) => globalThis.setTimeout(resolve, 200));
+    expect(mocks.runInteractiveCell).toHaveBeenCalledOnce();
+
+    fireEvent.input(input, { target: { value: '2' } });
+    fireEvent.input(input, { target: { value: '3' } });
+    await waitFor(() => expect(mocks.runInteractiveCell).toHaveBeenCalledTimes(2));
+    expect(mocks.runInteractiveCell).toHaveBeenLastCalledWith(expect.anything(), { count: 3 }, 'v1', expect.anything());
+  });
+
+  it('cancels an active reactive request and runs only the final replacement', async () => {
     const pending: Array<ReturnType<typeof createDeferredResult>> = [];
-    mocks.runInteractiveCell.mockImplementation(() => {
+    const signals: AbortSignal[] = [];
+    mocks.runInteractiveCell.mockImplementation((_cell, _values, _version, signal: AbortSignal) => {
       const deferred = createDeferredResult();
       pending.push(deferred);
+      signals.push(signal);
       return deferred.promise;
     });
     setManifestCells([
@@ -485,22 +564,15 @@ describe('InteractiveCell', () => {
     }
     await new Promise((resolve) => globalThis.setTimeout(resolve, 200));
 
-    expect(pending).toHaveLength(1);
+    expect(pending).toHaveLength(2);
+    expect(signals[0].aborted).toBe(true);
     expect(screen.getByText('Running cell...')).toBeVisible();
-
-    await act(async () => {
-      pending[0].resolve({
-        stdout: 'obsolete result',
-        stderr: '',
-        value: null,
-        plots: [],
-        outputs: [{ kind: 'text', stream: 'stdout', content: 'obsolete result' }]
-      });
-      await pending[0].promise;
-    });
-
-    await waitFor(() => expect(pending).toHaveLength(2));
-    expect(mocks.runInteractiveCell).toHaveBeenLastCalledWith(expect.anything(), { label: 'newer input 9' }, 'v1');
+    expect(mocks.runInteractiveCell).toHaveBeenLastCalledWith(
+      expect.anything(),
+      { label: 'newer input 9' },
+      'v1',
+      expect.anything()
+    );
     expect(screen.queryByText('obsolete result')).not.toBeInTheDocument();
 
     await act(async () => {
@@ -514,7 +586,7 @@ describe('InteractiveCell', () => {
       await pending[1].promise;
     });
 
-    expect(screen.getByTestId('run-output')).toHaveTextContent('newer result');
+    await waitFor(() => expect(screen.getByTestId('run-output')).toHaveTextContent('newer result'));
   });
 
   it('ignores stale async errors from superseded reactive runs', async () => {
@@ -556,15 +628,19 @@ describe('InteractiveCell', () => {
       await pending[1].promise;
     });
 
-    expect(screen.getByTestId('run-output')).toHaveTextContent('newer result');
+    await waitFor(() => expect(screen.getByTestId('run-output')).toHaveTextContent('newer result'));
   });
 
   it('drops debounced and active callbacks when a reactive cell unmounts', async () => {
     const active = createDeferredResult();
     const consoleError = vi.spyOn(console, 'error').mockImplementation(() => undefined);
     const unhandledRejection = vi.fn();
+    let signal: AbortSignal | undefined;
     window.addEventListener('unhandledrejection', unhandledRejection);
-    mocks.runInteractiveCell.mockReturnValue(active.promise);
+    mocks.runInteractiveCell.mockImplementation((_cell, _values, _version, activeSignal: AbortSignal) => {
+      signal = activeSignal;
+      return active.promise;
+    });
     setManifestCells([
       makeCell({
         run: 'reactive',
@@ -576,6 +652,8 @@ describe('InteractiveCell', () => {
     await waitFor(() => expect(mocks.runInteractiveCell).toHaveBeenCalledOnce());
     fireEvent.input(screen.getByLabelText('label'), { target: { value: 'discarded' } });
     rendered.unmount();
+
+    expect(signal?.aborted).toBe(true);
 
     active.reject(new Error('failure after unmount'));
     await active.promise.catch(() => undefined);
@@ -1325,6 +1403,82 @@ describe('TableOutput', () => {
     expect(screen.getByText('Rows 0-0 of 0')).toBeVisible();
     expect(screen.getByTestId('table-prev')).toBeDisabled();
     expect(screen.getByTestId('table-next')).toBeDisabled();
+  });
+
+  it('resets page, sort, and copy state at a new execution result boundary', async () => {
+    const writeText = vi.fn().mockResolvedValue(undefined);
+    Object.defineProperty(globalThis.navigator, 'clipboard', {
+      configurable: true,
+      value: { writeText }
+    });
+    const firstResult = {};
+    const secondResult = {};
+    const rows = Array.from({ length: 30 }, (_, index) => [30 - index, `row ${index + 1}`]);
+    const { rerender } = render(
+      <TableOutput
+        resultIdentity={firstResult}
+        table={{
+          kind: 'table',
+          columns: [
+            { key: 'score', label: 'Score' },
+            { key: 'label', label: 'Label' }
+          ],
+          rows
+        }}
+      />
+    );
+
+    fireEvent.click(screen.getByRole('button', { name: 'Score' }));
+    fireEvent.click(screen.getByTestId('table-next'));
+    fireEvent.click(screen.getByTestId('table-next'));
+    fireEvent.click(screen.getByTestId('table-copy-csv'));
+    await waitFor(() => expect(screen.getByTestId('table-copy-status')).toBeVisible());
+
+    rerender(
+      <TableOutput
+        resultIdentity={secondResult}
+        table={{
+          kind: 'table',
+          columns: [{ key: 'replacement', label: 'Replacement' }],
+          rows: [['a'], ['b'], ['c']]
+        }}
+      />
+    );
+
+    expect(screen.getByText('Rows 1-3 of 3')).toBeVisible();
+    expect(screen.getByRole('columnheader', { name: 'Replacement' })).toHaveAttribute('aria-sort', 'none');
+    expect(screen.queryByTestId('table-copy-status')).not.toBeInTheDocument();
+  });
+
+  it('stores a clamped page and clears removed-column sort for an unchanged result identity', () => {
+    const resultIdentity = {};
+    const columns = [{ key: 'score', label: 'Score' }];
+    const largeRows = Array.from({ length: 30 }, (_, index) => [index]);
+    const { rerender } = render(
+      <TableOutput resultIdentity={resultIdentity} table={{ kind: 'table', columns, rows: largeRows }} />
+    );
+
+    fireEvent.click(screen.getByRole('button', { name: 'Score' }));
+    fireEvent.click(screen.getByTestId('table-next'));
+    fireEvent.click(screen.getByTestId('table-next'));
+    expect(screen.getByText('Rows 21-30 of 30')).toBeVisible();
+
+    rerender(
+      <TableOutput
+        resultIdentity={resultIdentity}
+        table={{ kind: 'table', columns: [{ key: 'other', label: 'Other' }], rows: [[1], [2], [3]] }}
+      />
+    );
+    expect(screen.getByText('Rows 1-3 of 3')).toBeVisible();
+    expect(screen.getByRole('columnheader', { name: 'Other' })).toHaveAttribute('aria-sort', 'none');
+
+    rerender(
+      <TableOutput
+        resultIdentity={resultIdentity}
+        table={{ kind: 'table', columns: [{ key: 'other', label: 'Other' }], rows: largeRows }}
+      />
+    );
+    expect(screen.getByText('Rows 1-10 of 30')).toBeVisible();
   });
 
   it('sorts and formats table values without mutating rows', () => {

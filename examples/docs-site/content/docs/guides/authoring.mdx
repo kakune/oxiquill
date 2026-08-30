@@ -101,6 +101,8 @@ Common metadata fields:
 
 These are the only top-level fields. Dependency arrays must contain unique non-empty strings. Supported input types are `range`, `number`, `integer`, `text`, `textarea`, `checkbox`, `select`, and `radio`. See [Interactive Cells](../../features/interactive-cells/) for the exact input fields, defaults, constraints, and option schema.
 
+Integer metadata uses one portable signed 32-bit domain: `-2147483648` through `2147483647`. This limit applies to `value`, `min`, `max`, and `step` so generated Rust, Haskell, and Python bindings receive the same exact integer.
+
 ## Add Math
 
 Inline math uses `$...$`, and block math uses `$$...$$`.

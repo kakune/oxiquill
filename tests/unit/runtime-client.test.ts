@@ -147,7 +147,12 @@ describe('runtime client', () => {
 
   it('sends Python source and resolves successful worker responses', async () => {
     const { runner, workers } = makeRunner();
-    const promise = runner.runInteractiveCell(makeCell('python'), { scale: 2 });
+    const promise = runner.runInteractiveCell(
+      makeCell('python', {
+        inputs: [{ name: 'scale', type: 'number', label: 'scale', value: 1, options: [] }]
+      }),
+      { scale: 2 }
+    );
 
     expect(workers).toHaveLength(1);
     expect(workers[0].messages[0]).toMatchObject({
@@ -163,6 +168,39 @@ describe('runtime client', () => {
 
     await expect(promise).resolves.toEqual(normalizedResult);
   });
+
+  it('marks portable integer inputs for Python int conversion and accepts negative values', async () => {
+    const { runner, workers } = makeRunner();
+    const promise = runner.runInteractiveCell(
+      makeCell('python', {
+        inputs: [{ name: 'offset', type: 'integer', label: 'offset', value: 0, options: [] }]
+      }),
+      { offset: -2147483648 }
+    );
+
+    expect(workers[0].messages[0]).toMatchObject({
+      inputs: { offset: -2147483648 },
+      integerInputNames: ['offset']
+    });
+    workers[0].emitMessage({ requestId: 1, ok: true, result });
+    await expect(promise).resolves.toEqual(normalizedResult);
+  });
+
+  it.each([-2147483649, 2147483648, Number.MAX_SAFE_INTEGER + 1])(
+    'rejects integer values outside the portable domain before creating a worker: %s',
+    async (value) => {
+      const { runner, workers } = makeRunner();
+      const promise = runner.runInteractiveCell(
+        makeCell('rust', {
+          inputs: [{ name: 'count', type: 'integer', label: 'count', value: 0, options: [] }]
+        }),
+        { count: value }
+      );
+
+      await expect(promise).rejects.toThrow('invalid committed numeric value');
+      expect(workers).toEqual([]);
+    }
+  );
 
   it('normalizes legacy worker responses before resolving', async () => {
     const { runner, workers } = makeRunner();
@@ -307,6 +345,35 @@ describe('runtime client', () => {
 
     await expect(reset).rejects.toThrow('rust worker was reset');
     expect(workers[1].terminated).toBe(true);
+  });
+
+  it('cancels active worker requests, clears their timers, and recovers with a replacement worker', async () => {
+    const workers: FakeWorker[] = [];
+    const clearTimer = vi.fn(clearTimeout);
+    const runner = createInteractiveCellRunner({
+      clearTimeout: clearTimer,
+      createWorker: () => {
+        const worker = new FakeWorker();
+        workers.push(worker);
+        return worker as unknown as Worker;
+      },
+      setTimeout
+    });
+    const controller = new AbortController();
+    const cancelled = runner.runInteractiveCell(makeCell('rust'), {}, undefined, controller.signal);
+    const companion = runner.runInteractiveCell(makeCell('rust', { id: 'rust-companion' }), {});
+
+    controller.abort();
+
+    await expect(cancelled).rejects.toMatchObject({ name: 'AbortError' });
+    await expect(companion).rejects.toMatchObject({ name: 'AbortError' });
+    expect(workers[0].terminated).toBe(true);
+    expect(clearTimer).toHaveBeenCalledTimes(2);
+
+    const recovered = runner.runInteractiveCell(makeCell('rust'), {});
+    expect(workers).toHaveLength(2);
+    workers[1].emitMessage({ requestId: 3, ok: true, result });
+    await expect(recovered).resolves.toEqual(normalizedResult);
   });
 
   it('rejects only requests owned by a failed worker and replaces that worker', async () => {

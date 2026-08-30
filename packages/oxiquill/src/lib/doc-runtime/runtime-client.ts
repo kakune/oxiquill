@@ -1,4 +1,6 @@
 import type { CellLanguage, CellManifest, InputValues, RuntimeWorkerRequest, RuntimeWorkerResponse } from './types.js';
+import { ExecutionCancellationError } from './execution-cancellation.js';
+import { assertValidInputValues, completeInputValues } from './interactive-input-validation.js';
 import { normalizeCellExecutionResult, type NormalizedCellExecutionResult } from './output-artifacts.js';
 
 type PendingRequest = {
@@ -6,6 +8,7 @@ type PendingRequest = {
   resolve: (value: NormalizedCellExecutionResult) => void;
   timeout: ReturnType<typeof setTimeout>;
   worker: Worker;
+  removeAbortListener: () => void;
 };
 
 type RuntimeClientDependencies = {
@@ -17,10 +20,11 @@ type RuntimeClientDependencies = {
 export function runInteractiveCell(
   cell: CellManifest,
   inputs: InputValues,
-  runtimeVersion?: string
+  runtimeVersion?: string,
+  signal?: AbortSignal
 ): Promise<NormalizedCellExecutionResult> {
   /* v8 ignore next -- the factory is unit-tested; this delegates to browser Worker adapters. */
-  return defaultRuntimeClient.runInteractiveCell(cell, inputs, runtimeVersion);
+  return defaultRuntimeClient.runInteractiveCell(cell, inputs, runtimeVersion, signal);
 }
 
 export function resetInteractiveRuntime(language?: CellLanguage): void {
@@ -42,10 +46,19 @@ export function createInteractiveCellRunner(dependencies: RuntimeClientDependenc
   function runCell(
     cell: CellManifest,
     inputs: InputValues,
-    runtimeVersion?: string
+    runtimeVersion?: string,
+    signal?: AbortSignal
   ): Promise<NormalizedCellExecutionResult> {
+    const completeValues = completeInputValues(cell, inputs);
+    try {
+      assertValidInputValues(cell, completeValues);
+    } catch (error) {
+      return Promise.reject(toError(error));
+    }
+    if (signal?.aborted) return Promise.reject(new ExecutionCancellationError());
+
     const requestId = nextRequestId++;
-    const request = createWorkerRequest(requestId, cell, inputs, runtimeVersion);
+    const request = createWorkerRequest(requestId, cell, completeValues, runtimeVersion);
 
     return new Promise((resolve, reject) => {
       let worker: Worker | undefined;
@@ -57,7 +70,20 @@ export function createInteractiveCellRunner(dependencies: RuntimeClientDependenc
           failWorker(ownedWorker, new Error(`${cell.title} timed out after ${cell.timeoutMs}ms`));
         }, cell.timeoutMs);
 
-        pending.set(requestId, { resolve, reject, timeout, worker });
+        const abort = () => failWorker(ownedWorker, new ExecutionCancellationError());
+        signal?.addEventListener('abort', abort, { once: true });
+        pending.set(requestId, {
+          resolve,
+          reject,
+          timeout,
+          worker,
+          removeAbortListener: () => signal?.removeEventListener('abort', abort)
+        });
+
+        if (signal?.aborted) {
+          abort();
+          return;
+        }
 
         try {
           worker.postMessage(request);
@@ -92,6 +118,7 @@ export function createInteractiveCellRunner(dependencies: RuntimeClientDependenc
 
         pending.delete(event.data.requestId);
         dependencies.clearTimeout(request.timeout);
+        request.removeAbortListener();
 
         if (!event.data.ok) {
           request.reject(new Error(event.data.error));
@@ -144,6 +171,7 @@ export function createInteractiveCellRunner(dependencies: RuntimeClientDependenc
 
     for (const [requestId, request] of ownedRequests) {
       dependencies.clearTimeout(request.timeout);
+      request.removeAbortListener();
       pending.delete(requestId);
       request.reject(error);
     }
@@ -166,6 +194,10 @@ function createWorkerRequest(
     cellId: cell.id,
     ...(cell.language === 'haskell' ? { haskellFingerprintHash: runtimeHaskellFingerprintHash(runtimeVersion) } : {}),
     inputArgs: cell.language === 'haskell' ? cell.inputs.map((input) => inputArgument(input, inputs)) : undefined,
+    integerInputNames:
+      cell.language === 'python'
+        ? cell.inputs.filter((input) => input.type === 'integer' || input.integer).map((input) => input.name)
+        : undefined,
     inputs,
     source: cell.language === 'python' ? cell.source : undefined,
     packages: cell.language === 'python' ? cell.packages : undefined
