@@ -396,6 +396,7 @@ function packedAstroConfig({ offline }) {
     '  },',
     "  site: 'https://example.com',",
     "  title: 'My Docs',",
+    '  starlight: { disable404Route: true },',
     "  sidebar: [{ label: 'Overview', items: [{ label: 'Home', slug: 'index' }] }]",
     '});',
     ''
