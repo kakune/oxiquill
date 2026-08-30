@@ -7,6 +7,24 @@ Python cell は Pyodide を使う browser worker 内で実行されます。Oxiq
 
 built site はこの local asset を読みます。site の生成・deploy 後、reader が public CDN に接続する必要はありません。
 
+## 設定
+
+```js
+import { defineOxiquillConfig } from 'oxiquill/astro';
+
+export default defineOxiquillConfig({
+  python: {
+    offline: process.env.OXIQUILL_OFFLINE === '1',
+    packageMirror: 'https://packages.example/pyodide/'
+  },
+  paths: {
+    downloadCacheDir: '.cache/oxiquill/downloads/v1'
+  }
+});
+```
+
+`offline` の default は `false` です。`packageMirror` と `downloadCacheDir` は string または URL を受け取ります。TypeScript consumer は `OxiquillPythonOptions` と `OxiquillPathOptions` を `oxiquill/astro` から import できます。
+
 ## 検証付き download
 
 各 wheel の filename、release location、expected SHA-256 は install 済み `pyodide-lock.json` から取得します。mirror setting が変えるのは download base だけで、lockfile hash を弱めたり置き換えたりしません。
@@ -24,7 +42,9 @@ hash mismatch は常にその source の fatal error です。未検証の parti
 
 ## Cache の動作
 
-download cache は Pyodide/runtime input ごとに versioned で、互換性のない release の file を再利用しません。local/CI build 間で保持すると network work を省けます。generated `.oxiquill` state と `public/oxiquill/pyodide` は verified cache から再生成できます。
+default cache layout は `.cache/oxiquill/downloads/v1/pyodide/<pyodide-version>/<lock-sha256>/<filename>` です。Pyodide version または lockfile byte が変わると新しい namespace を使うため、互換性のない release の file は再利用されません。各 core asset と wheel も利用前に expected SHA-256 で検証されます。
+
+local/CI build 間で cache を保持すると network work を省けます。`oxiquill clean` は generated `.oxiquill`、public runtime、build output を削除しますが、`downloadCacheDir` は意図的に保持します。その後の generation は offline generation を含め、verified cache から `public/oxiquill/pyodide` を再構築できます。
 
 cache entry が corrupt な場合はその filename の entry を削除するか、online generation を再実行します。Oxiquill は利用前に mismatch を検出し、diagnostic に filename、cache path、expected hash を含めます。
 
@@ -39,6 +59,10 @@ mirror failure は effective URL を示し、DNS/connection、HTTP status、time
 offline generation は package download を一切行いません。必要な core asset と wheel がすべて verified cache に存在しなければなりません。cache miss は missing filename と expected SHA-256 を表示するため、connected machine で正しい cache を作って転送できます。
 
 同じ Oxiquill、Pyodide、manifest、package set で online generation が完了してから offline mode を使ってください。deploy site が copied asset を local 配信するため、browser execution は offline でも利用できます。
+
+## Runtime invalidation
+
+Python runtime fingerprint は Pyodide version、lockfile hash、core-asset hash、選択 package の name/version/dependency/file/hash metadata、sorted requested package set を記録します。これらの semantic input が変わると published runtime を再生成します。cache reuse の単位はより細かく、version-and-lock namespace 内の有効な file は requested package subset が変わっても再利用できます。
 
 ## Declared package
 

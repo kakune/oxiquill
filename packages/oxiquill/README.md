@@ -67,7 +67,7 @@ import { createOxiquillCollections } from 'oxiquill/content';
 export const collections = createOxiquillCollections({ defineCollection, docsLoader, docsSchema });
 ```
 
-Write pages under `content/docs`. Generated internals go under `.oxiquill`, browser assets go under `public/oxiquill`, and the static build normally goes under `dist`.
+Write pages under `content/docs`. Generated internals go under `.oxiquill`, browser assets go under `public/oxiquill`, and the static build normally goes under `dist`. Verified Pyodide downloads are cached under `.cache/oxiquill/downloads/v1`; `oxiquill clean` preserves that cache so later online or offline generation can reconstruct the public runtime.
 
 Static projects need only Node.js and a package manager. Rust cells additionally need the pinned Rust toolchain and `wasm-pack`; Haskell generation needs `wasm32-wasi-ghc` on Linux or macOS. Generated sites run in current Chromium, Firefox, and WebKit.
 

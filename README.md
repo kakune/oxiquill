@@ -255,6 +255,8 @@ Generated output includes:
 
 Do not edit generated output directly. Regenerate it with existing commands such as `pnpm docgen`, `pnpm wasm:dev`, `pnpm wasm:build`, `pnpm check`, or `pnpm build`.
 
+Verified Pyodide downloads are stored separately under `examples/docs-site/.cache/oxiquill/downloads/v1`. `pnpm clean` preserves this cache so generated state and public runtime assets can be reconstructed without downloading valid files again.
+
 ### Validation
 
 Run the full validation suite when broad changes are complete:
@@ -279,6 +281,7 @@ pnpm test:bundle
 pnpm test:e2e
 pnpm test:consumer:npm
 pnpm test:consumer:pnpm
+pnpm test:packed-browser
 pnpm lint:rust
 pnpm doc:rust
 ```
@@ -289,7 +292,7 @@ For docs-only prose changes, `pnpm check` is usually enough. For interactive cel
 
 Production builds write `dist/oxiquill/bundle-report.json` and fail when any emitted client or worker JavaScript chunk exceeds 650 KiB uncompressed. Run `pnpm test:bundle` after `pnpm build` to verify the budget and the ECharts and Mermaid dynamic import boundaries.
 
-`test:e2e` runs the full suite in Chromium, Firefox, and WebKit. `test:consumer:npm` and `test:consumer:pnpm` install the packed package tarball into a temporary standalone project, check and build a zero-cell site with only Node on `PATH`, then generate Rust and Python runtimes without workspace links.
+`test:e2e` runs the full suite in Chromium, Firefox, and WebKit. `test:consumer:npm` and `test:consumer:pnpm` install the packed package tarball into a temporary standalone project, check and build a zero-cell site with only Node on `PATH`, then generate Rust and Python runtimes without workspace links. `test:packed-browser` executes packaged Python and Haskell cells through their real workers in Chromium and verifies offline reuse of the cache after `clean`.
 
 ### License
 
@@ -573,6 +576,8 @@ putStrLn ("scaled = " <> show (scale * sum [1..5]))
 
 生成物を直接編集しないでください。`pnpm docgen`、`pnpm wasm:dev`、`pnpm wasm:build`、`pnpm check`、`pnpm build` などの既存 command で再生成します。
 
+verified Pyodide download は別の `examples/docs-site/.cache/oxiquill/downloads/v1` に保存されます。`pnpm clean` はこの cache を保持するため、有効な file を再 download せず generated state と public runtime asset を再構築できます。
+
 ### 検証
 
 広い変更が完了したら全体の検証を実行します。
@@ -597,6 +602,7 @@ pnpm test:bundle
 pnpm test:e2e
 pnpm test:consumer:npm
 pnpm test:consumer:pnpm
+pnpm test:packed-browser
 pnpm lint:rust
 pnpm doc:rust
 ```
@@ -607,7 +613,7 @@ docs-only の本文変更では、通常 `pnpm check` で十分です。実行�
 
 production build は `dist/oxiquill/bundle-report.json` を生成し、出力された client または worker の JavaScript chunk が uncompressed で 650 KiB を超えると失敗します。`pnpm build` の後に `pnpm test:bundle` を実行すると、budget と ECharts/Mermaid の dynamic import boundary を検証できます。
 
-`test:e2e` は Chromium、Firefox、WebKit で full suite を実行します。`test:consumer:npm` と `test:consumer:pnpm` は packed tarball を一時的な standalone project に install し、`PATH` に Node だけがある zero-cell site を check/build した後、workspace link を使わずに Rust/Python runtime の生成を確認します。
+`test:e2e` は Chromium、Firefox、WebKit で full suite を実行します。`test:consumer:npm` と `test:consumer:pnpm` は packed tarball を一時的な standalone project に install し、`PATH` に Node だけがある zero-cell site を check/build した後、workspace link を使わずに Rust/Python runtime の生成を確認します。`test:packed-browser` は packaged Python/Haskell cell を実際の worker 経由で Chromium 内で実行し、`clean` 後の offline cache reuse も確認します。
 
 ### ライセンス
 
