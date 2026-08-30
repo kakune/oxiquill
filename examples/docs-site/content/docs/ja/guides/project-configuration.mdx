@@ -8,9 +8,11 @@ Oxiquill は一つの project config を読み込み、development、check、gen
 ## 最小構成
 
 ```js
+import starlight from '@astrojs/starlight';
 import { defineOxiquillConfig } from 'oxiquill/astro';
 
 export default defineOxiquillConfig({
+  framework: { starlight },
   site: 'https://example.com',
   title: 'My Docs',
   sidebar: [{ label: 'Overview', items: [{ label: 'Home', slug: 'index' }] }]
@@ -19,26 +21,34 @@ export default defineOxiquillConfig({
 
 ```ts
 // content.config.ts
-export { collections } from 'oxiquill/content';
+import { defineCollection } from 'astro:content';
+import { docsLoader } from '@astrojs/starlight/loaders';
+import { docsSchema } from '@astrojs/starlight/schema';
+import { createOxiquillCollections } from 'oxiquill/content';
+
+export const collections = createOxiquillCollections({ defineCollection, docsLoader, docsSchema });
 ```
 
 `defineOxiquillConfig()` は static output、Oxiquill の Markdown transform、Preact、Starlight を設定済みの Astro config を返します。
 
 ## 設定 field
 
-| Field                                     | 意味                                                                                       |
-| ----------------------------------------- | ------------------------------------------------------------------------------------------ |
-| `title`, `description`, `sidebar`         | 対応する Starlight setting の shorthand。                                                  |
-| `starlight`                               | その他の Starlight option。同じ setting はこちらが shorthand より優先されます。            |
-| `framework.preact`, `framework.starlight` | 組み込み用途向けの高度な integration-factory override。                                    |
-| `integrations`                            | Oxiquill、Preact、Starlight の後に追加する Astro integration。                             |
-| `markdown`                                | 追加の Astro Markdown setting/plugin。Oxiquill 必須 plugin が先に動きます。                |
-| `vite`                                    | 追加の Vite setting。必須 alias、dedupe、worker plugin、filesystem access は保持されます。 |
-| `paths`                                   | 下記の source/cache/generated/public path。                                                |
-| `python`                                  | Pyodide download の `offline` と optional `packageMirror`。                                |
-| その他の Astro field                      | Astro に渡されます。Oxiquill の output は常に static です。                                |
+| Field                             | 意味                                                                                       |
+| --------------------------------- | ------------------------------------------------------------------------------------------ |
+| `title`, `description`, `sidebar` | 対応する Starlight setting の shorthand。                                                  |
+| `starlight`                       | その他の Starlight option。同じ setting はこちらが shorthand より優先されます。            |
+| `framework.starlight`             | `@astrojs/starlight` から import する必須の Starlight integration factory。                |
+| `framework.preact`                | 組み込み用途向けの optional Preact integration-factory override。                          |
+| `integrations`                    | Oxiquill、Preact、Starlight の後に追加する Astro integration。                             |
+| `markdown`                        | 対応する Astro Markdown setting/plugin。Oxiquill 必須 plugin が先に動きます。              |
+| `vite`                            | 追加の Vite setting。必須 alias、dedupe、worker plugin、filesystem access は保持されます。 |
+| `paths`                           | 下記の source/cache/generated/public path。                                                |
+| `python`                          | Pyodide download の `offline` と optional `packageMirror`。                                |
+| その他の Astro field              | Astro に渡されます。Oxiquill の output は常に static です。                                |
 
 Astro config を手動で組み立てる場合だけ `oxiquillIntegration()` を使います。受け取る option は `base`、`markdown`、`paths`、`python`、`vite` で、Preact と Starlight は caller が追加します。
+
+interactive cell、Mermaid、KaTeX、public-asset base path には Oxiquill の unified pipeline が必要なため、`markdown.processor` は Oxiquill が管理します。custom processor は未対応で `TypeError` になり、代わりに対応する Markdown field と追加の `remarkPlugins` / `rehypePlugins` を設定します。
 
 ## Path field
 

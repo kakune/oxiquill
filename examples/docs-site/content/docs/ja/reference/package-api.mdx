@@ -7,39 +7,44 @@ Oxiquill は ESM-only です。`node_modules/oxiquill` 配下の file を直接 
 
 ## Export
 
-| Export                                    | Public API                                                                                                                                       |
-| ----------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------ |
-| `oxiquill`                                | `defineOxiquillConfig`, `oxiquillIntegration`                                                                                                    |
-| `oxiquill/astro`                          | 同じ function と `OxiquillConfig`、`OxiquillIntegrationOptions`、`OxiquillFrameworkOptions`、`OxiquillPathOptions`、`OxiquillPythonOptions` type |
-| `oxiquill/content`                        | そのまま使える `collections` と高度な `createOxiquillCollections`、関連 type                                                                     |
-| `oxiquill/runtime/InteractiveCell`        | interactive-cell remark transform が使う Preact component                                                                                        |
-| `oxiquill/runtime/MermaidDiagram`         | Mermaid remark transform が使う Preact renderer                                                                                                  |
-| `oxiquill/runtime/types`                  | cell manifest、input、worker message、artifact、table、chart の TypeScript type                                                                  |
-| `oxiquill/components/starlight/PageFrame` | Oxiquill の Starlight page-frame override                                                                                                        |
-| `oxiquill/styles/katex.css`               | default integration が読み込む KaTeX style                                                                                                       |
-| `oxiquill/styles/custom.css`              | runtime、output、media、page-frame の style                                                                                                      |
-| `oxiquill/tsconfigs/strict`               | consumer project 用 strict TypeScript base config                                                                                                |
-| `oxiquill/env`                            | Oxiquill virtual module と asset import の ambient declaration                                                                                   |
+| Export                                    | Public API                                                                                                                                                                |
+| ----------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `oxiquill`                                | `defineOxiquillConfig`, `oxiquillIntegration`                                                                                                                             |
+| `oxiquill/astro`                          | 同じ function と `OxiquillConfig`、`OxiquillIntegrationOptions`、`OxiquillFrameworkOptions`、`OxiquillMarkdownConfig`、`OxiquillPathOptions`、`OxiquillPythonOptions` type |
+| `oxiquill/content`                        | `createOxiquillCollections` と `OxiquillContentDependencies`、`OxiquillCollections` type                                                                                  |
+| `oxiquill/runtime/InteractiveCell`        | interactive-cell remark transform が使う Preact component                                                                                                                 |
+| `oxiquill/runtime/MermaidDiagram`         | Mermaid remark transform が使う Preact renderer                                                                                                                           |
+| `oxiquill/runtime/types`                  | cell manifest、input、worker message、artifact、table、chart の TypeScript type                                                                                           |
+| `oxiquill/components/starlight/PageFrame` | Oxiquill の Starlight page-frame override                                                                                                                                 |
+| `oxiquill/styles/katex.css`               | default integration が読み込む KaTeX style                                                                                                                                |
+| `oxiquill/styles/custom.css`              | runtime、output、media、page-frame の style                                                                                                                               |
+| `oxiquill/tsconfigs/strict`               | consumer project 用 strict TypeScript base config                                                                                                                         |
+| `oxiquill/env`                            | Oxiquill virtual module と asset import の ambient declaration                                                                                                            |
 
 component、style、environment export は高度な composition 用の public API です。通常の project では `defineOxiquillConfig()` が読み込むため、手動 import は不要です。
 
 ## Astro API
 
-完全な site には `defineOxiquillConfig(options)` を使います。Oxiquill integration、Preact、Starlight の順に追加し、その後に consumer integration を追加します。field と優先順位は [プロジェクト設定](/ja/guides/project-configuration/) を参照してください。
+完全な site には `defineOxiquillConfig(options)` を使い、必須の `framework.starlight` integration factory を渡します。Oxiquill integration、Preact、Starlight の順に追加し、その後に consumer integration を追加します。field と優先順位は [プロジェクト設定](/ja/guides/project-configuration/) を参照してください。
 
 手動で Astro config を組み立てる場合だけ `oxiquillIntegration(options)` を使います。Markdown transform、virtual module、runtime generation、Wasm build、Vite resolution、license output を提供しますが、Preact と Starlight は自動追加しません。
 
-不正な framework integration factory は `TypeError` になります。config load や path conflict は生成 file を書く前に失敗します。
+不正な framework integration factory と未対応の custom Markdown processor は `TypeError` になります。config load や path conflict は生成 file を書く前に失敗します。
 
 ## Content API
 
-通常は ready collection を再 export します。
+通常は dependency-injected API で Starlight docs collection を作ります。
 
 ```ts
-export { collections } from 'oxiquill/content';
+import { defineCollection } from 'astro:content';
+import { docsLoader } from '@astrojs/starlight/loaders';
+import { docsSchema } from '@astrojs/starlight/schema';
+import { createOxiquillCollections } from 'oxiquill/content';
+
+export const collections = createOxiquillCollections({ defineCollection, docsLoader, docsSchema });
 ```
 
-`createOxiquillCollections({ defineCollection, docsLoader, docsSchema })` は、互換 Astro/Starlight function を注入する test/host 用です。Starlight loader/schema を使う `{ docs }` を返します。
+`createOxiquillCollections({ defineCollection, docsLoader, docsSchema })` が通常の content API です。注入された Starlight loader/schema を使う `{ docs }` を返します。
 
 ## Runtime type
 

@@ -8,9 +8,11 @@ Oxiquill loads one project configuration and uses the same resolved paths for de
 ## Minimal Configuration
 
 ```js
+import starlight from '@astrojs/starlight';
 import { defineOxiquillConfig } from 'oxiquill/astro';
 
 export default defineOxiquillConfig({
+  framework: { starlight },
   site: 'https://example.com',
   title: 'My Docs',
   sidebar: [{ label: 'Overview', items: [{ label: 'Home', slug: 'index' }] }]
@@ -19,26 +21,34 @@ export default defineOxiquillConfig({
 
 ```ts
 // content.config.ts
-export { collections } from 'oxiquill/content';
+import { defineCollection } from 'astro:content';
+import { docsLoader } from '@astrojs/starlight/loaders';
+import { docsSchema } from '@astrojs/starlight/schema';
+import { createOxiquillCollections } from 'oxiquill/content';
+
+export const collections = createOxiquillCollections({ defineCollection, docsLoader, docsSchema });
 ```
 
 `defineOxiquillConfig()` returns an Astro configuration with static output, Oxiquill's Markdown transforms, Preact, and Starlight already installed.
 
 ## Configuration Fields
 
-| Field                                     | Meaning                                                                                                              |
-| ----------------------------------------- | -------------------------------------------------------------------------------------------------------------------- |
-| `title`, `description`, `sidebar`         | Shorthand for the corresponding Starlight settings.                                                                  |
-| `starlight`                               | Any other Starlight option. A value here overrides the matching shorthand.                                           |
-| `framework.preact`, `framework.starlight` | Advanced integration-factory overrides used by embedded/framework consumers.                                         |
-| `integrations`                            | Additional Astro integrations, appended after Oxiquill, Preact, and Starlight.                                       |
-| `markdown`                                | Additional Astro Markdown settings and plugins. Oxiquill's required plugins run first.                               |
-| `vite`                                    | Additional Vite settings. Oxiquill preserves required aliases, deduplication, worker plugins, and filesystem access. |
-| `paths`                                   | Oxiquill-owned source, cache, generated, and public paths described below.                                           |
-| `python`                                  | Pyodide download behavior: `offline` and the optional `packageMirror`.                                               |
-| Other Astro fields                        | Passed through to Astro. Oxiquill always produces static output.                                                     |
+| Field                             | Meaning                                                                                                              |
+| --------------------------------- | -------------------------------------------------------------------------------------------------------------------- |
+| `title`, `description`, `sidebar` | Shorthand for the corresponding Starlight settings.                                                                  |
+| `starlight`                       | Any other Starlight option. A value here overrides the matching shorthand.                                           |
+| `framework.starlight`             | Required Starlight integration factory imported from `@astrojs/starlight`.                                           |
+| `framework.preact`                | Optional Preact integration-factory override for embedded/framework consumers.                                       |
+| `integrations`                    | Additional Astro integrations, appended after Oxiquill, Preact, and Starlight.                                       |
+| `markdown`                        | Supported Astro Markdown settings and plugins. Oxiquill's required plugins run first.                                |
+| `vite`                            | Additional Vite settings. Oxiquill preserves required aliases, deduplication, worker plugins, and filesystem access. |
+| `paths`                           | Oxiquill-owned source, cache, generated, and public paths described below.                                           |
+| `python`                          | Pyodide download behavior: `offline` and the optional `packageMirror`.                                               |
+| Other Astro fields                | Passed through to Astro. Oxiquill always produces static output.                                                     |
 
 Use `oxiquillIntegration()` only when composing an Astro configuration manually. It accepts `base`, `markdown`, `paths`, `python`, and `vite`; the caller is then responsible for adding Preact and Starlight.
+
+Oxiquill owns `markdown.processor` because interactive cells, Mermaid, KaTeX, and public-asset base paths require its unified pipeline. A custom processor is not supported and throws a `TypeError`; configure supported Markdown fields and append `remarkPlugins` or `rehypePlugins` instead.
 
 ## Path Fields
 

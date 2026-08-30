@@ -7,6 +7,7 @@ import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { chromium } from '@playwright/test';
+import { loadDocumentedConsumerConfig } from '../docs/documented-config.mjs';
 
 const supportedPythonPackages = [
   'contourpy',
@@ -38,10 +39,12 @@ const packageRoot = path.join(repositoryRoot, 'packages/oxiquill');
 const registryMode = process.argv.includes('--registry');
 const temporaryRoot = await mkdtemp(path.join(tmpdir(), 'oxiquill-consumer-'));
 const consumerRoot = path.join(temporaryRoot, 'consumer');
+const documentedConfig = await loadDocumentedConsumerConfig(repositoryRoot);
 const packageApiSource = `
+import starlight from '@astrojs/starlight';
 import { defineOxiquillConfig as defineRootConfig, oxiquillIntegration } from 'oxiquill';
 import { defineOxiquillConfig } from 'oxiquill/astro';
-import type { OxiquillPathOptions, OxiquillPythonOptions } from 'oxiquill/astro';
+import type { OxiquillMarkdownConfig, OxiquillPathOptions, OxiquillPythonOptions } from 'oxiquill/astro';
 import { createOxiquillCollections } from 'oxiquill/content';
 import InteractiveCell from 'oxiquill/runtime/InteractiveCell';
 import MermaidDiagram from 'oxiquill/runtime/MermaidDiagram';
@@ -50,6 +53,20 @@ import type { CellManifest } from 'oxiquill/runtime/types';
 const cell = {} as CellManifest;
 const paths = { downloadCacheDir: new URL('./verified downloads/', import.meta.url) } satisfies OxiquillPathOptions;
 const python = { offline: true, packageMirror: new URL('https://packages.example/pyodide/') } satisfies OxiquillPythonOptions;
+const markdownConfigs: OxiquillMarkdownConfig[] = [
+  { syntaxHighlight: false },
+  { syntaxHighlight: 'prism' },
+  { syntaxHighlight: 'shiki' },
+  { syntaxHighlight: { type: 'shiki', excludeLangs: ['custom'] } }
+];
+markdownConfigs.forEach((markdown) => defineOxiquillConfig({ framework: { starlight }, markdown }));
+defineOxiquillConfig({
+  framework: { starlight },
+  markdown: {
+    // @ts-expect-error Oxiquill owns the Markdown processor so required transforms cannot be bypassed.
+    processor: { createRenderer: async () => ({ render: async () => ({}) }), name: 'custom', options: {} }
+  }
+});
 void [
   defineRootConfig,
   oxiquillIntegration,
@@ -90,6 +107,8 @@ try {
   await writeFile(packageJsonPath, `${JSON.stringify(packageJson, null, 2)}\n`);
 
   run(packageManager, ['install'], consumerRoot);
+  await writeFile(path.join(consumerRoot, 'astro.config.mjs'), documentedConfig.astro);
+  await writeFile(path.join(consumerRoot, 'content.config.ts'), documentedConfig.content);
   const installedManifest = JSON.parse(
     await readFile(path.join(consumerRoot, 'node_modules/oxiquill/package.json'), 'utf8')
   );

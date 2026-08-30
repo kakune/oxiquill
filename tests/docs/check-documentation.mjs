@@ -1,8 +1,9 @@
 import assert from 'node:assert/strict';
 import { access, readFile, readdir } from 'node:fs/promises';
 import path from 'node:path';
-import { fileURLToPath } from 'node:url';
+import { fileURLToPath, pathToFileURL } from 'node:url';
 import { checkMarkdownStructure, headingSlug } from './markdown-structure.mjs';
+import { loadDocumentedConsumerConfig } from './documented-config.mjs';
 
 const repositoryRoot = fileURLToPath(new URL('../..', import.meta.url));
 const contentRoot = path.join(repositoryRoot, 'examples/docs-site/content/docs');
@@ -24,12 +25,13 @@ const documentsPackageJsonRoot = await readFile(path.join(repositoryRoot, 'packa
 const documentsTemplatePackageJson = await readFile(path.join(repositoryRoot, 'templates/basic/package.json'), 'utf8');
 
 checkDocumentStructures();
+await loadDocumentedConsumerConfig(repositoryRoot);
 await checkLinks();
 await checkLocalizedRoutes();
 await checkSidebarRoutes();
 await checkPublicContracts();
 checkJsonExamples();
-checkPackageImports();
+await checkPackageImports();
 checkShellCommands();
 
 console.log(
@@ -211,7 +213,7 @@ function checkJsonExamples() {
   }
 }
 
-function checkPackageImports() {
+async function checkPackageImports() {
   const packageJson = JSON.parse(documentsPackageJson);
   const publicSpecifiers = new Set(
     Object.keys(packageJson.exports).map((key) =>
@@ -224,6 +226,38 @@ function checkPackageImports() {
       assert.ok(publicSpecifiers.has(match[1]), `${relative(filePath)} imports undocumented package path ${match[1]}.`);
     }
   }
+
+  const namespaces = new Map();
+  for (const [filePath, source] of documents) {
+    for (const match of source.matchAll(
+      /\b(?:import|export)\s+\{([^}]+)\}\s+from\s+['"](oxiquill(?:\/[^'"]+)?)['"]/gu
+    )) {
+      const [, bindings, specifier] = match;
+      let namespace = namespaces.get(specifier);
+      if (!namespace) {
+        namespace = await import(packageEntryUrl(packageJson, specifier));
+        namespaces.set(specifier, namespace);
+      }
+
+      for (const binding of bindings.split(',')) {
+        const exportName = binding.trim().split(/\s+as\s+/u, 1)[0];
+        assert.ok(exportName in namespace, `${relative(filePath)} imports missing ${specifier} export ${exportName}.`);
+      }
+    }
+  }
+}
+
+function packageEntryUrl(packageJson, specifier) {
+  const exportKey = specifier === packageJson.name ? '.' : `.${specifier.slice(packageJson.name.length)}`;
+  const target = packageImportTarget(packageJson.exports[exportKey]);
+  assert.ok(target, `Unable to resolve built package entry point ${specifier}.`);
+  return pathToFileURL(path.join(repositoryRoot, 'packages/oxiquill', target)).href;
+}
+
+function packageImportTarget(value) {
+  if (typeof value === 'string') return value;
+  if (!value || typeof value !== 'object') return undefined;
+  return packageImportTarget(value.import ?? value.default);
 }
 
 function checkShellCommands() {
