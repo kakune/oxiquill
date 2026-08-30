@@ -34,6 +34,114 @@ export function generateRustOutputTypes(rustCells) {
   ]
     .filter(Boolean)
     .join('\n');
+  const boundedArtifactArms = [
+    `        OutputArtifact::Text(text) => {
+            text.truncated |= truncate_string(&mut text.content, ${outputArtifactLimits.bytesPerTextJsonOrHtml});
+        }`,
+    capabilities.json
+      ? `        OutputArtifact::Json(json) => {
+            let oversized = serde_json::to_string(&json.value)
+                .map(|serialized| serialized.len() > ${outputArtifactLimits.bytesPerTextJsonOrHtml})
+                .unwrap_or(true);
+            if oversized {
+                json.value = Value::String("[Truncated]".to_owned());
+                json.truncated = true;
+            }
+        }`
+      : '',
+    capabilities.html
+      ? `        OutputArtifact::Html(html) if html.html.len() > ${outputArtifactLimits.bytesPerTextJsonOrHtml} => {
+            return producer_error("Rust HTML output exceeded the per-artifact byte limit");
+        }`
+      : '',
+    capabilities.image
+      ? `        OutputArtifact::Image(image) if image.data.len() > ${Math.ceil((outputArtifactLimits.decodedBytesPerImage * 4) / 3) + 4} => {
+            return producer_error("Rust image output exceeded the per-artifact byte limit");
+        }`
+      : ''
+  ]
+    .filter(Boolean)
+    .join('\n');
+  const emitsArtifacts =
+    capabilities.text ||
+    capabilities.json ||
+    capabilities.html ||
+    capabilities.image ||
+    capabilities.table ||
+    capabilities.chart;
+  const outputCollector = emitsArtifacts
+    ? `struct OutputCollector {
+    byte_length: usize,
+    omitted: bool,
+    outputs: Vec<OutputArtifact>,
+}
+
+impl OutputCollector {
+    fn new() -> Self {
+        Self {
+            byte_length: 0,
+            omitted: false,
+            outputs: Vec::new(),
+        }
+    }
+
+    fn push(&mut self, artifact: OutputArtifact) {
+        if self.outputs.len() >= ${outputArtifactLimits.artifactsPerRun} {
+            self.omitted = true;
+            return;
+        }
+        let artifact = bound_output_artifact(artifact);
+        let Ok(serialized) = serde_json::to_string(&artifact) else {
+            self.omitted = true;
+            return;
+        };
+        if serialized.len() > ${outputArtifactLimits.validatedBytesPerRun}_usize.saturating_sub(self.byte_length) {
+            self.omitted = true;
+            return;
+        }
+        self.byte_length += serialized.len();
+        self.outputs.push(artifact);
+    }
+
+    fn finish(mut self) -> Vec<OutputArtifact> {
+        if self.omitted {
+            self.outputs.truncate(${outputArtifactLimits.artifactsPerRun - 1});
+            self.outputs.push(producer_error("Rust output exceeded its artifact or byte limit"));
+        }
+        self.outputs
+    }
+}`
+    : `struct OutputCollector {
+    outputs: Vec<OutputArtifact>,
+}
+
+impl OutputCollector {
+    fn new() -> Self {
+        Self { outputs: Vec::new() }
+    }
+
+    fn finish(self) -> Vec<OutputArtifact> {
+        self.outputs
+    }
+}`;
+  const boundOutputArtifact = emitsArtifacts
+    ? `fn bound_output_artifact(mut artifact: OutputArtifact) -> OutputArtifact {
+    match &mut artifact {
+${boundedArtifactArms}
+        _ => {}
+    }
+    artifact
+}
+
+fn truncate_string(value: &mut String, max_bytes: usize) -> bool {
+    if value.len() <= max_bytes {
+        return false;
+    }
+    let original = std::mem::take(value);
+    push_truncated(value, &original, max_bytes);
+    true
+}`
+    : '';
 
   return `
 type PlotSpec = Value;
@@ -86,72 +194,9 @@ impl std::fmt::Write for BoundedText {
     }
 }
 
-struct OutputCollector {
-    byte_length: usize,
-    omitted: bool,
-    outputs: Vec<OutputArtifact>,
-}
+${outputCollector}
 
-impl OutputCollector {
-    fn new() -> Self {
-        Self {
-            byte_length: 0,
-            omitted: false,
-            outputs: Vec::new(),
-        }
-    }
-
-    fn push(&mut self, artifact: OutputArtifact) {
-        if self.outputs.len() >= ${outputArtifactLimits.artifactsPerRun} {
-            self.omitted = true;
-            return;
-        }
-        let artifact = bound_output_artifact(artifact);
-        let Ok(serialized) = serde_json::to_string(&artifact) else {
-            self.omitted = true;
-            return;
-        };
-        if serialized.len() > ${outputArtifactLimits.validatedBytesPerRun}_usize.saturating_sub(self.byte_length) {
-            self.omitted = true;
-            return;
-        }
-        self.byte_length += serialized.len();
-        self.outputs.push(artifact);
-    }
-
-    fn finish(mut self) -> Vec<OutputArtifact> {
-        if self.omitted {
-            self.outputs.truncate(${outputArtifactLimits.artifactsPerRun - 1});
-            self.outputs.push(producer_error("Rust output exceeded its artifact or byte limit"));
-        }
-        self.outputs
-    }
-}
-
-fn bound_output_artifact(mut artifact: OutputArtifact) -> OutputArtifact {
-    match &mut artifact {
-        OutputArtifact::Text(text) => {
-            text.truncated |= truncate_string(&mut text.content, ${outputArtifactLimits.bytesPerTextJsonOrHtml});
-        }
-        OutputArtifact::Json(json) => {
-            let oversized = serde_json::to_string(&json.value)
-                .map(|serialized| serialized.len() > ${outputArtifactLimits.bytesPerTextJsonOrHtml})
-                .unwrap_or(true);
-            if oversized {
-                json.value = Value::String("[Truncated]".to_owned());
-                json.truncated = true;
-            }
-        }
-        OutputArtifact::Html(html) if html.html.len() > ${outputArtifactLimits.bytesPerTextJsonOrHtml} => {
-            return producer_error("Rust HTML output exceeded the per-artifact byte limit");
-        }
-        OutputArtifact::Image(image) if image.data.len() > ${Math.ceil((outputArtifactLimits.decodedBytesPerImage * 4) / 3) + 4} => {
-            return producer_error("Rust image output exceeded the per-artifact byte limit");
-        }
-        _ => {}
-    }
-    artifact
-}
+${boundOutputArtifact}
 
 fn producer_error(message: &str) -> OutputArtifact {
     OutputArtifact::ProducerError(ProducerErrorArtifact {
@@ -163,15 +208,6 @@ fn bounded_error_message(message: &str) -> String {
     let mut bounded = String::new();
     push_truncated(&mut bounded, message, ${outputArtifactLimits.bytesPerError});
     bounded
-}
-
-fn truncate_string(value: &mut String, max_bytes: usize) -> bool {
-    if value.len() <= max_bytes {
-        return false;
-    }
-    let original = std::mem::take(value);
-    push_truncated(value, &original, max_bytes);
-    true
 }
 
 fn push_truncated(output: &mut String, value: &str, max_bytes: usize) {

@@ -559,6 +559,12 @@ describe('doc runtime core', () => {
     );
     expect(generateRustLib([])).toContain('let _: Value = serde_json::from_str(inputs_json)');
     expect(generateRustLib([])).toContain('unknown Rust cell');
+    const plainRustLib = generateRustLib([{ id: 'plain', source: 'println!("ok");', inputs: [] }]);
+    expect(plainRustLib).not.toContain('fn bound_output_artifact');
+    expect(plainRustLib).not.toContain('fn push(&mut self, artifact: OutputArtifact)');
+    expect(plainRustLib).not.toContain('OutputArtifact::Json(json)');
+    expect(plainRustLib).not.toContain('OutputArtifact::Html(html)');
+    expect(plainRustLib).not.toContain('OutputArtifact::Image(image)');
     expect(generateRustLib([rustCell])).toContain('enum OutputArtifact');
     expect(generateRustLib([rustCell])).toContain('outputs: Vec<OutputArtifact>');
     expect(generateRustLib([preludeCell])).toContain('Json(JsonArtifact)');
