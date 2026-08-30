@@ -35,6 +35,7 @@ jobs:
     permissions:
       contents: read
       issues: read # Required to enforce the release-blocker milestone gate.
+      security-events: read # Required to enforce the Dependabot alert gate.
     outputs:
       archive_filename: ${{ steps.archive.outputs.archive_filename }}
       artifact_name: ${{ steps.archive.outputs.artifact_name }}
@@ -85,7 +86,7 @@ jobs:
       - name: Install the pinned npm CLI
         run: npm install --global "npm@${NPM_VERSION}"
 
-      - name: Verify release identity and blockers
+      - name: Verify release identity and security gates
         id: release
         env:
           GITHUB_TOKEN: ${{ github.token }}

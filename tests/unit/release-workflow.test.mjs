@@ -7,9 +7,11 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import {
+  assertNoOpenDependabotAlerts,
   assertNoOpenReleaseBlockers,
   assertReleaseIdentity,
   assertTagOnMain,
+  fetchOpenDependabotAlerts,
   fetchOpenReleaseBlockers
 } from '../../.github/scripts/verify-release.mjs';
 import {
@@ -115,6 +117,38 @@ describe('release identity verification', () => {
     expect(() => assertNoOpenReleaseBlockers([])).not.toThrow();
   });
 
+  it('fails when an open Dependabot alert remains', () => {
+    expect(() =>
+      assertNoOpenDependabotAlerts([{ dependency: 'undici', number: 7, summary: 'TLS validation bypass' }])
+    ).toThrow('#7 undici: TLS validation bypass');
+    expect(() => assertNoOpenDependabotAlerts([])).not.toThrow();
+  });
+
+  it('loads open Dependabot alerts with actionable advisory details', async () => {
+    const fetchImplementation = vi.fn().mockResolvedValue(
+      jsonResponse([
+        {
+          dependency: { package: { name: 'undici' } },
+          html_url: 'https://github.test/alerts/7',
+          number: 7,
+          security_advisory: { ghsa_id: 'GHSA-test', summary: 'TLS validation bypass' }
+        }
+      ])
+    );
+
+    await expect(
+      fetchOpenDependabotAlerts({ fetchImplementation, repository: 'kakune/oxiquill', token: 'token' })
+    ).resolves.toEqual([
+      {
+        dependency: 'undici',
+        number: 7,
+        summary: 'TLS validation bypass',
+        url: 'https://github.test/alerts/7'
+      }
+    ]);
+    expect(fetchImplementation.mock.calls[0][0]).toContain('/dependabot/alerts?state=open');
+  });
+
   it('loads milestone blockers and excludes pull requests', async () => {
     const fetchImplementation = vi
       .fn()
@@ -141,6 +175,17 @@ describe('release identity verification', () => {
     });
     await expect(fetchOpenReleaseBlockers({ fetchImplementation, repository: 'kakune/oxiquill' })).rejects.toThrow(
       'GitHub API request failed with 503'
+    );
+  });
+
+  it('fails closed when GitHub cannot verify Dependabot alerts', async () => {
+    const fetchImplementation = vi.fn().mockResolvedValue({
+      ok: false,
+      status: 403,
+      text: async () => 'forbidden'
+    });
+    await expect(fetchOpenDependabotAlerts({ fetchImplementation, repository: 'kakune/oxiquill' })).rejects.toThrow(
+      'GitHub API request failed with 403'
     );
   });
 });
