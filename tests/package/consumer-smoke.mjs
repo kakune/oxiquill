@@ -176,9 +176,14 @@ try {
   await mkdir(projectRoot);
   await rename(path.join(consumerRoot, 'content'), path.join(projectRoot, 'content'));
   await rename(path.join(consumerRoot, 'crates'), path.join(projectRoot, 'helper crates'));
+  await mkdir(path.join(projectRoot, 'helper crates/packed-helper/src'), { recursive: true });
   await writeFile(
-    path.join(projectRoot, 'helper crates/doc-rust/Cargo.toml'),
-    ["package.name = 'doc-rust'", "package.version = '0.1.0'", "package.edition = '2024'", ''].join('\n')
+    path.join(projectRoot, 'helper crates/packed-helper/Cargo.toml'),
+    ["package.name = 'packed-helper'", "package.version = '0.1.0'", "package.edition = '2024'", ''].join('\n')
+  );
+  await writeFile(
+    path.join(projectRoot, 'helper crates/packed-helper/src/lib.rs'),
+    'pub fn message() -> &\'static str { "packed consumer" }\n'
   );
   await rename(path.join(consumerRoot, 'public'), path.join(projectRoot, 'static files'));
   await rename(path.join(consumerRoot, 'content.config.ts'), path.join(projectRoot, 'content.config.ts'));
@@ -211,8 +216,8 @@ try {
       '',
       '```rust',
       '//| id: package-rust',
-      '//| crates: []',
-      'println!("packed consumer");',
+      '//| crates: [packed-helper]',
+      'println!("{}", packed_helper::message());',
       '```',
       '',
       '```python',
