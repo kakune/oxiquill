@@ -31,6 +31,7 @@ Here, $x_n$ is the state at step $n$, and `r` is the growth rate. Changing `r` o
 //|   r: { type: range, label: r, min: 0, max: 4, step: 0.01, value: 3.2 }
 //|   x0: { type: range, label: x0, min: 0, max: 1, step: 0.01, value: 0.2 }
 //|   steps: { type: integer, label: steps, min: 10, max: 300, step: 10, value: 120 }
+let steps = u32::try_from(steps).map_err(|_| "steps must be non-negative".to_owned())?;
 let points = doc_rust::logistic_series(r, x0, steps).map_err(|error| error.to_string())?;
 let final_point = points.last().ok_or_else(|| "series is empty".to_owned())?;
 
