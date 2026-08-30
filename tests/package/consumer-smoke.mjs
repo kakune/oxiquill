@@ -116,7 +116,8 @@ try {
 
   const nodeOnlyEnvironment = createNodeOnlyEnvironment();
   run(process.execPath, [packedCliPath, 'check'], consumerRoot, false, nodeOnlyEnvironment);
-  run(process.execPath, [packedCliPath, 'build'], consumerRoot, false, nodeOnlyEnvironment);
+  const initialBuild = run(process.execPath, [packedCliPath, 'build'], consumerRoot, true, nodeOnlyEnvironment);
+  assertNo404Warning(initialBuild);
   run(packageManager, ['run', 'preview', '--', '--background', '--host', '127.0.0.1', '--port', '4321'], consumerRoot);
   await assertFile(path.join(consumerRoot, '.astro/preview.json'));
   stopAstroPreview(packageManager, consumerRoot);
@@ -437,6 +438,13 @@ function createNodeOnlyEnvironment() {
   environment.OXIQUILL_NODE = process.execPath;
   delete environment.OXIQUILL_HASKELL_GHC;
   return environment;
+}
+
+function assertNo404Warning(result) {
+  const warning = `${result.stdout}\n${result.stderr}`
+    .split(/\r?\n/u)
+    .find((line) => /\bwarn(?:ing)?\b/iu.test(line) && /\b404\b/u.test(line));
+  assert.equal(warning, undefined, `fresh starter build emitted a missing 404 warning: ${warning}`);
 }
 
 async function assertFile(filePath) {

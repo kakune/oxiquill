@@ -15,6 +15,7 @@ export const starterFiles = Object.freeze([
   'README.md',
   'astro.config.mjs',
   'content.config.ts',
+  'content/docs/404.mdx',
   'content/docs/index.mdx',
   'crates/.gitkeep',
   'package.json',
