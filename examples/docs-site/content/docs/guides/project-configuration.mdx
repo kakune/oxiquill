@@ -36,6 +36,7 @@ export const collections = createOxiquillCollections({ defineCollection, docsLoa
 | Field                             | Meaning                                                                                                              |
 | --------------------------------- | -------------------------------------------------------------------------------------------------------------------- |
 | `title`, `description`, `sidebar` | Shorthand for the corresponding Starlight settings.                                                                  |
+| `desktopTableOfContentsToggle`    | Enables the persistent desktop table-of-contents control. Defaults to `true`.                                        |
 | `starlight`                       | Any other Starlight option. A value here overrides the matching shorthand.                                           |
 | `framework.starlight`             | Required Starlight integration factory imported from `@astrojs/starlight`.                                           |
 | `framework.preact`                | Optional Preact integration-factory override for embedded/framework consumers.                                       |
@@ -49,6 +50,22 @@ export const collections = createOxiquillCollections({ defineCollection, docsLoa
 Use `oxiquillIntegration()` only when composing an Astro configuration manually. It accepts `base`, `markdown`, `paths`, `python`, and `vite`; the caller is then responsible for adding Preact and Starlight.
 
 Oxiquill owns `markdown.processor` because interactive cells, Mermaid, KaTeX, and public-asset base paths require its unified pipeline. A custom processor is not supported and throws a `TypeError`; configure supported Markdown fields and append `remarkPlugins` or `rehypePlugins` instead.
+
+## Desktop Table of Contents
+
+On pages with a table of contents, Oxiquill adds a desktop collapse/expand button while preserving Starlight's mobile disclosure. Collapsing the table of contents removes the complete right column and lets the main content use the released width. The preference is stored for the current browser tab in `sessionStorage` under `oxiquill-table-of-contents-collapsed`; it is independent from the left-sidebar preference.
+
+Set `desktopTableOfContentsToggle: false` to retain Starlight's always-visible desktop table of contents:
+
+```js
+export default defineOxiquillConfig({
+  desktopTableOfContentsToggle: false,
+  framework: { starlight },
+  title: 'My Docs'
+});
+```
+
+The control is not rendered for `tableOfContents: false` or splash pages. Consumer entries in `starlight.components` take precedence over Oxiquill's defaults, including `PageFrame`, `TableOfContents`, and `TwoColumnContent` overrides.
 
 ## Path Fields
 

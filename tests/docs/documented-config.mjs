@@ -13,7 +13,7 @@ export async function loadDocumentedConsumerConfig(repositoryRoot) {
   const configs = sources.map((source, index) => {
     const section = sectionUnderHeading(source, sectionHeadings[index], sourcePaths[index]);
     return {
-      astro: codeFenceContaining(section, 'js', 'defineOxiquillConfig', sourcePaths[index]),
+      astro: codeFenceContaining(section, 'js', "from 'oxiquill/astro'", sourcePaths[index]),
       content: codeFenceContaining(section, 'ts', 'createOxiquillCollections', sourcePaths[index])
     };
   });

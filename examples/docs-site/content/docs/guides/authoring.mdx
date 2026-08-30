@@ -32,6 +32,12 @@ Start with what the page helps the reader do, then move into examples. Use headi
 
 Use the same route and general structure in Japanese translations. The Japanese page does not need to be word-for-word identical, but it should cover the same behavior and examples.
 
+## Choose the Page Table of Contents
+
+Regular pages show Starlight's table of contents. On desktop, readers can collapse the right column and Oxiquill remembers that choice for the current browser tab. On mobile, Starlight's existing disclosure remains unchanged.
+
+Use `tableOfContents: false` in frontmatter when a page should have no table of contents or desktop control. Starlight splash pages also omit both automatically. This page-level setting is separate from the project-wide `desktopTableOfContentsToggle` option, which only enables or disables the desktop collapse control.
+
 ## Write Rust Cells
 
 Rust cells are fenced `rust` code blocks with metadata in leading `//|` or `///|` comments. Metadata comments must form one contiguous block at the very start of the cell; later option-looking comments remain source code. The `id` must be unique within the page and match lowercase kebab-case. English and Japanese versions may reuse the same local `id`; the build creates page-scoped internal IDs.

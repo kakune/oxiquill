@@ -36,6 +36,7 @@ export const collections = createOxiquillCollections({ defineCollection, docsLoa
 | Field                             | 意味                                                                                       |
 | --------------------------------- | ------------------------------------------------------------------------------------------ |
 | `title`, `description`, `sidebar` | 対応する Starlight setting の shorthand。                                                  |
+| `desktopTableOfContentsToggle`    | 永続化される desktop 目次 control を有効にします。default は `true` です。                 |
 | `starlight`                       | その他の Starlight option。同じ setting はこちらが shorthand より優先されます。            |
 | `framework.starlight`             | `@astrojs/starlight` から import する必須の Starlight integration factory。                |
 | `framework.preact`                | 組み込み用途向けの optional Preact integration-factory override。                          |
@@ -49,6 +50,22 @@ export const collections = createOxiquillCollections({ defineCollection, docsLoa
 Astro config を手動で組み立てる場合だけ `oxiquillIntegration()` を使います。受け取る option は `base`、`markdown`、`paths`、`python`、`vite` で、Preact と Starlight は caller が追加します。
 
 interactive cell、Mermaid、KaTeX、public-asset base path には Oxiquill の unified pipeline が必要なため、`markdown.processor` は Oxiquill が管理します。custom processor は未対応で `TypeError` になり、代わりに対応する Markdown field と追加の `remarkPlugins` / `rehypePlugins` を設定します。
+
+## Desktop の目次
+
+目次があるページでは、Starlight の mobile disclosure を保ったまま、Oxiquill が desktop 用の折りたたみ・展開 button を追加します。目次を折りたたむと右列全体がなくなり、main content が空いた幅を使います。設定は現在の browser tab の `sessionStorage` に `oxiquill-table-of-contents-collapsed` key で保存され、左 sidebar の設定とは独立しています。
+
+Starlight の常時表示 desktop 目次を維持するには `desktopTableOfContentsToggle: false` を設定します。
+
+```js
+export default defineOxiquillConfig({
+  desktopTableOfContentsToggle: false,
+  framework: { starlight },
+  title: 'My Docs'
+});
+```
+
+`tableOfContents: false` のページと splash page には control を出力しません。`starlight.components` に consumer が指定した entry は Oxiquill の default より優先され、`PageFrame`、`TableOfContents`、`TwoColumnContent` の override も保持されます。
 
 ## Path field
 

@@ -32,6 +32,12 @@ Write the body here.
 
 日本語翻訳は英語版と同じ route と大まかな構成を保ちます。一字一句同じ訳である必要はありませんが、同じ動作と例を扱います。
 
+## ページの目次を選ぶ
+
+通常のページには Starlight の目次が表示されます。desktop では右列を折りたたむことができ、Oxiquill は現在の browser tab でその選択を記憶します。mobile では Starlight の既存 disclosure をそのまま使います。
+
+目次も desktop control も不要なページでは、frontmatter に `tableOfContents: false` を指定します。Starlight の splash page でも両方が自動的に省略されます。このページ単位の設定は、desktop collapse control だけを有効・無効にする project-wide の `desktopTableOfContentsToggle` option とは別です。
+
 ## Rust セルを書く
 
 Rust セルは `rust` の fenced code block で、先頭に `//|` または `///|` metadata comment を置きます。metadata comment は cell の先頭から連続させ、source code が始まった後の option comment 風の行は source code のままにします。`id` は lowercase kebab-case でページ内一意にします。英語版と日本語版は同じ local `id` を使えます。build が page-scoped internal ID を作ります。
