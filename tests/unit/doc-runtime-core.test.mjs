@@ -46,6 +46,20 @@ const helperCrates = new Map([
   ['doc-rust', { name: 'doc-rust', relativePath: '../../crates/doc-rust' }],
   ['doc-rust-text', { name: 'doc-rust-text', relativePath: '../../crates/doc-rust-text' }]
 ]);
+const runtimeInputs = {
+  package: { repository: 'https://example.com/oxiquill', version: '1.2.3' },
+  rust: {
+    dependencies: {
+      console_error_panic_hook: '0.1.7',
+      serde: '1.0.228',
+      serde_json: '1.0.150',
+      'wasm-bindgen': '0.2.122',
+      'wasm-bindgen-test': '0.3.72'
+    },
+    edition: '2024',
+    rustVersion: '1.95'
+  }
+};
 
 describe('doc runtime core', () => {
   it('creates stable page-scoped authoring ids', () => {
@@ -416,9 +430,14 @@ describe('doc runtime core', () => {
     expect(generateCellsModule(cells)).toContain('export const cells');
     expect(generateCellsJson(cells)).toContain('"id": "one"');
 
-    expect(generateRustCargoToml([], helperCrates)).not.toContain('doc-rust =');
-    expect(generateRustCargoToml([], helperCrates)).toContain('license = "MIT OR Apache-2.0"');
-    expect(generateRustCargoToml([{ crates: ['doc-rust'] }], helperCrates)).toContain(
+    expect(generateRustCargoToml([], helperCrates, runtimeInputs)).not.toContain('doc-rust =');
+    expect(generateRustCargoToml([], helperCrates, runtimeInputs)).toContain('license = "MIT OR Apache-2.0"');
+    expect(generateRustCargoToml([], helperCrates, runtimeInputs)).toContain('version = "1.2.3"');
+    expect(generateRustCargoToml([], helperCrates, runtimeInputs)).toContain(
+      'repository = "https://example.com/oxiquill"'
+    );
+    expect(generateRustCargoToml([], helperCrates, runtimeInputs)).toContain('serde_json = "=1.0.150"');
+    expect(generateRustCargoToml([{ crates: ['doc-rust'] }], helperCrates, runtimeInputs)).toContain(
       'doc-rust = { path = "../../crates/doc-rust" }'
     );
     expect(generateRustDependency('doc-rust', helperCrates)).toContain('doc-rust');

@@ -122,7 +122,7 @@ export async function runCli(
 
 async function generateRuntime({ projectConfig, tolerateHaskellBuildFailure = false, wasmMode }) {
   const { paths } = projectConfig;
-  const context = await createDocRuntimeContext({ paths });
+  const context = await createDocRuntimeContext({ paths, pythonOptions: projectConfig.python });
   const summary = await syncDocRuntime({
     ...context,
     mode: wasmMode,

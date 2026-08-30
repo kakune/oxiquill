@@ -94,6 +94,10 @@ async function expectedPackageFiles() {
   const licenseDataFiles = (await listFiles(licenseDataRoot)).map(
     (filePath) => `dist/generator/license-data/${normalizePath(path.relative(licenseDataRoot, filePath))}`
   );
+  const runtimeDataRoot = path.join(sourceRoot, 'generator/runtime-data');
+  const runtimeDataFiles = (await listFiles(runtimeDataRoot)).map(
+    (filePath) => `dist/generator/runtime-data/${normalizePath(path.relative(runtimeDataRoot, filePath))}`
+  );
   const copiedFiles = [
     'dist/components/starlight/PageFrame.astro',
     'dist/env.d.ts',
@@ -109,7 +113,8 @@ async function expectedPackageFiles() {
     'package.json',
     ...compiledFiles,
     ...copiedFiles,
-    ...licenseDataFiles
+    ...licenseDataFiles,
+    ...runtimeDataFiles
   ].sort();
 }
 

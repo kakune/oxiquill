@@ -109,11 +109,18 @@ describe('defineOxiquillConfig', () => {
   });
 
   it('retains frozen internal metadata without adding enumerable config fields', () => {
-    const config = defineOxiquillConfig({ sidebar: [], title: 'Docs' });
+    const config = defineOxiquillConfig({
+      python: { offline: true, packageMirror: 'https://packages.example/pyodide' },
+      sidebar: [],
+      title: 'Docs'
+    });
     const integration = config.integrations.flat().find((entry) => entry.name === 'oxiquill');
 
     expect(readOxiquillMetadata(config)).toMatchObject({ kind: 'config' });
-    expect(readOxiquillMetadata(integration)).toMatchObject({ kind: 'integration' });
+    expect(readOxiquillMetadata(integration)).toMatchObject({
+      kind: 'integration',
+      python: { offline: true, packageMirror: 'https://packages.example/pyodide/' }
+    });
     expect(Object.isFrozen(readOxiquillMetadata(config))).toBe(true);
     expect(Object.keys(config)).not.toContain('oxiquill');
   });

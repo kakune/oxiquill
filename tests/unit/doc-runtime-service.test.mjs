@@ -174,6 +174,34 @@ function createMemoryFileSystem(initialFiles = {}) {
 const highlighter = {
   codeToHtml: (source, options) => Promise.resolve(`<pre data-lang="${options.lang}">${source}</pre>`)
 };
+const runtimeInputs = Object.freeze({
+  haskell: Object.freeze({ compiler: 'wasm32-wasi-ghc', supportedVersionPrefix: '9.14.' }),
+  package: Object.freeze({ repository: 'https://example.com/oxiquill', version: '0.2.0' }),
+  rust: Object.freeze({
+    cargoVersion: '1.95.0',
+    dependencies: Object.freeze({
+      console_error_panic_hook: '0.1.7',
+      serde: '1.0.228',
+      serde_json: '1.0.150',
+      'wasm-bindgen': '0.2.122',
+      'wasm-bindgen-test': '0.3.72'
+    }),
+    edition: '2024',
+    rustVersion: '1.95',
+    rustcVersion: '1.95.0',
+    target: 'wasm32-unknown-unknown',
+    wasmPackVersion: '0.15.0'
+  }),
+  rustLock: 'fixture lock',
+  rustLockSha256: hashText('fixture lock')
+});
+const runtimeSyncOptions = Object.freeze({
+  preflightToolchains: async () => ({}),
+  resolvePyodideInputs: async ({ requestedPackages }) => ({
+    fingerprint: stableFingerprint({ requestedPackages })
+  }),
+  runtimeInputs
+});
 
 function pyodidePackage(name, fileName, content, depends = []) {
   return {
@@ -260,6 +288,7 @@ describe('doc runtime service', () => {
     const context = await createDocRuntimeContext({
       fileSystem,
       highlighter,
+      readRuntimeInputs: async () => runtimeInputs,
       root: '/repo'
     });
 
@@ -267,6 +296,8 @@ describe('doc runtime service', () => {
     await expect(
       createDocRuntimeContext({
         fileSystem,
+        highlighter,
+        readRuntimeInputs: async () => runtimeInputs,
         root: '/repo'
       })
     ).resolves.toMatchObject({
@@ -440,6 +471,7 @@ describe('doc runtime service', () => {
 
     await expect(
       syncDocRuntime({
+        ...runtimeSyncOptions,
         fileSystem: localDuplicate,
         helperCrates: new Map(),
         highlighter: countingHighlighter,
@@ -455,6 +487,7 @@ describe('doc runtime service', () => {
     });
     await expect(
       syncDocRuntime({
+        ...runtimeSyncOptions,
         fileSystem: scopedDuplicate,
         helperCrates: new Map(),
         highlighter: countingHighlighter,
@@ -613,6 +646,7 @@ describe('doc runtime service', () => {
         fileSystem,
         lockFile,
         paths,
+        pyodideVersion: '314.0.6',
         roots: ['root']
       })
     ).resolves.toBe(true);
@@ -622,6 +656,7 @@ describe('doc runtime service', () => {
         fileSystem,
         lockFile,
         paths,
+        pyodideVersion: '314.0.6',
         roots: ['root']
       })
     ).resolves.toBe(false);
@@ -636,6 +671,7 @@ describe('doc runtime service', () => {
         fileSystem: createMemoryFileSystem(),
         lockFile,
         paths,
+        pyodideVersion: '314.0.6',
         roots: ['root']
       })
     ).rejects.toThrow('has sha256');
@@ -656,6 +692,7 @@ describe('doc runtime service', () => {
         fileSystem: readFailure,
         lockFile,
         paths,
+        pyodideVersion: '314.0.6',
         roots: ['root']
       })
     ).rejects.toThrow('permission denied');
@@ -744,6 +781,7 @@ describe('doc runtime service', () => {
     };
 
     const first = await syncDocRuntime({
+      ...runtimeSyncOptions,
       fileSystem,
       helperCrates,
       highlighter,
@@ -796,6 +834,7 @@ describe('doc runtime service', () => {
     fileSystem.writes.length = 0;
     await expect(
       syncDocRuntime({
+        ...runtimeSyncOptions,
         fileSystem,
         helperCrates,
         highlighter,
@@ -822,6 +861,7 @@ describe('doc runtime service', () => {
     const syncPyodide = vi.fn();
 
     const result = await syncDocRuntime({
+      ...runtimeSyncOptions,
       buildHaskell,
       buildRust,
       fileSystem,
@@ -856,6 +896,7 @@ describe('doc runtime service', () => {
       await runtimeFileSystem.writeFile(path.join(runtimePaths.pyodidePublicDir, 'pyodide.mjs'), 'python');
     });
     const options = {
+      ...runtimeSyncOptions,
       buildHaskell,
       buildRust,
       fileSystem,
@@ -902,6 +943,7 @@ describe('doc runtime service', () => {
       ]);
     });
     const options = {
+      ...runtimeSyncOptions,
       buildHaskell: vi.fn(),
       buildRust,
       fileSystem,
@@ -942,6 +984,7 @@ describe('doc runtime service', () => {
     });
 
     const result = await syncDocRuntime({
+      ...runtimeSyncOptions,
       buildHaskell,
       buildRust: vi.fn(),
       fileSystem,
@@ -1008,7 +1051,8 @@ describe('doc runtime service', () => {
           '--out-dir',
           repoPath('public/oxiquill/rust-wasm'),
           '--out-name',
-          'doc_rust_cells'
+          'doc_rust_cells',
+          '--locked'
         ],
         { cwd: repoRoot }
       ],

@@ -22,4 +22,7 @@ await Promise.all(
 await cp(path.join(packageRoot, 'src/generator/license-data'), path.join(packageRoot, 'dist/generator/license-data'), {
   recursive: true
 });
+await cp(path.join(packageRoot, 'src/generator/runtime-data'), path.join(packageRoot, 'dist/generator/runtime-data'), {
+  recursive: true
+});
 await chmod(path.join(packageRoot, 'dist/cli/index.mjs'), 0o755);

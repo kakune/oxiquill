@@ -98,6 +98,11 @@ export interface OxiquillFrameworkOptions<StarlightOptions extends object = obje
   starlight: IntegrationFactory<StarlightOptions>;
 }
 
+export interface OxiquillPythonOptions {
+  offline?: boolean;
+  packageMirror?: string | URL;
+}
+
 interface OxiquillStarlightOptions {
   components?: Record<string, string>;
   customCss?: string[];
@@ -116,6 +121,7 @@ export interface OxiquillConfig<StarlightOptions extends object = object> extend
   integrations?: AstroIntegrations;
   markdown?: AstroMarkdownConfig;
   paths?: OxiquillPathOptions;
+  python?: OxiquillPythonOptions;
   sidebar?: StarlightOption<StarlightOptions, 'sidebar', unknown>;
   starlight?: Partial<StarlightOptions>;
   title?: StarlightOption<StarlightOptions, 'title', string>;
@@ -126,11 +132,13 @@ export interface OxiquillIntegrationOptions {
   base?: BaseAstroUserConfig['base'];
   markdown?: AstroMarkdownConfig;
   paths?: OxiquillPathOptions;
+  python?: OxiquillPythonOptions;
   vite?: ViteUserConfig;
 }
 
 const createDocRuntimeContextForPaths = createDocRuntimeContext as unknown as (options: {
   paths: OxiquillPaths;
+  pythonOptions?: Readonly<{ offline: boolean; packageMirror?: string }>;
 }) => Promise<DocRuntimeContext>;
 const syncDocRuntimeForBuild = syncDocRuntime as unknown as (
   options: DocRuntimeContext & { mode: 'build' }
@@ -146,6 +154,7 @@ export function defineOxiquillConfig<StarlightOptions extends object>(
     integrations = [],
     markdown = {},
     paths,
+    python,
     description,
     sidebar,
     starlight: starlightOptions = {},
@@ -166,7 +175,7 @@ export function defineOxiquillConfig<StarlightOptions extends object>(
     ...starlightOptions
   } as OxiquillStarlightOptions;
 
-  const integration = createOxiquillIntegration({ base, markdown, paths, vite }, explicitAstroPaths);
+  const integration = createOxiquillIntegration({ base, markdown, paths, python, vite }, explicitAstroPaths);
   const effectiveRoot = explicitAstroPaths.root ?? paths?.workspaceRoot;
   const effectivePublicDir = explicitAstroPaths.publicDir ?? paths?.publicDir ?? 'public';
   const effectiveCacheDir = explicitAstroPaths.cacheDir ?? paths?.cacheDir ?? '.oxiquill';
@@ -220,17 +229,19 @@ export function oxiquillIntegration({
   base,
   markdown = {},
   paths: pathOptions,
+  python,
   vite = {}
 }: OxiquillIntegrationOptions = {}): AstroIntegration {
-  return createOxiquillIntegration({ base, markdown, paths: pathOptions, vite });
+  return createOxiquillIntegration({ base, markdown, paths: pathOptions, python, vite });
 }
 
 function createOxiquillIntegration(
-  { base, markdown = {}, paths: pathOptions, vite = {} }: OxiquillIntegrationOptions = {},
+  { base, markdown = {}, paths: pathOptions, python, vite = {} }: OxiquillIntegrationOptions = {},
   astroOptions: Record<string, string | URL> = {}
 ): AstroIntegration {
-  const metadata = createOxiquillIntegrationMetadata({ astro: astroOptions, paths: pathOptions });
+  const metadata = createOxiquillIntegrationMetadata({ astro: astroOptions, paths: pathOptions, python });
   let paths: OxiquillPaths | undefined;
+  let pythonOptions: Readonly<{ offline: boolean; packageMirror?: string }> | undefined;
   const bundledModules = createBundledModuleCollector();
   const browserBundle = createBrowserBundleCollector();
 
@@ -245,6 +256,7 @@ function createOxiquillIntegration(
           integrationMetadata: metadata
         });
         paths = projectConfig.paths;
+        pythonOptions = projectConfig.python;
         addWatchFile(paths.docsDir);
         addWatchFile(paths.cratesDir);
 
@@ -291,7 +303,7 @@ function createOxiquillIntegration(
         browserBundle.reset();
         if (process.env.OXIQUILL_RUNTIME_OWNER === 'cli') return;
 
-        const context = await createDocRuntimeContextForPaths({ paths });
+        const context = await createDocRuntimeContextForPaths({ paths, pythonOptions });
         await syncDocRuntimeForBuild({ ...context, mode: 'build' });
       },
       'astro:build:done': async ({ dir }) => {
