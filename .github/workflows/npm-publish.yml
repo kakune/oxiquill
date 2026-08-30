@@ -50,6 +50,14 @@ jobs:
           persist-credentials: false
           ref: ${{ github.event.release.tag_name || inputs.release_tag }}
 
+      - name: Check out the release control plane
+        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6.1.0
+        with:
+          path: .release-control
+          persist-credentials: false
+          ref: ${{ github.workflow_sha }}
+          sparse-checkout: .github/scripts
+
       - name: Verify the release tag is on main
         env:
           RELEASE_TAG: ${{ github.event.release.tag_name || inputs.release_tag }}
@@ -68,6 +76,10 @@ jobs:
           fi
           if ! git merge-base --is-ancestor "$tag_commit" origin/main; then
             echo "Release tag $RELEASE_TAG is not contained in origin/main" >&2
+            exit 1
+          fi
+          if ! git merge-base --is-ancestor "$GITHUB_WORKFLOW_SHA" origin/main; then
+            echo "Workflow commit $GITHUB_WORKFLOW_SHA is not contained in origin/main" >&2
             exit 1
           fi
 
@@ -93,7 +105,7 @@ jobs:
           RELEASE_PRERELEASE: ${{ github.event.release.prerelease || false }}
           RELEASE_TAG: ${{ github.event.release.tag_name || inputs.release_tag }}
         run: |
-          node .github/scripts/verify-release.mjs
+          node .release-control/.github/scripts/verify-release.mjs
           legacy_license_pattern='AG''PL|Aff''ero'
           if git grep -n -E "$legacy_license_pattern"; then
             echo "Tracked current-license references must be removed before publishing" >&2
@@ -114,7 +126,7 @@ jobs:
 
       - name: Install ghc-wasm
         shell: bash
-        run: bash .github/scripts/install-ghc-wasm.sh
+        run: bash .release-control/.github/scripts/install-ghc-wasm.sh
 
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
@@ -130,7 +142,7 @@ jobs:
 
       - name: Build the release archive once
         id: archive
-        run: node .github/scripts/release-archive.mjs create "$RUNNER_TEMP/npm-release"
+        run: node .release-control/.github/scripts/release-archive.mjs create "$RUNNER_TEMP/npm-release"
 
       - name: Upload the verified release archive
         uses: actions/upload-artifact@330a01c490aca151604b8cf639adc76d48f6c5d4 # v5.0.0
@@ -151,11 +163,19 @@ jobs:
       contents: write # Required only to attach immutable assets to the matching GitHub Release.
 
     steps:
-      - name: Check out release verification code
+      - name: Check out the release tag
         uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6.1.0
         with:
           persist-credentials: false
           ref: ${{ needs.verify.outputs.release_tag }}
+
+      - name: Check out the release control plane
+        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6.1.0
+        with:
+          path: .release-control
+          persist-credentials: false
+          ref: ${{ github.workflow_sha }}
+          sparse-checkout: .github/scripts
 
       - name: Set up Node.js
         uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6.5.0
@@ -174,10 +194,10 @@ jobs:
           GITHUB_TOKEN: ${{ github.token }}
           RELEASE_TAG: ${{ needs.verify.outputs.release_tag }}
           RELEASE_VERSION: ${{ needs.verify.outputs.release_version }}
-        run: node .github/scripts/release-assets.mjs "$RUNNER_TEMP/npm-release" "$RELEASE_VERSION" "$RELEASE_TAG"
+        run: node .release-control/.github/scripts/release-assets.mjs "$RUNNER_TEMP/npm-release" "$RELEASE_VERSION" "$RELEASE_TAG"
 
   publish:
-    name: Stage npm package
+    name: Publish npm package
     if: github.event_name == 'release' && needs.verify.outputs.release_version != '0.3.0'
     needs:
       - release-assets
@@ -191,11 +211,19 @@ jobs:
       id-token: write # Required for npm Trusted Publishing and provenance.
 
     steps:
-      - name: Check out release verification code
+      - name: Check out the release tag
         uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6.1.0
         with:
           persist-credentials: false
           ref: ${{ needs.verify.outputs.release_tag }}
+
+      - name: Check out the release control plane
+        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6.1.0
+        with:
+          path: .release-control
+          persist-credentials: false
+          ref: ${{ github.workflow_sha }}
+          sparse-checkout: .github/scripts
 
       - name: Set up Node.js
         uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6.5.0
@@ -216,9 +244,9 @@ jobs:
         id: archive
         env:
           RELEASE_VERSION: ${{ needs.verify.outputs.release_version }}
-        run: node .github/scripts/release-archive.mjs verify "$RUNNER_TEMP/npm-release" "$RELEASE_VERSION" --require-oidc
+        run: node .release-control/.github/scripts/release-archive.mjs verify "$RUNNER_TEMP/npm-release" "$RELEASE_VERSION" --require-oidc
 
-      - name: Submit package for staged publication
+      - name: Publish the verified package
         env:
           RELEASE_ARCHIVE: ${{ steps.archive.outputs.archive_path }}
-        run: npm stage publish "$RELEASE_ARCHIVE" --registry https://registry.npmjs.org/
+        run: npm publish "$RELEASE_ARCHIVE" --access public --registry https://registry.npmjs.org/

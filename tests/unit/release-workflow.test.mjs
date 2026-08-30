@@ -27,6 +27,7 @@ import { verifyReleaseVersions } from '../../.github/scripts/verify-release-vers
 
 const repositoryRoot = fileURLToPath(new URL('../..', import.meta.url));
 const releaseCommit = 'a'.repeat(40);
+const workflowCommit = 'c'.repeat(40);
 const temporaryDirectories = [];
 
 afterEach(async () => {
@@ -96,11 +97,15 @@ describe('release-bound version verification', () => {
 });
 
 describe('release identity verification', () => {
-  it('grants the release verifier read-only Dependabot alert access', async () => {
+  it('grants read-only Dependabot access and pins the control plane to the workflow commit', async () => {
     const workflow = await readFile(path.join(repositoryRoot, '.github/workflows/npm-publish.yml'), 'utf8');
 
     expect(workflow).toContain('vulnerability-alerts: read # Required to enforce the Dependabot alert gate.');
     expect(workflow).not.toContain('security-events:');
+    expect(workflow.match(/ref: \$\{\{ github\.workflow_sha \}\}/gu)).toHaveLength(3);
+    expect(workflow.match(/path: \.release-control/gu)).toHaveLength(3);
+    expect(workflow).toContain('node .release-control/.github/scripts/verify-release.mjs');
+    expect(workflow).toContain('Workflow commit $GITHUB_WORKFLOW_SHA is not contained in origin/main');
   });
 
   it('accepts an exact stable tag and matching package versions', () => {
@@ -175,6 +180,43 @@ describe('release identity verification', () => {
       }
     ]);
     expect(fetchImplementation.mock.calls[0][0]).toContain('/dependabot/alerts?state=open');
+    expect(new URL(fetchImplementation.mock.calls[0][0]).searchParams.has('page')).toBe(false);
+    expect(fetchImplementation.mock.calls[0][1].headers['X-GitHub-Api-Version']).toBe('2026-03-10');
+  });
+
+  it('follows cursor pagination from the GitHub Link header', async () => {
+    const firstPage = Array.from({ length: 100 }, (_, index) => dependabotAlert(index + 1));
+    const nextUrl =
+      'https://api.github.com/repos/kakune/oxiquill/dependabot/alerts?state=open&per_page=100&after=cursor';
+    const fetchImplementation = vi
+      .fn()
+      .mockResolvedValueOnce(jsonResponse(firstPage, { link: `<${nextUrl}>; rel="next"` }))
+      .mockResolvedValueOnce(jsonResponse([dependabotAlert(101)]));
+
+    const alerts = await fetchOpenDependabotAlerts({
+      fetchImplementation,
+      repository: 'kakune/oxiquill',
+      token: 'token'
+    });
+
+    expect(alerts).toHaveLength(101);
+    expect(fetchImplementation).toHaveBeenCalledTimes(2);
+    expect(fetchImplementation.mock.calls[1][0]).toBe(nextUrl);
+  });
+
+  it('rejects untrusted and cyclic pagination links', async () => {
+    const untrustedFetch = vi
+      .fn()
+      .mockResolvedValue(jsonResponse([], { link: '<https://example.test/alerts?after=cursor>; rel="next"' }));
+    await expect(
+      fetchOpenDependabotAlerts({ fetchImplementation: untrustedFetch, repository: 'kakune/oxiquill' })
+    ).rejects.toThrow('untrusted URL');
+
+    const initialUrl = 'https://api.github.com/repos/kakune/oxiquill/dependabot/alerts?state=open&per_page=100';
+    const cyclicFetch = vi.fn().mockResolvedValue(jsonResponse([], { link: `<${initialUrl}>; rel="next"` }));
+    await expect(
+      fetchOpenDependabotAlerts({ fetchImplementation: cyclicFetch, repository: 'kakune/oxiquill' })
+    ).rejects.toThrow('contains a cycle');
   });
 
   it('loads milestone blockers and excludes pull requests', async () => {
@@ -225,6 +267,7 @@ describe('release archive verification', () => {
       verifyReleaseArchive(directory, '1.2.3', {
         environment: oidcEnvironment(),
         expectedCommit: releaseCommit,
+        expectedWorkflowCommit: workflowCommit,
         outputFile: null,
         requireOidc: true
       })
@@ -235,29 +278,56 @@ describe('release archive verification', () => {
     const changedArchive = await createArtifact();
     await writeFile(path.join(changedArchive, 'oxiquill-1.2.3.tgz'), 'changed');
     await expect(
-      verifyReleaseArchive(changedArchive, '1.2.3', { expectedCommit: releaseCommit, outputFile: null })
+      verifyReleaseArchive(changedArchive, '1.2.3', {
+        expectedCommit: releaseCommit,
+        expectedWorkflowCommit: workflowCommit,
+        outputFile: null
+      })
     ).rejects.toThrow('SHA-256 mismatch');
 
     const extraFile = await createArtifact();
     await writeFile(path.join(extraFile, 'substitute.tgz'), 'substitute');
     await expect(
-      verifyReleaseArchive(extraFile, '1.2.3', { expectedCommit: releaseCommit, outputFile: null })
+      verifyReleaseArchive(extraFile, '1.2.3', {
+        expectedCommit: releaseCommit,
+        expectedWorkflowCommit: workflowCommit,
+        outputFile: null
+      })
     ).rejects.toThrow('unexpected files');
   });
 
   it('rejects a manifest from a different commit', async () => {
     const directory = await createArtifact();
     await expect(
-      verifyReleaseArchive(directory, '1.2.3', { expectedCommit: 'b'.repeat(40), outputFile: null })
+      verifyReleaseArchive(directory, '1.2.3', {
+        expectedCommit: 'b'.repeat(40),
+        expectedWorkflowCommit: workflowCommit,
+        outputFile: null
+      })
     ).rejects.toThrow('does not match');
+
+    await expect(
+      verifyReleaseArchive(directory, '1.2.3', {
+        expectedCommit: releaseCommit,
+        expectedWorkflowCommit: 'b'.repeat(40),
+        outputFile: null
+      })
+    ).rejects.toThrow('workflow commit');
   });
 
   it('requires complete release manifest identity fields', () => {
     const pack = packManifest(Buffer.from('archive'));
     expect(() =>
       assertReleaseManifest(
-        { archiveSha256: '0'.repeat(64), commit: releaseCommit, name: 'oxiquill', pack, schemaVersion: 2 },
-        { commit: releaseCommit, name: 'oxiquill', version: '1.2.3' }
+        {
+          archiveSha256: '0'.repeat(64),
+          commit: releaseCommit,
+          name: 'oxiquill',
+          pack,
+          schemaVersion: 3,
+          workflowCommit
+        },
+        { commit: releaseCommit, name: 'oxiquill', version: '1.2.3', workflowCommit }
       )
     ).toThrow('identity mismatch');
   });
@@ -300,6 +370,7 @@ describe('GitHub Release asset upload', () => {
       uploadReleaseAssets({
         directory,
         expectedCommit: releaseCommit,
+        expectedWorkflowCommit: workflowCommit,
         expectedVersion: '1.2.3',
         fetchImplementation,
         repository: 'kakune/oxiquill',
@@ -333,6 +404,7 @@ describe('GitHub Release asset upload', () => {
       uploadReleaseAssets({
         directory,
         expectedCommit: releaseCommit,
+        expectedWorkflowCommit: workflowCommit,
         expectedVersion: '1.2.3',
         fetchImplementation,
         repository: 'kakune/oxiquill',
@@ -355,6 +427,7 @@ describe('GitHub Release asset upload', () => {
       uploadReleaseAssets({
         directory,
         expectedCommit: releaseCommit,
+        expectedWorkflowCommit: workflowCommit,
         expectedVersion: '1.2.3',
         fetchImplementation,
         repository: 'kakune/oxiquill',
@@ -393,7 +466,7 @@ describe('workflow supply-chain policy', () => {
     }
   });
 
-  it('keeps release OIDC and staged publishing isolated to the protected publish job', async () => {
+  it('keeps release OIDC and direct publishing isolated to the protected publish job', async () => {
     const source = await readFile(path.join(repositoryRoot, '.github/workflows/npm-publish.yml'), 'utf8');
     const [verifySource, releaseAndPublishSource] = source.split('\n  release-assets:\n');
     const [releaseAssetsSource, publishSource] = releaseAndPublishSource.split('\n  publish:\n');
@@ -407,9 +480,10 @@ describe('workflow supply-chain policy', () => {
     expect(source.match(/contents: write/gu)).toHaveLength(1);
     expect(publishSource).toContain('name: npm-publish');
     expect(publishSource).toContain("needs.verify.outputs.release_version != '0.3.0'");
-    expect(publishSource).toContain('npm stage publish');
+    expect(publishSource).toContain('npm publish "$RELEASE_ARCHIVE" --access public');
+    expect(publishSource).not.toContain('npm stage publish');
     expect(source).not.toMatch(/\bNPM_TOKEN\b|\bNODE_AUTH_TOKEN\b/u);
-    expect(source).not.toMatch(/run:\s+npm publish/u);
+    expect(source.match(/npm publish "\$RELEASE_ARCHIVE"/gu)).toHaveLength(1);
   });
 
   it('never pipes mutable remote installer content into an interpreter', async () => {
@@ -445,8 +519,9 @@ async function createArtifact() {
         commit: releaseCommit,
         name: pack.name,
         pack,
-        schemaVersion: 2,
-        version: pack.version
+        schemaVersion: 3,
+        version: pack.version,
+        workflowCommit
       },
       null,
       2
@@ -501,12 +576,22 @@ function digest(algorithm, value, encoding) {
   return createHash(algorithm).update(value).digest(encoding);
 }
 
-function jsonResponse(value) {
+function jsonResponse(value, { link = null } = {}) {
   return {
+    headers: { get: (name) => (name.toLowerCase() === 'link' ? link : null) },
     json: async () => value,
     ok: true,
     status: 200,
     text: async () => JSON.stringify(value)
+  };
+}
+
+function dependabotAlert(number) {
+  return {
+    dependency: { package: { name: `dependency-${number}` } },
+    html_url: `https://github.test/alerts/${number}`,
+    number,
+    security_advisory: { summary: `Advisory ${number}` }
   };
 }
 
