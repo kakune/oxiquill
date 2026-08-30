@@ -275,8 +275,12 @@ function csvCell(value: unknown, labels: RuntimeLabels): string {
   if (typeof value === 'number' && !Number.isFinite(value)) {
     throw new Error(labels.tableFiniteNumberError);
   }
-  const text = String(value);
+  const text = typeof value === 'string' ? spreadsheetSafeString(value) : String(value);
   return /[",\n\r]/u.test(text) ? `"${text.replace(/"/gu, '""')}"` : text;
+}
+
+function spreadsheetSafeString(value: string): string {
+  return /^\s*[=+\-@\t\r]/u.test(value) ? `'${value}` : value;
 }
 
 function ariaSort(sort: SortState | undefined, columnIndex: number): 'ascending' | 'descending' | 'none' {

@@ -200,11 +200,26 @@ function HtmlOutput({
     <iframe
       class="doc-html-output"
       data-testid="html-output"
+      referrerPolicy="no-referrer"
       sandbox=""
-      srcdoc={output.html}
+      srcdoc={htmlArtifactSrcdoc(output.html)}
       title={output.title ?? labels.htmlOutput}
     />
   );
+}
+
+export const htmlArtifactContentSecurityPolicy = [
+  "default-src 'none'",
+  'img-src data: blob:',
+  'media-src data: blob:',
+  "style-src 'unsafe-inline'",
+  'font-src data:',
+  "base-uri 'none'",
+  "form-action 'none'"
+].join('; ');
+
+export function htmlArtifactSrcdoc(html: string): string {
+  return `<!doctype html><html><head><meta http-equiv="Content-Security-Policy" content="${htmlArtifactContentSecurityPolicy}"><meta name="referrer" content="no-referrer"></head><body>${html}</body></html>`;
 }
 
 function OutputWithTruncation({

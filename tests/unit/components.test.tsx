@@ -51,6 +51,8 @@ const {
 } = await import('../../packages/oxiquill/src/components/doc-runtime/MermaidDiagram');
 const {
   default: OutputRenderer,
+  htmlArtifactContentSecurityPolicy,
+  htmlArtifactSrcdoc,
   imageArtifactSource,
   LazyChartOutput
 } = await import('../../packages/oxiquill/src/components/doc-runtime/OutputRenderer');
@@ -1190,7 +1192,9 @@ describe('OutputRenderer', () => {
 
     const htmlOutputs = screen.getAllByTestId('html-output');
     expect(htmlOutputs[0]).toHaveAttribute('sandbox', '');
-    expect(htmlOutputs[0]).toHaveAttribute('srcdoc', '<strong>safe</strong>');
+    expect(htmlOutputs[0]).toHaveAttribute('referrerpolicy', 'no-referrer');
+    expect(htmlOutputs[0].getAttribute('srcdoc')).toContain('<strong>safe</strong>');
+    expect(htmlOutputs[0].getAttribute('srcdoc')).toContain(htmlArtifactContentSecurityPolicy);
     expect(htmlOutputs[0]).toHaveAttribute('title', 'HTML preview');
     expect(htmlOutputs[1]).toHaveAttribute('title', 'HTML output');
     expect(screen.getByTestId('image-output')).toHaveAttribute('src', `data:image/png;base64,${pngBase64}`);
@@ -1247,6 +1251,15 @@ describe('OutputRenderer', () => {
         })
       )
     ).toBe(`data:image/png;base64,${pngBase64}`);
+  });
+
+  it('places the restrictive HTML policy before author markup', () => {
+    const srcdoc = htmlArtifactSrcdoc('<script>parent.document.body.dataset.compromised = "true"</script>');
+    expect(srcdoc.indexOf('Content-Security-Policy')).toBeLessThan(srcdoc.indexOf('<script>'));
+    expect(srcdoc).toContain("default-src 'none'");
+    expect(srcdoc).toContain('img-src data: blob:');
+    expect(srcdoc).toContain("form-action 'none'");
+    expect(srcdoc).toContain('<meta name="referrer" content="no-referrer">');
   });
 
   it('isolates renderer failures and resets the boundary for replacement output', async () => {
@@ -1651,6 +1664,26 @@ describe('TableOutput', () => {
     expect(tableToCsv([{ key: 'a', label: 'A' }], [[1, 2]], labelsForLanguage('ja'))).toEqual({
       ok: false,
       error: '1 行目のセルは 2 個ですが、1 個である必要があります。'
+    });
+  });
+
+  it('escapes spreadsheet formula prefixes in string headers and cells without changing negative numbers', () => {
+    expect(
+      tableToCsv(
+        [
+          { key: 'formula', label: '=Formula' },
+          { key: 'number', label: 'Number' }
+        ],
+        [
+          ['=SUM(A1:A2)', -42],
+          ['  +1', '-42'],
+          ['\t@command', true],
+          ['\r-control', null]
+        ]
+      )
+    ).toEqual({
+      ok: true,
+      csv: ["'=Formula,Number", "'=SUM(A1:A2),-42", "'  +1,'-42", "'\t@command,true", '"\'\r-control",'].join('\n')
     });
   });
 });
