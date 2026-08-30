@@ -103,8 +103,8 @@ pnpm preview
 For an existing project, install Oxiquill together with the Astro and Starlight packages imported by the project:
 
 ```sh
-pnpm add oxiquill astro @astrojs/starlight
-npm install oxiquill astro @astrojs/starlight
+pnpm add oxiquill@0.3.0 astro@7.2.9 @astrojs/starlight@0.41.9
+npm install oxiquill@0.3.0 astro@7.2.9 @astrojs/starlight@0.41.9
 ```
 
 Route project scripts through the CLI:
@@ -114,7 +114,7 @@ Route project scripts through the CLI:
   "dependencies": {
     "@astrojs/starlight": "0.41.9",
     "astro": "7.2.9",
-    "oxiquill": "0.2.0"
+    "oxiquill": "0.3.0"
   },
   "scripts": {
     "dev": "oxiquill dev",
@@ -255,6 +255,8 @@ Generated output includes:
 
 Do not edit generated output directly. Regenerate it with existing commands such as `pnpm docgen`, `pnpm wasm:dev`, `pnpm wasm:build`, `pnpm check`, or `pnpm build`.
 
+Verified Pyodide downloads are stored separately under `examples/docs-site/.cache/oxiquill/downloads/v1`. `pnpm clean` preserves this cache so generated state and public runtime assets can be reconstructed without downloading valid files again.
+
 ### Validation
 
 Run the full validation suite when broad changes are complete:
@@ -279,6 +281,7 @@ pnpm test:bundle
 pnpm test:e2e
 pnpm test:consumer:npm
 pnpm test:consumer:pnpm
+pnpm test:packed-browser
 pnpm lint:rust
 pnpm doc:rust
 ```
@@ -289,7 +292,7 @@ For docs-only prose changes, `pnpm check` is usually enough. For interactive cel
 
 Production builds write `dist/oxiquill/bundle-report.json` and fail when any emitted client or worker JavaScript chunk exceeds 650 KiB uncompressed. Run `pnpm test:bundle` after `pnpm build` to verify the budget and the ECharts and Mermaid dynamic import boundaries.
 
-`test:e2e` runs the full suite in Chromium, Firefox, and WebKit. `test:consumer:npm` and `test:consumer:pnpm` install the packed package tarball into a temporary standalone project, check and build a zero-cell site with only Node on `PATH`, then generate Rust and Python runtimes without workspace links.
+`test:e2e` runs the full suite in Chromium, Firefox, and WebKit. `test:consumer:npm` and `test:consumer:pnpm` install the packed package tarball into a temporary standalone project, check and build a zero-cell site with only Node on `PATH`, then generate Rust and Python runtimes without workspace links. `test:packed-browser` executes packaged Python and Haskell cells through their real workers in Chromium and verifies offline reuse of the cache after `clean`.
 
 ### License
 
@@ -300,10 +303,6 @@ See the [licensing guide](./examples/docs-site/content/docs/guides/licensing.mdx
 ### Contributing
 
 Contributions are welcome. Please open issues for bug reports, questions, and proposals, and send focused pull requests to `main` from topic branches for fixes or documentation improvements. Pull requests are squash-merged after the required checks pass. Contributions are accepted under the inbound dual-license terms in [CONTRIBUTING.md](./CONTRIBUTING.md).
-
-### Contributing
-
-Contributions are welcome. Please open issues for bug reports, questions, and proposals, and send focused pull requests for fixes or documentation improvements.
 
 See [CHANGELOG.md](./CHANGELOG.md) for release history, [SECURITY.md](./SECURITY.md) for private vulnerability reporting and supported versions, and [docs/RELEASING.md](./docs/RELEASING.md) for the maintainer release process.
 
@@ -421,8 +420,8 @@ pnpm preview
 既存 project では、project が直接 import する Astro および Starlight とともに Oxiquill を追加します。
 
 ```sh
-pnpm add oxiquill astro @astrojs/starlight
-npm install oxiquill astro @astrojs/starlight
+pnpm add oxiquill@0.3.0 astro@7.2.9 @astrojs/starlight@0.41.9
+npm install oxiquill@0.3.0 astro@7.2.9 @astrojs/starlight@0.41.9
 ```
 
 project script は CLI 経由にします。
@@ -432,7 +431,7 @@ project script は CLI 経由にします。
   "dependencies": {
     "@astrojs/starlight": "0.41.9",
     "astro": "7.2.9",
-    "oxiquill": "0.2.0"
+    "oxiquill": "0.3.0"
   },
   "scripts": {
     "dev": "oxiquill dev",
@@ -573,6 +572,8 @@ putStrLn ("scaled = " <> show (scale * sum [1..5]))
 
 生成物を直接編集しないでください。`pnpm docgen`、`pnpm wasm:dev`、`pnpm wasm:build`、`pnpm check`、`pnpm build` などの既存 command で再生成します。
 
+verified Pyodide download は別の `examples/docs-site/.cache/oxiquill/downloads/v1` に保存されます。`pnpm clean` はこの cache を保持するため、有効な file を再 download せず generated state と public runtime asset を再構築できます。
+
 ### 検証
 
 広い変更が完了したら全体の検証を実行します。
@@ -597,6 +598,7 @@ pnpm test:bundle
 pnpm test:e2e
 pnpm test:consumer:npm
 pnpm test:consumer:pnpm
+pnpm test:packed-browser
 pnpm lint:rust
 pnpm doc:rust
 ```
@@ -607,7 +609,7 @@ docs-only の本文変更では、通常 `pnpm check` で十分です。実行�
 
 production build は `dist/oxiquill/bundle-report.json` を生成し、出力された client または worker の JavaScript chunk が uncompressed で 650 KiB を超えると失敗します。`pnpm build` の後に `pnpm test:bundle` を実行すると、budget と ECharts/Mermaid の dynamic import boundary を検証できます。
 
-`test:e2e` は Chromium、Firefox、WebKit で full suite を実行します。`test:consumer:npm` と `test:consumer:pnpm` は packed tarball を一時的な standalone project に install し、`PATH` に Node だけがある zero-cell site を check/build した後、workspace link を使わずに Rust/Python runtime の生成を確認します。
+`test:e2e` は Chromium、Firefox、WebKit で full suite を実行します。`test:consumer:npm` と `test:consumer:pnpm` は packed tarball を一時的な standalone project に install し、`PATH` に Node だけがある zero-cell site を check/build した後、workspace link を使わずに Rust/Python runtime の生成を確認します。`test:packed-browser` は packaged Python/Haskell cell を実際の worker 経由で Chromium 内で実行し、`clean` 後の offline cache reuse も確認します。
 
 ### ライセンス
 
@@ -618,10 +620,6 @@ Oxiquill は [MIT License](./LICENSE-MIT) または [Apache License, Version 2.0
 ### コントリビューション
 
 バグ報告、質問、提案は issue で歓迎します。修正やドキュメント改善は topic branch から `main` への小さな pull request として送ってください。必須 check が成功した pull request は squash merge します。Contribution は [CONTRIBUTING.md](./CONTRIBUTING.md) の inbound dual-license 条項に基づいて受け入れます。
-
-### コントリビューション
-
-バグ報告、質問、提案は issue で歓迎します。小さな修正やドキュメント改善の pull request も歓迎します。
 
 ### トラブルシュート
 

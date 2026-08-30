@@ -1,31 +1,98 @@
 // @vitest-environment node
 
 import { createHash } from 'node:crypto';
-import { mkdtemp, readFile, readdir, rm, writeFile } from 'node:fs/promises';
+import { cp, mkdir, mkdtemp, readFile, readdir, rm, writeFile } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import {
+  assertNoOpenDependabotAlerts,
   assertNoOpenReleaseBlockers,
   assertReleaseIdentity,
   assertTagOnMain,
+  fetchOpenDependabotAlerts,
   fetchOpenReleaseBlockers
 } from '../../.github/scripts/verify-release.mjs';
 import {
   assertPackManifest,
   assertPublishEnvironment,
+  assertReleaseManifest,
   CHECKSUM_FILE,
   MANIFEST_FILE,
   verifyReleaseArchive
 } from '../../.github/scripts/release-archive.mjs';
+import { uploadReleaseAssets } from '../../.github/scripts/release-assets.mjs';
+import { verifyReleaseVersions } from '../../.github/scripts/verify-release-version.mjs';
 
 const repositoryRoot = fileURLToPath(new URL('../..', import.meta.url));
+const releaseCommit = 'a'.repeat(40);
 const temporaryDirectories = [];
 
 afterEach(async () => {
   vi.restoreAllMocks();
   await Promise.all(temporaryDirectories.splice(0).map((directory) => rm(directory, { force: true, recursive: true })));
+});
+
+describe('release-bound version verification', () => {
+  it('accepts every current v0.3.0 release reference', async () => {
+    await expect(verifyReleaseVersions({ repositoryRoot })).resolves.toMatchObject({ version: '0.3.0' });
+  });
+
+  it.each([
+    [
+      'templates/basic/package.json',
+      '"oxiquill": "^0.3.0"',
+      '"oxiquill": "^0.2.0"',
+      'templates/basic/package.json oxiquill dependency'
+    ],
+    ['README.md', '"oxiquill": "0.3.0"', '"oxiquill": "0.2.0"', 'README.md contains stale'],
+    [
+      'packages/oxiquill/README.md',
+      'npm install oxiquill@0.3.0',
+      'npm install oxiquill@0.2.0',
+      'package README contains stale'
+    ],
+    [
+      'examples/docs-site/content/docs/guides/getting-started.mdx',
+      'pnpm add oxiquill@0.3.0',
+      'pnpm add oxiquill@0.2.0',
+      'English getting-started guide contains stale'
+    ],
+    [
+      'examples/docs-site/content/docs/ja/guides/getting-started.mdx',
+      'pnpm add oxiquill@0.3.0',
+      'pnpm add oxiquill@0.2.0',
+      'Japanese getting-started guide contains stale'
+    ],
+    [
+      'examples/docs-site/crates/doc-rust/Cargo.toml',
+      'version = "0.3.0"',
+      'version = "0.2.0"',
+      'doc-rust Cargo.toml version'
+    ],
+    [
+      'examples/docs-site/crates/Cargo.lock',
+      'name = "doc-rust"\nversion = "0.3.0"',
+      'name = "doc-rust"\nversion = "0.2.0"',
+      'helper Cargo.lock doc-rust version'
+    ],
+    [
+      'packages/oxiquill/src/generator/license-data/rust/runtime-Cargo.lock',
+      'name = "doc-rust-cells"\nversion = "0.3.0"',
+      'name = "doc-rust-cells"\nversion = "0.2.0"',
+      'generated runtime Cargo.lock doc-rust-cells version'
+    ]
+  ])('rejects stale release metadata in %s', async (relativePath, current, stale, message) => {
+    const fixtureRoot = await createReleaseVersionFixture();
+    const filePath = path.join(fixtureRoot, relativePath);
+    const source = await readFile(filePath, 'utf8');
+    const modified = source.replace(current, stale);
+    expect(modified).not.toBe(source);
+    await writeFile(filePath, modified);
+
+    await expect(verifyReleaseVersions({ repositoryRoot: fixtureRoot })).rejects.toThrow(message);
+  });
 });
 
 describe('release identity verification', () => {
@@ -71,6 +138,38 @@ describe('release identity verification', () => {
     expect(() => assertNoOpenReleaseBlockers([])).not.toThrow();
   });
 
+  it('fails when an open Dependabot alert remains', () => {
+    expect(() =>
+      assertNoOpenDependabotAlerts([{ dependency: 'undici', number: 7, summary: 'TLS validation bypass' }])
+    ).toThrow('#7 undici: TLS validation bypass');
+    expect(() => assertNoOpenDependabotAlerts([])).not.toThrow();
+  });
+
+  it('loads open Dependabot alerts with actionable advisory details', async () => {
+    const fetchImplementation = vi.fn().mockResolvedValue(
+      jsonResponse([
+        {
+          dependency: { package: { name: 'undici' } },
+          html_url: 'https://github.test/alerts/7',
+          number: 7,
+          security_advisory: { ghsa_id: 'GHSA-test', summary: 'TLS validation bypass' }
+        }
+      ])
+    );
+
+    await expect(
+      fetchOpenDependabotAlerts({ fetchImplementation, repository: 'kakune/oxiquill', token: 'token' })
+    ).resolves.toEqual([
+      {
+        dependency: 'undici',
+        number: 7,
+        summary: 'TLS validation bypass',
+        url: 'https://github.test/alerts/7'
+      }
+    ]);
+    expect(fetchImplementation.mock.calls[0][0]).toContain('/dependabot/alerts?state=open');
+  });
+
   it('loads milestone blockers and excludes pull requests', async () => {
     const fetchImplementation = vi
       .fn()
@@ -99,6 +198,17 @@ describe('release identity verification', () => {
       'GitHub API request failed with 503'
     );
   });
+
+  it('fails closed when GitHub cannot verify Dependabot alerts', async () => {
+    const fetchImplementation = vi.fn().mockResolvedValue({
+      ok: false,
+      status: 403,
+      text: async () => 'forbidden'
+    });
+    await expect(fetchOpenDependabotAlerts({ fetchImplementation, repository: 'kakune/oxiquill' })).rejects.toThrow(
+      'GitHub API request failed with 403'
+    );
+  });
 });
 
 describe('release archive verification', () => {
@@ -107,6 +217,7 @@ describe('release archive verification', () => {
     await expect(
       verifyReleaseArchive(directory, '1.2.3', {
         environment: oidcEnvironment(),
+        expectedCommit: releaseCommit,
         outputFile: null,
         requireOidc: true
       })
@@ -116,13 +227,32 @@ describe('release archive verification', () => {
   it('rejects a changed archive and unexpected artifact files', async () => {
     const changedArchive = await createArtifact();
     await writeFile(path.join(changedArchive, 'oxiquill-1.2.3.tgz'), 'changed');
-    await expect(verifyReleaseArchive(changedArchive, '1.2.3', { outputFile: null })).rejects.toThrow(
-      'SHA-256 mismatch'
-    );
+    await expect(
+      verifyReleaseArchive(changedArchive, '1.2.3', { expectedCommit: releaseCommit, outputFile: null })
+    ).rejects.toThrow('SHA-256 mismatch');
 
     const extraFile = await createArtifact();
     await writeFile(path.join(extraFile, 'substitute.tgz'), 'substitute');
-    await expect(verifyReleaseArchive(extraFile, '1.2.3', { outputFile: null })).rejects.toThrow('unexpected files');
+    await expect(
+      verifyReleaseArchive(extraFile, '1.2.3', { expectedCommit: releaseCommit, outputFile: null })
+    ).rejects.toThrow('unexpected files');
+  });
+
+  it('rejects a manifest from a different commit', async () => {
+    const directory = await createArtifact();
+    await expect(
+      verifyReleaseArchive(directory, '1.2.3', { expectedCommit: 'b'.repeat(40), outputFile: null })
+    ).rejects.toThrow('does not match');
+  });
+
+  it('requires complete release manifest identity fields', () => {
+    const pack = packManifest(Buffer.from('archive'));
+    expect(() =>
+      assertReleaseManifest(
+        { archiveSha256: '0'.repeat(64), commit: releaseCommit, name: 'oxiquill', pack, schemaVersion: 2 },
+        { commit: releaseCommit, name: 'oxiquill', version: '1.2.3' }
+      )
+    ).toThrow('identity mismatch');
   });
 
   it('rejects incomplete, duplicate, and unsafe npm manifests', () => {
@@ -150,12 +280,96 @@ describe('release archive verification', () => {
   });
 });
 
+describe('GitHub Release asset upload', () => {
+  it('uploads each missing verified file without overwrite behavior', async () => {
+    const directory = await createArtifact();
+    const fetchImplementation = vi
+      .fn()
+      .mockResolvedValueOnce(jsonResponse({ id: 42, tag_name: 'v1.2.3' }))
+      .mockResolvedValueOnce(jsonResponse([]))
+      .mockResolvedValue(jsonResponse({ id: 100 }));
+
+    await expect(
+      uploadReleaseAssets({
+        directory,
+        expectedCommit: releaseCommit,
+        expectedVersion: '1.2.3',
+        fetchImplementation,
+        repository: 'kakune/oxiquill',
+        tag: 'v1.2.3',
+        token: 'token'
+      })
+    ).resolves.toEqual([
+      { filename: CHECKSUM_FILE, status: 'uploaded' },
+      { filename: 'oxiquill-1.2.3.tgz', status: 'uploaded' },
+      { filename: MANIFEST_FILE, status: 'uploaded' }
+    ]);
+    const uploads = fetchImplementation.mock.calls.filter(([, options]) => options?.method === 'POST');
+    expect(uploads).toHaveLength(3);
+    uploads.forEach(([, options]) => expect(options.headers).not.toHaveProperty('If-Match'));
+  });
+
+  it('accepts an idempotent rerun when every existing asset has identical bytes', async () => {
+    const directory = await createArtifact();
+    const filenames = (await readdir(directory)).sort();
+    const fetchImplementation = vi
+      .fn()
+      .mockResolvedValueOnce(jsonResponse({ id: 42, tag_name: 'v1.2.3' }))
+      .mockResolvedValueOnce(
+        jsonResponse(filenames.map((name, index) => ({ name, url: `https://api.github.test/assets/${index}` })))
+      );
+    for (const filename of filenames) {
+      fetchImplementation.mockResolvedValueOnce(bytesResponse(await readFile(path.join(directory, filename))));
+    }
+
+    await expect(
+      uploadReleaseAssets({
+        directory,
+        expectedCommit: releaseCommit,
+        expectedVersion: '1.2.3',
+        fetchImplementation,
+        repository: 'kakune/oxiquill',
+        tag: 'v1.2.3',
+        token: 'token'
+      })
+    ).resolves.toEqual(filenames.map((filename) => ({ filename, status: 'unchanged' })));
+    expect(fetchImplementation.mock.calls.some(([, options]) => options?.method === 'POST')).toBe(false);
+  });
+
+  it('fails instead of replacing an existing asset with different bytes', async () => {
+    const directory = await createArtifact();
+    const fetchImplementation = vi
+      .fn()
+      .mockResolvedValueOnce(jsonResponse({ id: 42, tag_name: 'v1.2.3' }))
+      .mockResolvedValueOnce(jsonResponse([{ name: CHECKSUM_FILE, url: 'https://api.github.test/assets/1' }]))
+      .mockResolvedValueOnce(bytesResponse(Buffer.from('conflicting bytes')));
+
+    await expect(
+      uploadReleaseAssets({
+        directory,
+        expectedCommit: releaseCommit,
+        expectedVersion: '1.2.3',
+        fetchImplementation,
+        repository: 'kakune/oxiquill',
+        tag: 'v1.2.3',
+        token: 'token'
+      })
+    ).rejects.toThrow('conflicts with the verified artifact');
+  });
+});
+
 describe('workflow supply-chain policy', () => {
   it('selects packed consumer scripts without shell-specific expansion', async () => {
     const source = await readFile(path.join(repositoryRoot, '.github/workflows/ci.yml'), 'utf8');
+    const packageJson = JSON.parse(await readFile(path.join(repositoryRoot, 'package.json'), 'utf8'));
 
     expect(source).toContain('pnpm "test:consumer:${{ matrix.package-manager }}"');
+    expect(source).toContain('run: pnpm test:packed-browser');
+    expect(source).toContain('run: pnpm exec playwright install --with-deps chromium');
     expect(source).not.toContain('${PACKAGE_MANAGER}');
+    expect(packageJson.scripts['test:packed-browser']).toBe(
+      'node tests/package/consumer-smoke.mjs --package-manager npm --browser'
+    );
   });
 
   it('pins every remote action to a full commit SHA with a version comment', async () => {
@@ -174,11 +388,16 @@ describe('workflow supply-chain policy', () => {
 
   it('keeps release OIDC and staged publishing isolated to the protected publish job', async () => {
     const source = await readFile(path.join(repositoryRoot, '.github/workflows/npm-publish.yml'), 'utf8');
-    const [verifySource, publishSource] = source.split('\n  publish:\n');
+    const [verifySource, releaseAndPublishSource] = source.split('\n  release-assets:\n');
+    const [releaseAssetsSource, publishSource] = releaseAndPublishSource.split('\n  publish:\n');
 
     expect(verifySource).not.toContain('id-token: write');
+    expect(verifySource).not.toContain('contents: write');
+    expect(releaseAssetsSource).toContain('contents: write');
+    expect(releaseAssetsSource).not.toContain('id-token: write');
     expect(publishSource).toContain('id-token: write');
     expect(source.match(/id-token: write/gu)).toHaveLength(1);
+    expect(source.match(/contents: write/gu)).toHaveLength(1);
     expect(publishSource).toContain('name: npm-publish');
     expect(publishSource).toContain("needs.verify.outputs.release_version != '0.3.0'");
     expect(publishSource).toContain('npm stage publish');
@@ -213,9 +432,49 @@ async function createArtifact() {
   await writeFile(path.join(directory, pack.filename), archive);
   await writeFile(
     path.join(directory, MANIFEST_FILE),
-    `${JSON.stringify({ archiveSha256, pack, schemaVersion: 1 }, null, 2)}\n`
+    `${JSON.stringify(
+      {
+        archiveSha256,
+        commit: releaseCommit,
+        name: pack.name,
+        pack,
+        schemaVersion: 2,
+        version: pack.version
+      },
+      null,
+      2
+    )}\n`
   );
   await writeFile(path.join(directory, CHECKSUM_FILE), `${archiveSha256}  ${pack.filename}\n`);
+  return directory;
+}
+
+async function createReleaseVersionFixture() {
+  const directory = await mkdtemp(path.join(os.tmpdir(), 'oxiquill-release-version-'));
+  temporaryDirectories.push(directory);
+  const files = [
+    'CHANGELOG.md',
+    'README.md',
+    'SECURITY.md',
+    'examples/docs-site/content/docs/guides/getting-started.mdx',
+    'examples/docs-site/content/docs/ja/guides/getting-started.mdx',
+    'examples/docs-site/crates/Cargo.lock',
+    'examples/docs-site/crates/doc-rust-text/Cargo.toml',
+    'examples/docs-site/crates/doc-rust/Cargo.toml',
+    'examples/docs-site/package.json',
+    'package.json',
+    'packages/oxiquill/README.md',
+    'packages/oxiquill/package.json',
+    'packages/oxiquill/src/generator/license-data/rust/runtime-Cargo.lock',
+    'templates/basic/package.json'
+  ];
+  await Promise.all(
+    files.map(async (file) => {
+      const destination = path.join(directory, file);
+      await mkdir(path.dirname(destination), { recursive: true });
+      await cp(path.join(repositoryRoot, file), destination);
+    })
+  );
   return directory;
 }
 
@@ -241,6 +500,15 @@ function jsonResponse(value) {
     ok: true,
     status: 200,
     text: async () => JSON.stringify(value)
+  };
+}
+
+function bytesResponse(value) {
+  return {
+    arrayBuffer: async () => value,
+    ok: true,
+    status: 200,
+    text: async () => value.toString('utf8')
   };
 }
 

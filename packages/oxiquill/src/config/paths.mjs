@@ -18,7 +18,7 @@ export function createOxiquillPaths(options = {}) {
     docsDir: directoryPath(options.docsDir ?? 'content/docs', workspaceRoot),
     cratesDir: directoryPath(options.cratesDir ?? 'crates', workspaceRoot),
     cacheDir,
-    downloadCacheDir: directoryPath('downloads/v1', cacheDir),
+    downloadCacheDir: directoryPath(options.downloadCacheDir ?? '.cache/oxiquill/downloads/v1', workspaceRoot),
     outDir: directoryPath(options.outDir ?? 'dist', workspaceRoot),
     generatedDir,
     haskellCellsDir: directoryPath(options.haskellCellsDir ?? 'haskell-cells', cacheDir),

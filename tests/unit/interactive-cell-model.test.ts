@@ -66,6 +66,25 @@ describe('interactive cell model', () => {
     expect(labelsForLanguage('ja').diagnosticDetail('Sample cell timed out after 1000ms')).toBe(
       'Sample cell は 1000 ミリ秒でタイムアウトしました。'
     );
+    expect(labelsForLanguage('ja').diagnosticDetail('Artifact data exceeds the remaining 16 MiB run limit.')).toBe(
+      '実行あたり 16 MiB の残り上限を超えています。'
+    );
+    expect(labelsForLanguage('ja').diagnosticDetail('Chart data item limit exceeded: received 21, maximum 20.')).toBe(
+      'グラフデータの上限を超えました。21 件を受け取りましたが、上限は 20 件です。'
+    );
+    expect(labelsForLanguage('ja').executionError('unknown failure')).toBe('セルの実行に失敗しました: unknown failure');
+    expect(labelsForLanguage('ja').copyCsvError('unknown failure')).toBe(
+      'CSV をコピーできませんでした: unknown failure'
+    );
+    expect(labelsForLanguage('ja').mermaidError('unknown failure')).toBe(
+      'Mermaid 図を表示できませんでした: unknown failure'
+    );
+    expect(labelsForLanguage('en').runtimeLanguage('rust')).toBe('Rust + Wasm');
+    expect(labelsForLanguage('en').runtimeLanguage('python')).toBe('Python + Pyodide');
+    expect(labelsForLanguage('en').runtimeLanguage('haskell')).toBe('Haskell + WASI');
+    const boundedDescription = labelsForLanguage('en').mermaidDescription(`  ${'diagram '.repeat(200)}  `);
+    expect(boundedDescription).toHaveLength(1_014);
+    expect(boundedDescription).toMatch(/…$/u);
   });
 
   it('coerces numeric input values and keeps text values', () => {

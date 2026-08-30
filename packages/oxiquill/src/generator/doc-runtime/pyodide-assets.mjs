@@ -99,27 +99,35 @@ export async function copyPyodideAssets({
     }))
   ];
 
-  const cachedAssets = await Promise.all(
-    assets.map(async (asset) => ({
-      ...asset,
-      cachePath: await ensureCachedAsset(asset, {
-        cacheDirectory,
-        fetchImplementation,
-        fetchPackage,
-        fileSystem,
-        offline: pythonOptions.offline,
-        packageBaseUrl,
-        sleep,
-        temporaryName
-      })
-    }))
-  );
+  const cachePromises = assets.map(async (asset) => ({
+    ...asset,
+    cachePath: await ensureCachedAsset(asset, {
+      cacheDirectory,
+      fetchImplementation,
+      fetchPackage,
+      fileSystem,
+      offline: pythonOptions.offline,
+      packageBaseUrl,
+      sleep,
+      temporaryName
+    })
+  }));
+  const cachedAssets = await settleCacheTransactions(cachePromises);
   const copied = await Promise.all(
     cachedAssets.map(({ cachePath, fileName }) =>
       copyFileIfChanged(cachePath, pathInUrl(paths.pyodidePublicDir, fileName), { fileSystem })
     )
   );
   return copied.some(Boolean);
+}
+
+async function settleCacheTransactions(cachePromises) {
+  try {
+    return await Promise.all(cachePromises);
+  } catch (error) {
+    await Promise.allSettled(cachePromises);
+    throw error;
+  }
 }
 
 export async function copyVendoredPyodidePackages({

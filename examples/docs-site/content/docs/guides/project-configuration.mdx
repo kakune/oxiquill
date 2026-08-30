@@ -35,32 +35,50 @@ export { collections } from 'oxiquill/content';
 | `markdown`                                | Additional Astro Markdown settings and plugins. Oxiquill's required plugins run first.                               |
 | `vite`                                    | Additional Vite settings. Oxiquill preserves required aliases, deduplication, worker plugins, and filesystem access. |
 | `paths`                                   | Oxiquill-owned source, cache, generated, and public paths described below.                                           |
+| `python`                                  | Pyodide download behavior: `offline` and the optional `packageMirror`.                                               |
 | Other Astro fields                        | Passed through to Astro. Oxiquill always produces static output.                                                     |
 
-Use `oxiquillIntegration()` only when composing an Astro configuration manually. It accepts `base`, `markdown`, `paths`, and `vite`; the caller is then responsible for adding Preact and Starlight.
+Use `oxiquillIntegration()` only when composing an Astro configuration manually. It accepts `base`, `markdown`, `paths`, `python`, and `vite`; the caller is then responsible for adding Preact and Starlight.
 
 ## Path Fields
 
-| Field                  | Default                      | Resolution base             |
-| ---------------------- | ---------------------------- | --------------------------- |
-| `workspaceRoot`        | project root                 | current project/config root |
-| `frameworkRoot`        | installed `oxiquill` package | absolute/package location   |
-| `docsDir`              | `content/docs`               | `workspaceRoot`             |
-| `cratesDir`            | `crates`                     | `workspaceRoot`             |
-| `publicDir`            | `public`                     | `workspaceRoot`             |
-| `cacheDir`             | `.oxiquill`                  | `workspaceRoot`             |
-| `generatedDir`         | `generated`                  | `cacheDir`                  |
-| `rustCellsDir`         | `rust-cells`                 | `cacheDir`                  |
-| `haskellCellsDir`      | `haskell-cells`              | `cacheDir`                  |
-| `publicAssetsDir`      | `oxiquill`                   | `publicDir`                 |
-| `rustWasmPublicDir`    | `rust-wasm`                  | `publicAssetsDir`           |
-| `haskellWasmPublicDir` | `haskell-wasm`               | `publicAssetsDir`           |
-| `pyodidePublicDir`     | `pyodide`                    | `publicAssetsDir`           |
-| `licensesPublicDir`    | `licenses`                   | `publicAssetsDir`           |
+| Field                  | Default                        | Resolution base             |
+| ---------------------- | ------------------------------ | --------------------------- |
+| `workspaceRoot`        | project root                   | current project/config root |
+| `frameworkRoot`        | installed `oxiquill` package   | absolute/package location   |
+| `docsDir`              | `content/docs`                 | `workspaceRoot`             |
+| `cratesDir`            | `crates`                       | `workspaceRoot`             |
+| `publicDir`            | `public`                       | `workspaceRoot`             |
+| `cacheDir`             | `.oxiquill`                    | `workspaceRoot`             |
+| `downloadCacheDir`     | `.cache/oxiquill/downloads/v1` | `workspaceRoot`             |
+| `generatedDir`         | `generated`                    | `cacheDir`                  |
+| `rustCellsDir`         | `rust-cells`                   | `cacheDir`                  |
+| `haskellCellsDir`      | `haskell-cells`                | `cacheDir`                  |
+| `publicAssetsDir`      | `oxiquill`                     | `publicDir`                 |
+| `rustWasmPublicDir`    | `rust-wasm`                    | `publicAssetsDir`           |
+| `haskellWasmPublicDir` | `haskell-wasm`                 | `publicAssetsDir`           |
+| `pyodidePublicDir`     | `pyodide`                      | `publicAssetsDir`           |
+| `licensesPublicDir`    | `licenses`                     | `publicAssetsDir`           |
 
 Every path accepts a relative string, an absolute string, or a `file:` URL. Nested relative paths resolve against the parent shown in the table, not against the process's incidental working directory.
 
 Astro's `root`, `publicDir`, `outDir`, and `cacheDir` and Oxiquill's explicit path settings must normalize to the same locations when they describe the same directory. Conflicting explicit values are errors; Oxiquill never silently chooses one. All CLI commands load this resolved configuration before reading, writing, or cleaning files.
+
+## Python Downloads
+
+```js
+export default defineOxiquillConfig({
+  python: {
+    offline: process.env.OXIQUILL_OFFLINE === '1',
+    packageMirror: new URL('https://packages.example/pyodide/')
+  },
+  paths: {
+    downloadCacheDir: new URL('./.cache/verified-downloads/', import.meta.url)
+  }
+});
+```
+
+`python.offline` defaults to `false`. `python.packageMirror` accepts a string or URL and changes the package download base without changing lockfile integrity checks. `paths.downloadCacheDir` also accepts a string or URL. The exported `OxiquillPythonOptions` and `OxiquillPathOptions` types describe these public fields.
 
 ## Precedence and Merging
 
@@ -70,12 +88,16 @@ Astro's `root`, `publicDir`, `outDir`, and `cacheDir` and Oxiquill's explicit pa
 4. Consumer Markdown, Vite, CSS, component, and integration additions are retained after Oxiquill's required entries.
 5. A conflicting path, missing Oxiquill integration, multiple Oxiquill integrations, or an unreadable config fails before generation or cleanup.
 
-Do not point an Oxiquill-owned output at the project root or another broad directory. `oxiquill clean` removes only validated, resolved Oxiquill paths and configured Astro output directories.
+Do not point an Oxiquill-owned output at the project root or another broad directory. `oxiquill clean` removes only validated, resolved generated paths and configured Astro output directories. It deliberately preserves `downloadCacheDir`, which must be outside every cleaned output path.
+
+## Runtime Fingerprints
+
+Runtime fingerprints contain semantic build inputs rather than machine-local paths. Python fingerprints include the Pyodide version, lockfile SHA-256, verified core-file hashes, selected package metadata, and requested package set. Haskell build fingerprints include the cells, generated source, supported compiler-version prefix, and the compiler's exact reported version (or its unavailable state). The Haskell compiler command, executable path, and diagnostic text are excluded, so moving an equivalent toolchain does not force a rebuild; changing its reported version or supported-version policy does.
 
 ## Base Paths and Public Assets
 
 Set Astro's `base` when publishing below a subpath. Oxiquill applies it to interactive-cell manifests, language runtimes, diagrams, and `/media/...` references. Keep authored public URLs root-relative; the Markdown transform adds the configured base exactly once.
 
-Generated runtime files belong under `.oxiquill` and `public/oxiquill`; the final static site belongs under Astro's `outDir` (normally `dist`). These directories are generated and must not be edited directly.
+Generated runtime files belong under `.oxiquill` and `public/oxiquill`; the verified download cache belongs under `.cache/oxiquill/downloads/v1`; and the final static site belongs under Astro's `outDir` (normally `dist`). Generated directories must not be edited directly. The download cache may be retained across builds and reconstructed outputs, but its files are verified before every use.
 
 When you customize generated directories, update `tsconfig.json` exclusions to the resolved cache, helper-crate target, output, and public-asset paths. Otherwise a broad include such as `**/*` can make Astro/TypeScript analyze generated JavaScript such as Pyodide instead of treating it as output.

@@ -1,4 +1,4 @@
-import { spawnSync } from 'node:child_process';
+import { execFileSync, spawnSync } from 'node:child_process';
 import { createHash } from 'node:crypto';
 import { appendFile, mkdir, readFile, readdir, writeFile } from 'node:fs/promises';
 import path from 'node:path';
@@ -38,7 +38,14 @@ export async function createReleaseArchive(destination, { outputFile = process.e
   const archiveSha256 = digest('sha256', archive, 'hex');
   assertArchiveDigests(pack, archive);
 
-  const manifest = { archiveSha256, pack, schemaVersion: 1 };
+  const manifest = {
+    archiveSha256,
+    commit: gitOutput(['rev-parse', 'HEAD'], packageRoot),
+    name: pack.name,
+    pack,
+    schemaVersion: 2,
+    version: pack.version
+  };
   await writeFile(path.join(destination, MANIFEST_FILE), `${JSON.stringify(manifest, null, 2)}\n`);
   await writeFile(path.join(destination, CHECKSUM_FILE), `${archiveSha256}  ${pack.filename}\n`);
   await assertArtifactFileSet(destination, pack.filename);
@@ -56,14 +63,12 @@ export async function createReleaseArchive(destination, { outputFile = process.e
 export async function verifyReleaseArchive(
   destination,
   expectedVersion,
-  { environment = process.env, outputFile = process.env.GITHUB_OUTPUT, requireOidc = false } = {}
+  { environment = process.env, expectedCommit, outputFile = process.env.GITHUB_OUTPUT, requireOidc = false } = {}
 ) {
   if (requireOidc) assertPublishEnvironment(environment);
 
   const manifest = JSON.parse(await readFile(path.join(destination, MANIFEST_FILE), 'utf8'));
-  if (manifest.schemaVersion !== 1 || typeof manifest.archiveSha256 !== 'string') {
-    throw new Error('Release manifest has an unsupported schema.');
-  }
+  assertReleaseManifest(manifest, { commit: expectedCommit, name: 'oxiquill', version: expectedVersion });
   assertPackManifest(manifest.pack, { name: 'oxiquill', version: expectedVersion });
   await assertArtifactFileSet(destination, manifest.pack.filename);
 
@@ -83,6 +88,27 @@ export async function verifyReleaseArchive(
 
   if (outputFile) await appendFile(outputFile, `archive_path=${archivePath}\n`);
   return { archivePath, manifest };
+}
+
+export function assertReleaseManifest(manifest, expected) {
+  if (
+    manifest?.schemaVersion !== 2 ||
+    typeof manifest.archiveSha256 !== 'string' ||
+    !/^[0-9a-f]{64}$/u.test(manifest.archiveSha256) ||
+    typeof manifest.commit !== 'string' ||
+    !/^[0-9a-f]{40}$/u.test(manifest.commit)
+  ) {
+    throw new Error('Release manifest has an unsupported schema or invalid identity fields.');
+  }
+  if (!expected.commit || manifest.commit !== expected.commit) {
+    throw new Error(`Release manifest commit ${manifest.commit} does not match ${String(expected.commit)}.`);
+  }
+  if (manifest.name !== expected.name || manifest.version !== expected.version) {
+    throw new Error(`Release manifest identity mismatch: expected ${expected.name}@${expected.version}.`);
+  }
+  if (manifest.pack?.name !== manifest.name || manifest.pack?.version !== manifest.version) {
+    throw new Error('Release manifest package identity does not match its npm pack metadata.');
+  }
 }
 
 export function assertPublishEnvironment(environment) {
@@ -146,6 +172,10 @@ function digest(algorithm, value, encoding) {
   return createHash(algorithm).update(value).digest(encoding);
 }
 
+function gitOutput(args, cwd) {
+  return execFileSync('git', args, { cwd, encoding: 'utf8' }).trim();
+}
+
 async function main() {
   const [command, destination, expectedVersion, ...flags] = process.argv.slice(2);
   if (command === 'create' && destination && !expectedVersion) {
@@ -155,7 +185,8 @@ async function main() {
   }
   if (command === 'verify' && destination && expectedVersion) {
     const requireOidc = flags.includes('--require-oidc');
-    const { archivePath } = await verifyReleaseArchive(destination, expectedVersion, { requireOidc });
+    const expectedCommit = gitOutput(['rev-parse', 'HEAD'], packageRoot);
+    const { archivePath } = await verifyReleaseArchive(destination, expectedVersion, { expectedCommit, requireOidc });
     console.log(`Verified ${archivePath}.`);
     return;
   }

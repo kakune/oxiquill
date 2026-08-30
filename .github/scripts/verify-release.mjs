@@ -1,7 +1,7 @@
 import { execFileSync, spawnSync } from 'node:child_process';
-import { appendFile, readFile } from 'node:fs/promises';
-import path from 'node:path';
+import { appendFile } from 'node:fs/promises';
 import { pathToFileURL } from 'node:url';
+import { verifyReleaseVersions } from './verify-release-version.mjs';
 
 export const BLOCKER_LABEL = 'release-blocker';
 export const RELEASE_MILESTONE = 'npm release readiness';
@@ -43,10 +43,29 @@ export function assertNoOpenReleaseBlockers(blockers) {
   throw new Error(`Open ${BLOCKER_LABEL} issues remain in ${RELEASE_MILESTONE}:\n${details}`);
 }
 
+export function assertNoOpenDependabotAlerts(alerts) {
+  if (alerts.length === 0) return;
+
+  const details = alerts.map((alert) => `#${alert.number} ${alert.dependency}: ${alert.summary}`).join('\n');
+  throw new Error(`Open Dependabot alerts remain:\n${details}`);
+}
+
+export async function fetchOpenDependabotAlerts({ fetchImplementation = fetch, repository, token }) {
+  assertRepositoryIdentifier(repository);
+  const alerts = await fetchAllPages(
+    `https://api.github.com/repos/${repository}/dependabot/alerts?state=open&per_page=100`,
+    { fetchImplementation, token }
+  );
+  return alerts.map(({ dependency, html_url: url, number, security_advisory: advisory }) => ({
+    dependency: dependency?.package?.name ?? '(unknown dependency)',
+    number,
+    summary: advisory?.summary ?? advisory?.ghsa_id ?? '(missing advisory summary)',
+    url
+  }));
+}
+
 export async function fetchOpenReleaseBlockers({ fetchImplementation = fetch, repository, token }) {
-  if (!/^[A-Za-z0-9_.-]+\/[A-Za-z0-9_.-]+$/u.test(repository)) {
-    throw new Error(`Invalid GitHub repository identifier: ${repository}`);
-  }
+  assertRepositoryIdentifier(repository);
 
   const apiRoot = `https://api.github.com/repos/${repository}`;
   const milestones = await fetchAllPages(`${apiRoot}/milestones?state=all&per_page=100`, {
@@ -72,13 +91,12 @@ export async function verifyRelease({ environment = process.env, repositoryRoot 
   const tag = requireEnvironment(environment, 'RELEASE_TAG');
   const releasePrerelease = parseBooleanEnvironment(environment, 'RELEASE_PRERELEASE');
   const repository = requireEnvironment(environment, 'GITHUB_REPOSITORY');
-  const rootPackage = await readJson(path.join(repositoryRoot, 'package.json'));
-  const publishedPackage = await readJson(path.join(repositoryRoot, 'packages/oxiquill/package.json'));
+  const { version } = await verifyReleaseVersions({ repositoryRoot });
 
   assertReleaseIdentity({
-    packageVersion: publishedPackage.version,
+    packageVersion: version,
     releasePrerelease,
-    rootVersion: rootPackage.version,
+    rootVersion: version,
     tag
   });
 
@@ -94,17 +112,24 @@ export async function verifyRelease({ environment = process.env, repositoryRoot 
   }
   assertTagOnMain({ headCommit, isAncestor: ancestry.status === 0, tag, tagCommit });
 
-  const blockers = await fetchOpenReleaseBlockers({
-    repository,
-    token: environment.GITHUB_TOKEN
-  });
+  const [alerts, blockers] = await Promise.all([
+    fetchOpenDependabotAlerts({ repository, token: environment.GITHUB_TOKEN }),
+    fetchOpenReleaseBlockers({ repository, token: environment.GITHUB_TOKEN })
+  ]);
+  assertNoOpenDependabotAlerts(alerts);
   assertNoOpenReleaseBlockers(blockers);
 
   if (environment.GITHUB_OUTPUT) {
-    await appendFile(environment.GITHUB_OUTPUT, `release_tag=${tag}\nrelease_version=${publishedPackage.version}\n`);
+    await appendFile(environment.GITHUB_OUTPUT, `release_tag=${tag}\nrelease_version=${version}\n`);
   }
 
-  return { tag, version: publishedPackage.version };
+  return { tag, version };
+}
+
+function assertRepositoryIdentifier(repository) {
+  if (!/^[A-Za-z0-9_.-]+\/[A-Za-z0-9_.-]+$/u.test(repository)) {
+    throw new Error(`Invalid GitHub repository identifier: ${repository}`);
+  }
 }
 
 async function fetchAllPages(url, { fetchImplementation, token }) {
@@ -150,10 +175,6 @@ function requireEnvironment(environment, name) {
   const value = environment[name];
   if (!value) throw new Error(`${name} must be set.`);
   return value;
-}
-
-async function readJson(filePath) {
-  return JSON.parse(await readFile(filePath, 'utf8'));
 }
 
 const isMainModule = process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href;

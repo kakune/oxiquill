@@ -7,6 +7,24 @@ Python cells execute in a browser worker using Pyodide. Oxiquill resolves the in
 
 The built site loads those local assets. A reader does not need access to a public CDN after the site has been generated and deployed.
 
+## Configuration
+
+```js
+import { defineOxiquillConfig } from 'oxiquill/astro';
+
+export default defineOxiquillConfig({
+  python: {
+    offline: process.env.OXIQUILL_OFFLINE === '1',
+    packageMirror: 'https://packages.example/pyodide/'
+  },
+  paths: {
+    downloadCacheDir: '.cache/oxiquill/downloads/v1'
+  }
+});
+```
+
+`offline` defaults to `false`. `packageMirror` and `downloadCacheDir` accept either a string or URL. TypeScript consumers can import `OxiquillPythonOptions` and `OxiquillPathOptions` from `oxiquill/astro`.
+
 ## Verified Downloads
 
 For each wheel, Oxiquill takes the filename, release location, and expected SHA-256 from the installed `pyodide-lock.json`. A configured mirror changes only the download base; it never weakens or replaces the lockfile hash.
@@ -24,7 +42,9 @@ A hash mismatch is always fatal for that source. Oxiquill never publishes or cac
 
 ## Cache Behavior
 
-The download cache is versioned by the Pyodide/runtime inputs, so files from incompatible releases are not reused. Preserve it between local or CI builds to avoid repeat network work. Generated `.oxiquill` state and `public/oxiquill/pyodide` can be regenerated from the verified cache.
+The default cache layout is `.cache/oxiquill/downloads/v1/pyodide/<pyodide-version>/<lock-sha256>/<filename>`. A Pyodide version or lockfile-byte change selects a new namespace, so files from incompatible releases are not reused. Every core asset and wheel is also checked against its expected SHA-256 before use.
+
+Preserve the cache between local or CI builds to avoid repeat network work. `oxiquill clean` removes generated `.oxiquill`, public runtime, and build output but deliberately preserves `downloadCacheDir`. A later generation, including offline generation, can reconstruct `public/oxiquill/pyodide` from the verified cache.
 
 If a cache entry is corrupt, remove that named entry or run online generation again; Oxiquill detects the mismatch before use. Cache diagnostics include the filename, cache path, and expected hash.
 
@@ -39,6 +59,10 @@ Mirror failures report the effective URL and distinguish DNS/connection failures
 Offline generation performs no package download. Every required core asset and wheel must already be present in the verified cache. A miss fails with the missing filename and expected SHA-256 so the cache can be populated on a connected machine and transferred without guesswork.
 
 Use offline mode only after an online generation has completed for the same Oxiquill, Pyodide, manifest, and package set. Browser execution remains offline-capable because the deployed site serves the copied assets locally.
+
+## Runtime Invalidation
+
+The Python runtime fingerprint records the Pyodide version, lockfile hash, core-asset hashes, selected package name/version/dependency/file/hash metadata, and the sorted requested package set. Changing any of these semantic inputs regenerates the published runtime. Cache reuse is narrower: its version-and-lock namespace can reuse any still-valid file even when the requested package subset changes.
 
 ## Declared Packages
 

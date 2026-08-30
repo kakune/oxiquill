@@ -60,7 +60,7 @@ The manual path never contacts an npm publish endpoint. It must verify:
 - zero open release blockers and zero production advisories;
 - all required checks and language/browser/consumer fixtures;
 - the complete npm tarball allowlist and README/licenses;
-- one tarball built exactly once, with its SHA-256 and file manifest recorded.
+- one tarball built exactly once, with its SHA-256, package identity, and tagged commit recorded.
 
 Download artifact `oxiquill-X.Y.Z`. It contains only `oxiquill-X.Y.Z.tgz`, `SHA256SUMS`, and `release-manifest.json`. Verify and inspect it from an isolated directory:
 
@@ -70,7 +70,9 @@ tar -tzf oxiquill-X.Y.Z.tgz
 npm pack --dry-run --json ./oxiquill-X.Y.Z.tgz
 ```
 
-On macOS, use `shasum -a 256 -c SHA256SUMS` if `sha256sum` is unavailable. Confirm the manifest records every tarball path, the expected package/version, npm integrity, and the same SHA-256. Do not rebuild or rename the archive.
+On macOS, use `shasum -a 256 -c SHA256SUMS` if `sha256sum` is unavailable. Confirm the manifest records every tarball path, the expected package/version and tag commit, npm integrity, and the same SHA-256. Do not rebuild or rename the archive.
+
+For a published GitHub Release, the workflow attaches the same three verified files with a dedicated `contents: write` job. A rerun accepts byte-identical assets and fails on conflicting content instead of replacing it.
 
 ## One-Time npm Bootstrap
 

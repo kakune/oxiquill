@@ -4,6 +4,7 @@ export const oxiquillPathOptionNames = Object.freeze([
   'cacheDir',
   'cratesDir',
   'docsDir',
+  'downloadCacheDir',
   'frameworkRoot',
   'generatedDir',
   'haskellCellsDir',

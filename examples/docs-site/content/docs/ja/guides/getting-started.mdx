@@ -19,13 +19,13 @@ cd my-docs
 既存 static documentation project に Oxiquill を追加する場合:
 
 ```sh
-pnpm add oxiquill astro @astrojs/starlight
+pnpm add oxiquill@0.3.0 astro@7.2.9 @astrojs/starlight@0.41.9
 ```
 
 または:
 
 ```sh
-npm install oxiquill astro @astrojs/starlight
+npm install oxiquill@0.3.0 astro@7.2.9 @astrojs/starlight@0.41.9
 ```
 
 starter が作成していない場合は `package.json` に次の script を追加します。
@@ -132,6 +132,6 @@ repository maintainer は full validation suite 用に `cargo-llvm-cov` と Play
 
 ## 生成物
 
-Oxiquill は `.oxiquill/**`、`public/oxiquill/**`、Astro type/cache output、`dist/**` を所有します。ignore し、CLI command から再生成してください。matching manifest、fingerprint、runtime input が同一でない限り、config 間で生成物を copy しないでください。
+Oxiquill は `.oxiquill/**`、`public/oxiquill/**`、Astro type/cache output、`dist/**` を所有します。ignore し、CLI command から再生成してください。verified download は別の `.cache/oxiquill/downloads/v1/**` に置かれ、starter はこの directory を ignore し、`oxiquill clean` は後の online/offline 再生成用に保持します。matching manifest、fingerprint、runtime input が同一でない限り、config 間で生成物を copy しないでください。
 
 続けて [執筆ガイド](/ja/guides/authoring/)、[CLI reference](/ja/reference/cli/)、[トラブルシューティング](/ja/guides/troubleshooting/) を参照してください。

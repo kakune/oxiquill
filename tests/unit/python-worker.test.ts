@@ -1,11 +1,15 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import {
   createPythonCellResult,
+  createPythonRuntimeLoader,
+  createPythonWorkerRequestHandler,
   createSerialRequestQueue,
+  importPyodideModule,
   pythonDisplaySupportCode,
   resolvePyodideUrls
 } from '../../packages/oxiquill/src/lib/doc-runtime/python-worker';
 import { toOutputArtifacts } from '../../packages/oxiquill/src/lib/doc-runtime/python-cell-result';
+import type { RuntimeWorkerRequest, RuntimeWorkerResponse } from '../../packages/oxiquill/src/lib/doc-runtime/types';
 
 function createDeferred() {
   let reject!: (reason: Error) => void;
@@ -99,6 +103,140 @@ describe('python worker asset URLs', () => {
       moduleUrl: '/notes/runtime%20assets/python/pyodide.mjs'
     });
   });
+
+  it('loads and initializes Pyodide once for repeated requests', async () => {
+    const pyodide = { runPythonAsync: vi.fn(async () => undefined) };
+    const loadPyodide = vi.fn(async () => pyodide);
+    const importModule = vi.fn(async () => ({ loadPyodide: loadPyodide as never }));
+    const loadRuntime = createPythonRuntimeLoader({
+      importModule,
+      indexUrl: '/runtime/',
+      moduleUrl: '/runtime/pyodide.mjs'
+    });
+
+    await expect(loadRuntime()).resolves.toBe(pyodide);
+    await expect(loadRuntime()).resolves.toBe(pyodide);
+    expect(importModule).toHaveBeenCalledOnce();
+    expect(importModule).toHaveBeenCalledWith('/runtime/pyodide.mjs');
+    expect(loadPyodide).toHaveBeenCalledOnce();
+    expect(loadPyodide).toHaveBeenCalledWith({ indexURL: '/runtime/' });
+    expect(pyodide.runPythonAsync).toHaveBeenCalledOnce();
+    expect(pyodide.runPythonAsync).toHaveBeenCalledWith(pythonDisplaySupportCode);
+  });
+
+  it('loads blob modules, reports HTTP failures, and always revokes temporary URLs', async () => {
+    const unavailable = vi.fn(async () => ({ ok: false, status: 503, statusText: 'Unavailable' }) as Response);
+    await expect(importPyodideModule('/runtime/pyodide.mjs', { fetchImplementation: unavailable })).rejects.toThrow(
+      'Failed to load /runtime/pyodide.mjs: 503 Unavailable'
+    );
+
+    const revokeObjectUrl = vi.fn();
+    const importModule = vi.fn(async () => {
+      throw new Error('invalid module');
+    });
+    await expect(
+      importPyodideModule('/runtime/pyodide.mjs', {
+        createObjectUrl: () => 'blob:pyodide',
+        fetchImplementation: vi.fn(
+          async () => ({ ok: true, text: async () => 'export const loadPyodide = true;' }) as Response
+        ),
+        importModule,
+        revokeObjectUrl
+      })
+    ).rejects.toThrow('invalid module');
+    expect(importModule).toHaveBeenCalledWith('blob:pyodide');
+    expect(revokeObjectUrl).toHaveBeenCalledWith('blob:pyodide');
+  });
+});
+
+describe('python worker request handling', () => {
+  it('loads packages, evaluates source, destroys proxies, and posts normalized output', async () => {
+    const globals = { destroy: vi.fn() };
+    const valueProxy = pythonProxy({ answer: 42 });
+    const displayProxy = pythonProxy([{ kind: 'text', stream: 'display', content: 'displayed' }]);
+    const matplotlibProxy = pythonProxy([{ kind: 'image', mime: 'image/svg+xml', data: '<svg />' }]);
+    const pyodide = {
+      loadPackage: vi.fn(async () => undefined),
+      loadPackagesFromImports: vi.fn(async () => undefined),
+      runPython: vi.fn((source: string) => {
+        if (source === '__oxiquill_take_outputs()') return displayProxy;
+        if (source === '__oxiquill_collect_matplotlib_outputs()') return matplotlibProxy;
+        return undefined;
+      }),
+      runPythonAsync: vi.fn(async () => valueProxy),
+      setStderr: vi.fn(({ batched }: { batched: (output: string) => void }) => batched('warning')),
+      setStdout: vi.fn(({ batched }: { batched: (output: string) => void }) => batched('printed')),
+      toPy: vi.fn(() => globals)
+    };
+    const responses: RuntimeWorkerResponse[] = [];
+    const handleRequest = createPythonWorkerRequestHandler({
+      ensurePyodide: async () => pyodide as never,
+      postMessage: (response) => responses.push(response)
+    });
+    const request = pythonRequest();
+
+    await handleRequest(request);
+
+    expect(pyodide.loadPackage).toHaveBeenCalledWith(['numpy']);
+    expect(pyodide.loadPackagesFromImports).toHaveBeenCalledWith(request.source);
+    expect(pyodide.toPy).toHaveBeenCalledWith(request.inputs);
+    expect(globals.destroy).toHaveBeenCalledOnce();
+    expect(valueProxy.destroy).toHaveBeenCalledOnce();
+    expect(displayProxy.destroy).toHaveBeenCalledOnce();
+    expect(matplotlibProxy.destroy).toHaveBeenCalledOnce();
+    expect(responses).toEqual([
+      {
+        requestId: 7,
+        ok: true,
+        result: {
+          stdout: 'printed',
+          stderr: 'warning',
+          value: { answer: 42 },
+          plots: [],
+          outputs: [
+            { kind: 'text', stream: 'stdout', content: 'printed' },
+            { kind: 'text', stream: 'stderr', content: 'warning' },
+            { kind: 'text', stream: 'display', content: 'displayed' },
+            { kind: 'image', mime: 'image/svg+xml', data: '<svg />' },
+            { kind: 'json', value: { answer: 42 } }
+          ]
+        }
+      }
+    ]);
+  });
+
+  it('posts startup and evaluation failures and still destroys Python globals', async () => {
+    const startupResponses: RuntimeWorkerResponse[] = [];
+    const startupHandler = createPythonWorkerRequestHandler({
+      ensurePyodide: async () => {
+        throw new Error('Pyodide startup failed');
+      },
+      postMessage: (response) => startupResponses.push(response)
+    });
+    await startupHandler(pythonRequest());
+    expect(startupResponses).toEqual([{ requestId: 7, ok: false, error: 'Pyodide startup failed' }]);
+
+    const globals = { destroy: vi.fn() };
+    const evaluationResponses: RuntimeWorkerResponse[] = [];
+    const evaluationHandler = createPythonWorkerRequestHandler({
+      ensurePyodide: async () =>
+        ({
+          loadPackage: vi.fn(),
+          loadPackagesFromImports: vi.fn(),
+          runPython: vi.fn(),
+          runPythonAsync: vi.fn(async () => {
+            throw 'evaluation failed';
+          }),
+          setStderr: vi.fn(),
+          setStdout: vi.fn(),
+          toPy: () => globals
+        }) as never,
+      postMessage: (response) => evaluationResponses.push(response)
+    });
+    await evaluationHandler(pythonRequest({ packages: [] }));
+    expect(globals.destroy).toHaveBeenCalledOnce();
+    expect(evaluationResponses).toEqual([{ requestId: 7, ok: false, error: 'evaluation failed' }]);
+  });
 });
 
 describe('python rich display support', () => {
@@ -176,3 +314,21 @@ describe('python rich display support', () => {
     expect(toOutputArtifacts({ kind: 'text', stream: 'display', content: 'ok' })).toEqual([]);
   });
 });
+
+function pythonRequest(overrides: Partial<RuntimeWorkerRequest> = {}): RuntimeWorkerRequest {
+  return {
+    requestId: 7,
+    cellId: 'python-cell',
+    inputs: { scale: 2 },
+    packages: ['numpy'],
+    source: 'print("ok")',
+    ...overrides
+  };
+}
+
+function pythonProxy(value: unknown) {
+  return {
+    destroy: vi.fn(),
+    toJs: vi.fn(() => value)
+  };
+}

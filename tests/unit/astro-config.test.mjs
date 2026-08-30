@@ -285,17 +285,23 @@ describe('defineOxiquillConfig', () => {
     }
   });
 
-  it('shares a directly installed workspace Preact runtime during SSR', () => {
+  it('shares a directly installed workspace Preact runtime during SSR', async () => {
     const config = defineOxiquillConfig({
       sidebar: [],
       title: 'Docs'
     });
 
-    const update = runConfigSetup(config, new URL('../../', import.meta.url));
+    const update = runConfigSetup(config, new URL('../../nested/astro-root/', import.meta.url));
 
     for (const id of preactExportSpecifiers) {
       expect(aliasReplacementFor(update.vite.resolve.alias, id), id).toBeUndefined();
     }
+
+    const resolver = update.vite.plugins.find((plugin) => plugin.name === 'oxiquill-dependency-resolver');
+    const resolve = vi.fn();
+
+    await expect(resolver.resolveId.call({ resolve }, 'preact/hooks', undefined, {})).resolves.toBeUndefined();
+    expect(resolve).not.toHaveBeenCalled();
   });
 
   it('bundles compiled Oxiquill while sharing the Preact SSR runtime', () => {

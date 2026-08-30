@@ -74,11 +74,12 @@ Verify installation without workspace links through both supported package manag
 ```sh
 pnpm test:consumer:npm
 pnpm test:consumer:pnpm
+pnpm test:packed-browser
 ```
 
-Each command packs `oxiquill`, installs the tarball in a temporary standalone project, checks and builds a zero-cell site with only Node on `PATH`, then adds Rust and Python cells and verifies their generated runtimes without workspace links.
+The consumer commands pack `oxiquill`, install the tarball in a temporary standalone project, check and build a zero-cell site with only Node on `PATH`, then add Rust and Python cells and verify their generated runtimes without workspace links. `test:packed-browser` additionally builds Python and Haskell cells from the installed package, launches Astro preview in background mode, and executes both cells through their real workers in Chromium. It also verifies that `clean` preserves the download cache and that offline generation can reuse it.
 
-Pull requests require compatibility jobs on Linux, macOS, and Windows, Haskell runtime jobs on Linux and macOS, and full browser jobs for Chromium, Firefox, and WebKit. Every supported matrix cell is merge-blocking.
+Pull requests require compatibility jobs on Linux, macOS, and Windows, Haskell runtime jobs on Linux and macOS, the packed Chromium job on Linux, and full browser jobs for Chromium, Firefox, and WebKit. Every supported matrix cell is merge-blocking.
 
 ## Rust Helper Checks
 

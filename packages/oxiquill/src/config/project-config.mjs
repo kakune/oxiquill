@@ -2,7 +2,7 @@ import { existsSync } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { loadConfigFromFile } from 'vite';
-import { assertPathWithin, canonicalPath, createOxiquillPaths, directoryPath } from './paths.mjs';
+import { assertPathWithin, canonicalPath, createOxiquillPaths, directoryPath, isPathWithin } from './paths.mjs';
 import { astroDirectoryOptionNames, readOxiquillMetadata } from './metadata.mjs';
 
 const astroConfigFileNames = Object.freeze([
@@ -196,9 +196,9 @@ function reconcileDirectory({
 
 function validateOwnedPaths(paths) {
   assertPathWithin(paths.workspaceRoot, paths.cacheDir, 'cacheDir');
+  assertPathWithin(paths.workspaceRoot, paths.downloadCacheDir, 'paths.downloadCacheDir');
   assertPathWithin(paths.workspaceRoot, paths.outDir, 'outDir');
   assertPathWithin(paths.cacheDir, paths.generatedDir, 'paths.generatedDir');
-  assertPathWithin(paths.cacheDir, paths.downloadCacheDir, 'paths.downloadCacheDir');
   assertPathWithin(paths.cacheDir, paths.haskellCellsDir, 'paths.haskellCellsDir');
   assertPathWithin(paths.cacheDir, paths.rustCellsDir, 'paths.rustCellsDir');
   assertPathWithin(paths.publicDir, paths.publicAssetsDir, 'paths.publicAssetsDir');
@@ -206,6 +206,12 @@ function validateOwnedPaths(paths) {
   assertPathWithin(paths.publicAssetsDir, paths.licensesPublicDir, 'paths.licensesPublicDir');
   assertPathWithin(paths.publicAssetsDir, paths.pyodidePublicDir, 'paths.pyodidePublicDir');
   assertPathWithin(paths.publicAssetsDir, paths.rustWasmPublicDir, 'paths.rustWasmPublicDir');
+
+  const downloadCache = canonicalPath(paths.downloadCacheDir);
+  const cleanedRoots = [paths.cacheDir, paths.outDir, paths.publicAssetsDir].map(canonicalPath);
+  if (cleanedRoots.some((root) => downloadCache === root || isPathWithin(root, downloadCache))) {
+    throw new Error('paths.downloadCacheDir must resolve outside directories removed by oxiquill clean.');
+  }
 }
 
 function flattenIntegrations(value) {

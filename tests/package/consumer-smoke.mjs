@@ -1,6 +1,8 @@
 import assert from 'node:assert/strict';
 import { spawn, spawnSync } from 'node:child_process';
-import { appendFile, cp, mkdir, mkdtemp, readFile, rename, rm, writeFile } from 'node:fs/promises';
+import { createHash } from 'node:crypto';
+import { appendFile, mkdir, mkdtemp, readFile, realpath, rename, rm, writeFile } from 'node:fs/promises';
+import { createRequire } from 'node:module';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -24,6 +26,8 @@ const supportedPythonPackages = [
 
 const packageManagerArgument = process.argv.indexOf('--package-manager');
 const packageManager = process.argv[packageManagerArgument + 1];
+const browserSmoke = process.argv.includes('--browser');
+const consumerEnvironment = { ...process.env, ASTRO_TELEMETRY_DISABLED: '1' };
 assert.ok(
   packageManagerArgument >= 0 && (packageManager === 'npm' || packageManager === 'pnpm'),
   '--package-manager must be either "npm" or "pnpm".'
@@ -31,17 +35,21 @@ assert.ok(
 
 const repositoryRoot = fileURLToPath(new URL('../../', import.meta.url));
 const packageRoot = path.join(repositoryRoot, 'packages/oxiquill');
+const registryMode = process.argv.includes('--registry');
 const temporaryRoot = await mkdtemp(path.join(tmpdir(), 'oxiquill-consumer-'));
 const consumerRoot = path.join(temporaryRoot, 'consumer');
 const packageApiSource = `
 import { defineOxiquillConfig as defineRootConfig, oxiquillIntegration } from 'oxiquill';
 import { defineOxiquillConfig } from 'oxiquill/astro';
+import type { OxiquillPathOptions, OxiquillPythonOptions } from 'oxiquill/astro';
 import { createOxiquillCollections } from 'oxiquill/content';
 import InteractiveCell from 'oxiquill/runtime/InteractiveCell';
 import MermaidDiagram from 'oxiquill/runtime/MermaidDiagram';
 import type { CellManifest } from 'oxiquill/runtime/types';
 
 const cell = {} as CellManifest;
+const paths = { downloadCacheDir: new URL('./verified downloads/', import.meta.url) } satisfies OxiquillPathOptions;
+const python = { offline: true, packageMirror: new URL('https://packages.example/pyodide/') } satisfies OxiquillPythonOptions;
 void [
   defineRootConfig,
   oxiquillIntegration,
@@ -49,28 +57,51 @@ void [
   createOxiquillCollections,
   InteractiveCell,
   MermaidDiagram,
-  cell
+  cell,
+  paths,
+  python
 ];
 `;
 
 try {
-  const packResult = run('npm', ['pack', '--json', '--silent', '--pack-destination', temporaryRoot], packageRoot, true);
-  const [packed] = JSON.parse(packResult.stdout);
-  const tarballPath = path.join(temporaryRoot, packed.filename);
+  const packageMetadata = JSON.parse(await readFile(path.join(packageRoot, 'package.json'), 'utf8'));
+  const expectedVersion = packageMetadata.version;
+  let packageSource = `oxiquill@${expectedVersion}`;
+  if (!registryMode) {
+    const packResult = run(
+      'npm',
+      ['pack', '--json', '--silent', '--pack-destination', temporaryRoot],
+      packageRoot,
+      true
+    );
+    const [packed] = JSON.parse(packResult.stdout);
+    packageSource = path.join(temporaryRoot, packed.filename);
+  }
 
-  initializePackedConsumer(packageManager, tarballPath, consumerRoot, temporaryRoot);
+  initializeConsumer(packageManager, packageSource, consumerRoot, temporaryRoot);
   const packageJsonPath = path.join(consumerRoot, 'package.json');
   const packageJson = JSON.parse(await readFile(packageJsonPath, 'utf8'));
-  const tarballReference = path.relative(consumerRoot, tarballPath).split(path.sep).join('/');
-  packageJson.dependencies.oxiquill = `file:${tarballReference}`;
+  assert.equal(packageJson.dependencies.oxiquill, `^${expectedVersion}`, 'starter Oxiquill version is stale');
+  packageJson.dependencies.oxiquill = registryMode
+    ? expectedVersion
+    : `file:${path.relative(consumerRoot, packageSource).split(path.sep).join('/')}`;
   packageJson.scripts['wasm:dev'] = 'oxiquill docgen --wasm dev';
   packageJson.scripts['test:wasm'] = 'oxiquill test-wasm';
   await writeFile(packageJsonPath, `${JSON.stringify(packageJson, null, 2)}\n`);
 
   run(packageManager, ['install'], consumerRoot);
-  const packedCliPath = path.join(consumerRoot, 'node_modules/oxiquill/dist/cli/index.mjs');
-  const versionResult = run(process.execPath, [packedCliPath, '--version'], consumerRoot, true);
-  assert.equal(versionResult.stdout.trim(), packed.version);
+  const installedManifest = JSON.parse(
+    await readFile(path.join(consumerRoot, 'node_modules/oxiquill/package.json'), 'utf8')
+  );
+  for (const lifecycleHook of ['prepare', 'install', 'postinstall']) {
+    assert.ok(
+      !Object.hasOwn(installedManifest.scripts, lifecycleHook),
+      `installed manifest must not define ${lifecycleHook}`
+    );
+  }
+  const installedCliPath = path.join(consumerRoot, 'node_modules/oxiquill/dist/cli/index.mjs');
+  const versionResult = run(process.execPath, [installedCliPath, '--version'], consumerRoot, true);
+  assert.equal(versionResult.stdout.trim(), expectedVersion);
   for (const command of [
     'init',
     'dev',
@@ -87,7 +118,7 @@ try {
     'doc-rust',
     'test-wasm'
   ]) {
-    const helpResult = run(process.execPath, [packedCliPath, command, '--help'], consumerRoot, true);
+    const helpResult = run(process.execPath, [installedCliPath, command, '--help'], consumerRoot, true);
     assert.match(helpResult.stdout, new RegExp(`Usage: oxiquill ${command.replace(/[.*+?^${}()|[\]\\]/gu, '\\$&')}`));
   }
   run(
@@ -97,8 +128,9 @@ try {
   );
 
   const nodeOnlyEnvironment = createNodeOnlyEnvironment();
-  run(process.execPath, [packedCliPath, 'check'], consumerRoot, false, nodeOnlyEnvironment);
-  run(process.execPath, [packedCliPath, 'build'], consumerRoot, false, nodeOnlyEnvironment);
+  run(process.execPath, [installedCliPath, 'check'], consumerRoot, false, nodeOnlyEnvironment);
+  const initialBuild = run(process.execPath, [installedCliPath, 'build'], consumerRoot, true, nodeOnlyEnvironment);
+  assertNo404Warning(initialBuild);
   run(packageManager, ['run', 'preview', '--', '--background', '--host', '127.0.0.1', '--port', '4321'], consumerRoot);
   await assertFile(path.join(consumerRoot, '.astro/preview.json'));
   stopAstroPreview(packageManager, consumerRoot);
@@ -107,9 +139,6 @@ try {
   const projectRoot = path.join(consumerRoot, 'site root');
   await mkdir(projectRoot);
   await rename(path.join(consumerRoot, 'content'), path.join(projectRoot, 'content'));
-  await cp(path.join(projectRoot, 'content/docs'), path.join(projectRoot, 'written docs'), {
-    recursive: true
-  });
   await rename(path.join(consumerRoot, 'crates'), path.join(projectRoot, 'helper crates'));
   await rename(path.join(consumerRoot, 'public'), path.join(projectRoot, 'static files'));
   await rename(path.join(consumerRoot, 'content.config.ts'), path.join(projectRoot, 'content.config.ts'));
@@ -118,46 +147,16 @@ try {
   const tsconfig = JSON.parse(await readFile(tsconfigPath, 'utf8'));
   tsconfig.exclude = ['state cache', 'helper crates/target', 'built site', 'static files/oxiquill assets'];
   await writeFile(tsconfigPath, `${JSON.stringify(tsconfig, null, 2)}\n`);
-  await writeFile(
-    path.join(consumerRoot, 'astro.config.mjs'),
-    [
-      "import starlight from '@astrojs/starlight';",
-      "import { defineOxiquillConfig } from 'oxiquill/astro';",
-      "import { fileURLToPath } from 'node:url';",
-      '',
-      "const projectRoot = fileURLToPath(new URL('./site root/', import.meta.url));",
-      '',
-      'export default defineOxiquillConfig({',
-      '  framework: { starlight },',
-      '  root: projectRoot,',
-      "  publicDir: 'static files',",
-      "  cacheDir: 'state cache',",
-      "  outDir: 'built site',",
-      '  paths: {',
-      "    docsDir: new URL('./site root/written docs/', import.meta.url),",
-      "    cratesDir: 'helper crates',",
-      "    generatedDir: 'generated runtime',",
-      "    publicAssetsDir: 'oxiquill assets',",
-      "    haskellWasmPublicDir: 'haskell runtime',",
-      "    licensesPublicDir: 'legal notices',",
-      "    pyodidePublicDir: 'python runtime',",
-      "    rustWasmPublicDir: 'rust runtime'",
-      '  },',
-      "  site: 'https://example.com',",
-      "  title: 'My Docs',",
-      "  sidebar: [{ label: 'Overview', items: [{ label: 'Home', slug: 'index' }] }]",
-      '});',
-      ''
-    ].join('\n')
-  );
+  const astroConfigPath = path.join(consumerRoot, 'astro.config.mjs');
+  await writeFile(astroConfigPath, packedAstroConfig({ offline: false }));
   await writeFile(path.join(projectRoot, 'package-api.ts'), packageApiSource);
   run(
     packageManager,
     packageManager === 'npm' ? ['exec', '--', 'oxiquill', 'help'] : ['exec', 'oxiquill', 'help'],
     consumerRoot
   );
-  run(process.execPath, [packedCliPath, 'check'], consumerRoot, false, nodeOnlyEnvironment);
-  run(process.execPath, [packedCliPath, 'build'], consumerRoot, false, nodeOnlyEnvironment);
+  run(process.execPath, [installedCliPath, 'check'], consumerRoot, false, nodeOnlyEnvironment);
+  run(process.execPath, [installedCliPath, 'build'], consumerRoot, false, nodeOnlyEnvironment);
 
   await assertFile(path.join(projectRoot, 'state cache/generated runtime/cells.json'));
   await assertMissing(path.join(projectRoot, 'state cache/rust-cells'));
@@ -167,7 +166,7 @@ try {
   await assertMissing(path.join(projectRoot, 'static files/oxiquill assets/haskell runtime'));
 
   await appendFile(
-    path.join(projectRoot, 'written docs/index.mdx'),
+    path.join(projectRoot, 'content/docs/index.mdx'),
     [
       '',
       '```rust',
@@ -179,6 +178,7 @@ try {
       '```python',
       '#| id: package-python',
       '#| run: autorun',
+      '#| timeoutMs: 180000',
       `#| packages: [${supportedPythonPackages.join(', ')}]`,
       'import contourpy',
       'import cycler',
@@ -217,7 +217,17 @@ try {
 
   const pyodidePublicDir = path.join(projectRoot, 'static files/oxiquill assets/python runtime');
   const pyodideBuildDir = path.join(projectRoot, 'built site/oxiquill assets/python runtime');
-  const lockFile = JSON.parse(await readFile(path.join(pyodidePublicDir, 'pyodide-lock.json'), 'utf8'));
+  const lockBytes = await readFile(path.join(pyodidePublicDir, 'pyodide-lock.json'));
+  const lockFile = JSON.parse(lockBytes.toString('utf8'));
+  const pyodidePackagePath = createRequire(await realpath(installedCliPath)).resolve('pyodide/package.json');
+  const pyodidePackage = JSON.parse(await readFile(pyodidePackagePath, 'utf8'));
+  const lockSha256 = createHash('sha256').update(lockBytes).digest('hex');
+  const downloadCacheDirectory = path.join(
+    projectRoot,
+    '.cache/oxiquill/downloads/v1/pyodide',
+    pyodidePackage.version,
+    lockSha256
+  );
   const packageWheels = supportedPythonPackages.map((packageName) => lockFile.packages[packageName].file_name);
   const requiredPyodideFiles = [
     'pyodide.mjs',
@@ -231,6 +241,7 @@ try {
   for (const fileName of requiredPyodideFiles) {
     await assertFile(path.join(pyodidePublicDir, fileName));
     await assertFile(path.join(pyodideBuildDir, fileName));
+    await assertFile(path.join(downloadCacheDirectory, fileName));
   }
 
   const publicLicenses = path.join(projectRoot, 'static files/oxiquill assets/legal notices');
@@ -257,35 +268,60 @@ try {
   }
   await assertFile(path.join(projectRoot, 'state cache/generated runtime/cells.json'));
 
-  if (process.env.OXIQUILL_PACKED_BROWSER === 'true') {
-    await runPackedPythonBrowserSmoke({ consumerRoot, packedCliPath, projectRoot });
+  if (browserSmoke) {
+    await runInstalledBrowserSmoke({ consumerRoot, installedCliPath, projectRoot });
   }
 
   run(packageManager, ['run', 'clean'], consumerRoot);
   await assertMissing(path.join(projectRoot, 'state cache'));
   await assertMissing(path.join(projectRoot, 'built site'));
   await assertMissing(path.join(projectRoot, 'static files/oxiquill assets'));
+  for (const fileName of requiredPyodideFiles) {
+    await assertFile(path.join(downloadCacheDirectory, fileName));
+  }
+
+  await writeFile(astroConfigPath, packedAstroConfig({ offline: true }));
+  run(process.execPath, [installedCliPath, 'docgen'], consumerRoot);
+  for (const fileName of requiredPyodideFiles) {
+    await assertFile(path.join(pyodidePublicDir, fileName));
+  }
+  run(packageManager, ['run', 'clean'], consumerRoot);
+  await assertMissing(path.join(projectRoot, 'state cache'));
+  await assertMissing(path.join(projectRoot, 'static files/oxiquill assets'));
+  for (const fileName of requiredPyodideFiles) {
+    await assertFile(path.join(downloadCacheDirectory, fileName));
+  }
   await assertFile(path.join(projectRoot, 'static files/favicon.svg'));
-  await assertFile(path.join(projectRoot, 'written docs/index.mdx'));
+  await assertFile(path.join(projectRoot, 'content/docs/index.mdx'));
   console.log(`Packed consumer smoke test passed with ${packageManager} in ${consumerRoot}.`);
 } finally {
   await rm(temporaryRoot, { force: true, recursive: true });
 }
 
-async function runPackedPythonBrowserSmoke({ consumerRoot, packedCliPath, projectRoot }) {
+async function runInstalledBrowserSmoke({ consumerRoot, installedCliPath, projectRoot }) {
   const port = 4_387;
-  const server = spawn(process.execPath, [packedCliPath, 'preview', '--host', '127.0.0.1', '--port', String(port)], {
-    cwd: consumerRoot,
-    env: process.env,
-    stdio: ['ignore', 'pipe', 'pipe']
-  });
+  const server = spawn(
+    process.execPath,
+    [installedCliPath, 'preview', '--background', '--host', '127.0.0.1', '--port', String(port)],
+    {
+      cwd: consumerRoot,
+      env: consumerEnvironment,
+      stdio: ['ignore', 'pipe', 'pipe']
+    }
+  );
   const serverOutput = [];
+  let serverError;
+  let serverReady = false;
   server.stdout.on('data', (chunk) => serverOutput.push(String(chunk)));
   server.stderr.on('data', (chunk) => serverOutput.push(String(chunk)));
+  server.once('error', (error) => {
+    serverError = error;
+  });
   let browser;
 
   try {
-    await waitForHttp(`http://127.0.0.1:${port}/`, 60_000, server, serverOutput);
+    await waitForHttp(`http://127.0.0.1:${port}/`, 60_000, server, serverOutput, () => serverError);
+    serverReady = true;
     const executablePath = process.env.PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH?.trim();
     browser = await chromium.launch({
       headless: true,
@@ -296,39 +332,44 @@ async function runPackedPythonBrowserSmoke({ consumerRoot, packedCliPath, projec
     const manifest = JSON.parse(await readFile(path.join(projectRoot, 'state cache/generated runtime/cells.json')));
     const pythonCell = manifest.find((cell) => cell.id.endsWith('__package-python'));
     assert.deepEqual(pythonCell?.packages, supportedPythonPackages);
-    const result = await page.evaluate(
-      async ({ packageNames, source }) => {
-        const indexUrl = new URL('/oxiquill%20assets/python%20runtime/', location.href).href;
-        const response = await fetch(new URL('pyodide.mjs', indexUrl));
-        if (!response.ok) throw new Error(`Unable to load packed Pyodide module: ${response.status}.`);
-        const moduleUrl = URL.createObjectURL(new Blob([await response.text()], { type: 'text/javascript' }));
-        try {
-          const { loadPyodide } = await import(moduleUrl);
-          const pyodide = await loadPyodide({ indexURL: indexUrl });
-          await pyodide.loadPackage(packageNames);
-          return pyodide.runPython(source);
-        } finally {
-          URL.revokeObjectURL(moduleUrl);
-        }
-      },
-      { packageNames: pythonCell.packages, source: pythonCell.source }
-    );
-    assert.equal(result, null);
+    const python = page.getByTestId(`cell-${pythonCell.id}`);
+    await python.scrollIntoViewIfNeeded();
+    const pythonOutput = python.getByTestId('run-output');
+    await pythonOutput.waitFor({ state: 'visible', timeout: 180_000 });
+    assert.match(await pythonOutput.textContent(), /packed python imports: ok/u);
+
+    const haskellCell = manifest.find((cell) => cell.id.endsWith('__package-haskell'));
+    if (haskellCell) {
+      const haskell = page.getByTestId(`cell-${haskellCell.id}`);
+      await haskell.scrollIntoViewIfNeeded();
+      await haskell.getByRole('button', { name: 'Run' }).click();
+      const haskellOutput = haskell.getByTestId('run-output');
+      await haskellOutput.waitFor({ state: 'visible', timeout: 60_000 });
+      assert.match(await haskellOutput.textContent(), /packed-consumer: Haskell\/WASI/u);
+    }
   } finally {
     await browser?.close();
-    if (!server.killed) server.kill('SIGTERM');
-    await Promise.race([
-      new Promise((resolve) => server.once('exit', resolve)),
-      new Promise((resolve) => setTimeout(resolve, 5_000))
-    ]);
+    if (serverReady) stopAstroPreview(packageManager, consumerRoot);
+    if (server.exitCode === null && !server.signalCode) {
+      server.kill('SIGTERM');
+      await Promise.race([
+        new Promise((resolve) => server.once('exit', resolve)),
+        new Promise((resolve) => setTimeout(resolve, 5_000))
+      ]);
+    }
   }
 }
 
-async function waitForHttp(url, timeoutMs, server, output) {
+async function waitForHttp(url, timeoutMs, server, output, readServerError) {
   const deadline = Date.now() + timeoutMs;
   while (Date.now() < deadline) {
-    if (server.exitCode !== null) {
-      throw new Error(`Packed preview exited before startup.\n${output.join('')}`);
+    const serverError = readServerError();
+    if (serverError) throw serverError;
+    if (server.exitCode !== null && server.exitCode !== 0) {
+      throw new Error(`Packed preview launcher exited with status ${server.exitCode}.\n${output.join('')}`);
+    }
+    if (server.signalCode) {
+      throw new Error(`Packed preview launcher exited with signal ${server.signalCode}.\n${output.join('')}`);
     }
     try {
       const response = await fetch(url);
@@ -341,11 +382,45 @@ async function waitForHttp(url, timeoutMs, server, output) {
   throw new Error(`Timed out waiting for packed preview at ${url}.\n${output.join('')}`);
 }
 
-function initializePackedConsumer(packageManager, tarballPath, target, cwd) {
+function packedAstroConfig({ offline }) {
+  return [
+    "import starlight from '@astrojs/starlight';",
+    "import { defineOxiquillConfig } from 'oxiquill/astro';",
+    "import { fileURLToPath } from 'node:url';",
+    '',
+    "const projectRoot = fileURLToPath(new URL('./site root/', import.meta.url));",
+    '',
+    'export default defineOxiquillConfig({',
+    '  framework: { starlight },',
+    '  root: projectRoot,',
+    "  publicDir: 'static files',",
+    "  cacheDir: 'state cache',",
+    "  outDir: 'built site',",
+    `  python: { offline: ${offline} },`,
+    '  paths: {',
+    "    docsDir: new URL('./site root/content/docs/', import.meta.url),",
+    "    cratesDir: 'helper crates',",
+    "    generatedDir: 'generated runtime',",
+    "    publicAssetsDir: 'oxiquill assets',",
+    "    haskellWasmPublicDir: 'haskell runtime',",
+    "    licensesPublicDir: 'legal notices',",
+    "    pyodidePublicDir: 'python runtime',",
+    "    rustWasmPublicDir: 'rust runtime'",
+    '  },',
+    "  site: 'https://example.com',",
+    "  title: 'My Docs',",
+    '  starlight: { disable404Route: true },',
+    "  sidebar: [{ label: 'Overview', items: [{ label: 'Home', slug: 'index' }] }]",
+    '});',
+    ''
+  ].join('\n');
+}
+
+function initializeConsumer(packageManager, packageSource, target, cwd) {
   const args =
     packageManager === 'npm'
-      ? ['exec', '--yes', `--package=${tarballPath}`, '--', 'oxiquill', 'init', target]
-      : ['dlx', tarballPath, 'init', target];
+      ? ['exec', '--yes', `--package=${packageSource}`, '--', 'oxiquill', 'init', target]
+      : ['dlx', packageSource, 'init', target];
   run(packageManager, args, cwd);
 }
 
@@ -355,7 +430,7 @@ function stopAstroPreview(packageManager, cwd) {
   run(packageManager, args, cwd);
 }
 
-function run(command, args, cwd, capture = false, environment = process.env) {
+function run(command, args, cwd, capture = false, environment = consumerEnvironment) {
   const isWindowsPackageManager = process.platform === 'win32' && (command === 'npm' || command === 'pnpm');
   const executable = isWindowsPackageManager ? (process.env.ComSpec ?? 'cmd.exe') : command;
   const commandArgs = isWindowsPackageManager ? ['/d', '/s', '/c', `${command}.cmd`, ...args] : args;
@@ -371,12 +446,19 @@ function run(command, args, cwd, capture = false, environment = process.env) {
 }
 
 function createNodeOnlyEnvironment() {
-  const environment = { ...process.env };
+  const environment = { ...consumerEnvironment };
   const pathKey = Object.keys(environment).find((key) => key.toUpperCase() === 'PATH') ?? 'PATH';
   environment[pathKey] = path.dirname(process.execPath);
   environment.OXIQUILL_NODE = process.execPath;
   delete environment.OXIQUILL_HASKELL_GHC;
   return environment;
+}
+
+function assertNo404Warning(result) {
+  const warning = `${result.stdout}\n${result.stderr}`
+    .split(/\r?\n/u)
+    .find((line) => /\bwarn(?:ing)?\b/iu.test(line) && /\b404\b/u.test(line));
+  assert.equal(warning, undefined, `fresh starter build emitted a missing 404 warning: ${warning}`);
 }
 
 async function assertFile(filePath) {

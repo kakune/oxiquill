@@ -74,11 +74,12 @@ workspace link を使わない install を、両方の supported package manager
 ```sh
 pnpm test:consumer:npm
 pnpm test:consumer:pnpm
+pnpm test:packed-browser
 ```
 
-各 command は `oxiquill` を pack し、tarball を一時的な standalone project に install して、`PATH` に Node だけがある状態で zero-cell site を check/build します。その後 Rust/Python cell を追加し、workspace link なしで対応 runtime の生成を検証します。
+consumer command は `oxiquill` を pack し、tarball を一時的な standalone project に install して、`PATH` に Node だけがある状態で zero-cell site を check/build します。その後 Rust/Python cell を追加し、workspace link なしで対応 runtime の生成を検証します。`test:packed-browser` は install 済み package から Python/Haskell cell も build し、Astro preview を background mode で起動して、実際の worker 経由で両 cell を Chromium 内で実行します。さらに `clean` が download cache を保持し、offline generation が再利用できることも確認します。
 
-pull request では Linux、macOS、Windows の compatibility job、Linux/macOS の Haskell runtime job、Chromium、Firefox、WebKit の full browser job が必須です。supported matrix の全 cell が merge-blocking です。
+pull request では Linux、macOS、Windows の compatibility job、Linux/macOS の Haskell runtime job、Linux の packed Chromium job、Chromium、Firefox、WebKit の full browser job が必須です。supported matrix の全 cell が merge-blocking です。
 
 ## Rust helper check
 

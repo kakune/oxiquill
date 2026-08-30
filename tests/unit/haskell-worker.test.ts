@@ -2,12 +2,15 @@ import { describe, expect, it, vi } from 'vitest';
 import {
   assertReadyHaskellRuntimeStatus,
   createHaskellCellResult,
+  createHaskellModuleLoader,
+  createHaskellWorkerRequestHandler,
   fetchHaskellModule,
   fetchHaskellRuntimeStatus,
   parseHaskellRuntimeStatus,
   resolveHaskellRuntimeStatusUrl,
   resolveHaskellWasmUrl
 } from '../../packages/oxiquill/src/lib/doc-runtime/haskell-worker';
+import type { RuntimeWorkerRequest, RuntimeWorkerResponse } from '../../packages/oxiquill/src/lib/doc-runtime/types';
 
 describe('haskell worker helpers', () => {
   it('resolves generated Haskell Wasm under the configured site base', () => {
@@ -35,6 +38,72 @@ describe('haskell worker helpers', () => {
         { kind: 'text', stream: 'stderr', content: 'warning' }
       ]
     });
+  });
+
+  it('handles successful requests and reports runtime failures', async () => {
+    const module = {} as WebAssembly.Module;
+    const request: RuntimeWorkerRequest = {
+      requestId: 4,
+      cellId: 'haskell-cell',
+      haskellFingerprintHash: 'hash-one',
+      inputArgs: ['sample'],
+      inputs: {}
+    };
+    const responses: RuntimeWorkerResponse[] = [];
+    const runCell = vi.fn(async () => createHaskellCellResult({ stdout: 'sample: ok', stderr: '' }));
+    const handleRequest = createHaskellWorkerRequestHandler({
+      loadModule: vi.fn(async () => module),
+      postMessage: (response) => responses.push(response),
+      runCell
+    });
+
+    await handleRequest(request);
+    expect(runCell).toHaveBeenCalledWith(module, request);
+    expect(responses).toEqual([
+      {
+        requestId: 4,
+        ok: true,
+        result: {
+          stdout: 'sample: ok',
+          plots: [],
+          outputs: [{ kind: 'text', stream: 'stdout', content: 'sample: ok' }]
+        }
+      }
+    ]);
+
+    const failureResponses: RuntimeWorkerResponse[] = [];
+    const failingHandler = createHaskellWorkerRequestHandler({
+      loadModule: async () => {
+        throw 'runtime unavailable';
+      },
+      postMessage: (response) => failureResponses.push(response)
+    });
+    await failingHandler(request);
+    expect(failureResponses).toEqual([{ requestId: 4, ok: false, error: 'runtime unavailable' }]);
+  });
+
+  it('caches modules by expected fingerprint and rejects stale status before loading wasm', async () => {
+    const module = {} as WebAssembly.Module;
+    const fetchStatus = vi.fn(async () => ({
+      status: 'ready' as const,
+      haskellFingerprintHash: 'hash-one',
+      message: ''
+    }));
+    const fetchModule = vi.fn(async () => module);
+    const loadModule = createHaskellModuleLoader({
+      fetchModule,
+      fetchStatus,
+      statusUrl: '/status.json',
+      wasmUrl: '/runtime.wasm'
+    });
+
+    await expect(loadModule('hash-one')).resolves.toBe(module);
+    await expect(loadModule('hash-one')).resolves.toBe(module);
+    expect(fetchStatus).toHaveBeenCalledOnce();
+    expect(fetchModule).toHaveBeenCalledOnce();
+    await expect(loadModule('hash-two')).rejects.toThrow('generated runtime is stale');
+    expect(fetchStatus).toHaveBeenCalledTimes(2);
+    expect(fetchModule).toHaveBeenCalledOnce();
   });
 
   it('parses and validates generated Haskell runtime status', () => {
@@ -90,6 +159,18 @@ describe('haskell worker helpers', () => {
       }) as Response;
     await expect(fetchHaskellRuntimeStatus('/missing.json', missing as typeof fetch)).rejects.toThrow(
       'Haskell WASI runtime is not available: generated runtime status is missing; rerun pnpm wasm:dev.'
+    );
+
+    const malformed = async () => ({ ok: true, json: async () => null }) as Response;
+    await expect(fetchHaskellRuntimeStatus('/malformed.json', malformed as typeof fetch)).rejects.toThrow(
+      'generated runtime status is invalid'
+    );
+  });
+
+  it('reports missing Haskell wasm responses', async () => {
+    const missing = async () => ({ ok: false, status: 404, statusText: 'Not Found' }) as Response;
+    await expect(fetchHaskellModule('/missing.wasm', missing as typeof fetch)).rejects.toThrow(
+      'Failed to load /missing.wasm: 404 Not Found'
     );
   });
 
