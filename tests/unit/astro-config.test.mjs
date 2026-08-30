@@ -176,25 +176,87 @@ describe('defineOxiquillConfig', () => {
       title: 'Docs'
     });
     const update = runConfigSetup(config);
+    const remarkPlugins = update.markdown.processor.options.remarkPlugins;
+    const rehypePlugins = update.markdown.processor.options.rehypePlugins;
 
-    expect(update.markdown.processor.options.remarkPlugins.at(-1)).toBe(remarkPlugin);
-    expect(update.markdown.processor.options.rehypePlugins.at(-1)).toBe(rehypePlugin);
+    expect(remarkPlugins).toHaveLength(5);
+    expect(remarkPlugins.at(-1)).toBe(remarkPlugin);
+    expect(rehypePlugins).toHaveLength(2);
+    expect(rehypePlugins.at(-1)).toBe(rehypePlugin);
     expect(update.markdown).not.toHaveProperty('remarkPlugins');
     expect(update.markdown).not.toHaveProperty('rehypePlugins');
   });
 
-  it('preserves explicit Astro rendering and Markdown processor options', () => {
-    const processor = { render: vi.fn() };
+  it.each([
+    ['disabled highlighting', false],
+    ['Prism highlighting', 'prism'],
+    ['Shiki shorthand highlighting', 'shiki']
+  ])('preserves %s', (_label, syntaxHighlight) => {
+    const config = defineOxiquillConfig({
+      markdown: { syntaxHighlight },
+      sidebar: [],
+      title: 'Docs'
+    });
+    const update = runConfigSetup(config);
+
+    expect(update.markdown.syntaxHighlight).toBe(syntaxHighlight);
+  });
+
+  it('merges required languages into Shiki object exclusions without dropping consumer fields', () => {
+    const config = defineOxiquillConfig({
+      markdown: {
+        syntaxHighlight: { excludeLangs: ['custom', 'math'], type: 'shiki' }
+      },
+      sidebar: [],
+      title: 'Docs'
+    });
+    const update = runConfigSetup(config);
+
+    expect(update.markdown.syntaxHighlight).toEqual({
+      excludeLangs: ['custom', 'math', 'mermaid'],
+      type: 'shiki'
+    });
+  });
+
+  it('uses Shiki with Oxiquill exclusions when syntax highlighting is not configured', () => {
+    const update = runConfigSetup(defineOxiquillConfig({ sidebar: [], title: 'Docs' }));
+
+    expect(update.markdown.syntaxHighlight).toEqual({
+      excludeLangs: ['math', 'mermaid'],
+      type: 'shiki'
+    });
+  });
+
+  it('preserves supported Astro rendering and Markdown fields', () => {
+    const image = { domains: ['images.example.com'] };
+    const remarkRehype = { footnoteLabel: 'Notes' };
+    const shikiConfig = { theme: 'github-light' };
+    const smartypants = { dashes: 'oldschool' };
     const config = defineOxiquillConfig({
       compressHTML: 'jsx',
-      markdown: { processor },
+      markdown: { gfm: false, image, remarkRehype, shikiConfig, smartypants },
       sidebar: [],
       title: 'Docs'
     });
     const update = runConfigSetup(config);
 
     expect(config.compressHTML).toBe('jsx');
-    expect(update.markdown.processor).toBe(processor);
+    expect(update.markdown).toMatchObject({ image, shikiConfig });
+    expect(update.markdown.processor.options).toMatchObject({
+      gfm: false,
+      remarkRehype,
+      smartypants
+    });
+  });
+
+  it('rejects a custom Markdown processor before configuration setup', () => {
+    const markdown = { processor: { createRenderer: vi.fn(), name: 'custom', options: {} } };
+
+    expect(() => defineOxiquillConfig({ markdown, sidebar: [], title: 'Docs' })).toThrow(
+      new TypeError(
+        'Oxiquill does not support markdown.processor because it owns the Markdown processor pipeline required for its transforms.'
+      )
+    );
   });
 
   it('installs package-owned main and worker bundle reporters', () => {

@@ -105,6 +105,10 @@ export interface OxiquillPythonOptions {
   packageMirror?: string | URL;
 }
 
+export type OxiquillMarkdownConfig = Omit<AstroMarkdownConfig, 'processor'> & {
+  processor?: never;
+};
+
 interface OxiquillStarlightOptions {
   components?: Record<string, string>;
   customCss?: string[];
@@ -121,7 +125,7 @@ export interface OxiquillConfig<StarlightOptions extends object = object> extend
   description?: StarlightOption<StarlightOptions, 'description', string>;
   framework: OxiquillFrameworkOptions<StarlightOptions>;
   integrations?: AstroIntegrations;
-  markdown?: AstroMarkdownConfig;
+  markdown?: OxiquillMarkdownConfig;
   paths?: OxiquillPathOptions;
   python?: OxiquillPythonOptions;
   sidebar?: StarlightOption<StarlightOptions, 'sidebar', unknown>;
@@ -132,7 +136,7 @@ export interface OxiquillConfig<StarlightOptions extends object = object> extend
 
 export interface OxiquillIntegrationOptions {
   base?: BaseAstroUserConfig['base'];
-  markdown?: AstroMarkdownConfig;
+  markdown?: OxiquillMarkdownConfig;
   paths?: OxiquillPathOptions;
   python?: OxiquillPythonOptions;
   vite?: ViteUserConfig;
@@ -241,6 +245,7 @@ function createOxiquillIntegration(
   { base, markdown = {}, paths: pathOptions, python, vite = {} }: OxiquillIntegrationOptions = {},
   astroOptions: Record<string, string | URL> = {}
 ): AstroIntegration {
+  rejectCustomMarkdownProcessor(markdown);
   const metadata = createOxiquillIntegrationMetadata({ astro: astroOptions, paths: pathOptions, python });
   let paths: OxiquillPaths | undefined;
   let pythonOptions: Readonly<{ offline: boolean; packageMirror?: string }> | undefined;
@@ -400,46 +405,52 @@ function createStarlightOptions(options: OxiquillStarlightOptions): OxiquillStar
   };
 }
 
-function mergeMarkdownConfig(base: BaseAstroUserConfig['base'], paths: OxiquillPaths, markdown: AstroMarkdownConfig) {
-  const {
-    gfm,
-    processor,
-    rehypePlugins = [],
-    remarkRehype,
-    remarkPlugins = [],
-    smartypants,
-    syntaxHighlight,
-    ...markdownRest
-  } = markdown;
-  const syntaxHighlightOptions = syntaxHighlightConfig(syntaxHighlight);
+function rejectCustomMarkdownProcessor(markdown: OxiquillMarkdownConfig): void {
+  if ((markdown as AstroMarkdownConfig).processor === undefined) return;
+
+  throw new TypeError(
+    'Oxiquill does not support markdown.processor because it owns the Markdown processor pipeline required for its transforms.'
+  );
+}
+
+function mergeMarkdownConfig(
+  base: BaseAstroUserConfig['base'],
+  paths: OxiquillPaths,
+  markdown: OxiquillMarkdownConfig
+) {
+  const { gfm, rehypePlugins = [], remarkRehype, remarkPlugins = [], smartypants, syntaxHighlight, ...markdownRest } =
+    markdown;
 
   return {
     ...markdownRest,
-    processor:
-      processor ??
-      unified({
-        gfm,
-        rehypePlugins: [rehypeKatex, ...rehypePlugins],
-        remarkPlugins: [
-          remarkMath,
-          [remarkPublicAssetBase, { base }],
-          [remarkInteractiveCells, { root: pathFromUrl(paths.workspaceRoot) }],
-          remarkMermaidDiagrams,
-          ...remarkPlugins
-        ],
-        remarkRehype,
-        smartypants
-      }),
-    syntaxHighlight: {
-      ...syntaxHighlightOptions,
-      type: syntaxHighlightOptions.type ?? 'shiki',
-      excludeLangs: syntaxHighlightOptions.excludeLangs ?? ['math', 'mermaid']
-    }
+    processor: unified({
+      gfm,
+      rehypePlugins: [rehypeKatex, ...rehypePlugins],
+      remarkPlugins: [
+        remarkMath,
+        [remarkPublicAssetBase, { base }],
+        [remarkInteractiveCells, { root: pathFromUrl(paths.workspaceRoot) }],
+        remarkMermaidDiagrams,
+        ...remarkPlugins
+      ],
+      remarkRehype,
+      smartypants
+    }),
+    syntaxHighlight: mergeSyntaxHighlightConfig(syntaxHighlight)
   };
 }
 
-function syntaxHighlightConfig(value: AstroMarkdownConfig['syntaxHighlight']): Partial<SyntaxHighlightObject> {
-  return typeof value === 'object' && value !== null && !Array.isArray(value) ? value : {};
+function mergeSyntaxHighlightConfig(
+  value: AstroMarkdownConfig['syntaxHighlight']
+): AstroMarkdownConfig['syntaxHighlight'] {
+  if (value === false || value === 'prism' || value === 'shiki') return value;
+
+  const options: Partial<SyntaxHighlightObject> = value ?? {};
+  return {
+    ...options,
+    type: options.type ?? 'shiki',
+    excludeLangs: mergeStringList(options.excludeLangs, ['math', 'mermaid'])
+  };
 }
 
 function mergeViteConfig(
