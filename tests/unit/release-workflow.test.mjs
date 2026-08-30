@@ -96,6 +96,13 @@ describe('release-bound version verification', () => {
 });
 
 describe('release identity verification', () => {
+  it('grants the release verifier read-only Dependabot alert access', async () => {
+    const workflow = await readFile(path.join(repositoryRoot, '.github/workflows/npm-publish.yml'), 'utf8');
+
+    expect(workflow).toContain('vulnerability-alerts: read # Required to enforce the Dependabot alert gate.');
+    expect(workflow).not.toContain('security-events:');
+  });
+
   it('accepts an exact stable tag and matching package versions', () => {
     expect(() =>
       assertReleaseIdentity({

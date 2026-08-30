@@ -35,7 +35,7 @@ jobs:
     permissions:
       contents: read
       issues: read # Required to enforce the release-blocker milestone gate.
-      security-events: read # Required to enforce the Dependabot alert gate.
+      vulnerability-alerts: read # Required to enforce the Dependabot alert gate.
     outputs:
       archive_filename: ${{ steps.archive.outputs.archive_filename }}
       artifact_name: ${{ steps.archive.outputs.artifact_name }}
