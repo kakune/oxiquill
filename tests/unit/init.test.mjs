@@ -1,7 +1,7 @@
 // @vitest-environment node
 
 import { spawnSync } from 'node:child_process';
-import { access, lstat, mkdir, mkdtemp, readFile, readdir, rm, symlink, writeFile } from 'node:fs/promises';
+import { access, lstat, mkdir, mkdtemp, readFile, readdir, realpath, rm, symlink, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -100,7 +100,7 @@ describe('oxiquill init', () => {
     const executed = spawnSync('sh', ['-c', `${command}\npwd`], { cwd, encoding: 'utf8' });
 
     expect(executed.status).toBe(0);
-    expect(executed.stdout.trim()).toBe(result.targetPath);
+    expect(await realpath(executed.stdout.trim())).toBe(await realpath(result.targetPath));
     await expect(access(path.join(cwd, 'dollar-injected'))).rejects.toMatchObject({ code: 'ENOENT' });
     await expect(access(path.join(cwd, 'backtick-injected'))).rejects.toMatchObject({ code: 'ENOENT' });
   });
