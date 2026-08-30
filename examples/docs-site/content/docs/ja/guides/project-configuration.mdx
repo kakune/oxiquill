@@ -88,7 +88,15 @@ export default defineOxiquillConfig({
 4. Consumer の Markdown、Vite、CSS、component、integration の追加は Oxiquill 必須 entry の後に保持されます。
 5. path の競合、Oxiquill integration の欠落・重複、config 読み込み失敗は generation/clean より前に失敗します。
 
-Oxiquill-owned output に project root や広すぎる directory を指定しないでください。`oxiquill clean` は検証済みの resolved generated path と設定済み Astro output だけを削除します。`downloadCacheDir` は意図的に保持され、clean 対象の output path の外側でなければなりません。
+## Clean の ownership と安全性
+
+`oxiquill clean` が再帰削除する resolved root は `cacheDir`、Astro の `outDir`、`publicAssetsDir` の3つだけです。`downloadCacheDir` は削除しません。default の verified download cache `.cache/oxiquill/downloads/v1` は clean 後も残り、次の generation で再利用できます。
+
+default の `.oxiquill`、`dist`、`public/oxiquill` は生成専用 location として予約され、ownership marker がなくても clean できます。custom cleanup root では、対応する generation/build lifecycle が存在しないか空の directory を claim し、`.oxiquill-ownership.json` を書きます。matching marker のない既存の non-empty custom directory を生成物とは推測しません。marker を手動で作成・編集しないでください。
+
+再帰削除する root はすべて `workspaceRoot` 内になければなりません。cleanup root 同士は disjoint であり、`docsDir`、`cratesDir`、`publicDir`、`frameworkRoot`、選択した Astro config、認識済み project config/manifest/lock file、persistent download cache、`.git` や `node_modules` など検出した VCS/package-installation state とも重複できません。generated child role 同士の重複も拒否します。authored/generated の包含で許可する唯一の例外は、`publicAssetsDir` が `publicDir` の厳密な子である関係です。`publicDir` と同一にはできず、別の authored public subtree の内側にも置けません。
+
+Oxiquill は比較・削除前に既存 path と symlink ancestor を canonicalize します。clean は最初の再帰削除より前に全 root と全 ownership marker を検証します。unsafe/unowned root が一つでもあれば何も削除せず、diagnostic に field、absolute resolved path、conflicting path role、corrective action を示します。
 
 ## Runtime fingerprint
 
@@ -98,6 +106,6 @@ runtime fingerprint には machine-local path ではなく semantic build input 
 
 subpath 配下へ公開するときは Astro の `base` を設定します。Oxiquill は interactive-cell manifest、language runtime、diagram、`/media/...` reference に適用します。authoring では public URL を root-relative のまま記述し、Markdown transform が base を一度だけ追加します。
 
-生成 runtime は `.oxiquill` と `public/oxiquill`、verified download cache は `.cache/oxiquill/downloads/v1`、最終 static site は Astro の `outDir`（通常 `dist`）に置かれます。生成 directory を直接編集しないでください。download cache は build や output 再生成をまたいで保持できますが、file は利用前に毎回検証されます。
+生成 runtime は `.oxiquill` と `public/oxiquill`、verified download cache は `.cache/oxiquill/downloads/v1`、最終 static site は Astro の `outDir`（通常 `dist`）に置かれます。生成 directory と ownership marker を直接編集しないでください。download cache は build や output 再生成をまたいで保持できますが、file は利用前に毎回検証されます。
 
 生成 directory を変更するときは、resolved cache、helper-crate target、output、public-asset path に合わせて `tsconfig.json` の exclusion も更新します。そうしないと `**/*` のような広い include により、Astro/TypeScript が Pyodide などの生成 JavaScript を output ではなく source として解析することがあります。
