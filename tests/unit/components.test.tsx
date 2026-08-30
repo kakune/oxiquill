@@ -940,6 +940,21 @@ describe('lazy chart renderer', () => {
 
     expect(screen.queryByTestId('doc-plot')).not.toBeInTheDocument();
   });
+
+  it('retries a transient chart-module load failure', async () => {
+    const load = vi
+      .fn<() => Promise<typeof chartOutputModule>>()
+      .mockRejectedValueOnce(new Error('temporary chart failure'))
+      .mockResolvedValue(chartOutputModule);
+
+    render(<LazyChartOutput spec={spec} load={load} />);
+    await waitFor(() => expect(screen.getByRole('alert')).toHaveTextContent('temporary chart failure'));
+
+    fireEvent.click(screen.getByRole('button', { name: 'Retry chart rendering' }));
+
+    await waitFor(() => expect(screen.getByTestId('doc-plot')).toBeVisible());
+    expect(load).toHaveBeenCalledTimes(2);
+  });
 });
 
 describe('ChartOutput options', () => {
@@ -1036,7 +1051,7 @@ describe('ChartOutput options', () => {
       xAxis: { type: 'category', data: ['x'] },
       yAxis: { type: 'category', data: ['y'] },
       dataZoom: undefined,
-      visualMap: expect.objectContaining({ calculable: true }),
+      visualMap: expect.objectContaining({ calculable: true, min: 5, max: 5 }),
       series: [{ type: 'heatmap', data: [['x', 'y', 5]] }]
     });
 
@@ -1057,6 +1072,24 @@ describe('ChartOutput options', () => {
       })
     ).toMatchObject({
       legend: { top: 4 }
+    });
+
+    expect(
+      chartSpecToEChartsOptions({
+        kind: 'heatmap',
+        data: [
+          [0, 0, -8],
+          [1, 0, -2]
+        ]
+      })
+    ).toMatchObject({ visualMap: { min: -8, max: -2 } });
+    expect(chartSpecToEChartsOptions({ kind: 'heatmap', data: [] })).toMatchObject({
+      visualMap: { min: 0, max: 1 }
+    });
+    expect(chartSpecToEChartsOptions({ kind: 'line', series: [] }, 'dark')).toMatchObject({
+      textStyle: { color: '#f3f4f6' },
+      xAxis: { axisLabel: { color: '#d1d5db' } },
+      yAxis: { axisLabel: { color: '#d1d5db' } }
     });
   });
 
@@ -1084,6 +1117,56 @@ describe('ChartOutput options', () => {
     expect(chartDataSummary({ kind: 'bar', categories: [], series: [] }, labelsForLanguage('en'))).toBe(
       'The chart contains no data.'
     );
+    expect(
+      chartDataSummary(
+        {
+          kind: 'heatmap',
+          data: [
+            [-2, 10, -8],
+            [4, 20, 6]
+          ]
+        },
+        labelsForLanguage('en')
+      )
+    ).toBe('Series: 1. Data items: 2. X range: -2–4. Y range: 10–20. Heat value range: -8–6.');
+    expect(
+      chartDataSummary(
+        {
+          kind: 'heatmap',
+          xCategories: ['x'],
+          yCategories: ['y'],
+          data: [['x', 'y', 3]]
+        },
+        labelsForLanguage('ja')
+      )
+    ).toBe('系列数: 1。データ数: 1。ヒート値の範囲: 3。');
+
+    const exactLimit = Array.from({ length: 100_000 }, (_, index) => [index, -index] as const);
+    expect(chartDataSummary({ kind: 'line', series: [{ points: exactLimit }] }, labelsForLanguage('en'))).toContain(
+      'Data items: 100000. X range: 0–99,999. Y range: -99,999–0.'
+    );
+  });
+
+  it('recreates charts with legible options when the Starlight theme changes', async () => {
+    const ChartOutput = chartOutputModule.default;
+    render(
+      <ChartOutput
+        artifact={{ kind: 'chart', spec: { kind: 'line', title: 'Theme chart', series: [] } }}
+        idPrefix="theme-chart"
+        labels={labelsForLanguage('en')}
+      />
+    );
+
+    await waitFor(() => expect(mocks.echartsInit).toHaveBeenCalledTimes(1));
+    expect(screen.getByTestId('doc-plot')).toHaveAttribute('data-chart-theme', 'light');
+    expect(mocks.echartsInit.mock.calls[0]?.[1]).toMatchObject({ textStyle: { color: '#111827' } });
+
+    document.documentElement.dataset.theme = 'dark';
+
+    await waitFor(() => expect(mocks.echartsInit).toHaveBeenCalledTimes(2));
+    expect(screen.getByTestId('doc-plot')).toHaveAttribute('data-chart-theme', 'dark');
+    expect(mocks.echartsInit.mock.calls[1]?.[1]).toMatchObject({ textStyle: { color: '#f3f4f6' } });
+    expect(mocks.chart.dispose).toHaveBeenCalled();
   });
 });
 

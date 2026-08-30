@@ -247,12 +247,25 @@ describe('output artifact validation', () => {
   });
 
   it.each([
-    { kind: 'line', series: [{ name: 'line', points: [[0, 1]] }] },
-    { kind: 'scatter', series: [{ points: [['x', 1]] }] },
-    { kind: 'area', series: [{ points: [[0, 'y']] }] },
-    { kind: 'bar', categories: ['a'], series: [{ name: 'bar', values: [1] }] },
-    { kind: 'histogram', bins: [[0, 1, 2]] },
-    { kind: 'heatmap', xCategories: ['x'], yCategories: ['y'], data: [['x', 'y', 3]] }
+    { kind: 'line', xType: 'value', yType: 'log', series: [{ name: 'line', points: [[0, 1]] }] },
+    { kind: 'scatter', xType: 'category', yType: 'log', series: [{ points: [['x', 1]] }] },
+    { kind: 'area', xType: 'value', yType: 'category', series: [{ points: [[0, 'y']] }] },
+    {
+      kind: 'bar',
+      xType: 'category',
+      yType: 'log',
+      categories: ['a'],
+      series: [{ name: 'bar', values: [1] }]
+    },
+    { kind: 'histogram', xType: 'category', yType: 'log', bins: [[0, 1, 2]] },
+    {
+      kind: 'heatmap',
+      xType: 'category',
+      yType: 'category',
+      xCategories: ['x'],
+      yCategories: ['y'],
+      data: [['x', 'y', 3]]
+    }
   ])('validates the $kind chart variant', (spec) => {
     expect(
       validArtifact({
@@ -261,8 +274,6 @@ describe('output artifact validation', () => {
           title: 'Chart',
           xLabel: 'x',
           yLabel: 'y',
-          xType: 'value',
-          yType: 'log',
           legend: true,
           tooltip: false,
           dataZoom: true,
@@ -270,6 +281,96 @@ describe('output artifact validation', () => {
         }
       })
     ).toMatchObject({ kind: 'chart', spec: { kind: spec.kind } });
+  });
+
+  it('validates coordinates against the effective value, log, time, and category axes', () => {
+    expect(
+      validationError({
+        kind: 'chart',
+        spec: { kind: 'line', series: [{ points: [['implicit category', 1]] }] }
+      })
+    ).toContain('finite number');
+    expect(
+      validationError({
+        kind: 'chart',
+        spec: { kind: 'line', xType: 'log', series: [{ points: [[0, 1]] }] }
+      })
+    ).toContain('strictly positive');
+    expect(
+      validArtifact({
+        kind: 'chart',
+        spec: {
+          kind: 'line',
+          xType: 'time',
+          series: [
+            {
+              points: [
+                ['2026-08-30T12:34:56Z', 1],
+                [1_788_092_096_000, 2]
+              ]
+            }
+          ]
+        }
+      })
+    ).toMatchObject({ kind: 'chart' });
+    expect(
+      validationError({
+        kind: 'chart',
+        spec: { kind: 'line', xType: 'time', series: [{ points: [['2026-02-30T00:00:00Z', 1]] }] }
+      })
+    ).toContain('ISO-8601');
+    expect(
+      validationError({
+        kind: 'chart',
+        spec: {
+          kind: 'heatmap',
+          xCategories: ['known'],
+          yCategories: ['row'],
+          data: [['unknown', 'row', 1]]
+        }
+      })
+    ).toContain('declared categories');
+    expect(
+      validArtifact({
+        kind: 'chart',
+        spec: {
+          kind: 'heatmap',
+          xCategories: ['first', 'second'],
+          yCategories: ['row'],
+          data: [[1, 0, 1]]
+        }
+      })
+    ).toMatchObject({ kind: 'chart' });
+  });
+
+  it('accepts empty and equal chart domains while rejecting invalid histogram bins and axis overrides', () => {
+    expect(validArtifact({ kind: 'chart', spec: { kind: 'line', series: [] } })).toMatchObject({ kind: 'chart' });
+    expect(
+      validArtifact({
+        kind: 'chart',
+        spec: {
+          kind: 'line',
+          series: [
+            {
+              points: [
+                [2, 3],
+                [2, 3]
+              ]
+            }
+          ]
+        }
+      })
+    ).toMatchObject({ kind: 'chart' });
+    expect(validationError({ kind: 'chart', spec: { kind: 'histogram', bins: [[1, 1, 2]] } })).toContain('smaller');
+    expect(
+      validationError({ kind: 'chart', spec: { kind: 'bar', xType: 'value', categories: [], series: [] } })
+    ).toContain('always category');
+    expect(
+      validationError({
+        kind: 'chart',
+        spec: { kind: 'heatmap', xType: 'log', xCategories: [], data: [] }
+      })
+    ).toContain('always category');
   });
 
   it('rejects malformed and excessive chart data', () => {

@@ -97,6 +97,7 @@ export function LazyChartOutput({
 }) {
   const chartArtifact = artifact ?? { kind: 'chart' as const, spec: spec as ChartSpec };
   const [state, setState] = useState<ChartRendererState>({ status: 'loading' });
+  const [loadAttempt, setLoadAttempt] = useState(0);
 
   useEffect(() => {
     let cancelled = false;
@@ -119,7 +120,7 @@ export function LazyChartOutput({
     return () => {
       cancelled = true;
     };
-  }, [load]);
+  }, [load, loadAttempt]);
 
   if (state.status === 'loading') {
     return (
@@ -131,9 +132,14 @@ export function LazyChartOutput({
 
   if (state.status === 'error') {
     return (
-      <p class="error-state" data-testid="artifact-error" role="alert">
-        {labels.chartLoadError(state.message)}
-      </p>
+      <div class="doc-chart-output__error">
+        <p class="error-state" data-testid="artifact-error" role="alert">
+          {labels.chartLoadError(state.message)}
+        </p>
+        <button type="button" onClick={() => setLoadAttempt((attempt) => attempt + 1)}>
+          {labels.chartRetry}
+        </button>
+      </div>
     );
   }
 
