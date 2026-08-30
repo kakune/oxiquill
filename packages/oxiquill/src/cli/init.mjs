@@ -15,6 +15,7 @@ export const starterFiles = Object.freeze([
   'README.md',
   'astro.config.mjs',
   'content.config.ts',
+  'content/docs/404.mdx',
   'content/docs/index.mdx',
   'crates/.gitkeep',
   'package.json',
@@ -41,10 +42,12 @@ export async function initializeProject({
   fileSystem: fileSystemOverrides = {},
   files = starterFiles,
   log = console.log,
+  platform = process.platform,
   starterRoot = fileURLToPath(new URL('./starter/v1/', import.meta.url))
 } = {}) {
   const fileSystem = { ...defaultFileSystem, ...fileSystemOverrides };
   const targetPath = path.resolve(cwd, directory ?? '.');
+  const navigationCommand = createNavigationCommand({ cwd, platform, targetPath });
   const packageName = packageNameFromTarget(targetPath);
   const starter = await loadStarter({ fileSystem, files, packageName, starterRoot, targetPath });
   const targetExisted = await assertEmptyTarget(targetPath, fileSystem);
@@ -53,8 +56,7 @@ export async function initializeProject({
 
   try {
     if (!targetExisted) {
-      await fileSystem.mkdir(targetPath);
-      createdDirectories.push(targetPath);
+      await createTargetDirectories(targetPath, createdDirectories, fileSystem);
     }
 
     for (const { content, target } of starter) {
@@ -69,7 +71,7 @@ export async function initializeProject({
     });
   }
 
-  printNextSteps({ cwd, log, targetPath });
+  printNextSteps({ log, navigationCommand, targetPath });
   return Object.freeze({ packageName, targetPath });
 }
 
@@ -177,6 +179,29 @@ async function createParentDirectories(directory, targetRoot, createdDirectories
   }
 }
 
+async function createTargetDirectories(targetPath, createdDirectories, fileSystem) {
+  const missingDirectories = [targetPath];
+  let current = path.dirname(targetPath);
+
+  while (true) {
+    try {
+      await fileSystem.lstat(current);
+      break;
+    } catch (error) {
+      if (error?.code !== 'ENOENT') throw error;
+      missingDirectories.push(current);
+      const parent = path.dirname(current);
+      if (parent === current) throw error;
+      current = parent;
+    }
+  }
+
+  for (const directory of missingDirectories.reverse()) {
+    await fileSystem.mkdir(directory);
+    createdDirectories.push(directory);
+  }
+}
+
 async function rollbackCreation({ createdDirectories, createdFiles, fileSystem }) {
   for (const filePath of createdFiles.reverse()) {
     await fileSystem.rm(filePath, { force: true }).catch(() => undefined);
@@ -186,18 +211,32 @@ async function rollbackCreation({ createdDirectories, createdFiles, fileSystem }
   }
 }
 
-function printNextSteps({ cwd, log, targetPath }) {
-  const relativeTarget = path.relative(cwd, targetPath) || '.';
+function printNextSteps({ log, navigationCommand, targetPath }) {
   log(`Created an Oxiquill project in ${targetPath}.`);
   log('');
   log('Next steps:');
-  if (relativeTarget !== '.') log(`  cd ${shellArgument(relativeTarget)}`);
+  if (navigationCommand) log(`  ${navigationCommand}`);
   log('  pnpm install');
   log('  pnpm dev');
 }
 
-function shellArgument(value) {
-  return /^[A-Za-z0-9_./\\:-]+$/u.test(value) ? value : JSON.stringify(value);
+function createNavigationCommand({ cwd, platform, targetPath }) {
+  const relativeTarget = path.relative(cwd, targetPath) || '.';
+  if (relativeTarget === '.') return undefined;
+  if (hasControlCharacter(relativeTarget)) {
+    throw new Error(`Oxiquill init target path contains control characters: ${JSON.stringify(relativeTarget)}`);
+  }
+
+  return platform === 'win32'
+    ? `Set-Location -LiteralPath '${relativeTarget.replaceAll("'", "''")}'`
+    : `cd -- '${relativeTarget.replaceAll("'", "'\\''")}'`;
+}
+
+function hasControlCharacter(value) {
+  return Array.from(value).some((character) => {
+    const codePoint = character.codePointAt(0);
+    return codePoint <= 0x1f || codePoint === 0x7f;
+  });
 }
 
 function errorMessage(error) {

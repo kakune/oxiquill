@@ -8,9 +8,19 @@ import { fileURLToPath } from 'node:url';
 const repositoryRoot = fileURLToPath(new URL('../../', import.meta.url));
 const packageRoot = path.join(repositoryRoot, 'packages/oxiquill');
 const packageReadme = await readFile(path.join(packageRoot, 'README.md'), 'utf8');
+const packageManifest = JSON.parse(await readFile(path.join(packageRoot, 'package.json'), 'utf8'));
+const starterManifest = JSON.parse(await readFile(path.join(repositoryRoot, 'templates/basic/package.json'), 'utf8'));
 const temporaryRoot = await mkdtemp(path.join(tmpdir(), 'oxiquill-package-'));
 
 try {
+  assert.equal(packageManifest.scripts.prepack, 'pnpm run build');
+  for (const lifecycleHook of ['prepare', 'install', 'postinstall']) {
+    assert.ok(
+      !Object.hasOwn(packageManifest.scripts, lifecycleHook),
+      `published manifest must not define ${lifecycleHook}`
+    );
+  }
+
   const staleFile = path.join(packageRoot, 'dist/accidental.txt');
   await mkdir(path.dirname(staleFile), { recursive: true });
   await writeFile(staleFile, 'must not be packed');
@@ -37,10 +47,15 @@ try {
     )
   );
   assert.ok(actualFiles.every((filePath) => !filePath.endsWith('.tsx')));
+  for (const unusedOutput of ['dist/cli/config-option.mjs', 'dist/cli/config-option.d.mts']) {
+    assert.ok(!actualFiles.includes(unusedOutput), `${unusedOutput} must not be published`);
+  }
 
+  const supportedInstall = `oxiquill@${packageManifest.version} astro@${starterManifest.dependencies.astro} @astrojs/starlight@${starterManifest.dependencies['@astrojs/starlight']}`;
   for (const requiredText of [
     'pnpm dlx oxiquill init',
-    'npm install oxiquill',
+    `pnpm add ${supportedInstall}`,
+    `npm install ${supportedInstall}`,
     'oxiquill preview',
     'https://kakune.github.io/oxiquill/reference/package-api/',
     'https://github.com/kakune/oxiquill/security/policy',
@@ -63,7 +78,7 @@ try {
 }
 
 function pack(destination) {
-  const npmArgs = ['pack', '--json', '--silent', '--pack-destination', destination];
+  const npmArgs = ['pack', '--json', '--silent', '--foreground-scripts', '--pack-destination', destination];
   const isWindows = process.platform === 'win32';
   const executable = isWindows ? (process.env.ComSpec ?? 'cmd.exe') : 'npm';
   const args = isWindows ? ['/d', '/s', '/c', 'npm.cmd', ...npmArgs] : npmArgs;
@@ -74,7 +89,13 @@ function pack(destination) {
 
   assert.ifError(result.error);
   assert.equal(result.status, 0, result.stderr || result.stdout);
-  const [packed] = JSON.parse(result.stdout);
+  const escapedBuildCommand = packageManifest.scripts.build.replace(/[.*+?^${}()|[\]\\]/gu, '\\$&');
+  const lifecycleOutput = `${result.stdout}\n${result.stderr}`;
+  const buildCount = Array.from(lifecycleOutput.matchAll(new RegExp(`^\\$ ${escapedBuildCommand}$`, 'gmu'))).length;
+  assert.equal(buildCount, 1, 'npm pack must run the package build exactly once');
+
+  const finalJsonStart = result.stdout.lastIndexOf('\n[') + 1;
+  const [packed] = JSON.parse(result.stdout.slice(finalJsonStart));
   return packed;
 }
 

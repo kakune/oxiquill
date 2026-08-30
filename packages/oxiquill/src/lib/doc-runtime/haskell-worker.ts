@@ -7,6 +7,12 @@ type WorkerScope = {
   postMessage(response: RuntimeWorkerResponse): void;
 };
 
+type HaskellWorkerHandlerDependencies = {
+  loadModule: (expectedFingerprintHash: string | undefined) => Promise<WebAssembly.Module>;
+  postMessage: (response: RuntimeWorkerResponse) => void;
+  runCell?: typeof runHaskellCell;
+};
+
 type WasiInstance = WebAssembly.Instance & {
   exports: {
     memory: WebAssembly.Memory;
@@ -27,28 +33,40 @@ export type HaskellRuntimeStatus =
     };
 
 const worker = self as unknown as WorkerScope;
-let wasmModuleReady: Promise<WebAssembly.Module> | undefined;
-let wasmModuleFingerprintHash: string | undefined;
 const haskellWasmUrl = resolveHaskellWasmUrl();
 const haskellRuntimeStatusUrl = resolveHaskellRuntimeStatusUrl();
+const loadModule = createHaskellModuleLoader({
+  statusUrl: haskellRuntimeStatusUrl,
+  wasmUrl: haskellWasmUrl
+});
+const handleRequest = createHaskellWorkerRequestHandler({
+  loadModule,
+  postMessage: (response) => worker.postMessage(response)
+});
 
 worker.addEventListener('message', (event) => {
   void handleRequest(event.data);
 });
 
-async function handleRequest(request: RuntimeWorkerRequest): Promise<void> {
-  try {
-    const module = await ensureHaskellModule(request.haskellFingerprintHash);
-    const result = await runHaskellCell(module, request);
+export function createHaskellWorkerRequestHandler({
+  loadModule,
+  postMessage,
+  runCell = runHaskellCell
+}: HaskellWorkerHandlerDependencies): (request: RuntimeWorkerRequest) => Promise<void> {
+  return async (request) => {
+    try {
+      const module = await loadModule(request.haskellFingerprintHash);
+      const result = await runCell(module, request);
 
-    worker.postMessage({ requestId: request.requestId, ok: true, result });
-  } catch (error) {
-    worker.postMessage({
-      requestId: request.requestId,
-      ok: false,
-      error: error instanceof Error ? error.message : String(error)
-    });
-  }
+      postMessage({ requestId: request.requestId, ok: true, result });
+    } catch (error) {
+      postMessage({
+        requestId: request.requestId,
+        ok: false,
+        error: error instanceof Error ? error.message : String(error)
+      });
+    }
+  };
 }
 
 export async function runHaskellCell(
@@ -113,30 +131,30 @@ export function resolveHaskellRuntimeStatusUrl(
   return `${base}${normalizedRuntimePath}/status.json`;
 }
 
-function ensureHaskellModule(expectedFingerprintHash: string | undefined): Promise<WebAssembly.Module> {
-  if (!wasmModuleReady || wasmModuleFingerprintHash !== expectedFingerprintHash) {
-    wasmModuleFingerprintHash = expectedFingerprintHash;
-    wasmModuleReady = fetchReadyHaskellModule({
-      expectedFingerprintHash,
-      statusUrl: haskellRuntimeStatusUrl,
-      wasmUrl: haskellWasmUrl
-    });
-  }
-  return wasmModuleReady;
-}
-
-async function fetchReadyHaskellModule({
-  expectedFingerprintHash,
+export function createHaskellModuleLoader({
+  fetchModule = fetchHaskellModule,
+  fetchStatus = fetchHaskellRuntimeStatus,
   statusUrl,
   wasmUrl
 }: {
-  expectedFingerprintHash: string | undefined;
+  fetchModule?: typeof fetchHaskellModule;
+  fetchStatus?: typeof fetchHaskellRuntimeStatus;
   statusUrl: string;
   wasmUrl: string;
-}): Promise<WebAssembly.Module> {
-  const status = await fetchHaskellRuntimeStatus(statusUrl);
-  assertReadyHaskellRuntimeStatus(status, expectedFingerprintHash);
-  return fetchHaskellModule(wasmUrl);
+}): (expectedFingerprintHash: string | undefined) => Promise<WebAssembly.Module> {
+  let wasmModuleReady: Promise<WebAssembly.Module> | undefined;
+  let wasmModuleFingerprintHash: string | undefined;
+
+  return (expectedFingerprintHash) => {
+    if (!wasmModuleReady || wasmModuleFingerprintHash !== expectedFingerprintHash) {
+      wasmModuleFingerprintHash = expectedFingerprintHash;
+      wasmModuleReady = fetchStatus(statusUrl).then((status) => {
+        assertReadyHaskellRuntimeStatus(status, expectedFingerprintHash);
+        return fetchModule(wasmUrl);
+      });
+    }
+    return wasmModuleReady;
+  };
 }
 
 export async function fetchHaskellRuntimeStatus(

@@ -10,11 +10,11 @@ import type {
   CellExecutionResult,
   CellLanguage,
   CellManifest,
-  RuntimeWorkerRequest,
-  RuntimeWorkerResponse
+  RuntimeWorkerRequest
 } from '../../packages/oxiquill/src/lib/doc-runtime/types';
 
 class FakeWorker {
+  addEventListenerFailure: unknown;
   messages: RuntimeWorkerRequest[] = [];
   postMessageFailure: unknown;
   terminated = false;
@@ -22,6 +22,7 @@ class FakeWorker {
   private listeners = new Map<string, Set<(event: Event) => void>>();
 
   addEventListener(type: string, listener: (event: Event) => void): void {
+    if (this.addEventListenerFailure !== undefined) throw this.addEventListenerFailure;
     this.listeners.set(type, new Set([...(this.listeners.get(type) ?? []), listener]));
   }
 
@@ -34,7 +35,7 @@ class FakeWorker {
     this.terminated = true;
   }
 
-  emitMessage(response: RuntimeWorkerResponse): void {
+  emitMessage(response: unknown): void {
     this.emit('message', { data: response } as MessageEvent);
   }
 
@@ -378,6 +379,36 @@ describe('runtime client', () => {
 
     await expect(failedPost).rejects.toThrow('post failed');
     expect(failedWorker.terminated).toBe(true);
+  });
+
+  it('rejects every owned request after a malformed worker response', async () => {
+    const { runner, workers } = makeRunner();
+    const first = runner.runInteractiveCell(makeCell('python'), {});
+    const second = runner.runInteractiveCell(makeCell('python', { id: 'python-second' }), {});
+
+    workers[0].emitMessage({ requestId: 1, ok: 'yes' });
+
+    await expect(first).rejects.toThrow('python worker sent an invalid message');
+    await expect(second).rejects.toThrow('python worker sent an invalid message');
+    expect(workers[0].terminated).toBe(true);
+
+    const replacement = runner.runInteractiveCell(makeCell('python'), {});
+    expect(workers).toHaveLength(2);
+    workers[1].emitMessage({ requestId: 3, ok: true, result });
+    await expect(replacement).resolves.toEqual(normalizedResult);
+  });
+
+  it('terminates workers that fail while registering startup listeners', async () => {
+    const worker = new FakeWorker();
+    worker.addEventListenerFailure = new Error('listener registration failed');
+    const runner = createInteractiveCellRunner({
+      clearTimeout,
+      createWorker: () => worker as unknown as Worker,
+      setTimeout
+    });
+
+    await expect(runner.runInteractiveCell(makeCell('haskell'), {})).rejects.toThrow('listener registration failed');
+    expect(worker.terminated).toBe(true);
   });
 
   it('returns worker construction failures as rejected promises', async () => {

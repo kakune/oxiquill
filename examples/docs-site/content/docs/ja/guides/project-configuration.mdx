@@ -35,9 +35,10 @@ export { collections } from 'oxiquill/content';
 | `markdown`                                | 追加の Astro Markdown setting/plugin。Oxiquill 必須 plugin が先に動きます。                |
 | `vite`                                    | 追加の Vite setting。必須 alias、dedupe、worker plugin、filesystem access は保持されます。 |
 | `paths`                                   | 下記の source/cache/generated/public path。                                                |
+| `python`                                  | Pyodide download の `offline` と optional `packageMirror`。                                |
 | その他の Astro field                      | Astro に渡されます。Oxiquill の output は常に static です。                                |
 
-Astro config を手動で組み立てる場合だけ `oxiquillIntegration()` を使います。受け取る option は `base`、`markdown`、`paths`、`vite` で、Preact と Starlight は caller が追加します。
+Astro config を手動で組み立てる場合だけ `oxiquillIntegration()` を使います。受け取る option は `base`、`markdown`、`paths`、`python`、`vite` で、Preact と Starlight は caller が追加します。
 
 ## Path field
 
@@ -49,6 +50,7 @@ Astro config を手動で組み立てる場合だけ `oxiquillIntegration()` を
 | `cratesDir`            | `crates`                        | `workspaceRoot`             |
 | `publicDir`            | `public`                        | `workspaceRoot`             |
 | `cacheDir`             | `.oxiquill`                     | `workspaceRoot`             |
+| `downloadCacheDir`     | `.cache/oxiquill/downloads/v1`  | `workspaceRoot`             |
 | `generatedDir`         | `generated`                     | `cacheDir`                  |
 | `rustCellsDir`         | `rust-cells`                    | `cacheDir`                  |
 | `haskellCellsDir`      | `haskell-cells`                 | `cacheDir`                  |
@@ -62,6 +64,22 @@ Astro config を手動で組み立てる場合だけ `oxiquillIntegration()` を
 
 Astro の `root`、`publicDir`、`outDir`、`cacheDir` と Oxiquill の path setting が同じ directory を示す場合、正規化後の location が一致しなければなりません。明示値の競合は error になり、Oxiquill が黙って一方を選ぶことはありません。すべての CLI command は file の読み書きや clean より前にこの config を解決します。
 
+## Python download
+
+```js
+export default defineOxiquillConfig({
+  python: {
+    offline: process.env.OXIQUILL_OFFLINE === '1',
+    packageMirror: new URL('https://packages.example/pyodide/')
+  },
+  paths: {
+    downloadCacheDir: new URL('./.cache/verified-downloads/', import.meta.url)
+  }
+});
+```
+
+`python.offline` の default は `false` です。`python.packageMirror` は string または URL を受け取り、lockfile の integrity check を変えずに package download base だけを変更します。`paths.downloadCacheDir` も string または URL を受け取ります。公開 type の `OxiquillPythonOptions` と `OxiquillPathOptions` がこれらの field を定義します。
+
 ## 優先順位と merge
 
 1. `--config <path>` が config file を選び、省略時は Astro 標準の探索を使います。
@@ -70,12 +88,16 @@ Astro の `root`、`publicDir`、`outDir`、`cacheDir` と Oxiquill の path set
 4. Consumer の Markdown、Vite、CSS、component、integration の追加は Oxiquill 必須 entry の後に保持されます。
 5. path の競合、Oxiquill integration の欠落・重複、config 読み込み失敗は generation/clean より前に失敗します。
 
-Oxiquill-owned output に project root や広すぎる directory を指定しないでください。`oxiquill clean` は検証済みの resolved Oxiquill path と設定済み Astro output だけを削除します。
+Oxiquill-owned output に project root や広すぎる directory を指定しないでください。`oxiquill clean` は検証済みの resolved generated path と設定済み Astro output だけを削除します。`downloadCacheDir` は意図的に保持され、clean 対象の output path の外側でなければなりません。
+
+## Runtime fingerprint
+
+runtime fingerprint には machine-local path ではなく semantic build input が入ります。Python fingerprint は Pyodide version、lockfile SHA-256、検証済み core-file hash、選択 package metadata、requested package set を含みます。Haskell build fingerprint は cell、generated source、supported compiler-version prefix、compiler が報告した正確な version（または unavailable state）を含みます。Haskell compiler command、executable path、diagnostic text は除外されるため、同等 toolchain の移動だけでは rebuild せず、reported version や supported-version policy の変更では rebuild します。
 
 ## Base path と public asset
 
 subpath 配下へ公開するときは Astro の `base` を設定します。Oxiquill は interactive-cell manifest、language runtime、diagram、`/media/...` reference に適用します。authoring では public URL を root-relative のまま記述し、Markdown transform が base を一度だけ追加します。
 
-生成 runtime は `.oxiquill` と `public/oxiquill`、最終 static site は Astro の `outDir`（通常 `dist`）に置かれます。生成 directory を直接編集しないでください。
+生成 runtime は `.oxiquill` と `public/oxiquill`、verified download cache は `.cache/oxiquill/downloads/v1`、最終 static site は Astro の `outDir`（通常 `dist`）に置かれます。生成 directory を直接編集しないでください。download cache は build や output 再生成をまたいで保持できますが、file は利用前に毎回検証されます。
 
 生成 directory を変更するときは、resolved cache、helper-crate target、output、public-asset path に合わせて `tsconfig.json` の exclusion も更新します。そうしないと `**/*` のような広い include により、Astro/TypeScript が Pyodide などの生成 JavaScript を output ではなく source として解析することがあります。

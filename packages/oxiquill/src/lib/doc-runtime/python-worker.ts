@@ -16,91 +16,132 @@ type WorkerScope = {
   postMessage(response: RuntimeWorkerResponse): void;
 };
 
+type PyodideModule = { loadPyodide: LoadPyodide };
+type PythonWorkerHandlerDependencies = {
+  ensurePyodide: () => Promise<PyodideRuntime>;
+  postMessage: (response: RuntimeWorkerResponse) => void;
+};
+type PyodideModuleDependencies = {
+  createObjectUrl?: (blob: Blob) => string;
+  fetchImplementation?: typeof fetch;
+  importModule?: (moduleUrl: string) => Promise<PyodideModule>;
+  revokeObjectUrl?: (moduleUrl: string) => void;
+};
+
 const worker = self as unknown as WorkerScope;
-let pyodideReady: Promise<PyodideRuntime> | undefined;
-let loadPyodideReady: Promise<LoadPyodide> | undefined;
 const pyodideUrls = resolvePyodideUrls();
+const ensurePyodide = createPythonRuntimeLoader(pyodideUrls);
+const handleRequest = createPythonWorkerRequestHandler({
+  ensurePyodide,
+  postMessage: (response) => worker.postMessage(response)
+});
 const requestQueue = createSerialRequestQueue(handleRequest);
 
 worker.addEventListener('message', (event) => {
   requestQueue.enqueue(event.data);
 });
 
-async function handleRequest(request: RuntimeWorkerRequest): Promise<void> {
-  try {
-    const pyodide = await ensurePyodide();
-    const stdout: string[] = [];
-    const stderr: string[] = [];
-
-    pyodide.setStdout({ batched: (output) => stdout.push(output) });
-    pyodide.setStderr({ batched: (output) => stderr.push(output) });
-
-    if (request.packages && request.packages.length > 0) {
-      await pyodide.loadPackage(Array.from(request.packages));
-    }
-    if (request.source) {
-      await pyodide.loadPackagesFromImports(request.source);
-    }
-    pyodide.runPython('__oxiquill_prepare_cell()');
-
-    const globals = pyodide.toPy(request.inputs);
-    let value: unknown = null;
-
+export function createPythonWorkerRequestHandler({
+  ensurePyodide,
+  postMessage
+}: PythonWorkerHandlerDependencies): (request: RuntimeWorkerRequest) => Promise<void> {
+  return async (request) => {
     try {
-      value = toSerializable(await pyodide.runPythonAsync(request.source ?? '', { globals }));
-    } finally {
-      globals.destroy();
+      const pyodide = await ensurePyodide();
+      const stdout: string[] = [];
+      const stderr: string[] = [];
+
+      pyodide.setStdout({ batched: (output) => stdout.push(output) });
+      pyodide.setStderr({ batched: (output) => stderr.push(output) });
+
+      if (request.packages && request.packages.length > 0) {
+        await pyodide.loadPackage(Array.from(request.packages));
+      }
+      if (request.source) {
+        await pyodide.loadPackagesFromImports(request.source);
+      }
+      pyodide.runPython('__oxiquill_prepare_cell()');
+
+      const globals = pyodide.toPy(request.inputs);
+      let value: unknown = null;
+
+      try {
+        value = toSerializable(await pyodide.runPythonAsync(request.source ?? '', { globals }));
+      } finally {
+        globals.destroy();
+      }
+      const displayOutputs = toOutputArtifacts(toSerializable(pyodide.runPython('__oxiquill_take_outputs()')));
+      const matplotlibOutputs = toOutputArtifacts(
+        toSerializable(pyodide.runPython('__oxiquill_collect_matplotlib_outputs()'))
+      );
+
+      const result = createPythonCellResult({
+        stdout: stdout.join('\n').trimEnd(),
+        stderr: stderr.join('\n').trimEnd(),
+        value,
+        plots: [],
+        displayOutputs: [...displayOutputs, ...matplotlibOutputs]
+      });
+
+      postMessage({ requestId: request.requestId, ok: true, result });
+    } catch (error) {
+      postMessage({
+        requestId: request.requestId,
+        ok: false,
+        error: error instanceof Error ? error.message : String(error)
+      });
     }
-    const displayOutputs = toOutputArtifacts(toSerializable(pyodide.runPython('__oxiquill_take_outputs()')));
-    const matplotlibOutputs = toOutputArtifacts(
-      toSerializable(pyodide.runPython('__oxiquill_collect_matplotlib_outputs()'))
-    );
+  };
+}
 
-    const result = createPythonCellResult({
-      stdout: stdout.join('\n').trimEnd(),
-      stderr: stderr.join('\n').trimEnd(),
-      value,
-      plots: [],
-      displayOutputs: [...displayOutputs, ...matplotlibOutputs]
+export function createPythonRuntimeLoader({
+  indexUrl,
+  importModule = importPyodideModule,
+  moduleUrl
+}: {
+  indexUrl: string;
+  importModule?: (moduleUrl: string) => Promise<PyodideModule>;
+  moduleUrl: string;
+}): () => Promise<PyodideRuntime> {
+  let pyodideReady: Promise<PyodideRuntime> | undefined;
+  let loadPyodideReady: Promise<LoadPyodide> | undefined;
+
+  return () => {
+    loadPyodideReady ??= importModule(moduleUrl).then((module) => module.loadPyodide);
+    pyodideReady ??= loadPyodideReady.then(async (loadPyodide) => {
+      const pyodide = await loadPyodide({ indexURL: indexUrl });
+      await pyodide.runPythonAsync(pythonDisplaySupportCode);
+      return pyodide;
     });
-
-    worker.postMessage({ requestId: request.requestId, ok: true, result });
-  } catch (error) {
-    worker.postMessage({
-      requestId: request.requestId,
-      ok: false,
-      error: error instanceof Error ? error.message : String(error)
-    });
-  }
+    return pyodideReady;
+  };
 }
 
-function ensurePyodide(): Promise<PyodideRuntime> {
-  pyodideReady ??= getLoadPyodide().then(async (loadPyodide) => {
-    const pyodide = await loadPyodide({ indexURL: pyodideUrls.indexUrl });
-    await pyodide.runPythonAsync(pythonDisplaySupportCode);
-    return pyodide;
-  });
-  return pyodideReady;
-}
-
-function getLoadPyodide(): Promise<LoadPyodide> {
-  loadPyodideReady ??= importPyodideModule().then((module) => module.loadPyodide);
-  return loadPyodideReady;
-}
-
-async function importPyodideModule(): Promise<{ loadPyodide: LoadPyodide }> {
-  const response = await fetch(pyodideUrls.moduleUrl);
+export async function importPyodideModule(
+  pyodideModuleUrl: string,
+  {
+    createObjectUrl = (blob) => URL.createObjectURL(blob),
+    fetchImplementation = fetch,
+    importModule = importModuleUrl,
+    revokeObjectUrl = (moduleUrl) => URL.revokeObjectURL(moduleUrl)
+  }: PyodideModuleDependencies = {}
+): Promise<PyodideModule> {
+  const response = await fetchImplementation(pyodideModuleUrl);
   if (!response.ok) {
-    throw new Error(`Failed to load ${pyodideUrls.moduleUrl}: ${response.status} ${response.statusText}`);
+    throw new Error(`Failed to load ${pyodideModuleUrl}: ${response.status} ${response.statusText}`);
   }
 
-  const moduleUrl = URL.createObjectURL(new Blob([await response.text()], { type: 'text/javascript' }));
+  const moduleUrl = createObjectUrl(new Blob([await response.text()], { type: 'text/javascript' }));
 
   try {
-    return (await import(/* @vite-ignore */ moduleUrl)) as { loadPyodide: LoadPyodide };
+    return await importModule(moduleUrl);
   } finally {
-    URL.revokeObjectURL(moduleUrl);
+    revokeObjectUrl(moduleUrl);
   }
+}
+
+async function importModuleUrl(moduleUrl: string): Promise<PyodideModule> {
+  return (await import(/* @vite-ignore */ moduleUrl)) as PyodideModule;
 }
 
 export function resolvePyodideUrls(

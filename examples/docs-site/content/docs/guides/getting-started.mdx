@@ -19,13 +19,13 @@ Omit `my-docs` to initialize the current directory. The target must not exist or
 You can also install Oxiquill into an existing static documentation project:
 
 ```sh
-pnpm add oxiquill astro @astrojs/starlight
+pnpm add oxiquill@0.3.0 astro@7.2.9 @astrojs/starlight@0.41.9
 ```
 
 or:
 
 ```sh
-npm install oxiquill astro @astrojs/starlight
+npm install oxiquill@0.3.0 astro@7.2.9 @astrojs/starlight@0.41.9
 ```
 
 Add these scripts to `package.json` if the starter did not create them:
@@ -132,6 +132,6 @@ Repository maintainers additionally need `cargo-llvm-cov` and Playwright browser
 
 ## Generated Output
 
-Oxiquill owns `.oxiquill/**`, `public/oxiquill/**`, Astro's type/cache output, and `dist/**`. Keep them ignored and regenerate them through CLI commands. Do not copy generated output between configurations unless the matching manifest, fingerprints, and runtime inputs are unchanged.
+Oxiquill owns `.oxiquill/**`, `public/oxiquill/**`, Astro's type/cache output, and `dist/**`. Keep them ignored and regenerate them through CLI commands. Verified downloads live separately under `.cache/oxiquill/downloads/v1/**`; the starter ignores this directory, and `oxiquill clean` preserves it for later online or offline regeneration. Do not copy generated output between configurations unless the matching manifest, fingerprints, and runtime inputs are unchanged.
 
 Continue with the [Authoring Guide](/guides/authoring/), [CLI reference](/reference/cli/), and [Troubleshooting](/guides/troubleshooting/).

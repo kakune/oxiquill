@@ -25,7 +25,12 @@ import {
   resolvePyodideRuntimeInputs as defaultResolvePyodideRuntimeInputs
 } from './doc-runtime/pyodide-assets.mjs';
 import { syncLicenseArtifacts as defaultSyncLicenseArtifacts, syncRustBuildSupportFiles } from './license-notices.mjs';
-import { createRuntimeVersion, generateRuntimeVersionModule, summarizeCells } from './doc-runtime/runtime-summary.mjs';
+import {
+  createHaskellBuildFingerprint,
+  createRuntimeVersion,
+  generateRuntimeVersionModule,
+  summarizeCells
+} from './doc-runtime/runtime-summary.mjs';
 import { hashText, stableFingerprint } from './doc-runtime/hashing.mjs';
 import { createRuntimePlan } from './doc-runtime/runtime-plan.mjs';
 import {
@@ -55,6 +60,7 @@ export {
   resolveVendoredPyodidePackages
 } from './doc-runtime/pyodide-assets.mjs';
 export {
+  createHaskellBuildFingerprint,
   createRuntimeVersion,
   generateRuntimeVersionModule,
   shouldBuildHaskellWasm,
@@ -313,10 +319,11 @@ async function createDesiredRuntime({
     }),
     python: Object.freeze({ assetFingerprint: pythonAssetFingerprint, cellCount: pythonCellCount }),
     haskell: Object.freeze({
-      buildFingerprint: stableFingerprint({
+      buildFingerprint: createHaskellBuildFingerprint({
         cells: summary.haskellFingerprint,
+        runtimeInputs: runtimeInputs.haskell,
         source: haskellSourceFingerprint,
-        toolchain: toolchains.haskell ?? runtimeInputs.haskell
+        toolchain: toolchains.haskell
       }),
       cellCount: summary.haskellCellCount,
       sourceFingerprint: haskellSourceFingerprint

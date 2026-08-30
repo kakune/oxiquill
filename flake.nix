@@ -57,11 +57,11 @@
           cacheHook = ''
             export XDG_CACHE_HOME="$PWD/.cache/xdg"
             export npm_config_cache="$PWD/.cache/npm"
-            export npm_config_store_dir="$PWD/.cache/pnpm-store"
+            export pnpm_config_store_dir="$PWD/.cache/pnpm-store"
             export PNPM_HOME="$PWD/.cache/pnpm-home"
             export CARGO_HOME="$PWD/.cache/cargo"
             export WASM_PACK_CACHE="$PWD/.cache/wasm-pack"
-            mkdir -p "$XDG_CACHE_HOME" "$npm_config_cache" "$npm_config_store_dir" "$PNPM_HOME" "$CARGO_HOME" "$WASM_PACK_CACHE"
+            mkdir -p "$XDG_CACHE_HOME" "$npm_config_cache" "$pnpm_config_store_dir" "$PNPM_HOME" "$CARGO_HOME" "$WASM_PACK_CACHE"
             export PATH="$PNPM_HOME:$PATH"
           '';
         in

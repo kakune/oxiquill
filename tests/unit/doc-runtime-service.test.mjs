@@ -12,6 +12,7 @@ import {
   copyFileIfChanged,
   copyPyodideAssets,
   copyVendoredPyodidePackages,
+  createHaskellBuildFingerprint,
   createRuntimeVersion,
   createDocRuntimeContext,
   createDocRuntimePaths,
@@ -1105,6 +1106,40 @@ describe('doc runtime service', () => {
         haskellFingerprint: previous.haskellFingerprint,
         status: 'ready'
       })
+    );
+  });
+
+  it('fingerprints Haskell builds from semantic toolchain inputs instead of compiler paths', () => {
+    const inputs = {
+      cells: 'haskell cells',
+      runtimeInputs: runtimeInputs.haskell,
+      source: 'generated source'
+    };
+    const first = createHaskellBuildFingerprint({
+      ...inputs,
+      toolchain: { command: '/opt/first/bin/wasm32-wasi-ghc', version: '9.14.1.20260330' }
+    });
+    const second = createHaskellBuildFingerprint({
+      ...inputs,
+      toolchain: { command: '/different/path/wasm32-wasi-ghc', version: '9.14.1.20260330' }
+    });
+
+    expect(second).toBe(first);
+    expect(
+      createHaskellBuildFingerprint({
+        ...inputs,
+        toolchain: { command: '/opt/first/bin/wasm32-wasi-ghc', version: '9.14.2.20260401' }
+      })
+    ).not.toBe(first);
+    expect(
+      createHaskellBuildFingerprint({
+        ...inputs,
+        runtimeInputs: { ...runtimeInputs.haskell, supportedVersionPrefix: '9.16.' },
+        toolchain: { command: '/opt/first/bin/wasm32-wasi-ghc', version: '9.14.1.20260330' }
+      })
+    ).not.toBe(first);
+    expect(createHaskellBuildFingerprint({ ...inputs, source: 'changed source' })).not.toBe(
+      createHaskellBuildFingerprint(inputs)
     );
   });
 

@@ -35,6 +35,7 @@ jobs:
     permissions:
       contents: read
       issues: read # Required to enforce the release-blocker milestone gate.
+      security-events: read # Required to enforce the Dependabot alert gate.
     outputs:
       archive_filename: ${{ steps.archive.outputs.archive_filename }}
       artifact_name: ${{ steps.archive.outputs.artifact_name }}
@@ -85,7 +86,7 @@ jobs:
       - name: Install the pinned npm CLI
         run: npm install --global "npm@${NPM_VERSION}"
 
-      - name: Verify release identity and blockers
+      - name: Verify release identity and security gates
         id: release
         env:
           GITHUB_TOKEN: ${{ github.token }}
@@ -140,10 +141,47 @@ jobs:
           compression-level: 0
           retention-days: 14
 
+  release-assets:
+    name: Attach verified release assets
+    if: github.event_name == 'release'
+    needs: verify
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      contents: write # Required only to attach immutable assets to the matching GitHub Release.
+
+    steps:
+      - name: Check out release verification code
+        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6.1.0
+        with:
+          persist-credentials: false
+          ref: ${{ needs.verify.outputs.release_tag }}
+
+      - name: Set up Node.js
+        uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6.5.0
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          package-manager-cache: false
+
+      - name: Download the verified release archive
+        uses: actions/download-artifact@634f93cb2916e3fdff6788551b99b062d0335ce0 # v5.0.0
+        with:
+          name: ${{ needs.verify.outputs.artifact_name }}
+          path: ${{ runner.temp }}/npm-release
+
+      - name: Attach immutable assets to the GitHub Release
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+          RELEASE_TAG: ${{ needs.verify.outputs.release_tag }}
+          RELEASE_VERSION: ${{ needs.verify.outputs.release_version }}
+        run: node .github/scripts/release-assets.mjs "$RUNNER_TEMP/npm-release" "$RELEASE_VERSION" "$RELEASE_TAG"
+
   publish:
     name: Stage npm package
     if: github.event_name == 'release' && needs.verify.outputs.release_version != '0.3.0'
-    needs: verify
+    needs:
+      - release-assets
+      - verify
     runs-on: ubuntu-latest
     timeout-minutes: 15
     environment:
