@@ -172,9 +172,25 @@ try {
   if (packageManager === 'pnpm') {
     await appendFile(
       path.join(consumerRoot, 'content/docs/index.mdx'),
-      ['', '```mermaid', 'graph TD', '  core --> linalg', '```', ''].join('\n')
+      [
+        '',
+        '```mermaid',
+        'flowchart TD',
+        '  core --> linalg',
+        '```',
+        '',
+        '```mermaid',
+        'gantt',
+        '  title Packed consumer release schedule',
+        '  dateFormat YYYY-MM-DD',
+        '  section Release',
+        '  Fix hydration :done, fix, 2026-08-29, 1d',
+        '  Publish package :publish, after fix, 1d',
+        '```',
+        ''
+      ].join('\n')
     );
-    await runInstalledDevSmoke({ consumerRoot });
+    await runInstalledDevSmoke({ browserEnabled: browserSmoke, consumerRoot });
   }
 
   const nodeOnlyEnvironment = createNodeOnlyEnvironment();
@@ -358,7 +374,7 @@ try {
   await assertFile(path.join(projectRoot, 'content/docs/index.mdx'));
   console.log(`Packed consumer smoke test passed with ${packageManager} in ${consumerRoot}.`);
 } finally {
-  await rm(temporaryRoot, { force: true, recursive: true });
+  await rm(temporaryRoot, { force: true, maxRetries: 10, recursive: true, retryDelay: 250 });
 }
 
 async function runInstalledBrowserSmoke({ consumerRoot, installedCliPath, projectRoot }) {
@@ -375,6 +391,7 @@ async function runInstalledBrowserSmoke({ consumerRoot, installedCliPath, projec
   const serverOutput = [];
   let serverError;
   let serverReady = false;
+  let serverPid;
   server.stdout.on('data', (chunk) => serverOutput.push(String(chunk)));
   server.stderr.on('data', (chunk) => serverOutput.push(String(chunk)));
   server.once('error', (error) => {
@@ -385,13 +402,16 @@ async function runInstalledBrowserSmoke({ consumerRoot, installedCliPath, projec
   try {
     await waitForHttp(`http://127.0.0.1:${port}/`, 60_000, server, serverOutput, () => serverError);
     serverReady = true;
+    serverPid = await readBackgroundServerPid(projectRoot, 'preview');
     const executablePath = process.env.PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH?.trim();
     browser = await chromium.launch({
       headless: true,
       ...(executablePath ? { executablePath } : {})
     });
     const page = await browser.newPage();
+    const pageErrors = collectPageErrors(page);
     await page.goto(`http://127.0.0.1:${port}/`);
+    await assertMermaidHydration(page);
     const tableOfContentsToggle = page.locator('starlight-table-of-contents-toggle button');
     await tableOfContentsToggle.waitFor({ state: 'visible' });
     assert.equal(await tableOfContentsToggle.getAttribute('aria-expanded'), 'true');
@@ -421,21 +441,29 @@ async function runInstalledBrowserSmoke({ consumerRoot, installedCliPath, projec
       await haskellOutput.waitFor({ state: 'visible', timeout: 60_000 });
       assert.match(await haskellOutput.textContent(), /packed-consumer: Haskell\/WASI/u);
     }
+    assertNoPageErrors(pageErrors, 'packed production preview');
   } finally {
     await browser?.close();
-    if (serverReady) stopAstroPreview(packageManager, consumerRoot);
-    if (server.exitCode === null && !server.signalCode) {
-      server.kill('SIGTERM');
-      await Promise.race([
-        new Promise((resolve) => server.once('exit', resolve)),
-        new Promise((resolve) => setTimeout(resolve, 5_000))
-      ]);
+    try {
+      if (serverReady) {
+        await stopAstroBackgroundServer({ command: 'preview', cwd: consumerRoot, pid: serverPid, root: projectRoot });
+      }
+    } finally {
+      if (server.exitCode === null && !server.signalCode) {
+        server.kill('SIGTERM');
+        await Promise.race([
+          new Promise((resolve) => server.once('exit', resolve)),
+          new Promise((resolve) => setTimeout(resolve, 5_000))
+        ]);
+      }
     }
   }
 }
 
-async function runInstalledDevSmoke({ consumerRoot }) {
+async function runInstalledDevSmoke({ browserEnabled, consumerRoot }) {
   const port = 4_386;
+  let browser;
+  let serverPid;
 
   try {
     run(
@@ -444,6 +472,7 @@ async function runInstalledDevSmoke({ consumerRoot }) {
       consumerRoot
     );
     const response = await waitForHttpResponse(`http://127.0.0.1:${port}/`, 60_000);
+    serverPid = await readBackgroundServerPid(consumerRoot, 'dev');
     const html = await response.text();
 
     assert.equal(response.status, 200, `packed development server returned ${response.status}`);
@@ -452,8 +481,115 @@ async function runInstalledDevSmoke({ consumerRoot }) {
       !/Cannot read properties of undefined|__H/u.test(html),
       'packed development response contained a Preact hook error'
     );
+
+    if (browserEnabled) {
+      const executablePath = process.env.PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH?.trim();
+      browser = await chromium.launch({
+        headless: true,
+        ...(executablePath ? { executablePath } : {})
+      });
+      const page = await browser.newPage();
+      const pageErrors = collectPageErrors(page);
+      await page.goto(`http://127.0.0.1:${port}/`);
+      await assertMermaidHydration(page);
+      assertNoPageErrors(pageErrors, 'packed development server');
+    }
   } finally {
-    stopAstroDev(packageManager, consumerRoot);
+    await browser?.close();
+    await stopAstroBackgroundServer({ command: 'dev', cwd: consumerRoot, pid: serverPid });
+  }
+}
+
+async function assertMermaidHydration(page) {
+  const diagrams = page.getByTestId('mermaid-diagram');
+  await diagrams.first().waitFor({ state: 'visible', timeout: 60_000 });
+  assert.equal(await diagrams.count(), 2, 'packed consumer must render the Flowchart and Gantt fixtures');
+  await page.waitForFunction(
+    (expectedCount) => {
+      const elements = [...document.querySelectorAll('[data-testid="mermaid-diagram"]')];
+      return elements.length === expectedCount && elements.every((element) => element.dataset.state === 'ready');
+    },
+    2,
+    { timeout: 60_000 }
+  );
+
+  for (let index = 0; index < 2; index += 1) {
+    const diagram = diagrams.nth(index);
+    assert.equal(await diagram.getAttribute('data-state'), 'ready');
+    const svg = diagram.locator('.mermaid-diagram__surface > svg');
+    await svg.waitFor({ state: 'visible', timeout: 60_000 });
+    assert.equal(await svg.count(), 1, `Mermaid fixture ${index + 1} did not render exactly one SVG`);
+    assert.equal(
+      await diagram.getByRole('alert').count(),
+      0,
+      `Mermaid fixture ${index + 1} rendered an error fallback`
+    );
+  }
+}
+
+function collectPageErrors(page) {
+  const errors = [];
+  page.on('pageerror', (error) => errors.push(error));
+  return errors;
+}
+
+function assertNoPageErrors(errors, stage) {
+  assert.equal(
+    errors.length,
+    0,
+    `${stage} emitted page errors:\n${errors.map((error) => error.stack ?? error.message).join('\n')}`
+  );
+}
+
+async function readBackgroundServerPid(cwd, command) {
+  const state = JSON.parse(await readFile(path.join(cwd, '.astro', `${command}.json`), 'utf8'));
+  assert.ok(Number.isSafeInteger(state.pid) && state.pid > 0, `Astro ${command} state did not contain a valid PID`);
+  return state.pid;
+}
+
+async function stopAstroBackgroundServer({ command, cwd, pid, root }) {
+  let stopError;
+  try {
+    if (command === 'dev') stopAstroDev(packageManager, cwd);
+    else stopAstroPreview(packageManager, cwd, root);
+  } catch (error) {
+    stopError = error;
+  }
+
+  if (pid !== undefined && !(await waitForProcessExit(pid, 1_000))) {
+    try {
+      process.kill(pid, 'SIGTERM');
+    } catch {
+      // The process exited between the liveness check and the signal.
+    }
+    if (!(await waitForProcessExit(pid, 5_000))) {
+      try {
+        process.kill(pid, 'SIGKILL');
+      } catch {
+        // The process exited between the liveness check and the signal.
+      }
+      assert.ok(await waitForProcessExit(pid, 5_000), `Astro ${command} server process ${pid} did not exit`);
+    }
+  }
+
+  if (stopError) throw stopError;
+}
+
+async function waitForProcessExit(pid, timeoutMs) {
+  const deadline = Date.now() + timeoutMs;
+  while (Date.now() < deadline) {
+    if (!isProcessAlive(pid)) return true;
+    await new Promise((resolve) => setTimeout(resolve, 100));
+  }
+  return !isProcessAlive(pid);
+}
+
+function isProcessAlive(pid) {
+  try {
+    process.kill(pid, 0);
+    return true;
+  } catch {
+    return false;
   }
 }
 
@@ -535,9 +671,11 @@ function initializeConsumer(packageManager, packageSource, target, cwd) {
   run(packageManager, args, cwd);
 }
 
-function stopAstroPreview(packageManager, cwd) {
+function stopAstroPreview(packageManager, cwd, root) {
   const args =
-    packageManager === 'npm' ? ['exec', '--', 'astro', 'preview', 'stop'] : ['exec', 'astro', 'preview', 'stop'];
+    packageManager === 'npm'
+      ? ['exec', '--', 'astro', 'preview', 'stop', ...(root ? ['--root', root] : [])]
+      : ['exec', 'astro', 'preview', 'stop', ...(root ? ['--root', root] : [])];
   run(packageManager, args, cwd);
 }
 

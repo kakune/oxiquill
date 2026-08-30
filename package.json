@@ -42,7 +42,7 @@
     "test:consumer": "pnpm test:consumer:npm && pnpm test:consumer:pnpm",
     "test:consumer:npm": "node tests/package/consumer-smoke.mjs --package-manager npm",
     "test:consumer:pnpm": "node tests/package/consumer-smoke.mjs --package-manager pnpm",
-    "test:packed-browser": "node tests/package/consumer-smoke.mjs --package-manager npm --browser",
+    "test:packed-browser": "node tests/package/consumer-smoke.mjs --package-manager pnpm --browser",
     "test:consumer:registry:npm": "node tests/package/consumer-smoke.mjs --package-manager npm --registry",
     "test:consumer:registry:pnpm": "node tests/package/consumer-smoke.mjs --package-manager pnpm --registry",
     "verify:release-version": "node .github/scripts/verify-release-version.mjs",

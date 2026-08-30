@@ -4,23 +4,20 @@ import { togglePresentation } from './toggle-localization.js';
 
 const { dir, lang, toc } = Astro.locals.starlightRoute;
 const presentation = togglePresentation(lang, dir, 'tableOfContents');
+const hasTableOfContents = Boolean(toc);
 ---
 
-<script is:inline>
-  {
-    `
-		(() => {
-			let collapsed = false;
-			try {
-				collapsed =
-					${Boolean(toc)} &&
-					matchMedia('(min-width: 72rem)').matches &&
-					sessionStorage.getItem('oxiquill-table-of-contents-collapsed') === 'true';
-			} catch {}
-			document.documentElement.toggleAttribute('data-table-of-contents-collapsed', collapsed);
-		})();
-	`;
-  }
+<script is:inline define:vars={{ hasTableOfContents }}>
+  (() => {
+    let collapsed = false;
+    try {
+      collapsed =
+        hasTableOfContents &&
+        matchMedia('(min-width: 72rem)').matches &&
+        sessionStorage.getItem('oxiquill-table-of-contents-collapsed') === 'true';
+    } catch {}
+    document.documentElement.toggleAttribute('data-table-of-contents-collapsed', collapsed);
+  })();
 </script>
 
 <div class="two-column-content lg:sl-flex">
