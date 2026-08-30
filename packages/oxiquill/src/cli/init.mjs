@@ -223,13 +223,20 @@ function printNextSteps({ log, navigationCommand, targetPath }) {
 function createNavigationCommand({ cwd, platform, targetPath }) {
   const relativeTarget = path.relative(cwd, targetPath) || '.';
   if (relativeTarget === '.') return undefined;
-  if (/[\u0000-\u001f\u007f]/u.test(relativeTarget)) {
+  if (hasControlCharacter(relativeTarget)) {
     throw new Error(`Oxiquill init target path contains control characters: ${JSON.stringify(relativeTarget)}`);
   }
 
   return platform === 'win32'
     ? `Set-Location -LiteralPath '${relativeTarget.replaceAll("'", "''")}'`
     : `cd -- '${relativeTarget.replaceAll("'", "'\\''")}'`;
+}
+
+function hasControlCharacter(value) {
+  return Array.from(value).some((character) => {
+    const codePoint = character.codePointAt(0);
+    return codePoint <= 0x1f || codePoint === 0x7f;
+  });
 }
 
 function errorMessage(error) {
