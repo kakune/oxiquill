@@ -153,9 +153,15 @@ describe('release archive verification', () => {
 describe('workflow supply-chain policy', () => {
   it('selects packed consumer scripts without shell-specific expansion', async () => {
     const source = await readFile(path.join(repositoryRoot, '.github/workflows/ci.yml'), 'utf8');
+    const packageJson = JSON.parse(await readFile(path.join(repositoryRoot, 'package.json'), 'utf8'));
 
     expect(source).toContain('pnpm "test:consumer:${{ matrix.package-manager }}"');
+    expect(source).toContain('run: pnpm test:packed-browser');
+    expect(source).toContain('run: pnpm exec playwright install --with-deps chromium');
     expect(source).not.toContain('${PACKAGE_MANAGER}');
+    expect(packageJson.scripts['test:packed-browser']).toBe(
+      'node tests/package/consumer-smoke.mjs --package-manager npm --browser'
+    );
   });
 
   it('pins every remote action to a full commit SHA with a version comment', async () => {
