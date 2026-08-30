@@ -10,8 +10,7 @@ import type {
   CellExecutionResult,
   CellLanguage,
   CellManifest,
-  RuntimeWorkerRequest,
-  RuntimeWorkerResponse
+  RuntimeWorkerRequest
 } from '../../packages/oxiquill/src/lib/doc-runtime/types';
 
 class FakeWorker {
