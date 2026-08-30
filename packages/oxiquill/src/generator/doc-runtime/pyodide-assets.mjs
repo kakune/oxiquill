@@ -3,13 +3,14 @@ import path from 'node:path';
 import { createRequire } from 'node:module';
 import { pathInUrl } from '../../config/paths.mjs';
 import { vendoredPyodidePackageRoots } from './constants.mjs';
-import { copyFileIfChanged, defaultFileSystem, hasPackageContent } from './file-system.mjs';
-import { hashBytes, stableFingerprint } from './hashing.mjs';
+import { copyFileIfChanged, defaultFileSystem, hashFileSha256, hasPackageContent } from './file-system.mjs';
+import { createSha256, hashBytes, stableFingerprint } from './hashing.mjs';
 
 const require = createRequire(import.meta.url);
 const defaultPackageCdn = 'https://cdn.jsdelivr.net/pyodide/';
 const cacheNamespace = 'pyodide';
 export const PYODIDE_DOWNLOAD_ATTEMPTS = 3;
+export const PYODIDE_DOWNLOAD_CONCURRENCY = 4;
 export const PYODIDE_REQUEST_TIMEOUT_MS = 30_000;
 export const requiredPyodideFiles = [
   'pyodide.mjs',
@@ -43,7 +44,7 @@ export async function resolvePyodideRuntimeInputs({
   const coreAssets = await Promise.all(
     requiredPyodideFiles.map(async (fileName) => {
       const sourcePath = path.join(packageDir, fileName);
-      return Object.freeze({ fileName, sha256: hashBytes(await fileSystem.readFile(sourcePath)), sourcePath });
+      return Object.freeze({ fileName, sha256: await hashFileSha256(sourcePath, { fileSystem }), sourcePath });
     })
   );
   const packages = resolveVendoredPyodidePackages(lockFile, requestedPackages);
@@ -82,6 +83,7 @@ export async function copyPyodideAssets({
   requestedPackages = vendoredPyodidePackageRoots,
   resolvePackageJson = resolvePyodidePackageJson,
   runtimeInputs,
+  signal,
   sleep = defaultSleep,
   temporaryName = randomUUID
 }) {
@@ -99,35 +101,30 @@ export async function copyPyodideAssets({
     }))
   ];
 
-  const cachePromises = assets.map(async (asset) => ({
-    ...asset,
-    cachePath: await ensureCachedAsset(asset, {
-      cacheDirectory,
-      fetchImplementation,
-      fetchPackage,
-      fileSystem,
-      offline: pythonOptions.offline,
-      packageBaseUrl,
-      sleep,
-      temporaryName
-    })
-  }));
-  const cachedAssets = await settleCacheTransactions(cachePromises);
-  const copied = await Promise.all(
-    cachedAssets.map(({ cachePath, fileName }) =>
-      copyFileIfChanged(cachePath, pathInUrl(paths.pyodidePublicDir, fileName), { fileSystem })
-    )
+  const cachedAssets = await mapWithConcurrency(
+    assets,
+    PYODIDE_DOWNLOAD_CONCURRENCY,
+    async (asset, _index, operationSignal) => ({
+      ...asset,
+      cachePath: await ensureCachedAsset(asset, {
+        cacheDirectory,
+        fetchImplementation,
+        fetchPackage,
+        fileSystem,
+        offline: pythonOptions.offline,
+        packageBaseUrl,
+        signal: operationSignal,
+        sleep,
+        temporaryName
+      })
+    }),
+    { signal }
   );
-  return copied.some(Boolean);
-}
-
-async function settleCacheTransactions(cachePromises) {
-  try {
-    return await Promise.all(cachePromises);
-  } catch (error) {
-    await Promise.allSettled(cachePromises);
-    throw error;
+  const copied = [];
+  for (const { cachePath, fileName } of cachedAssets) {
+    copied.push(await copyFileIfChanged(cachePath, pathInUrl(paths.pyodidePublicDir, fileName), { fileSystem }));
   }
+  return copied.some(Boolean);
 }
 
 export async function copyVendoredPyodidePackages({
@@ -138,6 +135,7 @@ export async function copyVendoredPyodidePackages({
   paths,
   pyodideVersion,
   roots = vendoredPyodidePackageRoots,
+  signal,
   sleep = defaultSleep,
   temporaryName = randomUUID
 }) {
@@ -156,6 +154,7 @@ export async function copyVendoredPyodidePackages({
     fileSystem,
     paths,
     runtimeInputs,
+    signal,
     sleep,
     temporaryName
   });
@@ -185,7 +184,17 @@ export function resolveVendoredPyodidePackages(lockFile, roots = vendoredPyodide
 
 async function ensureCachedAsset(
   asset,
-  { cacheDirectory, fetchImplementation, fetchPackage, fileSystem, offline, packageBaseUrl, sleep, temporaryName }
+  {
+    cacheDirectory,
+    fetchImplementation,
+    fetchPackage,
+    fileSystem,
+    offline,
+    packageBaseUrl,
+    signal,
+    sleep,
+    temporaryName
+  }
 ) {
   const cachePath = path.join(cacheDirectory, asset.fileName);
   if (await hasPackageContent(cachePath, asset.sha256, { fileSystem })) return cachePath;
@@ -200,19 +209,18 @@ async function ensureCachedAsset(
   try {
     if (asset.kind === 'installed') {
       await fileSystem.copyFile(asset.sourcePath, temporaryPath);
+      await assertFileSha256(temporaryPath, asset.sha256, asset.name ?? asset.fileName, { fileSystem });
     } else {
-      const content = fetchPackage
-        ? await fetchPackage(asset.fileName)
-        : await fetchPyodidePackage(asset.fileName, {
-            fetchImplementation,
-            packageBaseUrl,
-            sleep
-          });
-      await fileSystem.writeFile(temporaryPath, content);
+      await downloadAssetToFile(asset, temporaryPath, {
+        fetchImplementation,
+        fetchPackage,
+        fileSystem,
+        packageBaseUrl,
+        signal,
+        sleep
+      });
     }
-    await assertFileSha256(temporaryPath, asset.sha256, asset.name ?? asset.fileName, { fileSystem });
-    await fileSystem.rm(cachePath, { force: true });
-    await fileSystem.rename(temporaryPath, cachePath);
+    await publishVerifiedAsset(temporaryPath, cachePath, asset.sha256, { fileSystem, temporaryName });
     return cachePath;
   } finally {
     await fileSystem.rm(temporaryPath, { force: true });
@@ -224,6 +232,8 @@ export async function fetchPyodidePackage(
   {
     fetchImplementation = globalThis.fetch,
     packageBaseUrl,
+    consumeResponse = responseBytes,
+    signal,
     sleep = defaultSleep,
     timeoutMs = PYODIDE_REQUEST_TIMEOUT_MS
   }
@@ -235,7 +245,7 @@ export async function fetchPyodidePackage(
   for (let attempt = 1; attempt <= PYODIDE_DOWNLOAD_ATTEMPTS; attempt += 1) {
     attempts = attempt;
     try {
-      return await fetchOnce(url, { fetchImplementation, timeoutMs });
+      return await fetchOnce(url, { consumeResponse, fetchImplementation, signal, timeoutMs });
     } catch (error) {
       lastError = error;
       if (!isRetryable(error) || attempt === PYODIDE_DOWNLOAD_ATTEMPTS) break;
@@ -248,9 +258,16 @@ export async function fetchPyodidePackage(
   });
 }
 
-async function fetchOnce(url, { fetchImplementation, timeoutMs }) {
+async function fetchOnce(url, { consumeResponse, fetchImplementation, signal, timeoutMs }) {
   const controller = new AbortController();
-  const timeout = setTimeout(() => controller.abort(), timeoutMs);
+  let timedOut = false;
+  const abortRequest = () => controller.abort(signal?.reason);
+  if (signal?.aborted) abortRequest();
+  else signal?.addEventListener('abort', abortRequest, { once: true });
+  const timeout = setTimeout(() => {
+    timedOut = true;
+    controller.abort();
+  }, timeoutMs);
   try {
     const response = await fetchImplementation(url, { signal: controller.signal });
     if (!response.ok) {
@@ -258,16 +275,22 @@ async function fetchOnce(url, { fetchImplementation, timeoutMs }) {
       error.retryable = response.status === 408 || response.status === 429 || response.status >= 500;
       throw error;
     }
-    return Buffer.from(await response.arrayBuffer());
+    return await consumeResponse(response, { signal: controller.signal });
   } catch (error) {
-    if (controller.signal.aborted) {
+    if (timedOut) {
       const timeoutError = new Error(`request timed out after ${timeoutMs}ms`);
       timeoutError.retryable = true;
       throw timeoutError;
     }
+    if (signal?.aborted) {
+      const abortError = signal.reason instanceof Error ? signal.reason : new Error('operation aborted');
+      abortError.retryable = false;
+      throw abortError;
+    }
     throw error;
   } finally {
     clearTimeout(timeout);
+    signal?.removeEventListener('abort', abortRequest);
   }
 }
 
@@ -276,12 +299,156 @@ function isRetryable(error) {
 }
 
 async function assertFileSha256(filePath, expectedSha256, assetName, { fileSystem }) {
-  const actualSha256 = hashBytes(await fileSystem.readFile(filePath));
+  const actualSha256 = await hashFileSha256(filePath, { fileSystem });
+  assertSha256(actualSha256, expectedSha256, assetName);
+}
+
+function assertSha256(actualSha256, expectedSha256, assetName) {
   if (actualSha256 !== expectedSha256) {
     const error = new Error(`Pyodide asset "${assetName}" has sha256 ${actualSha256}; expected ${expectedSha256}.`);
     error.retryable = false;
     throw error;
   }
+}
+
+async function downloadAssetToFile(
+  asset,
+  temporaryPath,
+  { fetchImplementation, fetchPackage, fileSystem, packageBaseUrl, signal, sleep }
+) {
+  if (fetchPackage) {
+    const content = await fetchPackage(asset.fileName);
+    if (content?.body) {
+      await streamResponseToFile(content, temporaryPath, asset, { fileSystem, signal });
+    } else {
+      await fileSystem.writeFile(temporaryPath, content);
+      await assertFileSha256(temporaryPath, asset.sha256, asset.name ?? asset.fileName, { fileSystem });
+    }
+    return;
+  }
+
+  await fetchPyodidePackage(asset.fileName, {
+    consumeResponse: (response, { signal: requestSignal }) =>
+      streamResponseToFile(response, temporaryPath, asset, { fileSystem, signal: requestSignal }),
+    fetchImplementation,
+    packageBaseUrl,
+    signal,
+    sleep
+  });
+}
+
+async function streamResponseToFile(response, temporaryPath, asset, { fileSystem, signal }) {
+  if (!response.body) throw new Error(`Pyodide asset "${asset.name ?? asset.fileName}" has no response body.`);
+  if (!fileSystem.open) throw new Error('The configured file system does not support streaming writes.');
+
+  const hash = createSha256();
+  const fileHandle = await fileSystem.open(temporaryPath, 'w');
+  try {
+    for await (const chunk of response.body) {
+      throwIfAborted(signal);
+      const bytes = toBytes(chunk, asset.name ?? asset.fileName);
+      hash.update(bytes);
+      await writeAll(fileHandle, bytes);
+    }
+    throwIfAborted(signal);
+  } finally {
+    await fileHandle.close();
+  }
+
+  assertSha256(hash.digest('hex'), asset.sha256, asset.name ?? asset.fileName);
+}
+
+async function writeAll(fileHandle, bytes) {
+  let offset = 0;
+  while (offset < bytes.length) {
+    const { bytesWritten } = await fileHandle.write(bytes, offset, bytes.length - offset);
+    if (bytesWritten === 0) throw new Error('Unable to make progress while writing a Pyodide asset.');
+    offset += bytesWritten;
+  }
+}
+
+function toBytes(chunk, assetName) {
+  if (typeof chunk === 'string' || ArrayBuffer.isView(chunk) || chunk instanceof ArrayBuffer) {
+    return Buffer.from(chunk);
+  }
+  throw new TypeError(`Pyodide asset "${assetName}" returned a non-byte stream chunk.`);
+}
+
+async function publishVerifiedAsset(temporaryPath, cachePath, expectedSha256, { fileSystem, temporaryName }) {
+  const displacedPath = `${cachePath}.corrupt-${temporaryName()}`;
+  try {
+    for (;;) {
+      try {
+        await fileSystem.link(temporaryPath, cachePath);
+        return;
+      } catch (error) {
+        if (!isFileSystemError(error, 'EEXIST')) throw error;
+      }
+
+      if (await hasPackageContent(cachePath, expectedSha256, { fileSystem })) return;
+      try {
+        await fileSystem.rename(cachePath, displacedPath);
+      } catch (error) {
+        if (!isFileSystemError(error, 'ENOENT')) throw error;
+      }
+      await fileSystem.rm(displacedPath, { force: true });
+    }
+  } finally {
+    await fileSystem.rm(displacedPath, { force: true });
+  }
+}
+
+async function mapWithConcurrency(values, concurrency, mapper, { signal } = {}) {
+  const results = new Array(values.length);
+  const controller = new AbortController();
+  let nextIndex = 0;
+  let failure;
+  const abortWorkers = () => controller.abort(signal?.reason);
+  if (signal?.aborted) abortWorkers();
+  else signal?.addEventListener('abort', abortWorkers, { once: true });
+
+  async function worker() {
+    while (!controller.signal.aborted) {
+      const index = nextIndex;
+      nextIndex += 1;
+      if (index >= values.length) return;
+      try {
+        results[index] = await mapper(values[index], index, controller.signal);
+      } catch (error) {
+        failure ??= error;
+        controller.abort(error);
+      }
+    }
+  }
+
+  try {
+    await Promise.all(Array.from({ length: Math.min(concurrency, values.length) }, () => worker()));
+  } finally {
+    signal?.removeEventListener('abort', abortWorkers);
+  }
+
+  if (failure) throw failure;
+  if (signal?.aborted) throw signal.reason instanceof Error ? signal.reason : new Error('operation aborted');
+  return results;
+}
+
+async function responseBytes(response, { signal }) {
+  if (!response.body) return Buffer.from(await response.arrayBuffer());
+  const chunks = [];
+  for await (const chunk of response.body) {
+    throwIfAborted(signal);
+    chunks.push(toBytes(chunk, 'download'));
+  }
+  return Buffer.concat(chunks);
+}
+
+function throwIfAborted(signal) {
+  if (!signal?.aborted) return;
+  throw signal.reason instanceof Error ? signal.reason : new Error('operation aborted');
+}
+
+function isFileSystemError(error, code) {
+  return Boolean(error && error.code === code);
 }
 
 function resolvePyodidePackageJson() {
