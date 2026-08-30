@@ -188,8 +188,15 @@ jobs:
         run: bash .github/scripts/install-ghc-wasm.sh
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
-      - name: Test packed consumer
-        run: pnpm "test:consumer:${{ matrix.package-manager }}"
+      - name: Install Chromium for pnpm hydration tests
+        if: matrix.package-manager == 'pnpm'
+        run: pnpm exec playwright install --with-deps chromium
+      - name: Test packed npm consumer
+        if: matrix.package-manager == 'npm'
+        run: pnpm test:consumer:npm
+      - name: Test packed pnpm consumer with Chromium hydration
+        if: matrix.package-manager == 'pnpm'
+        run: pnpm test:consumer:pnpm -- --browser
 
   packed-browser:
     name: Packed browser (Chromium)

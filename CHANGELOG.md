@@ -56,6 +56,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 ### Fixed
 
 - Downstream Preact and SSR dependency resolution, custom consumer paths, runtime cleanup, Haskell execution, and Pyodide package availability.
+- Early desktop table-of-contents state restoration without browser reference errors.
+- Mermaid Flowchart and Gantt hydration in pnpm consumer development servers by routing Mermaid through Vite dependency optimization ([#100](https://github.com/kakune/oxiquill/issues/100)).
 - Production dependency advisories present in the v0.2.0 dependency graph.
 
 ### Security

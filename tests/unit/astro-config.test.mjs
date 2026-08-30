@@ -482,6 +482,30 @@ describe('defineOxiquillConfig', () => {
     );
   });
 
+  it('merges Mermaid into consumer Vite dependency optimization without duplicates', () => {
+    const config = defineOxiquillConfig({
+      sidebar: [],
+      title: 'Docs',
+      vite: {
+        optimizeDeps: {
+          entries: ['consumer-entry.ts'],
+          exclude: ['consumer-runtime'],
+          include: ['consumer-runtime', 'oxiquill > mermaid', 'oxiquill > mermaid'],
+          noDiscovery: true
+        }
+      }
+    });
+
+    const update = runConfigSetup(config, linkedConsumerRoot);
+
+    expect(update.vite.optimizeDeps).toEqual({
+      entries: ['consumer-entry.ts'],
+      exclude: ['consumer-runtime'],
+      include: ['consumer-runtime', 'oxiquill > mermaid'],
+      noDiscovery: true
+    });
+  });
+
   it('normalizes singular consumer SSR noExternal entries when merging Oxiquill defaults', () => {
     for (const noExternal of ['consumer-package', /^consumer-/]) {
       const config = defineOxiquillConfig({
@@ -528,6 +552,7 @@ describe('defineOxiquillConfig', () => {
       '@bjorn3/browser_wasi_shim',
       'aria-query',
       'html-escaper',
+      'mermaid',
       'astro/app',
       'astro/content/runtime',
       'astro/jsx-runtime',
@@ -547,6 +572,7 @@ describe('defineOxiquillConfig', () => {
     expect(resolved['@preact/signals']).toEqual(expect.any(String));
     expect(resolved['aria-query']).toEqual(expect.any(String));
     expect(resolved['html-escaper']).toEqual(expect.any(String));
+    expect(resolved.mermaid).toEqual(expect.any(String));
     expect(resolved['astro/app']).toEqual(expect.any(String));
     expect(resolved['astro/content/runtime']).toEqual(expect.any(String));
     expect(resolved['astro/jsx-runtime']).toEqual(expect.any(String));
