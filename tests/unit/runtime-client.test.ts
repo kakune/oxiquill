@@ -6,6 +6,7 @@ import {
   runInteractiveCell
 } from '../../packages/oxiquill/src/lib/doc-runtime/runtime-client';
 import { normalizeCellExecutionResult } from '../../packages/oxiquill/src/lib/doc-runtime/output-artifacts';
+import { outputArtifactLimits, utf8ByteLength } from '../../packages/oxiquill/src/lib/doc-runtime/output-limits.mjs';
 import type {
   CellExecutionResult,
   CellLanguage,
@@ -309,6 +310,32 @@ describe('runtime client', () => {
     expect(workers).toHaveLength(1);
     workers[0].emitMessage({ requestId: 2, ok: true, result });
     await expect(next).resolves.toEqual(normalizedResult);
+  });
+
+  it('bounds oversized worker errors and malformed artifact diagnostics', async () => {
+    const { runner, workers } = makeRunner();
+    const failed = runner.runInteractiveCell(makeCell('python'), {});
+    workers[0].emitMessage({
+      requestId: 1,
+      ok: false,
+      error: 'x'.repeat(outputArtifactLimits.bytesPerError + 1)
+    });
+    const workerError = await failed.catch((error: unknown) => error);
+    expect(workerError).toBeInstanceOf(Error);
+    expect(utf8ByteLength((workerError as Error).message)).toBeLessThanOrEqual(outputArtifactLimits.bytesPerError);
+
+    const malformed = runner.runInteractiveCell(makeCell('python'), {});
+    workers[0].emitMessage({
+      requestId: 2,
+      ok: true,
+      result: { outputs: [{ kind: 'x'.repeat(outputArtifactLimits.bytesPerDiagnostic * 2) }] }
+    });
+    const normalized = await malformed;
+    expect(normalized.outputResults[0]).toMatchObject({ status: 'error' });
+    const diagnostic = normalized.outputResults[0];
+    if (diagnostic?.status === 'error') {
+      expect(utf8ByteLength(diagnostic.message)).toBeLessThanOrEqual(outputArtifactLimits.bytesPerDiagnostic);
+    }
   });
 
   it('rejects every request owned by a timed-out worker and creates a clean replacement', async () => {

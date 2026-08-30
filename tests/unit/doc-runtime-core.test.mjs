@@ -555,7 +555,7 @@ describe('doc runtime core', () => {
     expect(generateRustFunction(chartCell)).toContain('macro_rules! emit_heatmap');
     expect(generateRustFunction(rustCell)).toContain('Ok(finish_cell_output');
     expect(generateRustFunction({ id: 'plain', source: 'let value = 1;', inputs: [] })).toContain(
-      'let __stdout = std::cell::RefCell::new(String::new());'
+      'let __stdout = std::cell::RefCell::new(BoundedText::new());'
     );
     expect(generateRustLib([])).toContain('let _: Value = serde_json::from_str(inputs_json)');
     expect(generateRustLib([])).toContain('unknown Rust cell');
@@ -564,8 +564,9 @@ describe('doc runtime core', () => {
     expect(generateRustLib([preludeCell])).toContain('Json(JsonArtifact)');
     expect(generateRustLib([preludeCell])).toContain('Html(HtmlArtifact)');
     expect(generateRustLib([preludeCell])).toContain('Image(ImageArtifact)');
-    expect(generateRustLib([preludeCell])).not.toContain('fn ensure_output_size');
-    expect(generateRustLib([tableCell])).toContain('row_count > 10_000');
+    expect(generateRustLib([preludeCell])).toContain('struct OutputCollector');
+    expect(generateRustLib([preludeCell])).toContain('fn serialize_cell_output');
+    expect(generateRustLib([tableCell])).toContain('row_count > 10000');
     expect(generateRustLib([preludeCell])).toContain('fn json_artifact');
     expect(generateRustLib([preludeCell])).toContain('fn html_artifact');
     expect(generateRustLib([preludeCell])).toContain('fn image_artifact');
@@ -577,7 +578,9 @@ describe('doc runtime core', () => {
     expect(generateRustLib([chartCell])).toContain('fn bar_chart_spec');
     expect(generateRustLib([chartCell])).toContain('fn histogram_chart_spec');
     expect(generateRustLib([chartCell])).toContain('fn heatmap_chart_spec');
+    expect(generateRustLib([chartCell])).toContain('fn ensure_chart_data_limit');
     expect(generateRustLib([rustCell])).toContain('generated_plot_cell_runs');
+    expect(generateRustLib([rustCell])).toContain('generated_output_limits_are_enforced');
 
     const haskellCell = {
       id: 'haskell-cell',

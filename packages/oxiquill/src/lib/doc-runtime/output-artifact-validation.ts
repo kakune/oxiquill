@@ -11,16 +11,9 @@ import type {
   TableColumnType,
   TextArtifact
 } from './types.js';
+import { outputArtifactLimits, truncateUtf8, utf8ByteLength } from './output-limits.mjs';
 
-export const outputArtifactLimits = Object.freeze({
-  artifactsPerRun: 100,
-  bytesPerTextJsonOrHtml: 1024 * 1024,
-  chartDataItems: 100_000,
-  columnsPerTable: 100,
-  decodedBytesPerImage: 10 * 1024 * 1024,
-  rowsPerTable: 10_000,
-  validatedBytesPerRun: 16 * 1024 * 1024
-});
+export { outputArtifactLimits } from './output-limits.mjs';
 
 export interface ValidatedJsonArtifact extends JsonArtifact {
   formattedValue: string;
@@ -108,15 +101,19 @@ const tableColumnTypes = new Set<TableColumnType>([
   'null',
   'unknown'
 ]);
-const utf8Encoder = new TextEncoder();
 const utf8Decoder = new TextDecoder('utf-8', { fatal: true });
 const maximumJsonNestingDepth = 100;
 
-class ArtifactValidationError extends Error {}
+class ArtifactValidationError extends Error {
+  constructor(message: string) {
+    super(truncateUtf8(message, outputArtifactLimits.bytesPerDiagnostic).value);
+  }
+}
 
 export function validateOutputArtifacts(outputs: readonly unknown[]): readonly ValidatedArtifactResult[] {
   const results: ValidatedArtifactResult[] = [];
   let validatedBytes = 0;
+  let diagnosticBytes = 0;
   const artifactCount = Math.min(outputs.length, outputArtifactLimits.artifactsPerRun);
 
   for (let index = 0; index < artifactCount; index += 1) {
@@ -128,18 +125,24 @@ export function validateOutputArtifacts(outputs: readonly unknown[]): readonly V
       validatedBytes += validated.byteLength;
       results.push({ status: 'valid', ...validated, index });
     } catch (error) {
+      const message = boundedDiagnostic(error, outputArtifactLimits.diagnosticBytesPerRun - diagnosticBytes);
+      diagnosticBytes += utf8ByteLength(message);
       results.push({
         status: 'error',
-        message: error instanceof Error ? error.message : String(error),
+        message,
         index
       });
     }
   }
 
   if (outputs.length > outputArtifactLimits.artifactsPerRun) {
+    const message = boundedDiagnostic(
+      `Artifact limit exceeded: received ${outputs.length}, maximum ${outputArtifactLimits.artifactsPerRun}.`,
+      outputArtifactLimits.diagnosticBytesPerRun - diagnosticBytes
+    );
     results.push({
       status: 'error',
-      message: `Artifact limit exceeded: received ${outputs.length}, maximum ${outputArtifactLimits.artifactsPerRun}.`,
+      message,
       index: outputArtifactLimits.artifactsPerRun
     });
   }
@@ -164,6 +167,8 @@ function validateOutputArtifact(value: unknown, remainingBytes: number): Validat
       return validateImageArtifact(record, remainingBytes);
     case 'html':
       return validateHtmlArtifact(record, remainingBytes);
+    case '__oxiquill_error':
+      throw new ArtifactValidationError(requiredString(record, 'message', 'Producer artifact error'));
     default:
       throw new ArtifactValidationError(`Unsupported artifact kind ${quoted(kind)}.`);
   }
@@ -380,9 +385,13 @@ function validateTableColumn(value: unknown, index: number): TableColumn {
   if (type != null && !tableColumnTypes.has(type as TableColumnType)) {
     throw new ArtifactValidationError(`Table artifact column ${index + 1} type ${quoted(type)} is not supported.`);
   }
+  const key = requiredString(record, 'key', `Table artifact column ${index + 1}`);
+  const label = requiredString(record, 'label', `Table artifact column ${index + 1}`);
+  requireMetadataBudget(key, `Table artifact column ${index + 1} key`);
+  requireMetadataBudget(label, `Table artifact column ${index + 1} label`);
   return {
-    key: requiredString(record, 'key', `Table artifact column ${index + 1}`),
-    label: requiredString(record, 'label', `Table artifact column ${index + 1}`),
+    key,
+    label,
     ...(type == null ? {} : { type: type as TableColumnType })
   };
 }
@@ -646,7 +655,7 @@ function safeJsonFormat(value: unknown, maxBytes: number, context: string): Json
       tasks.push({
         kind: 'visit',
         input: descriptor.value,
-        path: `${task.path}.${key}`,
+        path: jsonObjectPath(task.path, key),
         depth: task.depth + 1,
         assign: (next) => {
           Object.defineProperty(task.output, key, {
@@ -748,7 +757,9 @@ function validateBase64Image(
   const parsed = parseDataUrl(data);
   const payload = parsed ? parsed.payload : data;
   if (parsed && parsed.mime !== mime) {
-    throw new ArtifactValidationError(`Image artifact MIME mismatch: field is ${mime}, data URL is ${parsed.mime}.`);
+    throw new ArtifactValidationError(
+      `Image artifact MIME mismatch: field is ${quoted(mime)}, data URL is ${quoted(parsed.mime)}.`
+    );
   }
   if (parsed && !parsed.base64) {
     throw new ArtifactValidationError(`${mime} image data URLs must use base64 encoding.`);
@@ -766,7 +777,7 @@ function validateSvgImage(data: string): { data: string; decodedBytes: number; s
   const parsed = parseDataUrl(data);
   if (parsed && parsed.mime !== 'image/svg+xml') {
     throw new ArtifactValidationError(
-      `Image artifact MIME mismatch: field is image/svg+xml, data URL is ${parsed.mime}.`
+      `Image artifact MIME mismatch: field is image/svg+xml, data URL is ${quoted(parsed.mime)}.`
     );
   }
   let svg = data;
@@ -873,31 +884,6 @@ function payloadByteLength(value: unknown): number {
   return utf8ByteLength(JSON.stringify(value));
 }
 
-function truncateUtf8(value: string, maxBytes: number): { byteLength: number; truncated: boolean; value: string } {
-  const byteLength = utf8ByteLength(value);
-  if (byteLength <= maxBytes) return { value, byteLength, truncated: false };
-  if (maxBytes <= 0) return { value: '', byteLength: 0, truncated: true };
-  const marker = '…';
-  const markerBytes = utf8ByteLength(marker);
-  if (maxBytes < markerBytes) return { value: '', byteLength: 0, truncated: true };
-  let low = 0;
-  let high = value.length;
-  while (low < high) {
-    const middle = Math.ceil((low + high) / 2);
-    const candidate = value.slice(0, middle);
-    if (utf8ByteLength(candidate) + markerBytes <= maxBytes) low = middle;
-    else high = middle - 1;
-  }
-  const lastCodeUnit = value.charCodeAt(low - 1);
-  if (low > 0 && lastCodeUnit >= 0xd800 && lastCodeUnit <= 0xdbff) low -= 1;
-  const bounded = `${value.slice(0, low)}${marker}`;
-  return { value: bounded, byteLength: utf8ByteLength(bounded), truncated: true };
-}
-
-function utf8ByteLength(value: string): number {
-  return utf8Encoder.encode(value).byteLength;
-}
-
 function plainRecord(value: unknown, context: string): Record<string, unknown> {
   if (typeof value !== 'object' || value === null || Array.isArray(value)) {
     throw new ArtifactValidationError(`${context} must be a plain record.`);
@@ -950,6 +936,7 @@ function optionalString(record: Record<string, unknown>, key: string, context: s
   if (typeof value !== 'string') {
     throw new ArtifactValidationError(`${context} field ${quoted(key)} must be a string when provided.`);
   }
+  requireMetadataBudget(value, `${context} field ${quoted(key)}`);
   return value;
 }
 
@@ -1116,5 +1103,23 @@ function chartLimitError(dataItems: number): ArtifactValidationError {
 }
 
 function quoted(value: string): string {
-  return JSON.stringify(value);
+  return JSON.stringify(truncateUtf8(value, 256).value);
+}
+
+function requireMetadataBudget(value: string, context: string): void {
+  const byteLength = utf8ByteLength(value);
+  if (byteLength > outputArtifactLimits.bytesPerMetadataField) {
+    throw new ArtifactValidationError(
+      `${context} is ${byteLength} bytes; maximum is ${outputArtifactLimits.bytesPerMetadataField}.`
+    );
+  }
+}
+
+function jsonObjectPath(path: string, key: string): string {
+  return truncateUtf8(`${path}.${key}`, outputArtifactLimits.bytesPerDiagnostic / 2).value;
+}
+
+function boundedDiagnostic(value: unknown, remainingBytes: number): string {
+  const message = value instanceof Error ? value.message : String(value);
+  return truncateUtf8(message, Math.min(outputArtifactLimits.bytesPerDiagnostic, Math.max(0, remainingBytes))).value;
 }

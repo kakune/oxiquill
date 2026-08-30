@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'preact/hooks';
+import { boundedErrorMessage } from '../../lib/doc-runtime/output-limits.mjs';
 import type { RuntimeLabels } from '../../lib/doc-runtime/runtime-localization.js';
 import type { ChartArtifact, ChartSpec } from '../../lib/doc-runtime/types.js';
 
@@ -166,7 +167,7 @@ export default function ChartOutput({ artifact, idPrefix, labels }: ChartOutputP
 }
 
 function toError(value: unknown): Error {
-  return value instanceof Error ? value : new Error(String(value));
+  return new Error(boundedErrorMessage(value));
 }
 
 export function currentChartTheme(): ChartTheme {

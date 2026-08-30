@@ -2,6 +2,7 @@ import type { CellLanguage, CellManifest, InputValues, RuntimeWorkerRequest, Run
 import { ExecutionCancellationError } from './execution-cancellation.js';
 import { assertValidInputValues, completeInputValues } from './interactive-input-validation.js';
 import { normalizeCellExecutionResult, type NormalizedCellExecutionResult } from './output-artifacts.js';
+import { boundedErrorMessage } from './output-limits.mjs';
 
 type PendingRequest = {
   reject: (reason: Error) => void;
@@ -121,7 +122,7 @@ export function createInteractiveCellRunner(dependencies: RuntimeClientDependenc
         request.removeAbortListener();
 
         if (!event.data.ok) {
-          request.reject(new Error(event.data.error));
+          request.reject(toError(event.data.error));
           return;
         }
 
@@ -155,6 +156,7 @@ export function createInteractiveCellRunner(dependencies: RuntimeClientDependenc
   }
 
   function failWorker(worker: Worker, error: Error): void {
+    const boundedError = toError(error);
     let ownsWorker = false;
 
     for (const [language, current] of workers) {
@@ -173,7 +175,7 @@ export function createInteractiveCellRunner(dependencies: RuntimeClientDependenc
       dependencies.clearTimeout(request.timeout);
       request.removeAbortListener();
       pending.delete(requestId);
-      request.reject(error);
+      request.reject(boundedError);
     }
   }
 
@@ -239,7 +241,7 @@ function isRuntimeWorkerResponse(value: unknown): value is RuntimeWorkerResponse
 }
 
 function toError(value: unknown): Error {
-  return value instanceof Error ? value : new Error(String(value));
+  return new Error(boundedErrorMessage(value));
 }
 
 function inputArgument(input: CellManifest['inputs'][number], inputs: InputValues): string {

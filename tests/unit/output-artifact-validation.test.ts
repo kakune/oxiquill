@@ -579,4 +579,21 @@ describe('output artifact validation', () => {
     expect(siblings[0]).toMatchObject({ status: 'error' });
     expect(siblings[1]).toMatchObject({ status: 'valid', artifact: { content: 'still usable' } });
   });
+
+  it('bounds discriminator values and cumulative validation diagnostics', () => {
+    const invalidKind = 'unsupported-'.repeat(outputArtifactLimits.bytesPerDiagnostic);
+    const results = validateOutputArtifacts([
+      ...Array.from({ length: outputArtifactLimits.artifactsPerRun - 1 }, () => ({ kind: invalidKind })),
+      { kind: 'text', stream: 'stdout', content: 'valid sibling' }
+    ]);
+    const diagnosticBytes = results.reduce(
+      (total, result) => total + (result.status === 'error' ? new TextEncoder().encode(result.message).byteLength : 0),
+      0
+    );
+
+    expect(diagnosticBytes).toBeLessThanOrEqual(outputArtifactLimits.diagnosticBytesPerRun);
+    expect(results[0]).toMatchObject({ status: 'error' });
+    if (results[0]?.status === 'error') expect(results[0].message).not.toContain(invalidKind);
+    expect(results.at(-1)).toMatchObject({ status: 'valid', artifact: { content: 'valid sibling' } });
+  });
 });
