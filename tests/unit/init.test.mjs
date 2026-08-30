@@ -43,11 +43,13 @@ describe('oxiquill init', () => {
     );
     await expect(access(path.join(result.targetPath, 'node_modules'))).rejects.toMatchObject({ code: 'ENOENT' });
     await expect(access(path.join(result.targetPath, '.git'))).rejects.toMatchObject({ code: 'ENOENT' });
+    const navigationCommand =
+      process.platform === 'win32' ? "  Set-Location -LiteralPath 'My Docs!'" : "  cd -- 'My Docs!'";
     expect(log.mock.calls.map(([message]) => message)).toEqual([
       `Created an Oxiquill project in ${result.targetPath}.`,
       '',
       'Next steps:',
-      "  cd -- 'My Docs!'",
+      navigationCommand,
       '  pnpm install',
       '  pnpm dev'
     ]);
