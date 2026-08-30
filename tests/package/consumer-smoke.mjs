@@ -58,7 +58,52 @@ try {
   const [packed] = JSON.parse(packResult.stdout);
   const tarballPath = path.join(temporaryRoot, packed.filename);
 
-  await cp(path.join(repositoryRoot, 'templates/basic'), consumerRoot, { recursive: true });
+  initializePackedConsumer(packageManager, tarballPath, consumerRoot, temporaryRoot);
+  const packageJsonPath = path.join(consumerRoot, 'package.json');
+  const packageJson = JSON.parse(await readFile(packageJsonPath, 'utf8'));
+  const tarballReference = path.relative(consumerRoot, tarballPath).split(path.sep).join('/');
+  packageJson.dependencies.oxiquill = `file:${tarballReference}`;
+  packageJson.scripts['wasm:dev'] = 'oxiquill docgen --wasm dev';
+  packageJson.scripts['test:wasm'] = 'oxiquill test-wasm';
+  await writeFile(packageJsonPath, `${JSON.stringify(packageJson, null, 2)}\n`);
+
+  run(packageManager, ['install'], consumerRoot);
+  const packedCliPath = path.join(consumerRoot, 'node_modules/oxiquill/dist/cli/index.mjs');
+  const versionResult = run(process.execPath, [packedCliPath, '--version'], consumerRoot, true);
+  assert.equal(versionResult.stdout.trim(), packed.version);
+  for (const command of [
+    'init',
+    'dev',
+    'dev:runtime',
+    'dev:astro',
+    'preview',
+    'build',
+    'check',
+    'docgen',
+    'clean',
+    'test-rust',
+    'test-rust-coverage',
+    'lint-rust',
+    'doc-rust',
+    'test-wasm'
+  ]) {
+    const helpResult = run(process.execPath, [packedCliPath, command, '--help'], consumerRoot, true);
+    assert.match(helpResult.stdout, new RegExp(`Usage: oxiquill ${command.replace(/[.*+?^${}()|[\]\\]/gu, '\\$&')}`));
+  }
+  run(
+    'node',
+    ['--input-type=module', '--eval', "await import('oxiquill'); await import('oxiquill/astro');"],
+    consumerRoot
+  );
+
+  const nodeOnlyEnvironment = createNodeOnlyEnvironment();
+  run(process.execPath, [packedCliPath, 'check'], consumerRoot, false, nodeOnlyEnvironment);
+  run(process.execPath, [packedCliPath, 'build'], consumerRoot, false, nodeOnlyEnvironment);
+  run(packageManager, ['run', 'preview', '--', '--background', '--host', '127.0.0.1', '--port', '4321'], consumerRoot);
+  await assertFile(path.join(consumerRoot, '.astro/preview.json'));
+  stopAstroPreview(packageManager, consumerRoot);
+  run(packageManager, ['run', 'clean'], consumerRoot);
+
   const projectRoot = path.join(consumerRoot, 'site root');
   await mkdir(projectRoot);
   await rename(path.join(consumerRoot, 'content'), path.join(projectRoot, 'content'));
@@ -105,27 +150,12 @@ try {
       ''
     ].join('\n')
   );
-  const packageJsonPath = path.join(consumerRoot, 'package.json');
-  const packageJson = JSON.parse(await readFile(packageJsonPath, 'utf8'));
-  const tarballReference = path.relative(consumerRoot, tarballPath).split(path.sep).join('/');
-  packageJson.dependencies.oxiquill = `file:${tarballReference}`;
-  packageJson.scripts['wasm:dev'] = 'oxiquill docgen --wasm dev';
-  packageJson.scripts['test:wasm'] = 'oxiquill test-wasm';
-  await writeFile(packageJsonPath, `${JSON.stringify(packageJson, null, 2)}\n`);
   await writeFile(path.join(projectRoot, 'package-api.ts'), packageApiSource);
-  run(packageManager, ['install'], consumerRoot);
   run(
     packageManager,
     packageManager === 'npm' ? ['exec', '--', 'oxiquill', 'help'] : ['exec', 'oxiquill', 'help'],
     consumerRoot
   );
-  run(
-    'node',
-    ['--input-type=module', '--eval', "await import('oxiquill'); await import('oxiquill/astro');"],
-    consumerRoot
-  );
-  const packedCliPath = path.join(consumerRoot, 'node_modules/oxiquill/dist/cli/index.mjs');
-  const nodeOnlyEnvironment = createNodeOnlyEnvironment();
   run(process.execPath, [packedCliPath, 'check'], consumerRoot, false, nodeOnlyEnvironment);
   run(process.execPath, [packedCliPath, 'build'], consumerRoot, false, nodeOnlyEnvironment);
 
@@ -309,6 +339,20 @@ async function waitForHttp(url, timeoutMs, server, output) {
     await new Promise((resolve) => setTimeout(resolve, 250));
   }
   throw new Error(`Timed out waiting for packed preview at ${url}.\n${output.join('')}`);
+}
+
+function initializePackedConsumer(packageManager, tarballPath, target, cwd) {
+  const args =
+    packageManager === 'npm'
+      ? ['exec', '--yes', `--package=${tarballPath}`, '--', 'oxiquill', 'init', target]
+      : ['dlx', tarballPath, 'init', target];
+  run(packageManager, args, cwd);
+}
+
+function stopAstroPreview(packageManager, cwd) {
+  const args =
+    packageManager === 'npm' ? ['exec', '--', 'astro', 'preview', 'stop'] : ['exec', 'astro', 'preview', 'stop'];
+  run(packageManager, args, cwd);
 }
 
 function run(command, args, cwd, capture = false, environment = process.env) {
