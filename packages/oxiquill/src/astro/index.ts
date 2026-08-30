@@ -97,6 +97,7 @@ const viteAliasedPackageNames = [
 ];
 const viteSsrNoExternalPackageNames = ['@astrojs/preact', 'oxiquill', 'preact', 'preact-render-to-string'];
 const viteResolveDedupePackageNames = ['@preact/signals', 'preact', 'preact-render-to-string'];
+const viteOptimizeDepsInclude = ['oxiquill > mermaid'];
 
 export interface OxiquillFrameworkOptions<StarlightOptions extends object = object> {
   preact?: PreactIntegrationFactory;
@@ -483,10 +484,15 @@ function mergeViteConfig(
   const serverFs = server.fs ?? {};
   const ssr = vite.ssr ?? {};
   const resolve = vite.resolve ?? {};
+  const optimizeDeps = vite.optimizeDeps ?? {};
   const alias = mergeAlias(oxiquillDependencyAliases(paths), resolve.alias);
 
   return {
     ...vite,
+    optimizeDeps: {
+      ...optimizeDeps,
+      include: mergeStringList(optimizeDeps.include, viteOptimizeDepsInclude)
+    },
     resolve: {
       ...resolve,
       ...(alias ? { alias } : {}),
