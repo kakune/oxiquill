@@ -113,6 +113,10 @@ try {
   }
 
   initializeConsumer(packageManager, packageSource, consumerRoot, temporaryRoot);
+  const starterConfig = {
+    astro: await readFile(path.join(consumerRoot, 'astro.config.mjs'), 'utf8'),
+    content: await readFile(path.join(consumerRoot, 'content.config.ts'), 'utf8')
+  };
   const packageJsonPath = path.join(consumerRoot, 'package.json');
   const packageJson = JSON.parse(await readFile(packageJsonPath, 'utf8'));
   assert.equal(packageJson.dependencies.oxiquill, `^${expectedVersion}`, 'starter Oxiquill version is stale');
@@ -174,6 +178,10 @@ try {
 
   const nodeOnlyEnvironment = createNodeOnlyEnvironment();
   run(process.execPath, [installedCliPath, 'check'], consumerRoot, false, nodeOnlyEnvironment);
+  await Promise.all([
+    writeFile(path.join(consumerRoot, 'astro.config.mjs'), starterConfig.astro),
+    writeFile(path.join(consumerRoot, 'content.config.ts'), starterConfig.content)
+  ]);
   const initialBuild = run(process.execPath, [installedCliPath, 'build'], consumerRoot, true, nodeOnlyEnvironment);
   assertNo404Warning(initialBuild);
   run(packageManager, ['run', 'preview', '--', '--background', '--host', '127.0.0.1', '--port', '4321'], consumerRoot);
