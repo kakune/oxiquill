@@ -7,7 +7,7 @@ import {
   discoverProtectedPathRoles,
   validateProjectPathSafety
 } from '../config/path-safety.mjs';
-import { canonicalPath, normalizePath } from '../config/paths.mjs';
+import { arePathsEqual, canonicalPath, normalizePath } from '../config/paths.mjs';
 
 export const CLEANUP_OWNERSHIP_MARKER = '.oxiquill-ownership.json';
 
@@ -159,7 +159,7 @@ function isDefaultCleanupRoot(root, paths) {
       : root.property === 'outDir'
         ? path.join(paths.workspaceRoot, 'dist')
         : path.join(paths.publicDir, 'oxiquill');
-  return root.path === canonicalPath(defaultPath);
+  return arePathsEqual(root.path, defaultPath);
 }
 
 function ownershipError(root, reason) {

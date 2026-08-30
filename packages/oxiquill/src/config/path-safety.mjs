@@ -1,6 +1,6 @@
 import { readdir } from 'node:fs/promises';
 import path from 'node:path';
-import { canonicalPath, isPathWithin } from './paths.mjs';
+import { arePathsEqual, canonicalPath, isPathWithin } from './paths.mjs';
 
 const correctiveAction =
   'Choose a dedicated generated directory that does not overlap authored, protected, persistent-cache, or other generated paths.';
@@ -136,7 +136,7 @@ export async function discoverAuthoredPublicPathRoles({ fileSystem = { readdir }
   const authoredAncestors = await Promise.all(
     ancestors.map(async (ancestor) => {
       const entries = await directoryEntryNames(ancestor.path, fileSystem);
-      return entries.some((entryName) => entryName !== ancestor.expectedChild)
+      return entries.some((entryName) => !pathNamesEqual(entryName, ancestor.expectedChild))
         ? [role('authored public subtree', ancestor.path, 'authored public asset subtree')]
         : [];
     })
@@ -156,13 +156,13 @@ async function findProtectedEntries(rootPath, fileSystem) {
 
   const discovered = entries.flatMap((entry) => {
     const entryPath = path.join(rootPath, entry.name);
-    const protectedRole = protectedEntryRoles.get(entry.name);
+    const protectedRole = protectedRoleForEntryName(entry.name);
     if (protectedRole) return [role(entry.name, entryPath, protectedRole)];
     return [];
   });
   const nested = await Promise.all(
     entries
-      .filter((entry) => entry.isDirectory() && !protectedEntryRoles.has(entry.name))
+      .filter((entry) => entry.isDirectory() && !protectedRoleForEntryName(entry.name))
       .map((entry) => findProtectedEntries(path.join(rootPath, entry.name), fileSystem))
   );
 
@@ -207,7 +207,7 @@ function assertPathsDisjoint(left, right) {
 function pathRelationship(leftPath, rightPath) {
   const left = canonicalPath(leftPath);
   const right = canonicalPath(rightPath);
-  if (left === right) return 'equal to';
+  if (arePathsEqual(left, right)) return 'equal to';
   if (isPathWithin(left, right)) return 'an ancestor of';
   if (isPathWithin(right, left)) return 'a descendant of';
   return undefined;
@@ -225,15 +225,25 @@ function protectedPathSegment(workspaceRoot, candidatePath) {
   if (relative === '' || relative.startsWith(`..${path.sep}`) || path.isAbsolute(relative)) return undefined;
 
   const segments = relative.split(path.sep);
-  const protectedIndex = segments.findIndex((segment) => protectedEntryRoles.has(segment));
+  const protectedIndex = segments.findIndex((segment) => protectedRoleForEntryName(segment));
   if (protectedIndex < 0) return undefined;
 
   const entryName = segments[protectedIndex];
   return role(
     entryName,
     path.join(workspaceRoot, ...segments.slice(0, protectedIndex + 1)),
-    protectedEntryRoles.get(entryName)
+    protectedRoleForEntryName(entryName)
   );
+}
+
+function protectedRoleForEntryName(entryName) {
+  const exact = protectedEntryRoles.get(entryName);
+  if (exact || process.platform !== 'win32') return exact;
+  return Array.from(protectedEntryRoles).find(([name]) => name.toLowerCase() === entryName.toLowerCase())?.[1];
+}
+
+function pathNamesEqual(left, right) {
+  return process.platform === 'win32' ? left.toLowerCase() === right.toLowerCase() : left === right;
 }
 
 function role(field, value, roleName) {

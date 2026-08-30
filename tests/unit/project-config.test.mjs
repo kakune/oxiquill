@@ -81,6 +81,21 @@ describe('Oxiquill project configuration', () => {
     expect(normalizePath('C:\\workspace\\public\\oxiquill assets')).toBe('C:/workspace/public/oxiquill assets');
   });
 
+  it.runIf(process.platform === 'win32')('treats Windows path casing aliases as the same resolved path', async () => {
+    const root = await temporaryDirectory();
+    expect(() =>
+      resolveProject({
+        astro: { cacheDir: 'STATE', outDir: 'OUTPUT' },
+        paths: { cacheDir: 'state' },
+        root
+      })
+    ).not.toThrow();
+    expect(() => resolveProject({ astro: { cacheDir: 'OUTPUT', outDir: 'output' }, root })).toThrow(
+      'it is equal to outDir'
+    );
+    expect(() => resolveProject({ astro: { outDir: '.GIT' }, root })).toThrow('Git repository metadata');
+  });
+
   it('accepts equivalent explicit paths and reports conflicting fields', () => {
     const root = path.resolve('/repo');
     expect(() =>

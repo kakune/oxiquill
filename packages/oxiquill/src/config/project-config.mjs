@@ -2,7 +2,7 @@ import { existsSync } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { loadConfigFromFile } from 'vite';
-import { canonicalPath, createOxiquillPaths, directoryPath } from './paths.mjs';
+import { arePathsEqual, canonicalPath, createOxiquillPaths, directoryPath } from './paths.mjs';
 import { astroDirectoryOptionNames, readOxiquillMetadata } from './metadata.mjs';
 import { validateProjectPathSafety } from './path-safety.mjs';
 
@@ -184,7 +184,7 @@ function reconcileDirectory({
   const astroPath = astroExplicit ? directoryPath(astroOptions[astroField], basePath) : undefined;
   const oxiquillPath = pathExplicit ? directoryPath(pathOptions[pathField], basePath) : undefined;
 
-  if (astroPath && oxiquillPath && astroPath !== oxiquillPath) {
+  if (astroPath && oxiquillPath && !arePathsEqual(astroPath, oxiquillPath)) {
     throw new Error(
       `Conflicting project paths: ${astroField} resolves to ${astroPath}, ` +
         `but paths.${pathField} resolves to ${oxiquillPath}.`
