@@ -76,7 +76,7 @@ const presentation = togglePresentation(lang, dir, 'sidebar');
   }
 
   @media (min-width: 50rem) {
-    :global([data-sidebar-collapsed]) {
+    :global([data-has-sidebar][data-sidebar-collapsed]) {
       --sl-content-inline-start: 0rem;
       --sl-content-width: calc(var(--oq-sidebar-base-content-width) + var(--sl-sidebar-width));
     }
