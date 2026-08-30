@@ -1,5 +1,6 @@
 // @vitest-environment node
 
+import { spawnSync } from 'node:child_process';
 import { access, lstat, mkdir, mkdtemp, readFile, readdir, rm, symlink, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
@@ -46,10 +47,75 @@ describe('oxiquill init', () => {
       `Created an Oxiquill project in ${result.targetPath}.`,
       '',
       'Next steps:',
-      '  cd "My Docs!"',
+      "  cd -- 'My Docs!'",
       '  pnpm install',
       '  pnpm dev'
     ]);
+  });
+
+  it.each([
+    ['a path with spaces', "cd -- 'a path with spaces'"],
+    ["apostrophe's", "cd -- 'apostrophe'\\''s'"],
+    ['$(touch injected)', "cd -- '$(touch injected)'"],
+    ['`touch injected`', "cd -- '`touch injected`'"],
+    ['$PROJECT', "cd -- '$PROJECT'"],
+    ['back\\slash', "cd -- 'back\\slash'"],
+    ['Windows\\Style Path', "cd -- 'Windows\\Style Path'"]
+  ])('prints a safely quoted POSIX navigation command for %s', async (directory, expected) => {
+    const cwd = await temporaryDirectory();
+    const log = vi.fn();
+
+    await initializeProject({ cwd, directory, log, platform: 'linux', starterRoot });
+
+    expect(log.mock.calls.flat()).toContain(`  ${expected}`);
+  });
+
+  it.each([
+    ['a path with spaces', "Set-Location -LiteralPath 'a path with spaces'"],
+    ["apostrophe's", "Set-Location -LiteralPath 'apostrophe''s'"],
+    ['$(touch injected)', "Set-Location -LiteralPath '$(touch injected)'"],
+    ['`touch injected`', "Set-Location -LiteralPath '`touch injected`'"],
+    ['$PROJECT', "Set-Location -LiteralPath '$PROJECT'"],
+    ['back\\slash', "Set-Location -LiteralPath 'back\\slash'"],
+    ['Windows\\Style Path', "Set-Location -LiteralPath 'Windows\\Style Path'"]
+  ])('prints a literal PowerShell navigation command for %s', async (directory, expected) => {
+    const cwd = await temporaryDirectory();
+    const log = vi.fn();
+
+    await initializeProject({ cwd, directory, log, platform: 'win32', starterRoot });
+
+    expect(log.mock.calls.flat()).toContain(`  ${expected}`);
+  });
+
+  it.runIf(process.platform !== 'win32')('does not execute shell content embedded in a POSIX path', async () => {
+    const cwd = await temporaryDirectory();
+    const directory = '$(touch dollar-injected)`touch backtick-injected`';
+    const log = vi.fn();
+    const result = await initializeProject({ cwd, directory, log, platform: 'linux', starterRoot });
+    const command = log.mock.calls
+      .flat()
+      .find((message) => message.startsWith('  cd -- '))
+      .trim();
+
+    const executed = spawnSync('sh', ['-c', `${command}\npwd`], { cwd, encoding: 'utf8' });
+
+    expect(executed.status).toBe(0);
+    expect(executed.stdout.trim()).toBe(result.targetPath);
+    await expect(access(path.join(cwd, 'dollar-injected'))).rejects.toMatchObject({ code: 'ENOENT' });
+    await expect(access(path.join(cwd, 'backtick-injected'))).rejects.toMatchObject({ code: 'ENOENT' });
+  });
+
+  it.each([
+    ['newline', 'bad\npath'],
+    ['tab', 'bad\tpath'],
+    ['escape', 'bad\u001bpath'],
+    ['delete', 'bad\u007fpath']
+  ])('rejects a %s control character before creating files', async (_name, directory) => {
+    const cwd = await temporaryDirectory();
+
+    await expect(initializeProject({ cwd, directory, starterRoot })).rejects.toThrow('contains control characters');
+
+    expect(await readdir(cwd)).toEqual([]);
   });
 
   it('initializes an existing empty current directory without printing a cd command', async () => {
@@ -60,6 +126,15 @@ describe('oxiquill init', () => {
 
     expect(await relativeFiles(cwd)).toEqual([...starterFiles].sort());
     expect(log.mock.calls.flat()).not.toContain(expect.stringMatching(/^ {2}cd /u));
+  });
+
+  it('initializes a nested target whose parent directories do not exist', async () => {
+    const cwd = await temporaryDirectory();
+
+    const result = await initializeProject({ cwd, directory: path.join('nested', 'my-docs'), starterRoot });
+
+    expect(result.targetPath).toBe(path.join(cwd, 'nested', 'my-docs'));
+    expect(await relativeFiles(result.targetPath)).toEqual([...starterFiles].sort());
   });
 
   it('never changes a non-empty target or a file target', async () => {
@@ -113,6 +188,25 @@ describe('oxiquill init', () => {
 
     expect((await lstat(targetPath)).isDirectory()).toBe(true);
     expect(await readdir(targetPath)).toEqual([]);
+  });
+
+  it('rolls back a newly created nested target and its empty parent structure', async () => {
+    const cwd = await temporaryDirectory();
+
+    await expect(
+      initializeProject({
+        cwd,
+        directory: path.join('nested', 'my-docs'),
+        fileSystem: {
+          writeFile: async () => {
+            throw new Error('injected nested write failure');
+          }
+        },
+        starterRoot
+      })
+    ).rejects.toThrow('injected nested write failure');
+
+    expect(await readdir(cwd)).toEqual([]);
   });
 
   it('rejects escaping or missing starter sources before creating the target', async () => {
