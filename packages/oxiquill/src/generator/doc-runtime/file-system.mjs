@@ -4,6 +4,8 @@ import path from 'node:path';
 import { pathFromUrl } from '../../config/paths.mjs';
 import { createSha256, hashBytes } from './hashing.mjs';
 
+const pendingCopies = new Map();
+
 export const defaultFileSystem = {
   copyFile,
   createReadStream,
@@ -45,6 +47,20 @@ export async function writeIfChanged(filePath, content, { fileSystem = defaultFi
 export async function copyFileIfChanged(sourcePath, targetPath, { fileSystem = defaultFileSystem } = {}) {
   const sourceFilePath = pathFromUrl(sourcePath);
   const targetFilePath = pathFromUrl(targetPath);
+  const previousCopy = pendingCopies.get(targetFilePath) ?? Promise.resolve();
+  const copy = previousCopy
+    .catch(() => {})
+    .then(() => copyFileIfChangedOnce(sourceFilePath, targetFilePath, { fileSystem }));
+  pendingCopies.set(targetFilePath, copy);
+
+  try {
+    return await copy;
+  } finally {
+    if (pendingCopies.get(targetFilePath) === copy) pendingCopies.delete(targetFilePath);
+  }
+}
+
+async function copyFileIfChangedOnce(sourceFilePath, targetFilePath, { fileSystem }) {
   await fileSystem.mkdir(path.dirname(targetFilePath), { recursive: true });
 
   if (await hasBinaryContent(sourceFilePath, targetFilePath, { fileSystem })) return false;
