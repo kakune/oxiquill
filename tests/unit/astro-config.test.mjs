@@ -33,6 +33,12 @@ const preactExportSpecifiers = [
   'preact/debug',
   'preact/devtools'
 ];
+const preactRendererExportSpecifiers = [
+  'preact-render-to-string',
+  'preact-render-to-string/jsx',
+  'preact-render-to-string/stream',
+  'preact-render-to-string/stream-node'
+];
 
 function defineOxiquillConfig(options) {
   return definePackageConfig({
@@ -336,7 +342,7 @@ describe('defineOxiquillConfig', () => {
     expect(normalizedAllow.some((entry) => entry.includes('node_modules/.pnpm/aria-query'))).toBe(true);
   });
 
-  it('aliases Preact when the workspace does not expose a direct install', () => {
+  it('aliases the Preact runtime when the workspace does not expose a direct install', () => {
     const config = defineOxiquillConfig({
       sidebar: [],
       title: 'Docs'
@@ -349,6 +355,13 @@ describe('defineOxiquillConfig', () => {
 
       expect(replacement, id).toEqual(expect.any(String));
       expect(replacement.replaceAll('\\', '/'), id).toContain('/node_modules/preact/');
+    }
+
+    for (const id of preactRendererExportSpecifiers) {
+      const replacement = aliasReplacementFor(update.vite.resolve.alias, id);
+
+      expect(replacement, id).toEqual(expect.any(String));
+      expect(replacement.replaceAll('\\', '/'), id).toContain('/node_modules/preact-render-to-string/');
     }
   });
 
@@ -371,7 +384,7 @@ describe('defineOxiquillConfig', () => {
     expect(resolve).not.toHaveBeenCalled();
   });
 
-  it('bundles compiled Oxiquill while sharing the Preact SSR runtime', () => {
+  it('bundles the complete Preact SSR runtime with compiled Oxiquill', () => {
     const config = defineOxiquillConfig({
       sidebar: [],
       title: 'Docs'
@@ -379,9 +392,12 @@ describe('defineOxiquillConfig', () => {
 
     const update = runConfigSetup(config, linkedConsumerRoot);
 
-    expect(update.vite.ssr.noExternal).toEqual(expect.arrayContaining(['@astrojs/preact', 'oxiquill']));
-    expect(update.vite.ssr.noExternal).not.toEqual(expect.arrayContaining(['preact', 'preact-render-to-string']));
-    expect(update.vite.resolve.dedupe).toEqual(expect.arrayContaining(['@preact/signals', 'preact']));
+    expect(update.vite.ssr.noExternal).toEqual(
+      expect.arrayContaining(['@astrojs/preact', 'oxiquill', 'preact', 'preact-render-to-string'])
+    );
+    expect(update.vite.resolve.dedupe).toEqual(
+      expect.arrayContaining(['@preact/signals', 'preact', 'preact-render-to-string'])
+    );
   });
 
   it('merges consumer Vite SSR and dedupe settings with Oxiquill defaults', () => {
@@ -404,10 +420,17 @@ describe('defineOxiquillConfig', () => {
 
     expect(update.vite.ssr.external).toEqual(['external-runtime']);
     expect(update.vite.ssr.noExternal).toEqual(
-      expect.arrayContaining(['consumer-package', consumerNoExternal, '@astrojs/preact', 'oxiquill'])
+      expect.arrayContaining([
+        'consumer-package',
+        consumerNoExternal,
+        '@astrojs/preact',
+        'oxiquill',
+        'preact',
+        'preact-render-to-string'
+      ])
     );
     expect(update.vite.resolve.dedupe).toEqual(
-      expect.arrayContaining(['consumer-runtime', '@preact/signals', 'preact'])
+      expect.arrayContaining(['consumer-runtime', '@preact/signals', 'preact', 'preact-render-to-string'])
     );
   });
 
@@ -423,7 +446,9 @@ describe('defineOxiquillConfig', () => {
 
       const update = runConfigSetup(config, linkedConsumerRoot);
 
-      expect(update.vite.ssr.noExternal).toEqual(expect.arrayContaining([noExternal, '@astrojs/preact', 'oxiquill']));
+      expect(update.vite.ssr.noExternal).toEqual(
+        expect.arrayContaining([noExternal, '@astrojs/preact', 'oxiquill', 'preact', 'preact-render-to-string'])
+      );
     }
   });
 
@@ -450,6 +475,7 @@ describe('defineOxiquillConfig', () => {
     const update = runConfigSetup(config, linkedConsumerRoot);
     const resolved = await resolveWithVite(update, [
       ...preactExportSpecifiers,
+      ...preactRendererExportSpecifiers,
       '@preact/signals',
       '@bjorn3/browser_wasi_shim',
       'aria-query',
@@ -463,6 +489,10 @@ describe('defineOxiquillConfig', () => {
     ]);
 
     for (const id of preactExportSpecifiers) {
+      expect(resolved[id], id).toEqual(expect.any(String));
+    }
+
+    for (const id of preactRendererExportSpecifiers) {
       expect(resolved[id], id).toEqual(expect.any(String));
     }
 

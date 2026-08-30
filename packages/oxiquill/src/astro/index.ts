@@ -81,6 +81,8 @@ const viteManagedPackageNames = [
   'html-escaper',
   'katex',
   'mermaid',
+  'preact',
+  'preact-render-to-string',
   'pyodide'
 ];
 const viteAliasedPackageNames = [
@@ -88,12 +90,13 @@ const viteAliasedPackageNames = [
   '@astrojs/preact',
   '@preact/signals',
   'preact',
+  'preact-render-to-string',
   'aria-query',
   'axobject-query',
   'html-escaper'
 ];
-const viteSsrNoExternalPackageNames = ['@astrojs/preact', 'oxiquill'];
-const viteResolveDedupePackageNames = ['@preact/signals', 'preact'];
+const viteSsrNoExternalPackageNames = ['@astrojs/preact', 'oxiquill', 'preact', 'preact-render-to-string'];
+const viteResolveDedupePackageNames = ['@preact/signals', 'preact', 'preact-render-to-string'];
 
 export interface OxiquillFrameworkOptions<StarlightOptions extends object = object> {
   preact?: PreactIntegrationFactory;
