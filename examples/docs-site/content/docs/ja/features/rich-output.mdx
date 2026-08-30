@@ -27,35 +27,49 @@ Oxiquill は次の出力を表示します。
 | `table` | `columns`、rectangular `rows`                                  | `rowCount` が original size、`truncated` が preview を示します。                                   |
 | `chart` | 下記の valid `spec`                                            | oversize/invalid chart は local artifact error。                                                   |
 | `image` | `mime: image/png \| image/jpeg \| image/svg+xml`、valid data   | `alt` が image alternative。                                                                       |
-| `html`  | `html: string`, `sandboxed: true`                              | empty sandbox permission の iframe 内に常に表示。                                                  |
+| `html`  | `html: string`, `sandboxed: true`                              | empty sandbox、no-referrer、下記の restrictive CSP で表示。                                        |
 
 table column は `key`、`label`、optional `type` を持ちます。type は `string`、`number`、`integer`、`boolean`、`date`、`datetime`、`null`、`unknown` です。各 row は declared column count と正確に一致する必要があります。
 
 ## Chart schema
 
-すべての chart spec は optional `title`、`xLabel`、`yLabel`、`xType`、`yType`、`legend`、`tooltip`、`dataZoom` を受け取ります。axis type は `value`、`category`、`time`、`log` です。
+すべての chart spec は optional `title`、`xLabel`、`yLabel`、`xType`、`yType`、`legend`、`tooltip`、`dataZoom` を受け取ります。axis type は `value`、`category`、`time`、`log` です。未指定 axis は `value` が default ですが、bar/histogram 固有の category axis と、対応する categories array を持つ heatmap axis は `category` になります。
+
+- `value` coordinate は finite number、`log` coordinate は 0 より大きい finite number です。
+- `time` coordinate は finite epoch millisecond、または `YYYY-MM-DDTHH:mm:ss[.sss]Z` / `YYYY-MM-DDTHH:mm:ss[.sss]±HH:mm` 形式の ISO-8601 string です。calendar field と明示的な time zone も valid である必要があります。
+- `category` coordinate は string または finite number です。heatmap が `xCategories` / `yCategories` を持つ場合は、listed string または範囲内の zero-based integer index に限定されます。categories array を宣言した axis は category になり、矛盾する axis type は reject されます。
 
 - `line`、`scatter`、`area`: optional `name` と `[x, y]` point を持つ `series[]`。
 - `bar`: string `categories[]` と同じ length の numeric-or-null `values[]` series。
-- `histogram`: finite `[lower, upper, count]` tuple の `bins[]`。
+- `histogram`: `lower < upper` かつ count が non-negative の finite `[lower, upper, count]` tuple の `bins[]`。
 - `heatmap`: optional `xCategories`/`yCategories` と finite `[x, y, value]` cell。
 
-chart は textual title/caption と bounded accessible summary または equivalent table を提供します。equivalent がある場合、implementation canvas は accessibility API から隠されます。
+empty chart と equal point domain は valid です。heatmap は X、Y、heat value の範囲を別々に示し、color scale には実際の heat value を使います。empty dataset だけは `0–1` を fallback にします。chart は textual title/caption と bounded accessible summary または equivalent table を提供します。equivalent がある場合、implementation canvas は accessibility API から隠されます。
+
+chart は現在の Starlight light/dark theme に合わせた contrast-aware color を使い、`html[data-theme]` の変更時に ECharts instance を作り直します。一時的な renderer load failure の後には retry action を表示します。
 
 ## Resource limit
 
-limit は validation 後に適用され、各 run で累積します。
+producer は各 language worker 内で `postMessage` より前に limit を適用し、main thread でも bounded response を独立して再検証します。limit は UTF-8 byte 単位で、記載のものは run ごとに累積します。
 
 | Resource                    | Limit                      | 超過時                                                      |
 | --------------------------- | -------------------------- | ----------------------------------------------------------- |
 | Artifact                    | 1 run 100個                | 追加 artifact を local reject。                             |
+| stdout / stderr             | stream ごとに 1 MiB        | limit までだけ保持し、truncated として表示。                |
 | Text、serialized JSON、HTML | artifact ごとに 1 MiB      | Text/JSON は `truncated: true` 可、HTML は reject。         |
 | Table                       | 10,000 row、100 column     | bounded table は `truncated: true` と `rowCount` を使用可。 |
 | Chart                       | 合計100,000 point/bin/cell | artifact-local error。                                      |
 | Image                       | decoded 10 MiB             | artifact-local error。                                      |
 | 全 validated output         | 1 run 16 MiB               | remaining budget を超える artifact を local reject。        |
+| complete worker response    | 16 MiB                     | worker から page へ渡す前に後続 artifact を省略。           |
+| worker error                | 16 KiB                     | UTF-8 message を truncate。                                 |
+| artifact diagnostic         | 1件 8 KiB、1 run 64 KiB    | 各 limit 内で diagnostic を truncate。                      |
 
-`truncated: true` を使えるのは text、JSON、table だけです。chart、image、HTML は黙って truncate しません。invalid/cyclic/over-deep JSON、ragged table、non-finite chart value、invalid base64/MIME pair、unsafe structural record が cell component を crash させることはありません。
+`truncated: true` を使えるのは text、JSON、table だけです。chart、image、HTML は黙って truncate しません。invalid/cyclic/over-deep JSON、ragged table、non-finite chart value、invalid base64/MIME pair、unsafe structural record が cell component を crash させることはありません。legacy の `stdout`、`stderr`、`value`、`plots` alias は validated/bounded `outputs` から再生成され、raw alias が別の unbounded payload を保持することはありません。
+
+## CSV copy の安全性
+
+default table action は表示中の row を spreadsheet-safe CSV として copy します。最初の meaningful character が `=`、`+`、`-`、`@`、tab、carriage return の string header/cell には、RFC-style の comma/quote/line-break escape より前に apostrophe を付けます。この決定的な規則により、一般的な spreadsheet application が string data を formula として評価することを防ぎます。数値は変更しないため、実際の number `-42` は `-42` のままです。
 
 ## Python display helper
 
@@ -133,4 +147,6 @@ emit_html!(r#"<p><strong>Sandboxed HTML</strong> emitted from Rust.</p>"#);
 
 短い説明文には stdout を使います。正確な構造を見せたい場合は JSON、比較可能な record には table、傾向や分布には chart、生成された視覚情報には image、他の artifact で表せない markup には sandboxed HTML を使います。
 
-copy、sort、pagination、validation、running、completion、failure state は keyboard 操作可能で、localized English/Japanese label とともに announce されます。sandboxed HTML には意図的に script/same-origin permission がありません。trust boundary は [サポートとセキュリティ](/ja/guides/support-and-security/) を参照してください。
+copy、sort、pagination、validation、running、completion、failure state は keyboard 操作可能で、localized English/Japanese label とともに announce されます。sandboxed HTML には意図的に script/same-origin permission がなく、referrer を送らず、external subresource を default で block します。正確な policy と trust boundary は [サポートとセキュリティ](/ja/guides/support-and-security/) を参照してください。
+
+table interaction state は一つの execution result に限定されます。新しい result では page、sort、copy status を reset します。同じ result の rerender は互換性のある sort/page を維持しますが、row が減った場合は clamp 後の page を保存し、sort 対象 column が削除・置換された場合は sort を解除します。

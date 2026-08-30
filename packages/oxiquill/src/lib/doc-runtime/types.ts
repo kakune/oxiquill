@@ -2,6 +2,8 @@ export type CellLanguage = 'rust' | 'python' | 'haskell';
 export type RunMode = 'button' | 'reactive' | 'autorun';
 export type InputType = 'range' | 'number' | 'integer' | 'text' | 'textarea' | 'checkbox' | 'select' | 'radio';
 
+export { PORTABLE_INTEGER_MAX, PORTABLE_INTEGER_MIN } from './portable-integer.mjs';
+
 export interface InputOption {
   label: string;
   value: string;
@@ -179,6 +181,7 @@ export interface RuntimeWorkerRequest {
   cellId: string;
   haskellFingerprintHash?: string;
   inputArgs?: readonly string[];
+  integerInputNames?: readonly string[];
   inputs: InputValues;
   source?: string;
   packages?: readonly string[];

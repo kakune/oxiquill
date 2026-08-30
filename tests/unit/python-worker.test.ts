@@ -5,10 +5,15 @@ import {
   createPythonWorkerRequestHandler,
   createSerialRequestQueue,
   importPyodideModule,
+  pythonIntegerConversionCode,
   pythonDisplaySupportCode,
   resolvePyodideUrls
 } from '../../packages/oxiquill/src/lib/doc-runtime/python-worker';
 import { toOutputArtifacts } from '../../packages/oxiquill/src/lib/doc-runtime/python-cell-result';
+import {
+  createBoundedTextAccumulator,
+  outputArtifactLimits
+} from '../../packages/oxiquill/src/lib/doc-runtime/output-limits.mjs';
 import type { RuntimeWorkerRequest, RuntimeWorkerResponse } from '../../packages/oxiquill/src/lib/doc-runtime/types';
 
 function createDeferred() {
@@ -81,6 +86,13 @@ describe('python worker request queue', () => {
     await flushMicrotasks();
 
     expect(events).toEqual(['start:first', 'start:second', 'finish:second']);
+  });
+});
+
+describe('python input conversion', () => {
+  it('converts validated integer bindings to Python ints without interpolating arbitrary names', () => {
+    expect(pythonIntegerConversionCode('negative_offset')).toBe('negative_offset = int(negative_offset)');
+    expect(() => pythonIntegerConversionCode('value; import os')).toThrow('Invalid integer input name');
   });
 });
 
@@ -245,6 +257,39 @@ describe('python rich display support', () => {
     expect(pythonDisplaySupportCode).toContain('def display_table');
     expect(pythonDisplaySupportCode).toContain('_repr_html_');
     expect(pythonDisplaySupportCode).toContain('_repr_png_');
+    expect(pythonDisplaySupportCode).toContain(`__oxiquill_artifact_limit = ${outputArtifactLimits.artifactsPerRun}`);
+    expect(pythonDisplaySupportCode).toContain(
+      `__oxiquill_output_byte_limit = ${outputArtifactLimits.validatedBytesPerRun}`
+    );
+    expect(pythonDisplaySupportCode).toContain('def __oxiquill_append_output');
+  });
+
+  it('retains exact Python callback output and truncates over-limit stdout and stderr', () => {
+    const stdout = createBoundedTextAccumulator(outputArtifactLimits.bytesPerStream, '\n');
+    stdout.append('x'.repeat(outputArtifactLimits.bytesPerStream));
+    expect(stdout.take()).toEqual({ value: 'x'.repeat(outputArtifactLimits.bytesPerStream), truncated: false });
+
+    const stderr = createBoundedTextAccumulator(outputArtifactLimits.bytesPerStream, '\n');
+    stderr.append('x'.repeat(outputArtifactLimits.bytesPerStream + 1));
+    const bounded = stderr.take();
+    expect(new TextEncoder().encode(bounded.value).byteLength).toBeLessThanOrEqual(outputArtifactLimits.bytesPerStream);
+    expect(bounded.truncated).toBe(true);
+  });
+
+  it('marks bounded Python stream artifacts as truncated', () => {
+    const result = createPythonCellResult({
+      stdout: 'bounded stdout',
+      stdoutTruncated: true,
+      stderr: 'bounded stderr',
+      stderrTruncated: true,
+      value: null,
+      plots: [],
+      displayOutputs: []
+    });
+    expect(result.outputs).toEqual([
+      { kind: 'text', stream: 'stdout', content: 'bounded stdout', truncated: true },
+      { kind: 'text', stream: 'stderr', content: 'bounded stderr', truncated: true }
+    ]);
   });
 
   it('configures matplotlib and captures figures as image artifacts', () => {

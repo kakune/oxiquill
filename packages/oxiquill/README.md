@@ -69,6 +69,8 @@ export const collections = createOxiquillCollections({ defineCollection, docsLoa
 
 Write pages under `content/docs`. Generated internals go under `.oxiquill`, browser assets go under `public/oxiquill`, and the static build normally goes under `dist`. Verified Pyodide downloads are cached under `.cache/oxiquill/downloads/v1`; `oxiquill clean` preserves that cache so later online or offline generation can reconstruct the public runtime.
 
+On desktop, pages with a table of contents include an accessible collapse control that releases the complete right column. The per-tab preference is stored independently from the left sidebar. Set `desktopTableOfContentsToggle: false` in `defineOxiquillConfig()` to keep Starlight's desktop table of contents always visible; mobile, splash, and `tableOfContents: false` behavior is unchanged.
+
 Static projects need only Node.js and a package manager. Rust cells additionally need the pinned Rust toolchain and `wasm-pack`; Haskell generation needs `wasm32-wasi-ghc` on Linux or macOS. Generated sites run in current Chromium, Firefox, and WebKit.
 
 ## Documentation and Support

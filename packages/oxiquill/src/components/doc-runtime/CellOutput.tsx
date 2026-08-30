@@ -59,7 +59,7 @@ export function CellOutput({
         <p class="empty-state">{idleOutputMessage(runMode, labels)}</p>
       ) : outputResults?.length ? (
         <div class="doc-cell__outputs">
-          <OutputRenderer idPrefix={outputId} labels={labels} outputs={outputResults} />
+          <OutputRenderer idPrefix={outputId} labels={labels} outputs={outputResults} resultIdentity={result} />
         </div>
       ) : (
         <p class="empty-state">{labels.cellCompletedWithoutOutput}</p>

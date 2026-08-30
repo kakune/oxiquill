@@ -1,16 +1,18 @@
-import { useEffect, useMemo, useState } from 'preact/hooks';
+import { useLayoutEffect, useMemo, useRef, useState } from 'preact/hooks';
 import { labelsForLanguage, type RuntimeLabels } from '../../lib/doc-runtime/runtime-localization.js';
 import type { TableArtifact, TableColumn } from '../../lib/doc-runtime/types.js';
 
 interface TableOutputProps {
   idPrefix?: string;
   labels?: RuntimeLabels;
+  resultIdentity?: object;
   table: TableArtifact;
 }
 
 type SortDirection = 'asc' | 'desc';
 type SortState = {
   columnIndex: number;
+  columnKey?: string;
   direction: SortDirection;
 };
 
@@ -26,52 +28,77 @@ const pageSizes = [10, 25, 50, 100] as const;
 export default function TableOutput({
   idPrefix = 'doc-table',
   labels = labelsForLanguage(globalThis.document?.documentElement.lang),
+  resultIdentity,
   table
 }: TableOutputProps) {
   const [pageSize, setPageSize] = useState<(typeof pageSizes)[number]>(pageSizes[0]);
   const [page, setPage] = useState(0);
   const [sort, setSort] = useState<SortState>();
   const [copyStatus, setCopyStatus] = useState<CopyStatus>();
-  const sortedRows = useMemo(() => sortRows(table.rows, sort), [table.rows, sort]);
+  const identity = resultIdentity ?? table;
+  const identityRef = useRef(identity);
+  const resultGenerationRef = useRef(0);
+  const resultChanged = identityRef.current !== identity;
+  if (resultChanged) {
+    identityRef.current = identity;
+    resultGenerationRef.current += 1;
+  }
+  const reconciledSort = resultChanged || !isSortValid(sort, table.columns) ? undefined : sort;
+  const sortedRows = useMemo(() => sortRows(table.rows, reconciledSort), [table.rows, reconciledSort]);
   const pageCount = Math.max(1, Math.ceil(sortedRows.length / pageSize));
-  const safePage = Math.min(page, pageCount - 1);
+  const safePage = resultChanged ? 0 : Math.min(page, pageCount - 1);
   const currentRows = visibleRows(sortedRows, safePage, pageSize);
   const firstRow = sortedRows.length === 0 ? 0 : safePage * pageSize + 1;
   const lastRow = Math.min(sortedRows.length, (safePage + 1) * pageSize);
   const captionId = `${idPrefix}-title`;
   const descriptionId = table.caption ? `${idPrefix}-description` : undefined;
+  const columnKeys = table.columns.map((column) => column.key).join('\0');
 
-  useEffect(() => setCopyStatus(undefined), [table]);
+  useLayoutEffect(() => {
+    setPage((current) => (resultChanged ? 0 : Math.min(current, pageCount - 1)));
+    setSort((current) => (resultChanged || !isSortValid(current, table.columns) ? undefined : current));
+    setCopyStatus(undefined);
+  }, [columnKeys, identity, pageCount, resultChanged, table.columns]);
 
   function updateSort(columnIndex: number): void {
     setPage(0);
     setSort((current) => {
-      if (!current || current.columnIndex !== columnIndex) return { columnIndex, direction: 'asc' };
+      const columnKey = table.columns[columnIndex]?.key;
+      if (!current || current.columnIndex !== columnIndex) return { columnIndex, columnKey, direction: 'asc' };
       return { columnIndex, direction: current.direction === 'asc' ? 'desc' : 'asc' };
     });
   }
 
   async function copyVisibleCsv(): Promise<void> {
     if (copyStatus?.kind === 'copying') return;
+    const resultGeneration = resultGenerationRef.current;
     setCopyStatus({ kind: 'copying', message: labels.copyingCsv });
     const converted = tableToCsv(table.columns, currentRows, labels);
     if (!converted.ok) {
-      setCopyStatus({ kind: 'error', message: labels.copyCsvError(converted.error) });
+      if (resultGenerationRef.current === resultGeneration) {
+        setCopyStatus({ kind: 'error', message: labels.copyCsvError(converted.error) });
+      }
       return;
     }
     try {
       const clipboard = globalThis.navigator.clipboard;
       if (!clipboard) {
-        setCopyStatus({ kind: 'error', message: labels.copyCsvError(labels.clipboardUnavailable) });
+        if (resultGenerationRef.current === resultGeneration) {
+          setCopyStatus({ kind: 'error', message: labels.copyCsvError(labels.clipboardUnavailable) });
+        }
         return;
       }
       await clipboard.writeText(converted.csv);
-      setCopyStatus({ kind: 'success', message: labels.copyCsvSuccess });
+      if (resultGenerationRef.current === resultGeneration) {
+        setCopyStatus({ kind: 'success', message: labels.copyCsvSuccess });
+      }
     } catch (error) {
-      setCopyStatus({
-        kind: 'error',
-        message: labels.copyCsvError(error instanceof Error ? error.message : String(error))
-      });
+      if (resultGenerationRef.current === resultGeneration) {
+        setCopyStatus({
+          kind: 'error',
+          message: labels.copyCsvError(error instanceof Error ? error.message : String(error))
+        });
+      }
     }
   }
 
@@ -90,7 +117,7 @@ export default function TableOutput({
           <thead>
             <tr>
               {table.columns.map((column, columnIndex) => (
-                <th key={column.key} scope="col" aria-sort={ariaSort(sort, columnIndex)}>
+                <th key={column.key} scope="col" aria-sort={ariaSort(reconciledSort, columnIndex)}>
                   <button type="button" onClick={() => updateSort(columnIndex)}>
                     {column.label}
                   </button>
@@ -189,6 +216,12 @@ export function visibleRows(rows: readonly unknown[][], page: number, pageSize: 
   return rows.slice(page * pageSize, (page + 1) * pageSize);
 }
 
+function isSortValid(sort: SortState | undefined, columns: readonly TableColumn[]): boolean {
+  if (!sort) return true;
+  const column = columns[sort.columnIndex];
+  return Boolean(column && (sort.columnKey === undefined || sort.columnKey === column.key));
+}
+
 export function tableToCsv(
   columns: readonly TableColumn[],
   rows: readonly unknown[][],
@@ -242,8 +275,12 @@ function csvCell(value: unknown, labels: RuntimeLabels): string {
   if (typeof value === 'number' && !Number.isFinite(value)) {
     throw new Error(labels.tableFiniteNumberError);
   }
-  const text = String(value);
+  const text = typeof value === 'string' ? spreadsheetSafeString(value) : String(value);
   return /[",\n\r]/u.test(text) ? `"${text.replace(/"/gu, '""')}"` : text;
+}
+
+function spreadsheetSafeString(value: string): string {
+  return /^\s*[=+\-@\t\r]/u.test(value) ? `'${value}` : value;
 }
 
 function ariaSort(sort: SortState | undefined, columnIndex: number): 'ascending' | 'descending' | 'none' {

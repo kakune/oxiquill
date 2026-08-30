@@ -31,7 +31,8 @@ export function rustSourceCapabilities(source) {
     ...Object.fromEntries(sourceFeatureDescriptors.map(([key, tokens]) => [key, hasAnyToken(source, tokens)])),
     chart: hasAnyToken(source, chartTokens),
     image: hasAnyToken(source, imageTokens),
-    table: hasAnyToken(source, tableTokens)
+    table: hasAnyToken(source, tableTokens),
+    text: hasAnyToken(source, ['emit_text!'])
   };
 }
 

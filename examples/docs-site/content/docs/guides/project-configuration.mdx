@@ -8,9 +8,11 @@ Oxiquill loads one project configuration and uses the same resolved paths for de
 ## Minimal Configuration
 
 ```js
+import starlight from '@astrojs/starlight';
 import { defineOxiquillConfig } from 'oxiquill/astro';
 
 export default defineOxiquillConfig({
+  framework: { starlight },
   site: 'https://example.com',
   title: 'My Docs',
   sidebar: [{ label: 'Overview', items: [{ label: 'Home', slug: 'index' }] }]
@@ -19,26 +21,51 @@ export default defineOxiquillConfig({
 
 ```ts
 // content.config.ts
-export { collections } from 'oxiquill/content';
+import { defineCollection } from 'astro:content';
+import { docsLoader } from '@astrojs/starlight/loaders';
+import { docsSchema } from '@astrojs/starlight/schema';
+import { createOxiquillCollections } from 'oxiquill/content';
+
+export const collections = createOxiquillCollections({ defineCollection, docsLoader, docsSchema });
 ```
 
 `defineOxiquillConfig()` returns an Astro configuration with static output, Oxiquill's Markdown transforms, Preact, and Starlight already installed.
 
 ## Configuration Fields
 
-| Field                                     | Meaning                                                                                                              |
-| ----------------------------------------- | -------------------------------------------------------------------------------------------------------------------- |
-| `title`, `description`, `sidebar`         | Shorthand for the corresponding Starlight settings.                                                                  |
-| `starlight`                               | Any other Starlight option. A value here overrides the matching shorthand.                                           |
-| `framework.preact`, `framework.starlight` | Advanced integration-factory overrides used by embedded/framework consumers.                                         |
-| `integrations`                            | Additional Astro integrations, appended after Oxiquill, Preact, and Starlight.                                       |
-| `markdown`                                | Additional Astro Markdown settings and plugins. Oxiquill's required plugins run first.                               |
-| `vite`                                    | Additional Vite settings. Oxiquill preserves required aliases, deduplication, worker plugins, and filesystem access. |
-| `paths`                                   | Oxiquill-owned source, cache, generated, and public paths described below.                                           |
-| `python`                                  | Pyodide download behavior: `offline` and the optional `packageMirror`.                                               |
-| Other Astro fields                        | Passed through to Astro. Oxiquill always produces static output.                                                     |
+| Field                             | Meaning                                                                                                              |
+| --------------------------------- | -------------------------------------------------------------------------------------------------------------------- |
+| `title`, `description`, `sidebar` | Shorthand for the corresponding Starlight settings.                                                                  |
+| `desktopTableOfContentsToggle`    | Enables the persistent desktop table-of-contents control. Defaults to `true`.                                        |
+| `starlight`                       | Any other Starlight option. A value here overrides the matching shorthand.                                           |
+| `framework.starlight`             | Required Starlight integration factory imported from `@astrojs/starlight`.                                           |
+| `framework.preact`                | Optional Preact integration-factory override for embedded/framework consumers.                                       |
+| `integrations`                    | Additional Astro integrations, appended after Oxiquill, Preact, and Starlight.                                       |
+| `markdown`                        | Supported Astro Markdown settings and plugins. Oxiquill's required plugins run first.                                |
+| `vite`                            | Additional Vite settings. Oxiquill preserves required aliases, deduplication, worker plugins, and filesystem access. |
+| `paths`                           | Oxiquill-owned source, cache, generated, and public paths described below.                                           |
+| `python`                          | Pyodide download behavior: `offline` and the optional `packageMirror`.                                               |
+| Other Astro fields                | Passed through to Astro. Oxiquill always produces static output.                                                     |
 
 Use `oxiquillIntegration()` only when composing an Astro configuration manually. It accepts `base`, `markdown`, `paths`, `python`, and `vite`; the caller is then responsible for adding Preact and Starlight.
+
+Oxiquill owns `markdown.processor` because interactive cells, Mermaid, KaTeX, and public-asset base paths require its unified pipeline. A custom processor is not supported and throws a `TypeError`; configure supported Markdown fields and append `remarkPlugins` or `rehypePlugins` instead.
+
+## Desktop Table of Contents
+
+On pages with a table of contents, Oxiquill adds a desktop collapse/expand button while preserving Starlight's mobile disclosure. Collapsing the table of contents removes the complete right column and lets the main content use the released width. The preference is stored for the current browser tab in `sessionStorage` under `oxiquill-table-of-contents-collapsed`; it is independent from the left-sidebar preference.
+
+Set `desktopTableOfContentsToggle: false` to retain Starlight's always-visible desktop table of contents:
+
+```js
+export default defineOxiquillConfig({
+  desktopTableOfContentsToggle: false,
+  framework: { starlight },
+  title: 'My Docs'
+});
+```
+
+The control is not rendered for `tableOfContents: false` or splash pages. Consumer entries in `starlight.components` take precedence over Oxiquill's defaults, including `PageFrame`, `TableOfContents`, and `TwoColumnContent` overrides.
 
 ## Path Fields
 
@@ -88,7 +115,15 @@ export default defineOxiquillConfig({
 4. Consumer Markdown, Vite, CSS, component, and integration additions are retained after Oxiquill's required entries.
 5. A conflicting path, missing Oxiquill integration, multiple Oxiquill integrations, or an unreadable config fails before generation or cleanup.
 
-Do not point an Oxiquill-owned output at the project root or another broad directory. `oxiquill clean` removes only validated, resolved generated paths and configured Astro output directories. It deliberately preserves `downloadCacheDir`, which must be outside every cleaned output path.
+## Cleanup Ownership and Safety
+
+`oxiquill clean` recursively removes exactly three resolved roots: `cacheDir`, Astro's `outDir`, and `publicAssetsDir`. It does not remove `downloadCacheDir`; the default verified download cache at `.cache/oxiquill/downloads/v1` persists across clean and can be reused by later generation.
+
+The exact default roots `.oxiquill`, `dist`, and `public/oxiquill` are reserved generated locations and may be cleaned without an ownership marker. For a custom cleanup root, the corresponding generation or build lifecycle writes `.oxiquill-ownership.json` after claiming a missing or empty directory. A pre-existing non-empty custom directory without the matching marker is never inferred to be generated output. Do not create or edit the marker manually.
+
+Every recursively deleted root must stay inside `workspaceRoot`. Cleanup roots must be disjoint from one another and from `docsDir`, `cratesDir`, `publicDir`, `frameworkRoot`, the selected Astro config, recognized project config/manifest/lock files, the persistent download cache, and discovered VCS or package-installation state such as `.git` and `node_modules`. Generated child roles must also be disjoint from their siblings. The only authored/generated containment exception is a strict `publicAssetsDir` child below `publicDir`; it cannot equal `publicDir` or sit below another authored public subtree.
+
+Oxiquill canonicalizes existing paths and symlinked ancestors before comparing or deleting them. Clean validates every root and every ownership marker before its first recursive deletion. If one root is unsafe or unowned, no root is removed; the diagnostic names the field, absolute resolved path, conflicting path role, and corrective action.
 
 ## Runtime Fingerprints
 
@@ -98,6 +133,6 @@ Runtime fingerprints contain semantic build inputs rather than machine-local pat
 
 Set Astro's `base` when publishing below a subpath. Oxiquill applies it to interactive-cell manifests, language runtimes, diagrams, and `/media/...` references. Keep authored public URLs root-relative; the Markdown transform adds the configured base exactly once.
 
-Generated runtime files belong under `.oxiquill` and `public/oxiquill`; the verified download cache belongs under `.cache/oxiquill/downloads/v1`; and the final static site belongs under Astro's `outDir` (normally `dist`). Generated directories must not be edited directly. The download cache may be retained across builds and reconstructed outputs, but its files are verified before every use.
+Generated runtime files belong under `.oxiquill` and `public/oxiquill`; the verified download cache belongs under `.cache/oxiquill/downloads/v1`; and the final static site belongs under Astro's `outDir` (normally `dist`). Generated directories and their ownership markers must not be edited directly. The download cache may be retained across builds and reconstructed outputs, but its files are verified before every use.
 
 When you customize generated directories, update `tsconfig.json` exclusions to the resolved cache, helper-crate target, output, and public-asset paths. Otherwise a broad include such as `**/*` can make Astro/TypeScript analyze generated JavaScript such as Pyodide instead of treating it as output.

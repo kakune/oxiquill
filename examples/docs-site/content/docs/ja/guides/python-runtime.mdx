@@ -33,12 +33,12 @@ download は次の順序で行います。
 
 1. versioned Oxiquill download cache を確認します。
 2. cached file を expected SHA-256 で検証します。
-3. missing/corrupt で offline mode が無効なら temporary file に download します。
-4. 30秒 timeout と bounded backoff を使い、試行は合計3回までです。
-5. completed temporary file を検証してから cache へ atomic に配置します。
-6. verified artifact を resolved public Pyodide directory へ copy します。
+3. missing/corrupt で offline mode が無効なら、response を uniquely named temporary file へ stream しながら SHA-256 を incremental に計算します。
+4. core file と wheel は同時に最大4件まで処理します。retry は同じ worker slot 内で行い、30秒 timeout と bounded backoff を使って試行は合計3回までです。
+5. completed temporary file を検証してから cache name を atomic に claim します。複数の generator が同時に動く場合、loser は partial content で上書きせず verified winner を再利用します。
+6. 必要な cache entry をすべて検証した後、artifact を deterministic な順序で resolved public Pyodide directory へ copy します。
 
-hash mismatch は常にその source の fatal error です。未検証の partial response を publish/cache することはありません。
+hash mismatch は常にその source の fatal error です。failed/interrupted/aborted operation は temporary file を削除します。未検証の partial response を publish/cache せず、必要な cache entry がすべて揃うまで public staging を開始しません。
 
 ## Cache の動作
 

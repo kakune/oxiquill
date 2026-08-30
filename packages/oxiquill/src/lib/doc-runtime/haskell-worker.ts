@@ -1,6 +1,8 @@
 import { ConsoleStdout, File, OpenFile, WASI } from '@bjorn3/browser_wasi_shim';
 import { haskellWasmPath } from 'virtual:oxiquill/runtime-paths';
+import { boundedErrorMessage, outputArtifactLimits, truncateUtf8 } from './output-limits.mjs';
 import type { RawCellExecutionResult, RuntimeWorkerRequest, RuntimeWorkerResponse, TextArtifact } from './types.js';
+import { boundWorkerResult } from './worker-output.js';
 
 type WorkerScope = {
   addEventListener(type: 'message', listener: (event: MessageEvent<RuntimeWorkerRequest>) => void): void;
@@ -58,12 +60,12 @@ export function createHaskellWorkerRequestHandler({
       const module = await loadModule(request.haskellFingerprintHash);
       const result = await runCell(module, request);
 
-      postMessage({ requestId: request.requestId, ok: true, result });
+      postMessage({ requestId: request.requestId, ok: true, result: boundWorkerResult(result) });
     } catch (error) {
       postMessage({
         requestId: request.requestId,
         ok: false,
-        error: error instanceof Error ? error.message : String(error)
+        error: boundedErrorMessage(error)
       });
     }
   };
@@ -84,9 +86,13 @@ export async function runHaskellCell(
     wasi_snapshot_preview1: wasi.wasiImport
   })) as WasiInstance;
   const exitCode = wasi.start(instance);
+  const stdoutResult = stdout.take();
+  const stderrResult = stderr.take();
   const result = createHaskellCellResult({
-    stdout: stdout.take(),
-    stderr: stderr.take()
+    stdout: stdoutResult.value,
+    stdoutTruncated: stdoutResult.truncated,
+    stderr: stderrResult.value,
+    stderrTruncated: stderrResult.truncated
   });
 
   if (exitCode !== 0) {
@@ -98,14 +104,36 @@ export async function runHaskellCell(
 
 export function createHaskellCellResult({
   stderr,
-  stdout
+  stderrTruncated = false,
+  stdout,
+  stdoutTruncated = false
 }: {
   stderr: string;
+  stderrTruncated?: boolean;
   stdout: string;
+  stdoutTruncated?: boolean;
 }): RawCellExecutionResult {
   const outputs: TextArtifact[] = [
-    stdout ? [{ kind: 'text', stream: 'stdout', content: stdout } satisfies TextArtifact] : [],
-    stderr ? [{ kind: 'text', stream: 'stderr', content: stderr } satisfies TextArtifact] : []
+    stdout
+      ? [
+          {
+            kind: 'text',
+            stream: 'stdout',
+            content: stdout,
+            ...(stdoutTruncated ? { truncated: true } : {})
+          } satisfies TextArtifact
+        ]
+      : [],
+    stderr
+      ? [
+          {
+            kind: 'text',
+            stream: 'stderr',
+            content: stderr,
+            ...(stderrTruncated ? { truncated: true } : {})
+          } satisfies TextArtifact
+        ]
+      : []
   ].flat();
 
   return {
@@ -221,17 +249,28 @@ function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null;
 }
 
-function createOutputCapture(): {
+export function createOutputCapture(maxBytes = outputArtifactLimits.bytesPerStream): {
   file: ConsoleStdout;
-  take: () => string;
+  take: () => { truncated: boolean; value: string };
 } {
   const chunks: string[] = [];
   const decoder = new TextDecoder();
+  let byteLength = 0;
+  let truncated = false;
 
   return {
     file: new ConsoleStdout((buffer) => {
-      chunks.push(decoder.decode(buffer, { stream: true }));
+      if (truncated) return;
+      const retained = buffer.subarray(0, Math.max(0, maxBytes - byteLength));
+      if (retained.byteLength > 0) {
+        chunks.push(decoder.decode(retained, { stream: true }));
+        byteLength += retained.byteLength;
+      }
+      truncated = retained.byteLength < buffer.byteLength;
     }),
-    take: () => `${chunks.join('')}${decoder.decode()}`.trimEnd()
+    take: () => {
+      const bounded = truncateUtf8(`${chunks.join('')}${decoder.decode()}`.trimEnd(), maxBytes);
+      return { value: bounded.value, truncated: truncated || bounded.truncated };
+    }
   };
 }

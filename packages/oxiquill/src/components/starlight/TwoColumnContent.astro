@@ -1,0 +1,199 @@
+---
+import { Icon } from '@astrojs/starlight/components';
+import { togglePresentation } from './toggle-localization.js';
+
+const { dir, lang, toc } = Astro.locals.starlightRoute;
+const presentation = togglePresentation(lang, dir, 'tableOfContents');
+---
+
+<script is:inline>
+  {
+    `
+		(() => {
+			let collapsed = false;
+			try {
+				collapsed =
+					${Boolean(toc)} &&
+					matchMedia('(min-width: 72rem)').matches &&
+					sessionStorage.getItem('oxiquill-table-of-contents-collapsed') === 'true';
+			} catch {}
+			document.documentElement.toggleAttribute('data-table-of-contents-collapsed', collapsed);
+		})();
+	`;
+  }
+</script>
+
+<div class="two-column-content lg:sl-flex">
+  {
+    toc && (
+      <>
+        <aside id="starlight__right-sidebar" class="right-sidebar-container print:hidden">
+          <div class="right-sidebar">
+            <slot name="right-sidebar" />
+          </div>
+        </aside>
+        <starlight-table-of-contents-toggle
+          class="print:hidden"
+          data-collapse-label={presentation.collapseLabel}
+          data-expand-label={presentation.expandLabel}
+        >
+          <button
+            type="button"
+            class="table-of-contents-toggle-button sl-flex"
+            aria-controls="starlight__right-sidebar"
+            aria-expanded="true"
+            aria-label={presentation.collapseLabel}
+            title={presentation.collapseLabel}
+          >
+            <span class="collapse-table-of-contents" aria-hidden="true">
+              <Icon name={presentation.collapseIcon} size="1rem" />
+            </span>
+            <span class="expand-table-of-contents" aria-hidden="true">
+              <Icon name={presentation.expandIcon} size="1rem" />
+            </span>
+          </button>
+        </starlight-table-of-contents-toggle>
+      </>
+    )
+  }
+  <div class="main-pane"><slot /></div>
+</div>
+
+<script>
+  import { defineStarlightTableOfContentsToggle } from './table-of-contents-toggle.js';
+
+  defineStarlightTableOfContentsToggle();
+</script>
+
+<style>
+  :global(:root) {
+    --oq-sidebar-base-content-width: 45rem;
+    --oq-wide-base-content-width: 67.5rem;
+  }
+
+  @media (min-width: 72rem) {
+    :global([data-has-sidebar][data-table-of-contents-collapsed]) {
+      --sl-content-width: calc(var(--oq-sidebar-base-content-width) + var(--sl-sidebar-width));
+    }
+
+    :global([data-has-sidebar][data-sidebar-collapsed][data-table-of-contents-collapsed]) {
+      --sl-content-width: calc(var(--oq-sidebar-base-content-width) + 2 * var(--sl-sidebar-width));
+    }
+
+    :global(:not([data-has-sidebar])[data-table-of-contents-collapsed]) {
+      --sl-content-width: calc(var(--oq-wide-base-content-width) + var(--sl-sidebar-width));
+    }
+  }
+</style>
+
+<style>
+  @layer starlight.core {
+    .main-pane {
+      isolation: isolate;
+    }
+
+    starlight-table-of-contents-toggle {
+      display: none;
+    }
+
+    .table-of-contents-toggle-button {
+      align-items: center;
+      justify-content: center;
+      border: 1px solid var(--sl-color-hairline-shade);
+      border-radius: 50%;
+      width: 2rem;
+      height: 2rem;
+      padding: 0;
+      background-color: var(--sl-color-bg-nav);
+      color: var(--sl-color-text);
+      box-shadow: var(--sl-shadow-sm);
+      cursor: pointer;
+    }
+
+    .table-of-contents-toggle-button:hover {
+      border-color: var(--sl-color-gray-4);
+      background-color: var(--sl-color-gray-6);
+    }
+
+    .table-of-contents-toggle-button:focus-visible {
+      outline: 2px solid var(--sl-color-accent);
+      outline-offset: 2px;
+    }
+
+    .table-of-contents-toggle-button[aria-expanded='true'] .expand-table-of-contents,
+    .table-of-contents-toggle-button[aria-expanded='false'] .collapse-table-of-contents {
+      display: none;
+    }
+
+    @media (min-width: 72rem) {
+      .right-sidebar-container {
+        order: 2;
+        position: relative;
+        width: max(
+          var(--sl-sidebar-width),
+          calc(var(--sl-sidebar-width) + (100% - var(--sl-content-width) - var(--sl-sidebar-width)) / 2)
+        );
+      }
+
+      .right-sidebar {
+        position: fixed;
+        top: 0;
+        border-inline-start: 1px solid var(--sl-color-hairline);
+        padding-top: var(--sl-nav-height);
+        width: 100%;
+        height: 100vh;
+        overflow-y: auto;
+        scrollbar-width: none;
+      }
+
+      .main-pane {
+        width: 100%;
+      }
+
+      :global([data-has-sidebar][data-has-toc]) .main-pane {
+        --sl-content-margin-inline: auto 0;
+
+        order: 1;
+        width: min(
+          calc(100% - var(--sl-sidebar-width)),
+          calc(var(--sl-content-width) + (100% - var(--sl-content-width) - var(--sl-sidebar-width)) / 2)
+        );
+      }
+
+      starlight-table-of-contents-toggle {
+        display: block;
+      }
+
+      .table-of-contents-toggle-button {
+        position: fixed;
+        z-index: var(--sl-z-index-navbar);
+        inset-block-start: calc(var(--sl-nav-height) + 0.75rem);
+        inset-inline-end: calc(var(--sl-sidebar-width) - 1rem);
+        transition:
+          background-color 0.15s ease,
+          border-color 0.15s ease,
+          inset-inline-end 0.15s ease;
+      }
+
+      :global([data-table-of-contents-collapsed]) .right-sidebar-container {
+        display: none;
+      }
+
+      :global([data-has-toc][data-table-of-contents-collapsed]) .main-pane {
+        --sl-content-margin-inline: auto;
+
+        width: 100%;
+      }
+
+      :global([data-table-of-contents-collapsed]) .table-of-contents-toggle-button {
+        inset-inline-end: var(--sl-nav-pad-x);
+      }
+    }
+
+    @media (prefers-reduced-motion: reduce) {
+      .table-of-contents-toggle-button {
+        transition: none;
+      }
+    }
+  }
+</style>

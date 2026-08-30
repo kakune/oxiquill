@@ -1,3 +1,5 @@
+import { outputArtifactLimits } from './output-limits.mjs';
+
 const pythonDisplayJsonAndScalarSupport = String.raw`
 import base64
 import builtins
@@ -8,6 +10,42 @@ __oxiquill_outputs = []
 __oxiquill_displayed_figures = set()
 __oxiquill_table_limit = 10000
 __oxiquill_table_column_limit = 100
+__oxiquill_artifact_limit = ${outputArtifactLimits.artifactsPerRun}
+__oxiquill_output_byte_limit = ${outputArtifactLimits.validatedBytesPerRun}
+__oxiquill_diagnostic_byte_limit = ${outputArtifactLimits.bytesPerDiagnostic}
+__oxiquill_output_bytes = 0
+__oxiquill_output_omission = None
+
+def __oxiquill_bound_text(value, max_bytes):
+    text = str(value)
+    encoded = text.encode("utf-8")
+    if len(encoded) <= max_bytes:
+        return text
+    marker = "…"
+    prefix = encoded[:max(0, max_bytes - len(marker.encode("utf-8")))]
+    return prefix.decode("utf-8", errors="ignore") + marker
+
+def __oxiquill_error_artifact(message):
+    return {
+        "kind": "__oxiquill_error",
+        "message": __oxiquill_bound_text(message, __oxiquill_diagnostic_byte_limit),
+    }
+
+def __oxiquill_append_output(artifact):
+    global __oxiquill_output_bytes, __oxiquill_output_omission
+    if len(__oxiquill_outputs) >= __oxiquill_artifact_limit:
+        __oxiquill_output_omission = "Python output exceeded the artifact count limit."
+        return
+    try:
+        artifact_bytes = len(json.dumps(artifact, ensure_ascii=False, separators=(",", ":")).encode("utf-8"))
+    except Exception as error:
+        artifact = __oxiquill_error_artifact(f"Python output could not be serialized: {error}")
+        artifact_bytes = len(json.dumps(artifact, ensure_ascii=False, separators=(",", ":")).encode("utf-8"))
+    if artifact_bytes > __oxiquill_output_byte_limit - __oxiquill_output_bytes:
+        __oxiquill_output_omission = "Python output exceeded the cumulative artifact byte limit."
+        return
+    __oxiquill_outputs.append(artifact)
+    __oxiquill_output_bytes += artifact_bytes
 
 def __oxiquill_meta(artifact, title=None, caption=None):
     if title is not None:
@@ -356,6 +394,8 @@ def __oxiquill_collect_matplotlib_outputs(preferred="svg", close_figures=True):
         return []
     outputs = []
     for number in list(plt.get_fignums()):
+        if len(outputs) >= __oxiquill_artifact_limit:
+            break
         fig = plt.figure(number)
         if id(fig) in __oxiquill_displayed_figures:
             continue
@@ -414,24 +454,24 @@ def __oxiquill_artifact(value, title=None, caption=None):
 
 const pythonDisplayPublicFunctions = String.raw`
 def display(value, *, title=None, caption=None):
-    __oxiquill_outputs.append(__oxiquill_artifact(value, title, caption))
+    __oxiquill_append_output(__oxiquill_artifact(value, title, caption))
 
 def display_json(value, *, title=None):
-    __oxiquill_outputs.append(__oxiquill_json_artifact(value, title))
+    __oxiquill_append_output(__oxiquill_json_artifact(value, title))
 
 def display_html(html, *, title=None):
-    __oxiquill_outputs.append(__oxiquill_meta({"kind": "html", "html": str(html), "sandboxed": True}, title))
+    __oxiquill_append_output(__oxiquill_meta({"kind": "html", "html": str(html), "sandboxed": True}, title))
 
 def display_image(data, mime, *, alt=None, title=None):
     artifact = {"kind": "image", "mime": str(mime), "data": __oxiquill_image_data(data)}
     if alt is not None:
         artifact["alt"] = str(alt)
-    __oxiquill_outputs.append(__oxiquill_meta(artifact, title))
+    __oxiquill_append_output(__oxiquill_meta(artifact, title))
 
 def display_table(value, *, title=None, caption=None):
     dataframe_artifact = __oxiquill_dataframe_artifact(value, title=title, caption=caption)
     if dataframe_artifact is not None:
-        __oxiquill_outputs.append(dataframe_artifact)
+        __oxiquill_append_output(dataframe_artifact)
         return
     rows = list(value)
     truncated = len(rows) > __oxiquill_table_limit
@@ -447,7 +487,7 @@ def display_table(value, *, title=None, caption=None):
             [__oxiquill_jsonable(row[index]) if isinstance(row, (list, tuple)) and index < len(row) else None for index in range(width)]
             for row in preview
         ]
-    __oxiquill_outputs.append(__oxiquill_meta({
+    __oxiquill_append_output(__oxiquill_meta({
         "kind": "table",
         "columns": columns,
         "rows": table_rows,
@@ -458,8 +498,11 @@ def display_table(value, *, title=None, caption=None):
 
 const pythonDisplayBootstrapSupport = String.raw`
 def __oxiquill_reset_outputs():
+    global __oxiquill_output_bytes, __oxiquill_output_omission
     __oxiquill_outputs.clear()
     __oxiquill_displayed_figures.clear()
+    __oxiquill_output_bytes = 0
+    __oxiquill_output_omission = None
 
 def __oxiquill_prepare_cell():
     __oxiquill_reset_outputs()
@@ -467,6 +510,9 @@ def __oxiquill_prepare_cell():
 
 def __oxiquill_take_outputs():
     outputs = list(__oxiquill_outputs)
+    if __oxiquill_output_omission is not None:
+        outputs = outputs[:max(0, __oxiquill_artifact_limit - 1)]
+        outputs.append(__oxiquill_error_artifact(__oxiquill_output_omission))
     __oxiquill_outputs.clear()
     return outputs
 

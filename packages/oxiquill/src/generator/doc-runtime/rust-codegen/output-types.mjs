@@ -1,11 +1,14 @@
 import { rustOutputCapabilities } from './capabilities.mjs';
 import { generateRustChartHelpers } from './chart-helpers.mjs';
+import { outputArtifactLimits } from '../../../lib/doc-runtime/output-limits.mjs';
 
 export function generateRustOutputTypes(rustCells) {
   if (rustCells.length === 0) return '';
 
   const capabilities = rustOutputCapabilities(rustCells);
   const outputVariants = [
+    `    #[serde(rename = "__oxiquill_error")]
+    ProducerError(ProducerErrorArtifact),`,
     `    #[serde(rename = "text")]
     Text(TextArtifact),`,
     capabilities.json
@@ -31,27 +34,118 @@ export function generateRustOutputTypes(rustCells) {
   ]
     .filter(Boolean)
     .join('\n');
+  const boundedArtifactArms = [
+    `        OutputArtifact::Text(text) => {
+            text.truncated |= truncate_string(&mut text.content, ${outputArtifactLimits.bytesPerTextJsonOrHtml});
+        }`,
+    capabilities.json
+      ? `        OutputArtifact::Json(json) => {
+            let oversized = serde_json::to_string(&json.value)
+                .map(|serialized| serialized.len() > ${outputArtifactLimits.bytesPerTextJsonOrHtml})
+                .unwrap_or(true);
+            if oversized {
+                json.value = Value::String("[Truncated]".to_owned());
+                json.truncated = true;
+            }
+        }`
+      : '',
+    capabilities.html
+      ? `        OutputArtifact::Html(html) if html.html.len() > ${outputArtifactLimits.bytesPerTextJsonOrHtml} => {
+            return producer_error("Rust HTML output exceeded the per-artifact byte limit");
+        }`
+      : '',
+    capabilities.image
+      ? `        OutputArtifact::Image(image) if image.data.len() > ${Math.ceil((outputArtifactLimits.decodedBytesPerImage * 4) / 3) + 4} => {
+            return producer_error("Rust image output exceeded the per-artifact byte limit");
+        }`
+      : ''
+  ]
+    .filter(Boolean)
+    .join('\n');
+  const emitsArtifacts =
+    capabilities.text ||
+    capabilities.json ||
+    capabilities.html ||
+    capabilities.image ||
+    capabilities.table ||
+    capabilities.chart;
+  const outputCollector = emitsArtifacts
+    ? `struct OutputCollector {
+    byte_length: usize,
+    omitted: bool,
+    outputs: Vec<OutputArtifact>,
+}
+
+impl OutputCollector {
+    fn new() -> Self {
+        Self {
+            byte_length: 0,
+            omitted: false,
+            outputs: Vec::new(),
+        }
+    }
+
+    fn push(&mut self, artifact: OutputArtifact) {
+        if self.outputs.len() >= ${outputArtifactLimits.artifactsPerRun} {
+            self.omitted = true;
+            return;
+        }
+        let artifact = bound_output_artifact(artifact);
+        let Ok(serialized) = serde_json::to_string(&artifact) else {
+            self.omitted = true;
+            return;
+        };
+        if serialized.len() > ${outputArtifactLimits.validatedBytesPerRun}_usize.saturating_sub(self.byte_length) {
+            self.omitted = true;
+            return;
+        }
+        self.byte_length += serialized.len();
+        self.outputs.push(artifact);
+    }
+
+    fn finish(mut self) -> Vec<OutputArtifact> {
+        if self.omitted {
+            self.outputs.truncate(${outputArtifactLimits.artifactsPerRun - 1});
+            self.outputs.push(producer_error("Rust output exceeded its artifact or byte limit"));
+        }
+        self.outputs
+    }
+}`
+    : `struct OutputCollector {
+    outputs: Vec<OutputArtifact>,
+}
+
+impl OutputCollector {
+    fn new() -> Self {
+        Self { outputs: Vec::new() }
+    }
+
+    fn finish(self) -> Vec<OutputArtifact> {
+        self.outputs
+    }
+}`;
+  const boundOutputArtifact = emitsArtifacts
+    ? `fn bound_output_artifact(mut artifact: OutputArtifact) -> OutputArtifact {
+    match &mut artifact {
+${boundedArtifactArms}
+        _ => {}
+    }
+    artifact
+}
+
+fn truncate_string(value: &mut String, max_bytes: usize) -> bool {
+    if value.len() <= max_bytes {
+        return false;
+    }
+    let original = std::mem::take(value);
+    push_truncated(value, &original, max_bytes);
+    true
+}`
+    : '';
 
   return `
-${
-  capabilities.legacyPlot
-    ? `#[derive(Debug, Serialize)]
-#[serde(tag = "kind")]
-enum PlotSpec {
-    #[serde(rename = "line")]
-    Line(LinePlotSpec),
-}
+type PlotSpec = Value;
 
-#[derive(Debug, Serialize)]
-struct LinePlotSpec {
-    x_label: String,
-    y_label: String,
-    points: Vec<[f64; 2]>,
-}
-`
-    : `type PlotSpec = Value;
-`
-}
 #[derive(Debug, Serialize)]
 #[serde(tag = "kind")]
 enum OutputArtifact {
@@ -62,6 +156,76 @@ ${outputVariants}
 struct TextArtifact {
     stream: &'static str,
     content: String,
+    truncated: bool,
+}
+
+#[derive(Debug, Serialize)]
+struct ProducerErrorArtifact {
+    message: String,
+}
+
+struct BoundedText {
+    content: String,
+    truncated: bool,
+}
+
+impl BoundedText {
+    fn new() -> Self {
+        Self {
+            content: String::new(),
+            truncated: false,
+        }
+    }
+}
+
+impl std::fmt::Write for BoundedText {
+    fn write_str(&mut self, value: &str) -> std::fmt::Result {
+        if self.truncated {
+            return Ok(());
+        }
+        let remaining = ${outputArtifactLimits.bytesPerStream}_usize.saturating_sub(self.content.len());
+        if value.len() <= remaining {
+            self.content.push_str(value);
+            return Ok(());
+        }
+        push_truncated(&mut self.content, value, remaining);
+        self.truncated = true;
+        Ok(())
+    }
+}
+
+${outputCollector}
+
+${boundOutputArtifact}
+
+fn producer_error(message: &str) -> OutputArtifact {
+    OutputArtifact::ProducerError(ProducerErrorArtifact {
+        message: bounded_error_message(message),
+    })
+}
+
+fn bounded_error_message(message: &str) -> String {
+    let mut bounded = String::new();
+    push_truncated(&mut bounded, message, ${outputArtifactLimits.bytesPerError});
+    bounded
+}
+
+fn push_truncated(output: &mut String, value: &str, max_bytes: usize) {
+    if value.len() <= max_bytes {
+        output.push_str(value);
+        return;
+    }
+    let marker = '…';
+    let marker_bytes = marker.len_utf8();
+    if max_bytes < marker_bytes {
+        return;
+    }
+    let mut end = max_bytes - marker_bytes;
+    while !value.is_char_boundary(end) {
+        end = end.saturating_sub(1);
+    }
+    output.push_str(&value[..end]);
+    output.push(marker);
 }
 
 ${
@@ -69,10 +233,11 @@ ${
     ? `#[derive(Debug, Serialize)]
 struct JsonArtifact {
     value: Value,
+    truncated: bool,
 }
 
 fn json_artifact(value: Value) -> JsonArtifact {
-    JsonArtifact { value }
+    JsonArtifact { value, truncated: false }
 }
 `
     : ''
@@ -135,24 +300,50 @@ struct CellOutput {
 }
 
 fn finish_cell_output(
-    stdout: String,
-    plots: Vec<PlotSpec>,
-    mut outputs: Vec<OutputArtifact>,
+    stdout: BoundedText,
+    outputs: OutputCollector,
 ) -> CellOutput {
+    let BoundedText { content: stdout, truncated } = stdout;
+    let mut outputs = outputs.finish();
     if !stdout.is_empty() {
         outputs.insert(
             0,
             OutputArtifact::Text(TextArtifact {
                 stream: "stdout",
                 content: stdout.clone(),
+                truncated,
             }),
         );
+        outputs.truncate(${outputArtifactLimits.artifactsPerRun});
     }
     CellOutput {
         stdout,
-        plots,
+        plots: Vec::new(),
         value: Value::Null,
         outputs,
+    }
+}
+
+fn serialize_cell_output(mut output: CellOutput) -> Result<String, String> {
+    let mut omitted = false;
+    loop {
+        let serialized = serde_json::to_string(&output).map_err(|error| bounded_error_message(&error.to_string()))?;
+        if serialized.len() <= ${outputArtifactLimits.workerResponseBytes} {
+            if omitted && output.outputs.len() < ${outputArtifactLimits.artifactsPerRun} {
+                output.outputs.push(producer_error("Rust response exceeded the complete response byte limit"));
+                let with_diagnostic = serde_json::to_string(&output)
+                    .map_err(|error| bounded_error_message(&error.to_string()))?;
+                if with_diagnostic.len() <= ${outputArtifactLimits.workerResponseBytes} {
+                    return Ok(with_diagnostic);
+                }
+                output.outputs.pop();
+            }
+            return Ok(serialized);
+        }
+        if output.outputs.pop().is_none() {
+            return Err("Rust response exceeded the complete response byte limit".to_owned());
+        }
+        omitted = true;
     }
 }
 `;
@@ -182,8 +373,8 @@ fn table_artifact_from_value(value: Value) -> Result<TableArtifact, String> {
         _ => return Err("emit_table! expects a serializable array".to_owned()),
     };
     let row_count = rows.len();
-    let truncated = row_count > 10_000;
-    let preview: Vec<Value> = rows.into_iter().take(10_000).collect();
+    let truncated = row_count > ${outputArtifactLimits.rowsPerTable};
+    let preview: Vec<Value> = rows.into_iter().take(${outputArtifactLimits.rowsPerTable}).collect();
     let columns = infer_table_columns(&preview);
     let table_rows = table_rows_for_columns(preview, &columns);
     Ok(TableArtifact {
@@ -201,8 +392,8 @@ fn table_artifact_with_columns(columns: Value, rows: Value) -> Result<TableArtif
         _ => return Err("emit_table_with_columns! expects rows to serialize as an array".to_owned()),
     };
     let row_count = rows.len();
-    let truncated = row_count > 10_000;
-    let preview: Vec<Value> = rows.into_iter().take(10_000).collect();
+    let truncated = row_count > ${outputArtifactLimits.rowsPerTable};
+    let preview: Vec<Value> = rows.into_iter().take(${outputArtifactLimits.rowsPerTable}).collect();
     let table_rows = table_rows_for_columns(preview, &columns);
     Ok(TableArtifact {
         columns,
@@ -219,6 +410,7 @@ fn infer_table_columns(rows: &[Value]) -> Vec<TableColumn> {
     match first {
         Value::Object(object) => object
             .iter()
+            .take(${outputArtifactLimits.columnsPerTable})
             .map(|(key, value)| TableColumn {
                 key: key.clone(),
                 label: key.clone(),
@@ -227,6 +419,7 @@ fn infer_table_columns(rows: &[Value]) -> Vec<TableColumn> {
             .collect(),
         Value::Array(values) => values
             .iter()
+            .take(${outputArtifactLimits.columnsPerTable})
             .enumerate()
             .map(|(index, value)| TableColumn {
                 key: index.to_string(),
@@ -248,6 +441,7 @@ fn parse_table_columns(value: Value) -> Result<Vec<TableColumn>, String> {
     };
     columns
         .into_iter()
+        .take(${outputArtifactLimits.columnsPerTable})
         .enumerate()
         .map(|(index, column)| parse_table_column(index, column))
         .collect()

@@ -8,6 +8,7 @@ export type ChartSummaryDetails = {
   dataCount: number;
   seriesCount: number;
   seriesNames: string;
+  valueRange?: string;
   xRange?: string;
   yRange?: string;
 };
@@ -25,6 +26,7 @@ export type RuntimeLabels = {
   chartCaption: string;
   chartLoadError: (detail: string) => string;
   chartLoading: string;
+  chartRetry: string;
   chartSummary: (details: ChartSummaryDetails) => string;
   chartTitle: (kind: ChartKind) => string;
   clipboardUnavailable: string;
@@ -124,8 +126,9 @@ const runtimeLabels = {
     chartCaption: 'Chart data summary',
     chartLoadError: (detail) => `Chart renderer could not be loaded: ${detail}`,
     chartLoading: 'Loading chart renderer...',
-    chartSummary: ({ dataCount, seriesCount, seriesNames, xRange, yRange }) =>
-      `Series: ${seriesCount}${seriesNames ? ` (${seriesNames})` : ''}. Data items: ${dataCount}.${xRange ? ` X range: ${xRange}.` : ''}${yRange ? ` Y range: ${yRange}.` : ''}`,
+    chartRetry: 'Retry chart rendering',
+    chartSummary: ({ dataCount, seriesCount, seriesNames, valueRange, xRange, yRange }) =>
+      `Series: ${seriesCount}${seriesNames ? ` (${seriesNames})` : ''}. Data items: ${dataCount}.${xRange ? ` X range: ${xRange}.` : ''}${yRange ? ` Y range: ${yRange}.` : ''}${valueRange ? ` Heat value range: ${valueRange}.` : ''}`,
     chartTitle: (kind) => chartTitles.en[kind],
     clipboardUnavailable: 'Clipboard access is unavailable.',
     copyCsv: 'Copy visible rows as CSV',
@@ -180,8 +183,9 @@ const runtimeLabels = {
     chartCaption: 'グラフデータの概要',
     chartLoadError: (detail) => `グラフ表示を読み込めませんでした: ${detail}`,
     chartLoading: 'グラフ表示を読み込んでいます…',
-    chartSummary: ({ dataCount, seriesCount, seriesNames, xRange, yRange }) =>
-      `系列数: ${seriesCount}${seriesNames ? `（${seriesNames}）` : ''}。データ数: ${dataCount}。${xRange ? `X の範囲: ${xRange}。` : ''}${yRange ? `Y の範囲: ${yRange}。` : ''}`,
+    chartRetry: 'グラフ表示を再試行',
+    chartSummary: ({ dataCount, seriesCount, seriesNames, valueRange, xRange, yRange }) =>
+      `系列数: ${seriesCount}${seriesNames ? `（${seriesNames}）` : ''}。データ数: ${dataCount}。${xRange ? `X の範囲: ${xRange}。` : ''}${yRange ? `Y の範囲: ${yRange}。` : ''}${valueRange ? `ヒート値の範囲: ${valueRange}。` : ''}`,
     chartTitle: (kind) => chartTitles.ja[kind],
     clipboardUnavailable: 'クリップボードを利用できません。',
     copyCsv: '表示中の行を CSV としてコピー',

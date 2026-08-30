@@ -122,9 +122,10 @@ readDoubleInput name raw = case readMaybe raw of
   Nothing -> fail ("input " <> show name <> " must be a number, received " <> show raw)
 
 readIntInput :: String -> String -> IO Int
-readIntInput name raw = case readMaybe raw of
-  Just value -> pure value
-  Nothing -> fail ("input " <> show name <> " must be an integer, received " <> show raw)
+readIntInput name raw = case readMaybe raw :: Maybe Integer of
+  Just value
+    | value >= -2147483648 && value <= 2147483647 -> pure (fromInteger value)
+  _ -> fail ("input " <> show name <> " must be a signed 32-bit integer, received " <> show raw)
 
 readBoolInput :: String -> String -> IO Bool
 readBoolInput _ "true" = pure True

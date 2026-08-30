@@ -4,6 +4,7 @@ import { defineOxiquillConfig } from 'oxiquill/astro';
 const basePath = process.env.BASE_PATH;
 
 export default defineOxiquillConfig({
+  desktopTableOfContentsToggle: true,
   framework: { starlight },
   site: process.env.SITE ?? 'https://oxiquill.local',
   ...(basePath ? { base: basePath } : {}),
@@ -20,7 +21,7 @@ export default defineOxiquillConfig({
       },
       ja: {
         label: '日本語',
-        lang: 'ja'
+        lang: 'ja-JP'
       }
     },
     sidebar: [

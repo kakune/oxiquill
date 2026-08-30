@@ -45,7 +45,11 @@ Start with the first Oxiquill diagnostic. Generation errors include the relevant
 
 If different commands appear to use different directories, pass the same `--config <path>` and inspect the conflicting field named by the diagnostic. Relative child paths resolve against their documented parent. Do not combine Astro and `paths` values that normalize to different locations.
 
-`clean` refuses broad or unsafe targets. Fix the configuration instead of deleting the workspace manually.
+`clean` reports the unsafe field, its absolute resolved path, and the conflicting path role. Move the cleanup root to a dedicated generated directory when it overlaps authored input, the public root, project or repository metadata, dependencies, the framework, the persistent download cache, or another generated role. Symlink aliases do not bypass these checks.
+
+If a custom root reports a missing or mismatched `.oxiquill-ownership.json`, do not manufacture the marker. Preserve or move any authored files, select a missing or empty dedicated directory, and rerun the corresponding generation or build command so Oxiquill can establish ownership. An old custom output created before ownership markers must be reviewed and emptied explicitly before it can be claimed.
+
+Clean preflights all three targets before deleting any of them. A diagnostic for one target therefore leaves the other generated roots, authored files, repository/dependency state, and `.cache/oxiquill/downloads/v1` untouched. Fix the reported configuration or ownership problem, then rerun `pnpm clean`.
 
 ## Worker Timeouts and Browser Failures
 
@@ -55,6 +59,6 @@ For browser failures, verify the site was rebuilt, the expected files exist belo
 
 ## Stale Output
 
-Run `pnpm clean` followed by the required generation/build command when source and public output disagree. Generated ownership data removes stale language output when the final cell of that language disappears. Never repair generated manifests, Wasm, Pyodide files, licenses, or `dist` by hand.
+Run `pnpm clean` followed by the required generation/build command when source and public output disagree. Generated ownership data removes stale language output when the final cell of that language disappears. Never repair generated manifests, ownership markers, Wasm, Pyodide files, licenses, or `dist` by hand.
 
 If the problem persists, open a [GitHub issue](https://github.com/kakune/oxiquill/issues) with the Oxiquill/Node/tool versions, operating system, command, complete concise diagnostic, and a minimal reproducer. Use private vulnerability reporting for security-sensitive details.

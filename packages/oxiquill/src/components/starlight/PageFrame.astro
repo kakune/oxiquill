@@ -1,21 +1,10 @@
 ---
 import MobileMenuToggle from '@astrojs/starlight/components/MobileMenuToggle.astro';
 import { Icon } from '@astrojs/starlight/components';
+import { togglePresentation } from './toggle-localization.js';
 
 const { hasSidebar, dir, lang } = Astro.locals.starlightRoute;
-const isRtl = dir === 'rtl';
-const labels =
-  lang === 'ja'
-    ? {
-        collapse: 'サイドバーを折りたたむ',
-        expand: 'サイドバーを展開する'
-      }
-    : {
-        collapse: 'Collapse sidebar',
-        expand: 'Expand sidebar'
-      };
-const collapseIcon = isRtl ? 'right-arrow' : 'left-arrow';
-const expandIcon = isRtl ? 'left-arrow' : 'right-arrow';
+const presentation = togglePresentation(lang, dir, 'sidebar');
 ---
 
 {
@@ -29,11 +18,6 @@ const expandIcon = isRtl ? 'left-arrow' : 'right-arrow';
 							sessionStorage.getItem('oxiquill-sidebar-collapsed') === 'true'
 						) {
 							document.documentElement.setAttribute('data-sidebar-collapsed', '');
-							document.documentElement.style.setProperty('--sl-content-inline-start', '0rem');
-							document.documentElement.style.setProperty(
-								'--sl-content-width',
-								'calc(var(--oq-sidebar-base-content-width) + var(--sl-sidebar-width))'
-							);
 						}
 					} catch {}
 				})();
@@ -55,22 +39,22 @@ const expandIcon = isRtl ? 'left-arrow' : 'right-arrow';
         </div>
         <starlight-sidebar-toggle
           class="print:hidden"
-          data-collapse-label={labels.collapse}
-          data-expand-label={labels.expand}
+          data-collapse-label={presentation.collapseLabel}
+          data-expand-label={presentation.expandLabel}
         >
           <button
             type="button"
             class="sidebar-toggle-button sl-flex"
             aria-controls="starlight__sidebar"
             aria-expanded="true"
-            aria-label={labels.collapse}
-            title={labels.collapse}
+            aria-label={presentation.collapseLabel}
+            title={presentation.collapseLabel}
           >
             <span class="collapse-sidebar" aria-hidden="true">
-              <Icon name={collapseIcon} size="1rem" />
+              <Icon name={presentation.collapseIcon} size="1rem" />
             </span>
             <span class="expand-sidebar" aria-hidden="true">
-              <Icon name={expandIcon} size="1rem" />
+              <Icon name={presentation.expandIcon} size="1rem" />
             </span>
           </button>
         </starlight-sidebar-toggle>
@@ -81,86 +65,9 @@ const expandIcon = isRtl ? 'left-arrow' : 'right-arrow';
 </div>
 
 <script>
-  const storageKey = 'oxiquill-sidebar-collapsed';
-  const desktopQuery = matchMedia('(min-width: 50rem)');
+  import { defineStarlightSidebarToggle } from './sidebar-toggle.js';
 
-  class StarlightSidebarToggle extends HTMLElement {
-    button = this.querySelector('button')!;
-    sidebar = document.getElementById(this.button.getAttribute('aria-controls') || '');
-    collapseLabel = this.dataset.collapseLabel || 'Collapse sidebar';
-    expandLabel = this.dataset.expandLabel || 'Expand sidebar';
-
-    connectedCallback() {
-      this.button.addEventListener('click', this.toggleCollapsed);
-      desktopQuery.addEventListener('change', this.applyStoredState);
-      this.applyStoredState();
-    }
-
-    disconnectedCallback() {
-      this.button.removeEventListener('click', this.toggleCollapsed);
-      desktopQuery.removeEventListener('change', this.applyStoredState);
-    }
-
-    applyStoredState = () => {
-      this.setCollapsed(this.getStoredCollapsed());
-    };
-
-    toggleCollapsed = () => {
-      if (!desktopQuery.matches) return;
-      const nextCollapsed = !document.documentElement.hasAttribute('data-sidebar-collapsed');
-      this.storeCollapsed(nextCollapsed);
-      this.setCollapsed(nextCollapsed);
-    };
-
-    getStoredCollapsed(): boolean {
-      try {
-        return sessionStorage.getItem(storageKey) === 'true';
-      } catch {
-        return false;
-      }
-    }
-
-    storeCollapsed(collapsed: boolean) {
-      try {
-        if (collapsed) {
-          sessionStorage.setItem(storageKey, 'true');
-        } else {
-          sessionStorage.removeItem(storageKey);
-        }
-      } catch {}
-    }
-
-    setCollapsed(collapsed: boolean) {
-      const active = desktopQuery.matches && collapsed;
-      const label = active ? this.expandLabel : this.collapseLabel;
-      document.documentElement.toggleAttribute('data-sidebar-collapsed', active);
-      if (active) {
-        document.documentElement.style.setProperty('--sl-content-inline-start', '0rem');
-        document.documentElement.style.setProperty(
-          '--sl-content-width',
-          'calc(var(--oq-sidebar-base-content-width) + var(--sl-sidebar-width))'
-        );
-      } else {
-        document.documentElement.style.removeProperty('--sl-content-inline-start');
-        document.documentElement.style.removeProperty('--sl-content-width');
-      }
-      this.button.setAttribute('aria-expanded', String(!active));
-      this.button.setAttribute('aria-label', label);
-      this.button.title = label;
-      if (this.sidebar) {
-        if (active) {
-          this.sidebar.setAttribute('aria-hidden', 'true');
-        } else {
-          this.sidebar.removeAttribute('aria-hidden');
-        }
-        this.sidebar.toggleAttribute('inert', active);
-      }
-    }
-  }
-
-  if (!customElements.get('starlight-sidebar-toggle')) {
-    customElements.define('starlight-sidebar-toggle', StarlightSidebarToggle);
-  }
+  defineStarlightSidebarToggle();
 </script>
 
 <style>
@@ -169,7 +76,7 @@ const expandIcon = isRtl ? 'left-arrow' : 'right-arrow';
   }
 
   @media (min-width: 50rem) {
-    :global([data-sidebar-collapsed]) {
+    :global([data-has-sidebar][data-sidebar-collapsed]) {
       --sl-content-inline-start: 0rem;
       --sl-content-width: calc(var(--oq-sidebar-base-content-width) + var(--sl-sidebar-width));
     }

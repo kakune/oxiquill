@@ -5,7 +5,7 @@ export function generateRustReaders(rustCells) {
 
   return [
     readers.has('read_f64') ? rustReadF64() : '',
-    readers.has('read_u32') ? rustReadU32() : '',
+    readers.has('read_i32') ? rustReadI32() : '',
     readers.has('read_bool') ? rustReadBool() : '',
     readers.has('read_string') ? rustReadString() : ''
   ]
@@ -28,13 +28,13 @@ function rustReadF64() {
 }`;
 }
 
-function rustReadU32() {
-  return `fn read_u32(inputs: &Value, key: &str) -> Result<u32, String> {
+function rustReadI32() {
+  return `fn read_i32(inputs: &Value, key: &str) -> Result<i32, String> {
     let value = inputs
         .get(key)
-        .and_then(Value::as_u64)
+        .and_then(Value::as_i64)
         .ok_or_else(|| format!("input {key} must be an integer"))?;
-    u32::try_from(value).map_err(|_| format!("input {key} is too large"))
+    i32::try_from(value).map_err(|_| format!("input {key} must be a signed 32-bit integer"))
 }`;
 }
 
