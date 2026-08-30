@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { spawn, spawnSync } from 'node:child_process';
 import { createHash } from 'node:crypto';
-import { appendFile, mkdir, mkdtemp, readFile, rename, rm, writeFile } from 'node:fs/promises';
+import { appendFile, mkdir, mkdtemp, readFile, realpath, rename, rm, writeFile } from 'node:fs/promises';
 import { createRequire } from 'node:module';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
@@ -196,7 +196,7 @@ try {
   const pyodideBuildDir = path.join(projectRoot, 'built site/oxiquill assets/python runtime');
   const lockBytes = await readFile(path.join(pyodidePublicDir, 'pyodide-lock.json'));
   const lockFile = JSON.parse(lockBytes.toString('utf8'));
-  const pyodidePackagePath = createRequire(packedCliPath).resolve('pyodide/package.json');
+  const pyodidePackagePath = createRequire(await realpath(packedCliPath)).resolve('pyodide/package.json');
   const pyodidePackage = JSON.parse(await readFile(pyodidePackagePath, 'utf8'));
   const lockSha256 = createHash('sha256').update(lockBytes).digest('hex');
   const downloadCacheDirectory = path.join(
