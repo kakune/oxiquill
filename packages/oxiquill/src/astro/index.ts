@@ -517,12 +517,16 @@ function bundledModuleCollectorPlugin(collector: BundledModuleCollector, source:
 
 function oxiquillDependencyResolverPlugin(paths: OxiquillPaths): Plugin {
   const contextPaths = dependencyResolutionContextPaths(paths);
+  const workspacePreactPackage = workspacePackageInstallation(paths, 'preact');
 
   return {
     enforce: 'pre',
     name: 'oxiquill-dependency-resolver',
     async resolveId(source, _importer, options) {
       if (!isPackageManagedDependency(source)) {
+        return undefined;
+      }
+      if (packageNameFromSpecifier(source) === 'preact' && workspacePreactPackage !== undefined) {
         return undefined;
       }
 
@@ -557,15 +561,30 @@ function oxiquillServeAllow(paths: OxiquillPaths): string[] {
 
 function oxiquillDependencyAliases(paths: OxiquillPaths): Alias[] {
   const requires = dependencyRequireContexts(paths);
-  const workspacePreactPackage = pathInUrl(paths.workspaceRoot, 'node_modules', 'preact', 'package.json');
+  const workspacePreactPackage = workspacePackageInstallation(paths, 'preact');
   const aliases: Alias[] = [];
 
   for (const packageName of viteAliasedPackageNames) {
-    if (packageName === 'preact' && existsSync(workspacePreactPackage)) continue;
+    if (packageName === 'preact' && workspacePreactPackage !== undefined) continue;
     aliases.push(...resolvePackageExportAliases(requires, packageName));
   }
 
   return aliases;
+}
+
+function workspacePackageInstallation(paths: OxiquillPaths, packageName: string): string | undefined {
+  let current = pathFromUrl(paths.workspaceRoot);
+
+  while (true) {
+    if (existsSync(path.join(current, 'package.json'))) {
+      const packageJsonPath = path.join(current, 'node_modules', packageName, 'package.json');
+      return existsSync(packageJsonPath) ? packageJsonPath : undefined;
+    }
+
+    const parent = path.dirname(current);
+    if (parent === current) return undefined;
+    current = parent;
+  }
 }
 
 function dependencyResolutionContextPaths(paths: OxiquillPaths): string[] {
