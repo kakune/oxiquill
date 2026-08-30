@@ -126,6 +126,7 @@ export interface OxiquillConfig<StarlightOptions extends object = object> extend
   'integrations' | 'markdown' | 'vite'
 > {
   description?: StarlightOption<StarlightOptions, 'description', string>;
+  desktopTableOfContentsToggle?: boolean;
   framework: OxiquillFrameworkOptions<StarlightOptions>;
   integrations?: AstroIntegrations;
   markdown?: OxiquillMarkdownConfig;
@@ -165,6 +166,7 @@ export function defineOxiquillConfig<StarlightOptions extends object>(
     paths,
     python,
     description,
+    desktopTableOfContentsToggle = true,
     sidebar,
     starlight: starlightOptions = {},
     title,
@@ -202,7 +204,10 @@ export function defineOxiquillConfig<StarlightOptions extends object>(
     integrations: [
       integration,
       preactIntegration(undefined),
-      callStarlightIntegration(starlightIntegration, createStarlightOptions(mergedStarlightOptions)),
+      callStarlightIntegration(
+        starlightIntegration,
+        createStarlightOptions(mergedStarlightOptions, desktopTableOfContentsToggle)
+      ),
       ...integrations
     ]
   };
@@ -387,7 +392,10 @@ function callStarlightIntegration<StarlightOptions extends object>(
   return (integration as unknown as IntegrationFactory<OxiquillStarlightOptions>)(options);
 }
 
-function createStarlightOptions(options: OxiquillStarlightOptions): OxiquillStarlightOptions {
+function createStarlightOptions(
+  options: OxiquillStarlightOptions,
+  desktopTableOfContentsToggle: boolean
+): OxiquillStarlightOptions {
   const {
     components = {},
     customCss = [],
@@ -403,6 +411,7 @@ function createStarlightOptions(options: OxiquillStarlightOptions): OxiquillStar
     customCss: ['oxiquill/styles/katex.css', 'oxiquill/styles/custom.css', ...customCss],
     components: {
       PageFrame: 'oxiquill/components/starlight/PageFrame',
+      ...(desktopTableOfContentsToggle ? { TwoColumnContent: 'oxiquill/components/starlight/TwoColumnContent' } : {}),
       ...components
     }
   };

@@ -76,6 +76,7 @@ const markdownConfigs: OxiquillMarkdownConfig[] = [
   { syntaxHighlight: { type: 'shiki', excludeLangs: ['custom'] } }
 ];
 markdownConfigs.forEach((markdown) => defineOxiquillConfig({ framework: { starlight }, markdown }));
+defineOxiquillConfig({ desktopTableOfContentsToggle: false, framework: { starlight } });
 defineOxiquillConfig({
   framework: { starlight },
   markdown: {

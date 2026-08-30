@@ -299,6 +299,54 @@ describe('defineOxiquillConfig', () => {
     );
   });
 
+  it('enables the desktop table-of-contents toggle by default and preserves component overrides', () => {
+    const starlight = vi.fn(() => ({ hooks: {}, name: 'custom-starlight' }));
+
+    defineOxiquillConfig({
+      framework: { starlight },
+      starlight: {
+        components: {
+          PageFrame: './CustomPageFrame.astro',
+          TableOfContents: './CustomTableOfContents.astro'
+        }
+      }
+    });
+
+    expect(starlight).toHaveBeenCalledWith(
+      expect.objectContaining({
+        components: {
+          PageFrame: './CustomPageFrame.astro',
+          TableOfContents: './CustomTableOfContents.astro',
+          TwoColumnContent: 'oxiquill/components/starlight/TwoColumnContent'
+        }
+      })
+    );
+  });
+
+  it('allows consumers to disable or replace the desktop table-of-contents toggle', () => {
+    const disabledStarlight = vi.fn(() => ({ hooks: {}, name: 'disabled-starlight' }));
+    defineOxiquillConfig({ desktopTableOfContentsToggle: false, framework: { starlight: disabledStarlight } });
+    expect(disabledStarlight).toHaveBeenCalledWith(
+      expect.objectContaining({
+        components: { PageFrame: 'oxiquill/components/starlight/PageFrame' }
+      })
+    );
+
+    const overriddenStarlight = vi.fn(() => ({ hooks: {}, name: 'overridden-starlight' }));
+    defineOxiquillConfig({
+      framework: { starlight: overriddenStarlight },
+      starlight: { components: { TwoColumnContent: './CustomTwoColumnContent.astro' } }
+    });
+    expect(overriddenStarlight).toHaveBeenCalledWith(
+      expect.objectContaining({
+        components: {
+          PageFrame: 'oxiquill/components/starlight/PageFrame',
+          TwoColumnContent: './CustomTwoColumnContent.astro'
+        }
+      })
+    );
+  });
+
   it('keeps explicit integration factory overrides for tests and advanced consumers', () => {
     const preact = vi.fn(() => ({ hooks: {}, name: 'custom-preact' }));
     const starlight = vi.fn(() => ({ hooks: {}, name: 'custom-starlight' }));

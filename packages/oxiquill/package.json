@@ -65,6 +65,7 @@
       "default": "./dist/lib/doc-runtime/types.js"
     },
     "./components/starlight/PageFrame": "./dist/components/starlight/PageFrame.astro",
+    "./components/starlight/TwoColumnContent": "./dist/components/starlight/TwoColumnContent.astro",
     "./styles/katex.css": "./dist/styles/katex.css",
     "./styles/custom.css": "./dist/styles/custom.css",
     "./tsconfigs/strict": "./dist/tsconfigs/strict.json",
