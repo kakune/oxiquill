@@ -27,35 +27,49 @@ Every artifact may have optional string `id`, `title`, and `caption` fields. Val
 | `table` | `columns`, rectangular `rows`                                  | `rowCount` records the original size; `truncated` marks a preview.                                  |
 | `chart` | Valid `spec` described below                                   | Oversize/invalid charts become a local artifact error.                                              |
 | `image` | `mime: image/png \| image/jpeg \| image/svg+xml`, valid data   | `alt` supplies the image alternative.                                                               |
-| `html`  | `html: string`, `sandboxed: true`                              | Always rendered in an iframe with an empty sandbox permission set.                                  |
+| `html`  | `html: string`, `sandboxed: true`                              | Rendered with an empty sandbox, no referrer, and the restrictive CSP described below.               |
 
 Table columns contain `key`, `label`, and optional `type`: `string`, `number`, `integer`, `boolean`, `date`, `datetime`, `null`, or `unknown`. Every row must have exactly the declared column count.
 
 ## Chart Schema
 
-All chart specs accept optional `title`, `xLabel`, `yLabel`, `xType`, `yType`, `legend`, `tooltip`, and `dataZoom`. Axis types are `value`, `category`, `time`, and `log`.
+All chart specs accept optional `title`, `xLabel`, `yLabel`, `xType`, `yType`, `legend`, `tooltip`, and `dataZoom`. Axis types are `value`, `category`, `time`, and `log`. Unspecified axes default to `value`, except the category axes intrinsic to bar/histogram charts and heatmap axes with a corresponding categories array.
+
+- `value` coordinates are finite numbers, and `log` coordinates are finite numbers greater than zero.
+- `time` coordinates are finite epoch milliseconds or ISO-8601 strings in `YYYY-MM-DDTHH:mm:ss[.sss]Z` or `YYYY-MM-DDTHH:mm:ss[.sss]±HH:mm` form. Calendar fields and the explicit time zone must be valid.
+- `category` coordinates are strings or finite numbers. When a heatmap supplies `xCategories` or `yCategories`, a coordinate must be a listed string or an in-range zero-based integer index. A declared categories array makes that axis categorical; a conflicting axis type is rejected.
 
 - `line`, `scatter`, and `area`: `series[]`, each with optional `name` and `[x, y]` points.
 - `bar`: string `categories[]` plus series of numeric-or-null `values[]` with matching length.
-- `histogram`: `bins[]` as finite `[lower, upper, count]` tuples.
+- `histogram`: `bins[]` as finite `[lower, upper, count]` tuples, where `lower < upper` and count is non-negative.
 - `heatmap`: optional `xCategories`/`yCategories` and finite `[x, y, value]` cells.
 
-Charts expose a textual title/caption and bounded accessible summary or equivalent table. The implementation canvas is hidden from accessibility APIs when that equivalent is present.
+Empty charts and equal point domains are valid. Heatmaps report X, Y, and heat-value ranges separately; their color scale uses the actual heat values, with a `0–1` fallback only for an empty dataset. Charts expose a textual title/caption and bounded accessible summary or equivalent table. The implementation canvas is hidden from accessibility APIs when that equivalent is present.
+
+Charts use contrast-aware colors for the current Starlight light/dark theme, recreate their ECharts instance when `html[data-theme]` changes, and expose a retry action after a transient renderer load failure.
 
 ## Resource Limits
 
-Limits apply after validation and are cumulative for each run:
+Producers enforce limits inside each language worker before `postMessage`; the main thread independently validates the bounded response again. Limits are UTF-8 byte limits and are cumulative for each run where noted:
 
-| Resource                    | Limit                           | Over-limit result                                              |
-| --------------------------- | ------------------------------- | -------------------------------------------------------------- |
-| Artifacts                   | 100 per run                     | Additional artifacts are rejected locally.                     |
-| Text, serialized JSON, HTML | 1 MiB per artifact              | Text/JSON may use `truncated: true`; HTML is rejected.         |
-| Table                       | 10,000 rows and 100 columns     | A bounded table may use `truncated: true` and `rowCount`.      |
-| Chart                       | 100,000 total points/bins/cells | Artifact-local error.                                          |
-| Image                       | 10 MiB decoded bytes            | Artifact-local error.                                          |
-| All validated output        | 16 MiB per run                  | Artifacts exceeding the remaining budget are rejected locally. |
+| Resource                    | Limit                           | Over-limit result                                                 |
+| --------------------------- | ------------------------------- | ----------------------------------------------------------------- |
+| Artifacts                   | 100 per run                     | Additional artifacts are rejected locally.                        |
+| stdout or stderr            | 1 MiB per stream                | Captured text is retained only to the limit and marked truncated. |
+| Text, serialized JSON, HTML | 1 MiB per artifact              | Text/JSON may use `truncated: true`; HTML is rejected.            |
+| Table                       | 10,000 rows and 100 columns     | A bounded table may use `truncated: true` and `rowCount`.         |
+| Chart                       | 100,000 total points/bins/cells | Artifact-local error.                                             |
+| Image                       | 10 MiB decoded bytes            | Artifact-local error.                                             |
+| All validated output        | 16 MiB per run                  | Artifacts exceeding the remaining budget are rejected locally.    |
+| Complete worker response    | 16 MiB                          | Later artifacts are omitted before worker-to-page transfer.       |
+| Worker error                | 16 KiB                          | The UTF-8 message is truncated.                                   |
+| Artifact diagnostic         | 8 KiB each; 64 KiB per run      | Diagnostics are truncated within both limits.                     |
 
-`truncated: true` is valid only for text, JSON, and table artifacts. Chart, image, and HTML artifacts are never silently truncated. Invalid/cyclic/over-deep JSON, ragged tables, non-finite chart values, invalid base64/MIME pairs, or unsafe structural records cannot crash the cell component.
+`truncated: true` is valid only for text, JSON, and table artifacts. Chart, image, and HTML artifacts are never silently truncated. Invalid/cyclic/over-deep JSON, ragged tables, non-finite chart values, invalid base64/MIME pairs, or unsafe structural records cannot crash the cell component. Legacy `stdout`, `stderr`, `value`, and `plots` aliases are regenerated from validated, bounded `outputs`; raw aliases cannot retain a second unbounded payload.
+
+## CSV Copy Safety
+
+The default table action copies visible rows as spreadsheet-safe CSV. String headers or cells whose first meaningful character is `=`, `+`, `-`, `@`, tab, or carriage return receive a leading apostrophe before RFC-style comma/quote/line-break escaping. This deterministic convention prevents common spreadsheet applications from evaluating string data as a formula. Numeric values remain numeric, so a genuine number such as `-42` is copied as `-42`.
 
 ## Python Display Helpers
 
@@ -133,4 +147,6 @@ emit_html!(r#"<p><strong>Sandboxed HTML</strong> emitted from Rust.</p>"#);
 
 Use stdout for short explanatory text. Use JSON when readers need the exact structured value. Use tables for comparable records, charts for trends or distributions, images for generated visuals, and sandboxed HTML only when the output needs markup that cannot be represented by the other artifact types.
 
-Copy, sort, pagination, validation, running, completion, and failure states are keyboard-operable and announced with localized English/Japanese labels. Sandboxed HTML intentionally has no script or same-origin permission; see [Support and Security](/guides/support-and-security/) for the full trust boundary.
+Copy, sort, pagination, validation, running, completion, and failure states are keyboard-operable and announced with localized English/Japanese labels. Sandboxed HTML intentionally has no script or same-origin permission, sends no referrer, and blocks external subresources by default; see [Support and Security](/guides/support-and-security/) for the exact policy and trust boundary.
+
+Table interaction state is scoped to one execution result. A new result resets the page, sort, and copy status. Rerenders of the same result preserve a compatible sort and page, but row shrinkage stores the clamped page and a removed or replaced sorted column clears the sort.

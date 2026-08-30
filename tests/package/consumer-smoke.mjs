@@ -7,6 +7,7 @@ import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { chromium } from '@playwright/test';
+import { loadDocumentedConsumerConfig } from '../docs/documented-config.mjs';
 
 const supportedPythonPackages = [
   'contourpy',
@@ -38,11 +39,21 @@ const packageRoot = path.join(repositoryRoot, 'packages/oxiquill');
 const registryMode = process.argv.includes('--registry');
 const temporaryRoot = await mkdtemp(path.join(tmpdir(), 'oxiquill-consumer-'));
 const consumerRoot = path.join(temporaryRoot, 'consumer');
+const documentedConfig = await loadDocumentedConsumerConfig(repositoryRoot);
 const packageApiSource = `
+import starlight from '@astrojs/starlight';
 import { defineOxiquillConfig as defineRootConfig, oxiquillIntegration } from 'oxiquill';
 import { defineOxiquillConfig } from 'oxiquill/astro';
-import type { OxiquillPathOptions, OxiquillPythonOptions } from 'oxiquill/astro';
+import type {
+  OxiquillConfig,
+  OxiquillFrameworkOptions,
+  OxiquillIntegrationOptions,
+  OxiquillMarkdownConfig,
+  OxiquillPathOptions,
+  OxiquillPythonOptions
+} from 'oxiquill/astro';
 import { createOxiquillCollections } from 'oxiquill/content';
+import type { OxiquillCollections, OxiquillContentDependencies } from 'oxiquill/content';
 import InteractiveCell from 'oxiquill/runtime/InteractiveCell';
 import MermaidDiagram from 'oxiquill/runtime/MermaidDiagram';
 import type { CellManifest } from 'oxiquill/runtime/types';
@@ -50,6 +61,29 @@ import type { CellManifest } from 'oxiquill/runtime/types';
 const cell = {} as CellManifest;
 const paths = { downloadCacheDir: new URL('./verified downloads/', import.meta.url) } satisfies OxiquillPathOptions;
 const python = { offline: true, packageMirror: new URL('https://packages.example/pyodide/') } satisfies OxiquillPythonOptions;
+const publicTypes = {} as [
+  OxiquillConfig,
+  OxiquillFrameworkOptions,
+  OxiquillIntegrationOptions,
+  OxiquillPathOptions,
+  OxiquillCollections<(...args: never[]) => unknown>,
+  OxiquillContentDependencies<(...args: never[]) => unknown, (...args: never[]) => unknown, (...args: never[]) => unknown>
+];
+const markdownConfigs: OxiquillMarkdownConfig[] = [
+  { syntaxHighlight: false },
+  { syntaxHighlight: 'prism' },
+  { syntaxHighlight: 'shiki' },
+  { syntaxHighlight: { type: 'shiki', excludeLangs: ['custom'] } }
+];
+markdownConfigs.forEach((markdown) => defineOxiquillConfig({ framework: { starlight }, markdown }));
+defineOxiquillConfig({ desktopTableOfContentsToggle: false, framework: { starlight } });
+defineOxiquillConfig({
+  framework: { starlight },
+  markdown: {
+    // @ts-expect-error Oxiquill owns the Markdown processor so required transforms cannot be bypassed.
+    processor: { createRenderer: async () => ({ render: async () => ({}) }), name: 'custom', options: {} }
+  }
+});
 void [
   defineRootConfig,
   oxiquillIntegration,
@@ -59,7 +93,8 @@ void [
   MermaidDiagram,
   cell,
   paths,
-  python
+  python,
+  publicTypes
 ];
 `;
 
@@ -79,9 +114,14 @@ try {
   }
 
   initializeConsumer(packageManager, packageSource, consumerRoot, temporaryRoot);
+  const starterConfig = {
+    astro: await readFile(path.join(consumerRoot, 'astro.config.mjs'), 'utf8'),
+    content: await readFile(path.join(consumerRoot, 'content.config.ts'), 'utf8')
+  };
   const packageJsonPath = path.join(consumerRoot, 'package.json');
   const packageJson = JSON.parse(await readFile(packageJsonPath, 'utf8'));
   assert.equal(packageJson.dependencies.oxiquill, `^${expectedVersion}`, 'starter Oxiquill version is stale');
+  assert.equal(packageJson.dependencies.preact, undefined, 'starter must not declare Preact directly');
   packageJson.dependencies.oxiquill = registryMode
     ? expectedVersion
     : `file:${path.relative(consumerRoot, packageSource).split(path.sep).join('/')}`;
@@ -90,6 +130,8 @@ try {
   await writeFile(packageJsonPath, `${JSON.stringify(packageJson, null, 2)}\n`);
 
   run(packageManager, ['install'], consumerRoot);
+  await writeFile(path.join(consumerRoot, 'astro.config.mjs'), documentedConfig.astro);
+  await writeFile(path.join(consumerRoot, 'content.config.ts'), documentedConfig.content);
   const installedManifest = JSON.parse(
     await readFile(path.join(consumerRoot, 'node_modules/oxiquill/package.json'), 'utf8')
   );
@@ -127,8 +169,20 @@ try {
     consumerRoot
   );
 
+  if (packageManager === 'pnpm') {
+    await appendFile(
+      path.join(consumerRoot, 'content/docs/index.mdx'),
+      ['', '```mermaid', 'graph TD', '  core --> linalg', '```', ''].join('\n')
+    );
+    await runInstalledDevSmoke({ consumerRoot });
+  }
+
   const nodeOnlyEnvironment = createNodeOnlyEnvironment();
   run(process.execPath, [installedCliPath, 'check'], consumerRoot, false, nodeOnlyEnvironment);
+  await Promise.all([
+    writeFile(path.join(consumerRoot, 'astro.config.mjs'), starterConfig.astro),
+    writeFile(path.join(consumerRoot, 'content.config.ts'), starterConfig.content)
+  ]);
   const initialBuild = run(process.execPath, [installedCliPath, 'build'], consumerRoot, true, nodeOnlyEnvironment);
   assertNo404Warning(initialBuild);
   run(packageManager, ['run', 'preview', '--', '--background', '--host', '127.0.0.1', '--port', '4321'], consumerRoot);
@@ -140,6 +194,15 @@ try {
   await mkdir(projectRoot);
   await rename(path.join(consumerRoot, 'content'), path.join(projectRoot, 'content'));
   await rename(path.join(consumerRoot, 'crates'), path.join(projectRoot, 'helper crates'));
+  await mkdir(path.join(projectRoot, 'helper crates/packed-helper/src'), { recursive: true });
+  await writeFile(
+    path.join(projectRoot, 'helper crates/packed-helper/Cargo.toml'),
+    ["package.name = 'packed-helper'", "package.version = '0.1.0'", "package.edition = '2024'", ''].join('\n')
+  );
+  await writeFile(
+    path.join(projectRoot, 'helper crates/packed-helper/src/lib.rs'),
+    'pub fn message() -> &\'static str { "packed consumer" }\n'
+  );
   await rename(path.join(consumerRoot, 'public'), path.join(projectRoot, 'static files'));
   await rename(path.join(consumerRoot, 'content.config.ts'), path.join(projectRoot, 'content.config.ts'));
   const tsconfigPath = path.join(projectRoot, 'tsconfig.json');
@@ -171,8 +234,8 @@ try {
       '',
       '```rust',
       '//| id: package-rust',
-      '//| crates: []',
-      'println!("packed consumer");',
+      '//| crates: [packed-helper]',
+      'println!("{}", packed_helper::message());',
       '```',
       '',
       '```python',
@@ -329,6 +392,17 @@ async function runInstalledBrowserSmoke({ consumerRoot, installedCliPath, projec
     });
     const page = await browser.newPage();
     await page.goto(`http://127.0.0.1:${port}/`);
+    const tableOfContentsToggle = page.locator('starlight-table-of-contents-toggle button');
+    await tableOfContentsToggle.waitFor({ state: 'visible' });
+    assert.equal(await tableOfContentsToggle.getAttribute('aria-expanded'), 'true');
+    await tableOfContentsToggle.click();
+    assert.equal(await tableOfContentsToggle.getAttribute('aria-expanded'), 'false');
+    assert.equal(await page.locator('#starlight__right-sidebar').getAttribute('inert'), '');
+    assert.equal(
+      await page.locator('html').getAttribute('data-table-of-contents-collapsed'),
+      '',
+      'packed consumer did not enable the configured desktop table-of-contents toggle'
+    );
     const manifest = JSON.parse(await readFile(path.join(projectRoot, 'state cache/generated runtime/cells.json')));
     const pythonCell = manifest.find((cell) => cell.id.endsWith('__package-python'));
     assert.deepEqual(pythonCell?.packages, supportedPythonPackages);
@@ -358,6 +432,42 @@ async function runInstalledBrowserSmoke({ consumerRoot, installedCliPath, projec
       ]);
     }
   }
+}
+
+async function runInstalledDevSmoke({ consumerRoot }) {
+  const port = 4_386;
+
+  try {
+    run(
+      packageManager,
+      ['run', 'dev', '--', '--background', '--host', '127.0.0.1', '--port', String(port)],
+      consumerRoot
+    );
+    const response = await waitForHttpResponse(`http://127.0.0.1:${port}/`, 60_000);
+    const html = await response.text();
+
+    assert.equal(response.status, 200, `packed development server returned ${response.status}`);
+    assert.ok(html.includes('data-testid="mermaid-diagram"'), 'packed development response omitted Mermaid SSR markup');
+    assert.ok(
+      !/Cannot read properties of undefined|__H/u.test(html),
+      'packed development response contained a Preact hook error'
+    );
+  } finally {
+    stopAstroDev(packageManager, consumerRoot);
+  }
+}
+
+async function waitForHttpResponse(url, timeoutMs) {
+  const deadline = Date.now() + timeoutMs;
+  while (Date.now() < deadline) {
+    try {
+      return await fetch(url);
+    } catch {
+      // The development server is still starting.
+    }
+    await new Promise((resolve) => setTimeout(resolve, 250));
+  }
+  throw new Error(`Timed out waiting for packed development server at ${url}.`);
 }
 
 async function waitForHttp(url, timeoutMs, server, output, readServerError) {
@@ -391,6 +501,7 @@ function packedAstroConfig({ offline }) {
     "const projectRoot = fileURLToPath(new URL('./site root/', import.meta.url));",
     '',
     'export default defineOxiquillConfig({',
+    '  desktopTableOfContentsToggle: true,',
     '  framework: { starlight },',
     '  root: projectRoot,',
     "  publicDir: 'static files',",
@@ -427,6 +538,11 @@ function initializeConsumer(packageManager, packageSource, target, cwd) {
 function stopAstroPreview(packageManager, cwd) {
   const args =
     packageManager === 'npm' ? ['exec', '--', 'astro', 'preview', 'stop'] : ['exec', 'astro', 'preview', 'stop'];
+  run(packageManager, args, cwd);
+}
+
+function stopAstroDev(packageManager, cwd) {
+  const args = packageManager === 'npm' ? ['exec', '--', 'astro', 'dev', 'stop'] : ['exec', 'astro', 'dev', 'stop'];
   run(packageManager, args, cwd);
 }
 

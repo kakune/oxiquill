@@ -45,7 +45,11 @@ description: install、config、runtime generation、download、timeout、stale 
 
 command ごとに別 directory を使うように見える場合、同じ `--config <path>` を渡し、diagnostic が示す conflicting field を確認します。relative child path は documented parent から解決されます。Astro と `paths` に正規化後の location が異なる値を組み合わせないでください。
 
-`clean` は broad/unsafe target を拒否します。workspace を手動削除せず config を修正してください。
+`clean` は unsafe field、absolute resolved path、conflicting path role を報告します。cleanup root が authored input、public root、project/repository metadata、dependency、framework、persistent download cache、別の generated role と重なる場合は、生成専用 directory へ移してください。symlink alias でも検証を迂回できません。
+
+custom root で `.oxiquill-ownership.json` の欠落・不一致が報告された場合、marker を手動作成しないでください。authored file を保持または移動し、存在しないか空の生成専用 directory を選んで、対応する generation/build command を再実行すると Oxiquill が ownership を確立します。ownership marker 導入前に作られた古い custom output は、内容を確認して明示的に空にしてから claim してください。
+
+clean は削除前に3つの target をすべて preflight します。そのため、一つの target の diagnostic が出ても、他の generated root、authored file、repository/dependency state、`.cache/oxiquill/downloads/v1` は変更されません。報告された config/ownership を修正してから `pnpm clean` を再実行します。
 
 ## Worker timeout と browser failure
 
@@ -55,6 +59,6 @@ browser failure では site rebuild、`public/oxiquill` 下の expected file、d
 
 ## Stale output
 
-source と public output が一致しない場合は `pnpm clean` 後に必要な generation/build command を実行します。generated ownership data は最後の cell が消えた language の stale output を除去します。manifest、Wasm、Pyodide file、license、`dist` を手動修正しないでください。
+source と public output が一致しない場合は `pnpm clean` 後に必要な generation/build command を実行します。generated ownership data は最後の cell が消えた language の stale output を除去します。manifest、ownership marker、Wasm、Pyodide file、license、`dist` を手動修正しないでください。
 
 解決しない場合は [GitHub issue](https://github.com/kakune/oxiquill/issues) に Oxiquill/Node/tool version、OS、command、完全で簡潔な diagnostic、minimal reproducer を添えてください。security-sensitive detail は private vulnerability reporting を使います。

@@ -46,6 +46,7 @@ function generateTextMacro() {
             __outputs.borrow_mut().push(OutputArtifact::Text(TextArtifact {
                 stream: "display",
                 content: ($content).to_string(),
+                truncated: false,
             }));
         }};
     }`;
@@ -250,11 +251,6 @@ function generateLinePlotMacro() {
                 .iter()
                 .map(|point| [f64::from(point.n), point.x])
                 .collect();
-            __plots.borrow_mut().push(PlotSpec::Line(LinePlotSpec {
-                x_label: x_label.clone(),
-                y_label: y_label.clone(),
-                points: points.clone(),
-            }));
             __outputs.borrow_mut().push(OutputArtifact::Chart(ChartArtifact {
                 spec: serde_json::json!({
                     "kind": "line",

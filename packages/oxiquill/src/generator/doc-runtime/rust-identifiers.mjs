@@ -2,7 +2,7 @@ import { rustReservedIdentifiers } from './constants.mjs';
 
 export function rustReaderName(input) {
   if (input.type === 'checkbox') return 'read_bool';
-  if (input.type === 'integer' || input.integer) return 'read_u32';
+  if (input.type === 'integer' || input.integer) return 'read_i32';
   if (input.type === 'range' || input.type === 'number') return 'read_f64';
   return 'read_string';
 }

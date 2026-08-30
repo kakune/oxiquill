@@ -100,6 +100,10 @@ export function isPathWithin(parentPath, candidatePath) {
   );
 }
 
+export function arePathsEqual(leftPath, rightPath) {
+  return path.relative(canonicalPath(leftPath), canonicalPath(rightPath)) === '';
+}
+
 export function assertPathWithin(parentPath, candidatePath, fieldName) {
   if (!isPathWithin(parentPath, candidatePath)) {
     throw new Error(`${fieldName} must resolve to a directory inside ${parentPath}; received ${candidatePath}.`);

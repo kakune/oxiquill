@@ -36,7 +36,7 @@
     "test:wasm": "pnpm build:package && pnpm --dir examples/docs-site test:wasm",
     "test:e2e": "pnpm build:package && playwright test",
     "test:bundle": "node tests/bundle/client-bundle.mjs",
-    "test:docs": "node tests/docs/check-documentation.mjs",
+    "test:docs": "pnpm build:package && node tests/docs/check-documentation.mjs",
     "lint:package": "pnpm build:package && publint packages/oxiquill && attw packages/oxiquill --pack --profile esm-only --entrypoints . ./astro ./content ./runtime/InteractiveCell ./runtime/MermaidDiagram ./runtime/types ./env",
     "test:package": "node tests/package/package-contents.mjs && pnpm lint:package",
     "test:consumer": "pnpm test:consumer:npm && pnpm test:consumer:pnpm",

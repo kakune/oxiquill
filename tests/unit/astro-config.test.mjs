@@ -19,7 +19,8 @@ vi.mock('@astrojs/starlight', () => ({
   default: () => ({ hooks: {}, name: '@astrojs/starlight' })
 }));
 
-const { defineOxiquillConfig: definePackageConfig } = await import('../../packages/oxiquill/src/astro/index.ts');
+const { defineOxiquillConfig: definePackageConfig, oxiquillIntegration } =
+  await import('../../packages/oxiquill/src/astro/index.ts');
 const { readOxiquillMetadata } = await import('../../packages/oxiquill/src/config/metadata.mjs');
 const { canonicalPath } = await import('../../packages/oxiquill/src/config/paths.mjs');
 const linkedConsumerRoot = new URL('../fixtures/linked-consumer/', import.meta.url);
@@ -31,6 +32,12 @@ const preactExportSpecifiers = [
   'preact/hooks',
   'preact/debug',
   'preact/devtools'
+];
+const preactRendererExportSpecifiers = [
+  'preact-render-to-string',
+  'preact-render-to-string/jsx',
+  'preact-render-to-string/stream',
+  'preact-render-to-string/stream-node'
 ];
 
 function defineOxiquillConfig(options) {
@@ -176,25 +183,91 @@ describe('defineOxiquillConfig', () => {
       title: 'Docs'
     });
     const update = runConfigSetup(config);
+    const remarkPlugins = update.markdown.processor.options.remarkPlugins;
+    const rehypePlugins = update.markdown.processor.options.rehypePlugins;
 
-    expect(update.markdown.processor.options.remarkPlugins.at(-1)).toBe(remarkPlugin);
-    expect(update.markdown.processor.options.rehypePlugins.at(-1)).toBe(rehypePlugin);
+    expect(remarkPlugins.map(pluginName)).toEqual([
+      'remarkMath',
+      'remarkPublicAssetBase',
+      'remarkInteractiveCells',
+      'remarkMermaidDiagrams',
+      'remarkPlugin'
+    ]);
+    expect(rehypePlugins.map(pluginName)).toEqual(['rehypeKatex', 'rehypePlugin']);
     expect(update.markdown).not.toHaveProperty('remarkPlugins');
     expect(update.markdown).not.toHaveProperty('rehypePlugins');
   });
 
-  it('preserves explicit Astro rendering and Markdown processor options', () => {
-    const processor = { render: vi.fn() };
+  it.each([
+    ['disabled highlighting', false],
+    ['Prism highlighting', 'prism'],
+    ['Shiki shorthand highlighting', 'shiki']
+  ])('preserves %s', (_label, syntaxHighlight) => {
+    const config = defineOxiquillConfig({
+      markdown: { syntaxHighlight },
+      sidebar: [],
+      title: 'Docs'
+    });
+    const update = runConfigSetup(config);
+
+    expect(update.markdown.syntaxHighlight).toBe(syntaxHighlight);
+  });
+
+  it('merges required languages into Shiki object exclusions without dropping consumer fields', () => {
+    const config = defineOxiquillConfig({
+      markdown: {
+        syntaxHighlight: { excludeLangs: ['custom', 'math'], type: 'shiki' }
+      },
+      sidebar: [],
+      title: 'Docs'
+    });
+    const update = runConfigSetup(config);
+
+    expect(update.markdown.syntaxHighlight).toEqual({
+      excludeLangs: ['custom', 'math', 'mermaid'],
+      type: 'shiki'
+    });
+  });
+
+  it('uses Shiki with Oxiquill exclusions when syntax highlighting is not configured', () => {
+    const update = runConfigSetup(defineOxiquillConfig({ sidebar: [], title: 'Docs' }));
+
+    expect(update.markdown.syntaxHighlight).toEqual({
+      excludeLangs: ['math', 'mermaid'],
+      type: 'shiki'
+    });
+  });
+
+  it('preserves supported Astro rendering and Markdown fields', () => {
+    const image = { domains: ['images.example.com'] };
+    const remarkRehype = { footnoteLabel: 'Notes' };
+    const shikiConfig = { theme: 'github-light' };
+    const smartypants = { dashes: 'oldschool' };
     const config = defineOxiquillConfig({
       compressHTML: 'jsx',
-      markdown: { processor },
+      markdown: { gfm: false, image, remarkRehype, shikiConfig, smartypants },
       sidebar: [],
       title: 'Docs'
     });
     const update = runConfigSetup(config);
 
     expect(config.compressHTML).toBe('jsx');
-    expect(update.markdown.processor).toBe(processor);
+    expect(update.markdown).toMatchObject({ image, shikiConfig });
+    expect(update.markdown.processor.options).toMatchObject({
+      gfm: false,
+      remarkRehype,
+      smartypants
+    });
+  });
+
+  it('rejects a custom Markdown processor before configuration setup', () => {
+    const markdown = { processor: { createRenderer: vi.fn(), name: 'custom', options: {} } };
+    const expectedError = new TypeError(
+      'Oxiquill does not support markdown.processor because it owns the Markdown processor pipeline required for its transforms.'
+    );
+
+    expect(() => defineOxiquillConfig({ markdown, sidebar: [], title: 'Docs' })).toThrow(expectedError);
+    expect(() => oxiquillIntegration({ markdown })).toThrow(expectedError);
   });
 
   it('installs package-owned main and worker bundle reporters', () => {
@@ -222,6 +295,54 @@ describe('defineOxiquillConfig', () => {
         description: 'Docs description',
         sidebar: [{ label: 'Overview', items: [{ label: 'Home', slug: 'index' }] }],
         title: 'Docs'
+      })
+    );
+  });
+
+  it('enables the desktop table-of-contents toggle by default and preserves component overrides', () => {
+    const starlight = vi.fn(() => ({ hooks: {}, name: 'custom-starlight' }));
+
+    defineOxiquillConfig({
+      framework: { starlight },
+      starlight: {
+        components: {
+          PageFrame: './CustomPageFrame.astro',
+          TableOfContents: './CustomTableOfContents.astro'
+        }
+      }
+    });
+
+    expect(starlight).toHaveBeenCalledWith(
+      expect.objectContaining({
+        components: {
+          PageFrame: './CustomPageFrame.astro',
+          TableOfContents: './CustomTableOfContents.astro',
+          TwoColumnContent: 'oxiquill/components/starlight/TwoColumnContent'
+        }
+      })
+    );
+  });
+
+  it('allows consumers to disable or replace the desktop table-of-contents toggle', () => {
+    const disabledStarlight = vi.fn(() => ({ hooks: {}, name: 'disabled-starlight' }));
+    defineOxiquillConfig({ desktopTableOfContentsToggle: false, framework: { starlight: disabledStarlight } });
+    expect(disabledStarlight).toHaveBeenCalledWith(
+      expect.objectContaining({
+        components: { PageFrame: 'oxiquill/components/starlight/PageFrame' }
+      })
+    );
+
+    const overriddenStarlight = vi.fn(() => ({ hooks: {}, name: 'overridden-starlight' }));
+    defineOxiquillConfig({
+      framework: { starlight: overriddenStarlight },
+      starlight: { components: { TwoColumnContent: './CustomTwoColumnContent.astro' } }
+    });
+    expect(overriddenStarlight).toHaveBeenCalledWith(
+      expect.objectContaining({
+        components: {
+          PageFrame: 'oxiquill/components/starlight/PageFrame',
+          TwoColumnContent: './CustomTwoColumnContent.astro'
+        }
       })
     );
   });
@@ -269,7 +390,7 @@ describe('defineOxiquillConfig', () => {
     expect(normalizedAllow.some((entry) => entry.includes('node_modules/.pnpm/aria-query'))).toBe(true);
   });
 
-  it('aliases Preact when the workspace does not expose a direct install', () => {
+  it('aliases the Preact runtime when the workspace does not expose a direct install', () => {
     const config = defineOxiquillConfig({
       sidebar: [],
       title: 'Docs'
@@ -282,6 +403,13 @@ describe('defineOxiquillConfig', () => {
 
       expect(replacement, id).toEqual(expect.any(String));
       expect(replacement.replaceAll('\\', '/'), id).toContain('/node_modules/preact/');
+    }
+
+    for (const id of preactRendererExportSpecifiers) {
+      const replacement = aliasReplacementFor(update.vite.resolve.alias, id);
+
+      expect(replacement, id).toEqual(expect.any(String));
+      expect(replacement.replaceAll('\\', '/'), id).toContain('/node_modules/preact-render-to-string/');
     }
   });
 
@@ -304,7 +432,7 @@ describe('defineOxiquillConfig', () => {
     expect(resolve).not.toHaveBeenCalled();
   });
 
-  it('bundles compiled Oxiquill while sharing the Preact SSR runtime', () => {
+  it('bundles the complete Preact SSR runtime with compiled Oxiquill', () => {
     const config = defineOxiquillConfig({
       sidebar: [],
       title: 'Docs'
@@ -312,9 +440,12 @@ describe('defineOxiquillConfig', () => {
 
     const update = runConfigSetup(config, linkedConsumerRoot);
 
-    expect(update.vite.ssr.noExternal).toEqual(expect.arrayContaining(['@astrojs/preact', 'oxiquill']));
-    expect(update.vite.ssr.noExternal).not.toEqual(expect.arrayContaining(['preact', 'preact-render-to-string']));
-    expect(update.vite.resolve.dedupe).toEqual(expect.arrayContaining(['@preact/signals', 'preact']));
+    expect(update.vite.ssr.noExternal).toEqual(
+      expect.arrayContaining(['@astrojs/preact', 'oxiquill', 'preact', 'preact-render-to-string'])
+    );
+    expect(update.vite.resolve.dedupe).toEqual(
+      expect.arrayContaining(['@preact/signals', 'preact', 'preact-render-to-string'])
+    );
   });
 
   it('merges consumer Vite SSR and dedupe settings with Oxiquill defaults', () => {
@@ -337,10 +468,17 @@ describe('defineOxiquillConfig', () => {
 
     expect(update.vite.ssr.external).toEqual(['external-runtime']);
     expect(update.vite.ssr.noExternal).toEqual(
-      expect.arrayContaining(['consumer-package', consumerNoExternal, '@astrojs/preact', 'oxiquill'])
+      expect.arrayContaining([
+        'consumer-package',
+        consumerNoExternal,
+        '@astrojs/preact',
+        'oxiquill',
+        'preact',
+        'preact-render-to-string'
+      ])
     );
     expect(update.vite.resolve.dedupe).toEqual(
-      expect.arrayContaining(['consumer-runtime', '@preact/signals', 'preact'])
+      expect.arrayContaining(['consumer-runtime', '@preact/signals', 'preact', 'preact-render-to-string'])
     );
   });
 
@@ -356,7 +494,9 @@ describe('defineOxiquillConfig', () => {
 
       const update = runConfigSetup(config, linkedConsumerRoot);
 
-      expect(update.vite.ssr.noExternal).toEqual(expect.arrayContaining([noExternal, '@astrojs/preact', 'oxiquill']));
+      expect(update.vite.ssr.noExternal).toEqual(
+        expect.arrayContaining([noExternal, '@astrojs/preact', 'oxiquill', 'preact', 'preact-render-to-string'])
+      );
     }
   });
 
@@ -383,6 +523,7 @@ describe('defineOxiquillConfig', () => {
     const update = runConfigSetup(config, linkedConsumerRoot);
     const resolved = await resolveWithVite(update, [
       ...preactExportSpecifiers,
+      ...preactRendererExportSpecifiers,
       '@preact/signals',
       '@bjorn3/browser_wasi_shim',
       'aria-query',
@@ -399,6 +540,10 @@ describe('defineOxiquillConfig', () => {
       expect(resolved[id], id).toEqual(expect.any(String));
     }
 
+    for (const id of preactRendererExportSpecifiers) {
+      expect(resolved[id], id).toEqual(expect.any(String));
+    }
+
     expect(resolved['@preact/signals']).toEqual(expect.any(String));
     expect(resolved['aria-query']).toEqual(expect.any(String));
     expect(resolved['html-escaper']).toEqual(expect.any(String));
@@ -410,3 +555,7 @@ describe('defineOxiquillConfig', () => {
     expect(resolved['astro/runtime/server/index.js']).toEqual(expect.any(String));
   });
 });
+
+function pluginName(plugin) {
+  return (Array.isArray(plugin) ? plugin[0] : plugin).name;
+}

@@ -36,13 +36,27 @@ test('desktop sidebar toggle collapses, expands, and persists across navigation'
   await expect(persistedToggle).toHaveAttribute('aria-label', 'Expand sidebar');
   await expect(page.locator('#starlight__sidebar')).not.toBeVisible();
 
+  await persistedToggle.evaluate((element) => {
+    const toggleElement = element.closest('starlight-sidebar-toggle');
+    const parent = toggleElement?.parentElement;
+    if (toggleElement && parent) parent.append(toggleElement);
+  });
   await persistedToggle.click();
+  await expect(page.locator('html')).not.toHaveAttribute('data-sidebar-collapsed', '');
 
   await expect(page.locator('html')).not.toHaveAttribute('data-sidebar-collapsed', '');
   await expect(persistedToggle).toHaveAttribute('aria-expanded', 'true');
   await expect(persistedToggle).toHaveAttribute('aria-label', 'Collapse sidebar');
   await expect(page.locator('#starlight__sidebar')).toBeVisible();
   expect(await page.evaluate(() => sessionStorage.getItem('oxiquill-sidebar-collapsed'))).toBeNull();
+});
+
+test('sidebar labels use the primary Japanese language subtag', async ({ page }) => {
+  await page.setViewportSize({ width: 1280, height: 900 });
+  await page.goto('/ja/features/math/');
+
+  await expect(page.locator('html')).toHaveAttribute('lang', 'ja-JP');
+  await expect(page.locator('starlight-sidebar-toggle button')).toHaveAttribute('aria-label', 'サイドバーを折りたたむ');
 });
 
 test('desktop sidebar preference does not affect the mobile menu', async ({ page }) => {
@@ -67,6 +81,131 @@ test('desktop sidebar preference does not affect the mobile menu', async ({ page
   await expect(sidebar).not.toBeVisible();
   await expect(page.locator('body')).not.toHaveAttribute('data-mobile-menu-expanded', '');
   expect(await page.evaluate(() => sessionStorage.getItem('oxiquill-sidebar-collapsed'))).toBe('true');
+});
+
+test('desktop table of contents collapses, releases its column, and persists independently', async ({ page }) => {
+  await page.setViewportSize({ width: 1280, height: 900 });
+  await page.goto('/features/math/');
+
+  const tableOfContents = page.locator('#starlight__right-sidebar');
+  const mainPane = page.locator('.two-column-content > .main-pane');
+  const contentContainer = page.locator('.content-panel .sl-container').first();
+  const toggle = page.locator('starlight-table-of-contents-toggle button');
+  const tableOfContentsLink = tableOfContents.getByRole('link').first();
+
+  await expect(toggle).toBeVisible();
+  await expect(toggle).toHaveAttribute('aria-controls', 'starlight__right-sidebar');
+  await expect(toggle).toHaveAttribute('aria-expanded', 'true');
+  await expect(toggle).toHaveAttribute('aria-label', 'Collapse table of contents');
+  await expect(tableOfContents).toBeVisible();
+  const expandedMainWidth = await elementWidth(mainPane);
+  const expandedContentWidth = await elementWidth(contentContainer);
+
+  await tableOfContentsLink.focus();
+  await toggle.evaluate((element) => (element as HTMLButtonElement).click());
+
+  await expect(toggle).toBeFocused();
+  await expect(page.locator('html')).toHaveAttribute('data-table-of-contents-collapsed', '');
+  await expect(page.locator('html')).not.toHaveAttribute('data-sidebar-collapsed', '');
+  await expect(toggle).toHaveAttribute('aria-expanded', 'false');
+  await expect(toggle).toHaveAttribute('aria-label', 'Expand table of contents');
+  await expect(tableOfContents).toHaveAttribute('aria-hidden', 'true');
+  await expect(tableOfContents).toHaveAttribute('inert', '');
+  await expect(tableOfContents).not.toBeVisible();
+  await expect.poll(() => elementWidth(mainPane)).toBeGreaterThan(expandedMainWidth + 100);
+  await expect.poll(() => elementWidth(contentContainer)).toBeGreaterThan(expandedContentWidth + 100);
+  expect(await horizontalOverflow(page)).toBeLessThan(1);
+  expect(await page.evaluate(() => sessionStorage.getItem('oxiquill-table-of-contents-collapsed'))).toBe('true');
+  expect(await page.evaluate(() => sessionStorage.getItem('oxiquill-sidebar-collapsed'))).toBeNull();
+
+  await page.goto('/features/diagrams/');
+
+  const persistedToggle = page.locator('starlight-table-of-contents-toggle button');
+  await expect(page.locator('html')).toHaveAttribute('data-table-of-contents-collapsed', '');
+  await expect(persistedToggle).toHaveAttribute('aria-expanded', 'false');
+  await expect(page.locator('#starlight__right-sidebar')).not.toBeVisible();
+
+  await persistedToggle.evaluate((element) => {
+    const toggleElement = element.closest('starlight-table-of-contents-toggle');
+    const parent = toggleElement?.parentElement;
+    if (toggleElement && parent) parent.append(toggleElement);
+  });
+  await persistedToggle.focus();
+  await persistedToggle.press('Enter');
+
+  await expect(persistedToggle).toBeFocused();
+  await expect(page.locator('html')).not.toHaveAttribute('data-table-of-contents-collapsed', '');
+  await expect(persistedToggle).toHaveAttribute('aria-expanded', 'true');
+  await expect(page.locator('#starlight__right-sidebar')).toBeVisible();
+  expect(await page.evaluate(() => sessionStorage.getItem('oxiquill-table-of-contents-collapsed'))).toBeNull();
+});
+
+test('desktop table-of-contents labels use the primary Japanese language subtag', async ({ page }) => {
+  await page.setViewportSize({ width: 1280, height: 900 });
+  await page.goto('/ja/features/math/');
+
+  await expect(page.locator('html')).toHaveAttribute('lang', 'ja-JP');
+  await expect(page.locator('starlight-table-of-contents-toggle button')).toHaveAttribute(
+    'aria-label',
+    '目次を折りたたむ'
+  );
+});
+
+test('desktop table-of-contents preference does not affect the mobile disclosure', async ({ page }) => {
+  await page.setViewportSize({ width: 390, height: 800 });
+  await page.goto('/features/math/');
+  await page.evaluate(() => sessionStorage.setItem('oxiquill-table-of-contents-collapsed', 'true'));
+  await page.reload();
+
+  const tableOfContents = page.locator('#starlight__right-sidebar');
+  const desktopToggle = page.locator('starlight-table-of-contents-toggle button');
+  const mobileDisclosure = page.locator('#starlight__mobile-toc summary');
+
+  await expect(page.locator('html')).not.toHaveAttribute('data-table-of-contents-collapsed', '');
+  await expect(desktopToggle).not.toBeVisible();
+  await expect(tableOfContents).not.toHaveAttribute('aria-hidden');
+  await expect(tableOfContents).not.toHaveAttribute('inert');
+  await expect(mobileDisclosure).toBeVisible();
+  await mobileDisclosure.press('Enter');
+  await expect(page.locator('#starlight__mobile-toc')).toHaveAttribute('open', '');
+  expect(await page.evaluate(() => sessionStorage.getItem('oxiquill-table-of-contents-collapsed'))).toBe('true');
+});
+
+test('table-of-contents toggle stays absent on disabled and splash pages', async ({ page }) => {
+  await page.setViewportSize({ width: 1280, height: 900 });
+  await page.goto('/features/math/');
+  await page.evaluate(() => sessionStorage.setItem('oxiquill-table-of-contents-collapsed', 'true'));
+
+  for (const path of ['/tests/no-table-of-contents/', '/tests/splash/']) {
+    await page.goto(path);
+    await expect(page.locator('html')).not.toHaveAttribute('data-has-toc', '');
+    await expect(page.locator('html')).not.toHaveAttribute('data-table-of-contents-collapsed', '');
+    await expect(page.locator('starlight-table-of-contents-toggle')).toHaveCount(0);
+    await expect(page.locator('#starlight__right-sidebar')).toHaveCount(0);
+  }
+});
+
+test('table-of-contents collapse uses logical positioning and does not constrain print output', async ({ page }) => {
+  await page.setViewportSize({ width: 1280, height: 900 });
+  await page.goto('/features/math/');
+
+  const toggle = page.locator('starlight-table-of-contents-toggle button');
+  const ltrPosition = await inlinePosition(toggle);
+  expect(ltrPosition.x).toBeGreaterThan(640);
+
+  await page.locator('html').evaluate((element) => {
+    (element as HTMLElement).dir = 'rtl';
+  });
+  const rtlPosition = await inlinePosition(toggle);
+  expect(rtlPosition.x).toBeLessThan(640);
+
+  await toggle.click();
+  await page.emulateMedia({ media: 'print' });
+
+  await expect(toggle).not.toBeVisible();
+  await expect(page.locator('#starlight__right-sidebar')).not.toBeVisible();
+  expect(await elementWidth(page.locator('.two-column-content > .main-pane'))).toBeGreaterThan(1200);
+  expect(await horizontalOverflow(page)).toBeLessThan(1);
 });
 
 test('static pages do not reference optional browser runtimes', async ({ page }) => {
@@ -267,6 +406,9 @@ test('interactive cells and math rendering are available', async ({ page }) => {
 test('rich output examples render browser-visible artifacts', async ({ page }) => {
   test.setTimeout(180_000);
   await page.goto('/features/rich-output/');
+  await page.evaluate(() => {
+    document.documentElement.dataset.theme = 'light';
+  });
 
   const rust = page.getByTestId('cell-features__rich-output__rust-rich-outputs');
   await hydrateCell(rust);
@@ -281,10 +423,49 @@ test('rich output examples render browser-visible artifacts', async ({ page }) =
 
   const rustChart = rust.getByTestId('doc-plot');
   await expect(rustChart.locator('canvas')).toHaveCount(1);
+  await expect(rustChart).toHaveAttribute('data-chart-theme', 'light');
   expect((await canvasStats(rustChart.locator('canvas'))).inkPixels).toBeGreaterThan(1_000);
+  await page.evaluate(() => {
+    document.documentElement.dataset.theme = 'dark';
+  });
+  await expect(rustChart).toHaveAttribute('data-chart-theme', 'dark');
+  await expect(rustChart.locator('canvas')).toHaveCount(1);
+  await page.evaluate(() => {
+    document.documentElement.dataset.theme = 'light';
+  });
+  await expect(rustChart).toHaveAttribute('data-chart-theme', 'light');
   await expect(rust.getByTestId('image-output')).toHaveAttribute('src', /data:image\/svg\+xml/);
-  await expect(rust.getByTestId('html-output')).toHaveAttribute('sandbox', '');
-  await expect(rust.getByTestId('html-output')).toHaveAttribute('srcdoc', /Sandboxed HTML/);
+  const htmlOutput = rust.getByTestId('html-output');
+  await expect(htmlOutput).toHaveAttribute('sandbox', '');
+  await expect(htmlOutput).toHaveAttribute('csp', /default-src 'none'/);
+  await expect(htmlOutput).toHaveAttribute('referrerpolicy', 'no-referrer');
+  await expect(htmlOutput).toHaveAttribute('srcdoc', /default-src 'none'/);
+  await expect(htmlOutput).toHaveAttribute('srcdoc', /Sandboxed HTML/);
+
+  const privacyProbeResponses: string[] = [];
+  page.on('response', (response) => {
+    if (response.url().includes('__oxiquill_html_privacy_probe__')) privacyProbeResponses.push(response.url());
+  });
+  await htmlOutput.evaluate((element) => {
+    const iframe = element as HTMLIFrameElement;
+    iframe.srcdoc = (iframe.srcdoc ?? '').replace(
+      '</body>',
+      `<script>
+        document.body.dataset.scriptExecuted = 'true';
+        parent.document.documentElement.dataset.htmlArtifactParentRead = document.title;
+        fetch('/__oxiquill_html_privacy_probe__/script');
+      </script>
+      <img src="/__oxiquill_html_privacy_probe__/image" alt="">
+      <div style="background-image: url('/__oxiquill_html_privacy_probe__/style')">probe</div>
+      </body>`
+    );
+  });
+  const htmlFrame = htmlOutput.contentFrame();
+  await expect(htmlFrame.locator('body')).toBeVisible();
+  await page.waitForTimeout(500);
+  await expect(htmlFrame.locator('body')).not.toHaveAttribute('data-script-executed', 'true');
+  expect(await page.locator('html').getAttribute('data-html-artifact-parent-read')).toBeNull();
+  expect(privacyProbeResponses).toEqual([]);
 
   const python = page.getByTestId('cell-features__rich-output__python-rich-outputs');
   await hydrateCell(python);
@@ -294,8 +475,44 @@ test('rich output examples render browser-visible artifacts', async ({ page }) =
   await expect(python.getByTestId('table-output').locator('caption')).toHaveText('Pandas table');
   await expect(python.getByTestId('value-output').filter({ hasText: '"status": "ok"' })).toBeVisible();
   await expect(python.getByTestId('html-output')).toHaveAttribute('sandbox', '');
+  await expect(python.getByTestId('html-output')).toHaveAttribute('referrerpolicy', 'no-referrer');
   await expect(python.getByTestId('html-output')).toHaveAttribute('srcdoc', /Sandboxed HTML/);
   await expect(python.getByTestId('image-output')).toHaveAttribute('src', /data:image\/svg\+xml/);
+});
+
+test('chart rendering recovers after a transient chunk load failure', async ({ browserName, page }) => {
+  test.skip(
+    browserName !== 'chromium',
+    'One real-browser recovery path is sufficient for the chunk failure regression.'
+  );
+  test.setTimeout(180_000);
+  let failedOnce = false;
+  await page.route('**/*', async (route) => {
+    const request = route.request();
+    const pathname = new URL(request.url()).pathname;
+    const referrer = request.headers()['referer'] ?? '';
+    if (
+      !failedOnce &&
+      pathname.includes('/ChartOutput.') &&
+      pathname.endsWith('.js') &&
+      referrer.includes('/InteractiveCell.')
+    ) {
+      failedOnce = true;
+      await route.abort('failed');
+      return;
+    }
+    await route.continue();
+  });
+
+  await page.goto('/features/rich-output/');
+  const rust = page.getByTestId('cell-features__rich-output__rust-rich-outputs');
+  await hydrateCell(rust);
+  await rust.getByRole('button', { name: 'Run' }).click();
+  await expect(rust.getByRole('alert')).toContainText('Chart renderer could not be loaded');
+  expect(failedOnce).toBe(true);
+
+  await rust.getByRole('button', { name: 'Retry chart rendering' }).click();
+  await expect(rust.getByTestId('doc-plot').locator('canvas')).toHaveCount(1);
 });
 
 test('theme note and Mermaid examples are available without author-side TSX imports', async ({ page }) => {
@@ -364,6 +581,17 @@ async function sidebarPadding(mainFrame: Locator): Promise<number> {
 
 async function elementWidth(locator: Locator): Promise<number> {
   return locator.evaluate((element) => element.getBoundingClientRect().width);
+}
+
+async function horizontalOverflow(page: Page): Promise<number> {
+  return page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth);
+}
+
+async function inlinePosition(locator: Locator): Promise<{ x: number; width: number }> {
+  return locator.evaluate((element) => {
+    const bounds = element.getBoundingClientRect();
+    return { width: bounds.width, x: bounds.x };
+  });
 }
 
 async function canvasStats(canvas: Locator): Promise<{

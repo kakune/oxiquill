@@ -1,13 +1,16 @@
-import { existsSync } from 'node:fs';
-import { copyFile, mkdir, readFile, readdir, rename, rm, writeFile } from 'node:fs/promises';
+import { createReadStream, existsSync } from 'node:fs';
+import { copyFile, link, mkdir, open, readFile, readdir, rename, rm, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import { pathFromUrl } from '../../config/paths.mjs';
-import { hashBytes } from './hashing.mjs';
+import { createSha256, hashBytes } from './hashing.mjs';
 
 export const defaultFileSystem = {
   copyFile,
+  createReadStream,
   existsSync,
+  link,
   mkdir,
+  open,
   readFile,
   readdir,
   rename,
@@ -53,11 +56,20 @@ export async function copyFileIfChanged(sourcePath, targetPath, { fileSystem = d
 export async function hasPackageContent(filePath, sha256, { fileSystem = defaultFileSystem } = {}) {
   const targetPath = pathFromUrl(filePath);
   try {
-    return hashBytes(await fileSystem.readFile(targetPath)) === sha256;
+    return (await hashFileSha256(targetPath, { fileSystem })) === sha256;
   } catch (error) {
     if (error && error.code === 'ENOENT') return false;
     throw error;
   }
+}
+
+export async function hashFileSha256(filePath, { fileSystem = defaultFileSystem } = {}) {
+  const targetPath = pathFromUrl(filePath);
+  if (!fileSystem.createReadStream) return hashBytes(await fileSystem.readFile(targetPath));
+
+  const hash = createSha256();
+  for await (const chunk of fileSystem.createReadStream(targetPath)) hash.update(chunk);
+  return hash.digest('hex');
 }
 
 async function hasTextContent(filePath, content, { fileSystem }) {

@@ -6,7 +6,11 @@ export const chart = {
   setOption: vi.fn()
 };
 
-export const echartsInit = vi.fn(() => chart);
+export const echartsInit = vi.fn((element?: HTMLElement, theme?: unknown) => {
+  void element;
+  void theme;
+  return chart;
+});
 export const echartsUse = vi.fn();
 export const mermaidInitialize = vi.fn();
 export const mermaidRender = vi.fn();

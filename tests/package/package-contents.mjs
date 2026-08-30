@@ -130,6 +130,7 @@ async function expectedPackageFiles() {
   );
   const copiedFiles = [
     'dist/components/starlight/PageFrame.astro',
+    'dist/components/starlight/TwoColumnContent.astro',
     'dist/env.d.ts',
     'dist/styles/custom.css',
     'dist/styles/katex.css',

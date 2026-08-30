@@ -27,14 +27,16 @@ afterEach(() => {
 });
 
 describe('interactive cell request scheduler', () => {
-  it('keeps one active request and only the newest delayed replacement', async () => {
+  it('actively cancels obsolete work and starts only the newest delayed replacement', async () => {
     vi.useFakeTimers();
     const executions: number[] = [];
     const pending: Array<ReturnType<typeof createDeferred<string>>> = [];
+    const signals: AbortSignal[] = [];
     const onResult = vi.fn();
     const scheduler = createLatestRequestScheduler<number, string>({
-      execute: (request) => {
+      execute: (request, signal) => {
         executions.push(request);
+        signals.push(signal);
         const deferred = createDeferred<string>();
         pending.push(deferred);
         return deferred.promise;
@@ -52,12 +54,8 @@ describe('interactive cell request scheduler', () => {
     }
     await vi.advanceTimersByTimeAsync(150);
 
-    expect(executions).toEqual([0]);
-
-    pending[0].resolve('obsolete');
-    await flushMicrotasks();
-
     expect(executions).toEqual([0, 10]);
+    expect(signals[0].aborted).toBe(true);
     expect(onResult).not.toHaveBeenCalled();
 
     pending[1].resolve('latest');
@@ -65,6 +63,10 @@ describe('interactive cell request scheduler', () => {
 
     expect(onResult).toHaveBeenCalledOnce();
     expect(onResult).toHaveBeenCalledWith('latest');
+
+    pending[0].resolve('obsolete');
+    await flushMicrotasks();
+    expect(onResult).toHaveBeenCalledOnce();
   });
 
   it('suppresses stale failures and continues with the ready replacement', async () => {
@@ -121,6 +123,20 @@ describe('interactive cell request scheduler', () => {
     expect(execute).toHaveBeenCalledOnce();
     expect(onError).not.toHaveBeenCalled();
     expect(onResult).not.toHaveBeenCalled();
+  });
+
+  it('reports external cancellation separately from execution failures', async () => {
+    const onCancelled = vi.fn();
+    const scheduler = createLatestRequestScheduler<string, string>({
+      execute: async () => Promise.reject(new DOMException('cancelled', 'AbortError')),
+      onCancelled,
+      onError: vi.fn(),
+      onResult: vi.fn(),
+      onScheduled: vi.fn()
+    });
+
+    scheduler.schedule('request');
+    await vi.waitFor(() => expect(onCancelled).toHaveBeenCalledOnce());
   });
 
   it('shares successful and failed executions by key', async () => {

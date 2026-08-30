@@ -6,6 +6,8 @@ import {
   initialValues,
   labelsForLanguage,
   localeFromLanguage,
+  parseNumericInput,
+  stepNumericInputValue,
   shouldShowInputControls,
   shouldShowRunButton
 } from '../../packages/oxiquill/src/lib/doc-runtime/interactive-cell-model';
@@ -31,6 +33,10 @@ describe('interactive cell model', () => {
     expect(formatInputValue(2.345)).toBe('2.35');
     expect(formatInputValue(true)).toBe('true');
     expect(formatInputValue('raw')).toBe('raw');
+    expect(formatInputValue(1.2, 0.001)).toBe('1.200');
+    expect(formatInputValue(0.0000003, 1e-7)).toBe('0.0000003');
+    expect(formatInputValue(0.0075, 2.5e-3)).toBe('0.0075');
+    expect(formatInputValue(0.30000000000000004, 0.1)).toBe('0.3');
   });
 
   it('describes run controls and idle output messages', () => {
@@ -91,5 +97,43 @@ describe('interactive cell model', () => {
     expect(coerceInputValue({ ...textInput, type: 'number' }, '12')).toBe(12);
     expect(coerceInputValue({ ...textInput, type: 'integer' }, '12')).toBe(12);
     expect(coerceInputValue(textInput, '12')).toBe('12');
+    expect(coerceInputValue({ ...textInput, type: 'number' }, '')).toBe('');
+  });
+
+  it('parses only complete finite numeric values that satisfy every constraint', () => {
+    const numberInput: InputSpec = {
+      ...textInput,
+      type: 'number',
+      value: 1,
+      min: -2,
+      max: 2,
+      step: 0.5
+    };
+
+    expect(parseNumericInput(numberInput, '')).toEqual({ valid: false, validation: 'required' });
+    expect(parseNumericInput(numberInput, '-')).toEqual({ valid: false, validation: 'number' });
+    expect(parseNumericInput(numberInput, '1e309')).toEqual({ valid: false, validation: 'number' });
+    expect(parseNumericInput(numberInput, '-2.5')).toEqual({ valid: false, validation: 'rangeUnderflow' });
+    expect(parseNumericInput(numberInput, '2.5')).toEqual({ valid: false, validation: 'rangeOverflow' });
+    expect(parseNumericInput(numberInput, '1.25')).toEqual({ valid: false, validation: 'stepMismatch' });
+    expect(parseNumericInput(numberInput, '-1.5')).toEqual({ valid: true, value: -1.5 });
+  });
+
+  it('enforces the portable signed 32-bit integer domain', () => {
+    const integerInput: InputSpec = { ...textInput, type: 'integer', value: 0 };
+
+    expect(parseNumericInput(integerInput, '-2147483648')).toEqual({ valid: true, value: -2147483648 });
+    expect(parseNumericInput(integerInput, '2147483647')).toEqual({ valid: true, value: 2147483647 });
+    expect(parseNumericInput(integerInput, '-2147483649')).toEqual({ valid: false, validation: 'integer' });
+    expect(parseNumericInput(integerInput, '2147483648')).toEqual({ valid: false, validation: 'integer' });
+    expect(parseNumericInput(integerInput, '9007199254740992')).toEqual({ valid: false, validation: 'integer' });
+  });
+
+  it('steps numeric spinbuttons without floating-point artifacts and clamps their range', () => {
+    const numberInput: InputSpec = { ...textInput, type: 'number', value: 0.2, min: 0, max: 0.3, step: 0.1 };
+
+    expect(stepNumericInputValue(numberInput, 0.2, 1)).toBe(0.3);
+    expect(stepNumericInputValue(numberInput, 0.3, 1)).toBe(0.3);
+    expect(stepNumericInputValue(numberInput, 0, -1)).toBe(0);
   });
 });

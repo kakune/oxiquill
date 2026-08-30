@@ -51,16 +51,9 @@ export function normalizeCellExecutionResult(result: RawCellExecutionResult): No
     output.status === 'valid' ? [publicOutputArtifact(output.artifact)] : []
   );
   const legacy = outputsToLegacyResult(outputs);
-  const rawStdout = ownDataField(result, 'stdout').value;
-  const rawStderr = ownDataField(result, 'stderr').value;
-  const rawValue = ownDataField(result, 'value');
-  const rawPlots = ownDataField(result, 'plots');
 
   return {
-    stdout: typeof rawStdout === 'string' ? rawStdout : legacy.stdout,
-    ...(typeof rawStderr === 'string' ? { stderr: rawStderr } : legacy.stderr ? { stderr: legacy.stderr } : {}),
-    ...(rawValue.present ? { value: rawValue.value } : Object.hasOwn(legacy, 'value') ? { value: legacy.value } : {}),
-    plots: rawPlots.present && Array.isArray(rawPlots.value) ? validatedLegacyPlots(rawPlots.value) : legacy.plots,
+    ...legacy,
     outputs,
     outputResults
   };
@@ -77,12 +70,6 @@ function legacyResultToOutputCandidates(result: RawCellExecutionResult): readonl
     value.present && value.value != null && value.value !== '' ? [{ kind: 'json', value: value.value }] : [],
     ...(Array.isArray(plots) ? plots.map((plot) => [legacyPlotCandidate(plot)]) : [])
   ].flat();
-}
-
-function validatedLegacyPlots(values: readonly unknown[]): readonly PlotSpec[] {
-  return validateOutputArtifacts(values.map(legacyPlotCandidate)).flatMap((result) =>
-    result.status === 'valid' ? chartArtifactToLegacyPlot(result.artifact) : []
-  );
 }
 
 function legacyPlotCandidate(value: unknown): unknown {

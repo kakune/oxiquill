@@ -15,6 +15,7 @@ const cliMocks = vi.hoisted(() => ({
   createDocRuntimeContext: vi.fn(),
   loadProjectConfig: vi.fn(),
   markRuntimeReady: vi.fn(),
+  prepareCleanupOwnership: vi.fn(),
   runHelperCargo: vi.fn(),
   syncDocRuntime: vi.fn(),
   syncLicenseArtifacts: vi.fn(),
@@ -32,6 +33,9 @@ vi.mock('../../packages/oxiquill/src/generator/doc-runtime-service.mjs', () => (
 }));
 vi.mock('../../packages/oxiquill/src/generator/clean.mjs', () => ({
   cleanOxiquillWorkspace: cliMocks.cleanOxiquillWorkspace
+}));
+vi.mock('../../packages/oxiquill/src/generator/cleanup-ownership.mjs', () => ({
+  prepareCleanupOwnership: cliMocks.prepareCleanupOwnership
 }));
 vi.mock('../../packages/oxiquill/src/generator/run-helper-cargo.mjs', () => ({
   runHelperCargo: cliMocks.runHelperCargo
@@ -72,6 +76,7 @@ beforeEach(() => {
     haskellFingerprint: 'haskell-fingerprint',
     rustCellCount: 1
   });
+  cliMocks.prepareCleanupOwnership.mockResolvedValue([]);
   cliMocks.buildHaskellWasm.mockResolvedValue({ ok: true });
   cliMocks.testGeneratedHaskellCells.mockResolvedValue({ cellCount: 1 });
   cliMocks.watchDocRuntime.mockResolvedValue({ close: vi.fn(async () => undefined) });
@@ -445,14 +450,61 @@ describe('oxiquill CLI', () => {
     await runCli('clean', [], { cwd: repoRoot });
 
     expect(cliMocks.cleanOxiquillWorkspace).toHaveBeenCalledWith({
+      configFile: undefined,
       paths: expect.objectContaining({ workspaceRoot: repoRoot })
     });
+  });
+
+  it('preflights outDir ownership before starting an Oxiquill build', async () => {
+    const stopBeforeAstro = new Error('stop before Astro');
+    const runCommand = vi.fn(async () => {
+      throw stopBeforeAstro;
+    });
+
+    await expect(
+      runCli('build', [], {
+        cwd: repoRoot,
+        runCommand,
+        selectNode: () => 'node'
+      })
+    ).rejects.toBe(stopBeforeAstro);
+
+    expect(cliMocks.prepareCleanupOwnership).toHaveBeenCalledWith({
+      configFile: undefined,
+      fields: ['cacheDir', 'outDir', 'publicAssetsDir'],
+      paths: expect.objectContaining({ workspaceRoot: repoRoot })
+    });
+    expect(runCommand).toHaveBeenCalled();
+    expect(cliMocks.prepareCleanupOwnership.mock.invocationCallOrder[0]).toBeLessThan(
+      runCommand.mock.invocationCallOrder[0]
+    );
+  });
+
+  it('does not start generation or Astro when build output ownership is invalid', async () => {
+    const runCommand = vi.fn(async () => undefined);
+    cliMocks.prepareCleanupOwnership.mockRejectedValueOnce(new Error('unowned outDir'));
+
+    await expect(
+      runCli('build', [], {
+        cwd: repoRoot,
+        runCommand,
+        selectNode: () => 'node'
+      })
+    ).rejects.toThrow('unowned outDir');
+
+    expect(cliMocks.createDocRuntimeContext).not.toHaveBeenCalled();
+    expect(runCommand).not.toHaveBeenCalled();
   });
 
   it('generates manifests without Wasm unless a valid mode is requested', async () => {
     const log = vi.spyOn(console, 'log').mockImplementation(() => {});
 
     await runCli('docgen', [], { cwd: repoRoot });
+    expect(cliMocks.prepareCleanupOwnership).toHaveBeenCalledWith({
+      configFile: undefined,
+      fields: ['cacheDir', 'publicAssetsDir'],
+      paths: expect.objectContaining({ workspaceRoot: repoRoot })
+    });
     expect(cliMocks.syncDocRuntime).toHaveBeenCalledTimes(1);
     expect(cliMocks.buildRustWasm).not.toHaveBeenCalled();
     expect(cliMocks.syncDocRuntime).toHaveBeenLastCalledWith(

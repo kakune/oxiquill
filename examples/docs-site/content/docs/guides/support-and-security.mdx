@@ -36,9 +36,11 @@ Image data is passed to browser image decoders. SVG is rendered in image context
 
 ## Sandboxed HTML
 
-HTML artifacts render in an iframe with an empty `sandbox` attribute. The frame intentionally receives no `allow-scripts`, `allow-same-origin`, `allow-forms`, `allow-popups`, `allow-top-navigation`, or download permission. It therefore cannot execute script, access the parent DOM or same-origin storage/cookies, submit forms, open popups, or navigate the top-level page.
+HTML artifacts render in an iframe with an empty `sandbox` attribute and `referrerPolicy="no-referrer"`. The frame intentionally receives no `allow-scripts`, `allow-same-origin`, `allow-forms`, `allow-popups`, `allow-top-navigation`, or download permission. It therefore cannot execute script, access the parent DOM or same-origin storage/cookies, submit forms, open popups, initiate downloads, or navigate the top-level page.
 
-The sandbox is not an HTML sanitizer. Passive subresources and links may still cause network requests, and browser parsing still processes the supplied markup. Prefer typed text, JSON, table, chart, or image artifacts; publish HTML only from reviewed authors.
+Oxiquill prepends a Content Security Policy to `srcdoc`: `default-src 'none'; img-src data: blob:; media-src data: blob:; style-src 'unsafe-inline'; font-src data:; base-uri 'none'; form-action 'none'`. This blocks HTTP(S) and other external subresource requests while retaining inline styles and data/blob images or media needed by reviewed presentation artifacts. The explicit base/form directives prevent markup from changing URL resolution or selecting a form destination. The iframe policy also suppresses referrers.
+
+The sandbox and CSP are isolation controls, not HTML sanitization. The browser still parses supplied markup, and a user can still interact with ordinary content such as text or links within the isolated frame. Prefer typed text, JSON, table, chart, or image artifacts; publish HTML only from reviewed authors.
 
 ## Reporting Security Issues
 

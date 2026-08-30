@@ -1,3 +1,5 @@
+import { ExecutionCancellationError, isExecutionCancellation } from './execution-cancellation.js';
+
 type SchedulerTimer = ReturnType<typeof setTimeout>;
 
 type ScheduledRequest<Request> = {
@@ -7,7 +9,8 @@ type ScheduledRequest<Request> = {
 };
 
 type LatestRequestSchedulerOptions<Request, Result> = {
-  execute: (request: Request) => Promise<Result>;
+  execute: (request: Request, signal: AbortSignal) => Promise<Result>;
+  onCancelled?: () => void;
   onError: (error: unknown) => void;
   onResult: (result: Result) => void;
   onScheduled: () => void;
@@ -23,8 +26,10 @@ export function createLatestRequestScheduler<Request, Result>(
   dependencies: SchedulerDependencies = defaultSchedulerDependencies
 ): {
   dispose: () => void;
+  cancel: () => void;
   schedule: (request: Request, delayMs?: number) => void;
 } {
+  let activeController: AbortController | undefined;
   let activeGeneration: number | undefined;
   let generation = 0;
   let listeners: LatestRequestSchedulerOptions<Request, Result> | undefined = callbacks;
@@ -38,6 +43,7 @@ export function createLatestRequestScheduler<Request, Result>(
     clearPendingTimer();
     pending = { generation, ready: delayMs <= 0, request };
     listeners.onScheduled();
+    activeController?.abort();
 
     if (delayMs > 0) {
       const scheduledGeneration = generation;
@@ -58,11 +64,12 @@ export function createLatestRequestScheduler<Request, Result>(
     if (!listeners || activeGeneration !== undefined || !pending?.ready) return;
 
     const active = pending;
+    const controller = new AbortController();
     pending = undefined;
     activeGeneration = active.generation;
+    activeController = controller;
 
-    void Promise.resolve()
-      .then(() => callbacks.execute(active.request))
+    void executeWithCancellation(active.request, controller)
       .then(
         (result) => {
           if (listeners && generation === active.generation) {
@@ -71,15 +78,33 @@ export function createLatestRequestScheduler<Request, Result>(
         },
         (error: unknown) => {
           if (listeners && generation === active.generation) {
-            listeners.onError(error);
+            if (isExecutionCancellation(error)) {
+              listeners.onCancelled?.();
+            } else {
+              listeners.onError(error);
+            }
           }
         }
       )
       .finally(() => {
-        activeGeneration = undefined;
+        if (activeController === controller) {
+          activeController = undefined;
+          activeGeneration = undefined;
+        }
         drain();
       })
       .catch(() => undefined);
+  }
+
+  function executeWithCancellation(request: Request, controller: AbortController): Promise<Result> {
+    const execution = Promise.resolve().then(() => {
+      if (controller.signal.aborted) throw new ExecutionCancellationError();
+      return callbacks.execute(request, controller.signal);
+    });
+    const cancellation = new Promise<never>((_, reject) => {
+      controller.signal.addEventListener('abort', () => reject(new ExecutionCancellationError()), { once: true });
+    });
+    return Promise.race([execution, cancellation]);
   }
 
   function clearPendingTimer(): void {
@@ -89,14 +114,19 @@ export function createLatestRequestScheduler<Request, Result>(
     timer = undefined;
   }
 
-  function dispose(): void {
+  function cancel(): void {
     generation += 1;
     clearPendingTimer();
     pending = undefined;
+    activeController?.abort();
+  }
+
+  function dispose(): void {
+    cancel();
     listeners = undefined;
   }
 
-  return { dispose, schedule };
+  return { cancel, dispose, schedule };
 }
 
 export function createRunOnceCache<Key, Result>(): {
@@ -111,6 +141,9 @@ export function createRunOnceCache<Key, Result>(): {
 
       const request = Promise.resolve().then(execute);
       requests.set(key, request);
+      void request.catch((error: unknown) => {
+        if (isExecutionCancellation(error) && requests.get(key) === request) requests.delete(key);
+      });
       return request;
     }
   };

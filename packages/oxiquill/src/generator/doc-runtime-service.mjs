@@ -54,6 +54,7 @@ export {
   copyVendoredPyodidePackages,
   fetchPyodidePackage,
   PYODIDE_DOWNLOAD_ATTEMPTS,
+  PYODIDE_DOWNLOAD_CONCURRENCY,
   PYODIDE_REQUEST_TIMEOUT_MS,
   requiredPyodideFiles,
   resolvePyodideRuntimeInputs,

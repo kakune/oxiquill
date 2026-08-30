@@ -1,5 +1,7 @@
 import init, { run_rust_cell } from 'virtual:oxiquill/rust-wasm';
+import { boundedErrorMessage } from './output-limits.mjs';
 import type { CellExecutionResult, RuntimeWorkerRequest, RuntimeWorkerResponse } from './types.js';
+import { boundWorkerResult } from './worker-output.js';
 
 type WorkerScope = {
   addEventListener(type: 'message', listener: (event: MessageEvent<RuntimeWorkerRequest>) => void): void;
@@ -16,14 +18,16 @@ worker.addEventListener('message', (event) => {
 async function handleRequest(request: RuntimeWorkerRequest): Promise<void> {
   try {
     await ensureWasm();
-    const result = JSON.parse(run_rust_cell(request.cellId, JSON.stringify(request.inputs))) as CellExecutionResult;
+    const result = boundWorkerResult(
+      JSON.parse(run_rust_cell(request.cellId, JSON.stringify(request.inputs))) as CellExecutionResult
+    );
 
     worker.postMessage({ requestId: request.requestId, ok: true, result });
   } catch (error) {
     worker.postMessage({
       requestId: request.requestId,
       ok: false,
-      error: error instanceof Error ? error.message : String(error)
+      error: boundedErrorMessage(error)
     });
   }
 }

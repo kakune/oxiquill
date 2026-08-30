@@ -26,14 +26,22 @@ const reactiveDebounceMs = 150;
 export function useInteractiveCellRun(cell: CellManifest, runtimeVersion: string) {
   const [values, setValues] = useState<InputValues>(() => initialValues(cell.inputs));
   const [execution, setExecution] = useState<ExecutionState>({ status: 'idle' });
+  const [inputsValid, setInputsValid] = useState(true);
+  const invalidInputsRef = useRef(new Set<string>());
   const valuesRef = useRef(values);
   const schedulerRef =
     useRef<ReturnType<typeof createLatestRequestScheduler<CellRunRequest, NormalizedCellExecutionResult>>>();
 
   schedulerRef.current ??= createLatestRequestScheduler({
-    execute: ({ autorunKey, cell: requestedCell, runtimeVersion: requestedVersion, values: requestedValues }) => {
-      const execute = () => runInteractiveCell(requestedCell, requestedValues, requestedVersion);
+    execute: (
+      { autorunKey, cell: requestedCell, runtimeVersion: requestedVersion, values: requestedValues },
+      signal
+    ) => {
+      const execute = () => runInteractiveCell(requestedCell, requestedValues, requestedVersion, signal);
       return autorunKey ? autorunRequests.getOrCreate(autorunKey, execute) : execute();
+    },
+    onCancelled: () => {
+      setExecution({ status: 'idle' });
     },
     onError: (caught) => {
       setExecution({ error: caught instanceof Error ? caught.message : String(caught), status: 'error' });
@@ -64,6 +72,7 @@ export function useInteractiveCellRun(cell: CellManifest, runtimeVersion: string
   }
 
   function run(): void {
+    if (invalidInputsRef.current.size > 0) return;
     schedule(valuesRef.current);
   }
 
@@ -72,17 +81,36 @@ export function useInteractiveCellRun(cell: CellManifest, runtimeVersion: string
     valuesRef.current = nextValues;
     setValues(nextValues);
 
-    if (cell.run === 'reactive') {
+    if (cell.run === 'reactive' && invalidInputsRef.current.size === 0) {
       schedule(nextValues, reactiveDebounceMs);
+    }
+  }
+
+  function setInputValidity(inputName: string, valid: boolean): void {
+    const nextInvalidInputs = new Set(invalidInputsRef.current);
+    if (valid) {
+      nextInvalidInputs.delete(inputName);
+    } else {
+      nextInvalidInputs.add(inputName);
+    }
+    if (nextInvalidInputs.size === invalidInputsRef.current.size && nextInvalidInputs.has(inputName) === !valid) return;
+
+    invalidInputsRef.current = nextInvalidInputs;
+    setInputsValid(nextInvalidInputs.size === 0);
+    if (!valid) {
+      schedulerRef.current?.cancel();
+      setExecution({ status: 'idle' });
     }
   }
 
   return {
     error: execution.status === 'error' ? execution.error : undefined,
+    inputsValid,
     isRunning: execution.status === 'running',
     result: execution.status === 'success' ? execution.result : undefined,
     run,
     setInputValue,
+    setInputValidity,
     values
   };
 }

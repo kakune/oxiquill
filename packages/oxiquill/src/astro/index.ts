@@ -33,6 +33,7 @@ import {
   syncLicenseArtifacts
 } from '../generator/doc-runtime-service.mjs';
 import { createBrowserBundleCollector, syncBrowserBundleReport } from '../generator/browser-bundle-report.mjs';
+import { maintainCleanupOwnership, prepareCleanupOwnership } from '../generator/cleanup-ownership.mjs';
 import remarkInteractiveCells from '../lib/doc-runtime/remark-interactive-cells.mjs';
 import remarkMermaidDiagrams from '../lib/doc-runtime/remark-mermaid-diagrams.mjs';
 import remarkPublicAssetBase from '../lib/doc-runtime/remark-public-asset-base.mjs';
@@ -80,6 +81,8 @@ const viteManagedPackageNames = [
   'html-escaper',
   'katex',
   'mermaid',
+  'preact',
+  'preact-render-to-string',
   'pyodide'
 ];
 const viteAliasedPackageNames = [
@@ -87,12 +90,13 @@ const viteAliasedPackageNames = [
   '@astrojs/preact',
   '@preact/signals',
   'preact',
+  'preact-render-to-string',
   'aria-query',
   'axobject-query',
   'html-escaper'
 ];
-const viteSsrNoExternalPackageNames = ['@astrojs/preact', 'oxiquill'];
-const viteResolveDedupePackageNames = ['@preact/signals', 'preact'];
+const viteSsrNoExternalPackageNames = ['@astrojs/preact', 'oxiquill', 'preact', 'preact-render-to-string'];
+const viteResolveDedupePackageNames = ['@preact/signals', 'preact', 'preact-render-to-string'];
 
 export interface OxiquillFrameworkOptions<StarlightOptions extends object = object> {
   preact?: PreactIntegrationFactory;
@@ -103,6 +107,10 @@ export interface OxiquillPythonOptions {
   offline?: boolean;
   packageMirror?: string | URL;
 }
+
+export type OxiquillMarkdownConfig = Omit<AstroMarkdownConfig, 'processor'> & {
+  processor?: never;
+};
 
 interface OxiquillStarlightOptions {
   components?: Record<string, string>;
@@ -118,9 +126,10 @@ export interface OxiquillConfig<StarlightOptions extends object = object> extend
   'integrations' | 'markdown' | 'vite'
 > {
   description?: StarlightOption<StarlightOptions, 'description', string>;
+  desktopTableOfContentsToggle?: boolean;
   framework: OxiquillFrameworkOptions<StarlightOptions>;
   integrations?: AstroIntegrations;
-  markdown?: AstroMarkdownConfig;
+  markdown?: OxiquillMarkdownConfig;
   paths?: OxiquillPathOptions;
   python?: OxiquillPythonOptions;
   sidebar?: StarlightOption<StarlightOptions, 'sidebar', unknown>;
@@ -131,7 +140,7 @@ export interface OxiquillConfig<StarlightOptions extends object = object> extend
 
 export interface OxiquillIntegrationOptions {
   base?: BaseAstroUserConfig['base'];
-  markdown?: AstroMarkdownConfig;
+  markdown?: OxiquillMarkdownConfig;
   paths?: OxiquillPathOptions;
   python?: OxiquillPythonOptions;
   vite?: ViteUserConfig;
@@ -157,6 +166,7 @@ export function defineOxiquillConfig<StarlightOptions extends object>(
     paths,
     python,
     description,
+    desktopTableOfContentsToggle = true,
     sidebar,
     starlight: starlightOptions = {},
     title,
@@ -194,7 +204,10 @@ export function defineOxiquillConfig<StarlightOptions extends object>(
     integrations: [
       integration,
       preactIntegration(undefined),
-      callStarlightIntegration(starlightIntegration, createStarlightOptions(mergedStarlightOptions)),
+      callStarlightIntegration(
+        starlightIntegration,
+        createStarlightOptions(mergedStarlightOptions, desktopTableOfContentsToggle)
+      ),
       ...integrations
     ]
   };
@@ -240,9 +253,11 @@ function createOxiquillIntegration(
   { base, markdown = {}, paths: pathOptions, python, vite = {} }: OxiquillIntegrationOptions = {},
   astroOptions: Record<string, string | URL> = {}
 ): AstroIntegration {
+  rejectCustomMarkdownProcessor(markdown);
   const metadata = createOxiquillIntegrationMetadata({ astro: astroOptions, paths: pathOptions, python });
   let paths: OxiquillPaths | undefined;
   let pythonOptions: Readonly<{ offline: boolean; packageMirror?: string }> | undefined;
+  let buildOwnership: Awaited<ReturnType<typeof prepareCleanupOwnership>> = Object.freeze([]);
   const bundledModules = createBundledModuleCollector();
   const browserBundle = createBrowserBundleCollector();
 
@@ -300,6 +315,7 @@ function createOxiquillIntegration(
       'astro:build:start': async () => {
         if (!paths) return;
 
+        buildOwnership = await prepareCleanupOwnership({ paths });
         bundledModules.reset();
         browserBundle.reset();
         if (process.env.OXIQUILL_RUNTIME_OWNER === 'cli') return;
@@ -321,6 +337,7 @@ function createOxiquillIntegration(
           outputDirectory: dir,
           workspaceRoot: paths.workspaceRoot
         });
+        await maintainCleanupOwnership({ ownership: buildOwnership });
       }
     }
   };
@@ -375,7 +392,10 @@ function callStarlightIntegration<StarlightOptions extends object>(
   return (integration as unknown as IntegrationFactory<OxiquillStarlightOptions>)(options);
 }
 
-function createStarlightOptions(options: OxiquillStarlightOptions): OxiquillStarlightOptions {
+function createStarlightOptions(
+  options: OxiquillStarlightOptions,
+  desktopTableOfContentsToggle: boolean
+): OxiquillStarlightOptions {
   const {
     components = {},
     customCss = [],
@@ -391,15 +411,27 @@ function createStarlightOptions(options: OxiquillStarlightOptions): OxiquillStar
     customCss: ['oxiquill/styles/katex.css', 'oxiquill/styles/custom.css', ...customCss],
     components: {
       PageFrame: 'oxiquill/components/starlight/PageFrame',
+      ...(desktopTableOfContentsToggle ? { TwoColumnContent: 'oxiquill/components/starlight/TwoColumnContent' } : {}),
       ...components
     }
   };
 }
 
-function mergeMarkdownConfig(base: BaseAstroUserConfig['base'], paths: OxiquillPaths, markdown: AstroMarkdownConfig) {
+function rejectCustomMarkdownProcessor(markdown: OxiquillMarkdownConfig): void {
+  if ((markdown as AstroMarkdownConfig).processor === undefined) return;
+
+  throw new TypeError(
+    'Oxiquill does not support markdown.processor because it owns the Markdown processor pipeline required for its transforms.'
+  );
+}
+
+function mergeMarkdownConfig(
+  base: BaseAstroUserConfig['base'],
+  paths: OxiquillPaths,
+  markdown: OxiquillMarkdownConfig
+) {
   const {
     gfm,
-    processor,
     rehypePlugins = [],
     remarkRehype,
     remarkPlugins = [],
@@ -407,35 +439,37 @@ function mergeMarkdownConfig(base: BaseAstroUserConfig['base'], paths: OxiquillP
     syntaxHighlight,
     ...markdownRest
   } = markdown;
-  const syntaxHighlightOptions = syntaxHighlightConfig(syntaxHighlight);
 
   return {
     ...markdownRest,
-    processor:
-      processor ??
-      unified({
-        gfm,
-        rehypePlugins: [rehypeKatex, ...rehypePlugins],
-        remarkPlugins: [
-          remarkMath,
-          [remarkPublicAssetBase, { base }],
-          [remarkInteractiveCells, { root: pathFromUrl(paths.workspaceRoot) }],
-          remarkMermaidDiagrams,
-          ...remarkPlugins
-        ],
-        remarkRehype,
-        smartypants
-      }),
-    syntaxHighlight: {
-      ...syntaxHighlightOptions,
-      type: syntaxHighlightOptions.type ?? 'shiki',
-      excludeLangs: syntaxHighlightOptions.excludeLangs ?? ['math', 'mermaid']
-    }
+    processor: unified({
+      gfm,
+      rehypePlugins: [rehypeKatex, ...rehypePlugins],
+      remarkPlugins: [
+        remarkMath,
+        [remarkPublicAssetBase, { base }],
+        [remarkInteractiveCells, { root: pathFromUrl(paths.workspaceRoot) }],
+        remarkMermaidDiagrams,
+        ...remarkPlugins
+      ],
+      remarkRehype,
+      smartypants
+    }),
+    syntaxHighlight: mergeSyntaxHighlightConfig(syntaxHighlight)
   };
 }
 
-function syntaxHighlightConfig(value: AstroMarkdownConfig['syntaxHighlight']): Partial<SyntaxHighlightObject> {
-  return typeof value === 'object' && value !== null && !Array.isArray(value) ? value : {};
+function mergeSyntaxHighlightConfig(
+  value: AstroMarkdownConfig['syntaxHighlight']
+): AstroMarkdownConfig['syntaxHighlight'] {
+  if (value === false || value === 'prism' || value === 'shiki') return value;
+
+  const options: Partial<SyntaxHighlightObject> = value ?? {};
+  return {
+    ...options,
+    type: options.type ?? 'shiki',
+    excludeLangs: mergeStringList(options.excludeLangs, ['math', 'mermaid'])
+  };
 }
 
 function mergeViteConfig(

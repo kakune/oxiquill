@@ -18,23 +18,31 @@ type ChartRendererState =
   { status: 'loading' } | { status: 'ready'; module: ChartOutputModule } | { status: 'error'; message: string };
 
 let chartOutputModuleReady: Promise<ChartOutputModule> | undefined;
+let chartOutputLoadAttempt = 0;
 
 interface OutputRendererProps {
   idPrefix?: string;
   labels?: RuntimeLabels;
   outputs: readonly ValidatedArtifactResult[];
+  resultIdentity?: object;
 }
 
 export default function OutputRenderer({
   idPrefix = 'doc-output',
   labels = labelsForLanguage(globalThis.document?.documentElement.lang),
-  outputs
+  outputs,
+  resultIdentity
 }: OutputRendererProps) {
   return (
     <>
       {outputs.map((output, index) => (
         <ArtifactErrorBoundary key={artifactKey(output, index)} index={output.index} labels={labels} resetKey={output}>
-          <ArtifactOutput idPrefix={`${idPrefix}-artifact-${output.index}`} labels={labels} output={output} />
+          <ArtifactOutput
+            idPrefix={`${idPrefix}-artifact-${output.index}`}
+            labels={labels}
+            output={output}
+            resultIdentity={resultIdentity}
+          />
         </ArtifactErrorBoundary>
       ))}
     </>
@@ -44,11 +52,13 @@ export default function OutputRenderer({
 function ArtifactOutput({
   idPrefix,
   labels,
-  output
+  output,
+  resultIdentity
 }: {
   idPrefix: string;
   labels: RuntimeLabels;
   output: ValidatedArtifactResult;
+  resultIdentity?: object;
 }) {
   if (output.status === 'error') {
     return <ArtifactError message={labels.artifactError(output.index + 1, labels.diagnosticDetail(output.message))} />;
@@ -64,7 +74,9 @@ function ArtifactOutput({
     case 'chart':
       return <LazyChartOutput artifact={output.artifact} idPrefix={idPrefix} labels={labels} />;
     case 'table':
-      return <TableOutput idPrefix={idPrefix} labels={labels} table={output.artifact} />;
+      return (
+        <TableOutput idPrefix={idPrefix} labels={labels} table={output.artifact} resultIdentity={resultIdentity} />
+      );
     case 'image':
       return <ImageOutput labels={labels} output={output.artifact} />;
   }
@@ -86,6 +98,7 @@ export function LazyChartOutput({
 }) {
   const chartArtifact = artifact ?? { kind: 'chart' as const, spec: spec as ChartSpec };
   const [state, setState] = useState<ChartRendererState>({ status: 'loading' });
+  const [loadAttempt, setLoadAttempt] = useState(0);
 
   useEffect(() => {
     let cancelled = false;
@@ -108,7 +121,7 @@ export function LazyChartOutput({
     return () => {
       cancelled = true;
     };
-  }, [load]);
+  }, [load, loadAttempt]);
 
   if (state.status === 'loading') {
     return (
@@ -120,9 +133,14 @@ export function LazyChartOutput({
 
   if (state.status === 'error') {
     return (
-      <p class="error-state" data-testid="artifact-error" role="alert">
-        {labels.chartLoadError(state.message)}
-      </p>
+      <div class="doc-chart-output__error">
+        <p class="error-state" data-testid="artifact-error" role="alert">
+          {labels.chartLoadError(state.message)}
+        </p>
+        <button type="button" onClick={() => setLoadAttempt((attempt) => attempt + 1)}>
+          {labels.chartRetry}
+        </button>
+      </div>
     );
   }
 
@@ -181,13 +199,29 @@ function HtmlOutput({
 }) {
   return (
     <iframe
+      {...{ csp: htmlArtifactContentSecurityPolicy }}
       class="doc-html-output"
       data-testid="html-output"
+      referrerPolicy="no-referrer"
       sandbox=""
-      srcdoc={output.html}
+      srcdoc={htmlArtifactSrcdoc(output.html)}
       title={output.title ?? labels.htmlOutput}
     />
   );
+}
+
+export const htmlArtifactContentSecurityPolicy = [
+  "default-src 'none'",
+  'img-src data: blob:',
+  'media-src data: blob:',
+  "style-src 'unsafe-inline'",
+  'font-src data:',
+  "base-uri 'none'",
+  "form-action 'none'"
+].join('; ');
+
+export function htmlArtifactSrcdoc(html: string): string {
+  return `<!doctype html><html><head><meta http-equiv="Content-Security-Policy" content="${htmlArtifactContentSecurityPolicy}"><meta name="referrer" content="no-referrer"></head><body>${html}</body></html>`;
 }
 
 function OutputWithTruncation({
@@ -220,9 +254,16 @@ function artifactKey(output: ValidatedArtifactResult, index: number): string {
 }
 
 function loadChartOutput(): Promise<ChartOutputModule> {
-  chartOutputModuleReady ??= import('./ChartOutput.js').catch((error: unknown) => {
+  chartOutputModuleReady ??= importChartOutput(chartOutputLoadAttempt).catch((error: unknown) => {
     chartOutputModuleReady = undefined;
+    chartOutputLoadAttempt += 1;
     throw error;
   });
   return chartOutputModuleReady;
+}
+
+function importChartOutput(attempt: number): Promise<ChartOutputModule> {
+  return attempt === 0
+    ? import('./ChartOutput.js')
+    : (import('./ChartOutput.js?oxiquill-retry') as Promise<ChartOutputModule>);
 }

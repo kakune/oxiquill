@@ -1,4 +1,5 @@
 import { Component, type ComponentChildren } from 'preact';
+import { boundedErrorMessage } from '../../lib/doc-runtime/output-limits.mjs';
 import type { RuntimeLabels } from '../../lib/doc-runtime/runtime-localization.js';
 
 interface ArtifactErrorBoundaryProps {
@@ -16,7 +17,7 @@ export default class ArtifactErrorBoundary extends Component<ArtifactErrorBounda
   state: ArtifactErrorBoundaryState = {};
 
   componentDidCatch(error: unknown): void {
-    this.setState({ error: error instanceof Error ? error.message : String(error) });
+    this.setState({ error: boundedErrorMessage(error) });
   }
 
   componentDidUpdate(previousProps: ArtifactErrorBoundaryProps): void {

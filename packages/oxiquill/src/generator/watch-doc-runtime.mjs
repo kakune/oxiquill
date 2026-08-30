@@ -4,6 +4,7 @@ import { parseArgs } from 'node:util';
 import { pathFromUrl } from '../config/paths.mjs';
 import { loadOxiquillProjectConfig } from '../config/project-config.mjs';
 import { createDocRuntimeContext, syncDocRuntime } from './doc-runtime-service.mjs';
+import { prepareCleanupOwnership } from './cleanup-ownership.mjs';
 import {
   classifyChangedPath,
   createRuntimeWatchPaths,
@@ -17,6 +18,7 @@ import {
 const defaultServices = {
   createDocRuntimeContext,
   loadProjectConfig: loadOxiquillProjectConfig,
+  prepareCleanupOwnership,
   syncDocRuntime,
   watch: chokidar.watch
 };
@@ -44,6 +46,11 @@ export async function main(argv = process.argv.slice(2), serviceOverrides = {}) 
 export async function watchDocRuntime({ projectConfig, serviceOverrides = {}, skipInitial = false }) {
   const services = { ...defaultServices, ...serviceOverrides };
   const { paths } = projectConfig;
+  await services.prepareCleanupOwnership({
+    configFile: projectConfig.configFile,
+    fields: ['cacheDir', 'publicAssetsDir'],
+    paths
+  });
   const initialContext = await services.createDocRuntimeContext({ paths });
   const workspaceRoot = pathFromUrl(initialContext.paths.workspaceRoot);
   let changeKinds = skipInitial ? new Set() : new Set(['docs']);

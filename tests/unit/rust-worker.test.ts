@@ -1,5 +1,6 @@
 import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { RuntimeWorkerRequest, RuntimeWorkerResponse } from '../../packages/oxiquill/src/lib/doc-runtime/types';
+import { outputArtifactLimits, utf8ByteLength } from '../../packages/oxiquill/src/lib/doc-runtime/output-limits.mjs';
 import { initializeRustWasm, run_rust_cell } from './mocks/virtual-runtime';
 
 type MessageListener = (event: MessageEvent<RuntimeWorkerRequest>) => void;
@@ -29,7 +30,13 @@ afterAll(() => {
 
 describe('Rust runtime worker', () => {
   it('initializes Wasm once and posts parsed cell results', async () => {
-    run_rust_cell.mockReturnValue(JSON.stringify({ stdout: 'ok', plots: [], outputs: [] }));
+    run_rust_cell.mockReturnValue(
+      JSON.stringify({
+        stdout: 'ok',
+        plots: [],
+        outputs: [{ kind: 'text', stream: 'stdout', content: 'ok' }]
+      })
+    );
 
     worker.listener?.({
       data: { requestId: 1, cellId: 'first', inputs: { count: 2 } }
@@ -44,7 +51,11 @@ describe('Rust runtime worker', () => {
     expect(worker.postMessage).toHaveBeenCalledWith({
       requestId: 1,
       ok: true,
-      result: { stdout: 'ok', plots: [], outputs: [] }
+      result: {
+        stdout: 'ok',
+        plots: [],
+        outputs: [{ kind: 'text', stream: 'stdout', content: 'ok' }]
+      }
     });
   });
 
@@ -65,6 +76,19 @@ describe('Rust runtime worker', () => {
     } as MessageEvent<RuntimeWorkerRequest>);
     await flushMicrotasks();
     expect(worker.postMessage).toHaveBeenCalledWith({ requestId: 4, ok: false, error: 'string failure' });
+
+    run_rust_cell.mockImplementationOnce(() => {
+      throw new Error('x'.repeat(outputArtifactLimits.bytesPerError + 1));
+    });
+    worker.listener?.({
+      data: { requestId: 5, cellId: 'oversized-error', inputs: {} }
+    } as MessageEvent<RuntimeWorkerRequest>);
+    await flushMicrotasks();
+    const response = worker.postMessage.mock.calls.at(-1)?.[0];
+    expect(response?.ok).toBe(false);
+    if (response?.ok === false) {
+      expect(utf8ByteLength(response.error)).toBeLessThanOrEqual(outputArtifactLimits.bytesPerError);
+    }
   });
 });
 

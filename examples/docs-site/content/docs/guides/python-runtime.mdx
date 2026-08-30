@@ -33,12 +33,12 @@ Downloads use this sequence:
 
 1. Check the versioned Oxiquill download cache.
 2. Verify a cached file against its expected SHA-256 before use.
-3. If it is missing or corrupt and offline mode is disabled, download to a temporary file.
-4. Apply a 30-second timeout and make no more than three total attempts with bounded backoff.
-5. Verify the completed temporary file, then atomically place it in the cache.
-6. Copy the verified artifact into the resolved public Pyodide directory.
+3. If it is missing or corrupt and offline mode is disabled, stream the response to a uniquely named temporary file while incrementally calculating SHA-256.
+4. Process at most four core files and wheels concurrently. Retries remain inside the same worker slot, use a 30-second timeout, and make no more than three total attempts with bounded backoff.
+5. Verify the completed temporary file, then atomically claim its cache name. Concurrent generators reuse the verified winner instead of overwriting it with partial content.
+6. After every required cache entry is verified, copy artifacts into the resolved public Pyodide directory in deterministic order.
 
-A hash mismatch is always fatal for that source. Oxiquill never publishes or caches an unverified partial response.
+A hash mismatch is always fatal for that source. A failed, interrupted, or aborted operation removes its temporary files. Oxiquill never publishes or caches an unverified partial response, and public staging does not begin until every required cache entry is ready.
 
 ## Cache Behavior
 

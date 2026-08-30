@@ -1,5 +1,6 @@
 import YAML from 'yaml';
 import { scopedCellId } from './authoring-ids.mjs';
+import { isPortableInteger, PORTABLE_INTEGER_MAX, PORTABLE_INTEGER_MIN } from './portable-integer.mjs';
 
 export const inputTypes = ['range', 'number', 'integer', 'text', 'textarea', 'checkbox', 'select', 'radio'];
 export const runModes = ['button', 'reactive', 'autorun'];
@@ -481,8 +482,14 @@ function validateNumericConstraints(input, inputPath, context, diagnostics) {
   }
   if (input.integer) {
     for (const field of ['value', 'min', 'max', 'step']) {
-      if (input[field] !== undefined && !Number.isInteger(input[field])) {
-        diagnostics.push(diagnostic(context, `${inputPath}.${field}`, 'Expected an integer.'));
+      if (input[field] !== undefined && !isPortableInteger(input[field])) {
+        diagnostics.push(
+          diagnostic(
+            context,
+            `${inputPath}.${field}`,
+            `Expected a signed 32-bit integer from ${PORTABLE_INTEGER_MIN} through ${PORTABLE_INTEGER_MAX}.`
+          )
+        );
       }
     }
   }

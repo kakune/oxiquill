@@ -34,6 +34,7 @@ describe('runtime watcher entrypoint', () => {
     const services = {
       createDocRuntimeContext: vi.fn(async () => ({ highlighter: {}, paths })),
       loadProjectConfig: vi.fn(async () => ({ paths })),
+      prepareCleanupOwnership: vi.fn(async () => []),
       syncDocRuntime: vi.fn().mockResolvedValueOnce(initial).mockResolvedValueOnce(current),
       watch: vi.fn(() => watcher)
     };
@@ -42,6 +43,11 @@ describe('runtime watcher entrypoint', () => {
 
     await main(['--skip-initial'], services);
 
+    expect(services.prepareCleanupOwnership).toHaveBeenCalledWith({
+      configFile: undefined,
+      fields: ['cacheDir', 'publicAssetsDir'],
+      paths
+    });
     expect(services.watch).toHaveBeenCalledWith(expect.arrayContaining([expect.any(String)]), {
       cwd: workspaceRoot,
       ignoreInitial: true
@@ -70,6 +76,7 @@ describe('runtime watcher entrypoint', () => {
     const services = {
       createDocRuntimeContext: vi.fn(async () => ({ highlighter: {}, paths })),
       loadProjectConfig: vi.fn(async () => ({ paths })),
+      prepareCleanupOwnership: vi.fn(async () => []),
       syncDocRuntime: vi.fn(async () => ({
         cellCount: 0,
         plan: { languages: { haskell: { public: 'keep' }, rust: { public: 'keep' } } }

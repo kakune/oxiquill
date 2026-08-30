@@ -92,6 +92,31 @@ function createMemoryFileSystem(initialFiles = {}) {
     mkdir: async (directory) => {
       directories.add(memoryPath(directory));
     },
+    link: async (sourcePath, targetPath) => {
+      const normalizedSource = memoryPath(sourcePath);
+      const normalizedTarget = memoryPath(targetPath);
+      if (files.has(normalizedTarget)) {
+        const error = new Error(`exists ${targetPath}`);
+        error.code = 'EEXIST';
+        throw error;
+      }
+      ensureParents(normalizedTarget);
+      files.set(normalizedTarget, Buffer.from(files.get(normalizedSource)));
+    },
+    open: async (filePath) => {
+      const normalizedPath = memoryPath(filePath);
+      ensureParents(normalizedPath);
+      files.set(normalizedPath, Buffer.alloc(0));
+      return {
+        close: async () => {},
+        write: async (buffer, offset, length) => {
+          const bytes = Buffer.from(buffer).subarray(offset, offset + length);
+          files.set(normalizedPath, Buffer.concat([files.get(normalizedPath), bytes]));
+          writes.push(normalizedPath);
+          return { bytesWritten: bytes.length };
+        }
+      };
+    },
     readFile: async (filePath, encoding) => {
       const content = files.get(memoryPath(filePath));
       if (!content) {
@@ -712,6 +737,7 @@ describe('doc runtime service', () => {
     globalThis.fetch = async (url) => {
       requestedUrls.push(String(url));
       return {
+        body: ReadableStream.from([Buffer.from('root bytes')]),
         ok: true,
         arrayBuffer: async () => Buffer.from('root bytes')
       };

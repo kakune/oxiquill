@@ -1,8 +1,10 @@
 import { pyodidePath } from 'virtual:oxiquill/runtime-paths';
+import { boundedErrorMessage, createBoundedTextAccumulator, outputArtifactLimits } from './output-limits.mjs';
 import { pythonDisplaySupportCode } from './python-display-support.js';
 import { createPythonCellResult, toOutputArtifacts } from './python-cell-result.js';
 import { createSerialRequestQueue } from './python-worker-queue.js';
 import type { RuntimeWorkerRequest, RuntimeWorkerResponse } from './types.js';
+import { boundWorkerResult } from './worker-output.js';
 
 export { pythonDisplaySupportCode } from './python-display-support.js';
 export { createPythonCellResult } from './python-cell-result.js';
@@ -48,11 +50,11 @@ export function createPythonWorkerRequestHandler({
   return async (request) => {
     try {
       const pyodide = await ensurePyodide();
-      const stdout: string[] = [];
-      const stderr: string[] = [];
+      const stdout = createBoundedTextAccumulator(outputArtifactLimits.bytesPerStream, '\n');
+      const stderr = createBoundedTextAccumulator(outputArtifactLimits.bytesPerStream, '\n');
 
-      pyodide.setStdout({ batched: (output) => stdout.push(output) });
-      pyodide.setStderr({ batched: (output) => stderr.push(output) });
+      pyodide.setStdout({ batched: stdout.append });
+      pyodide.setStderr({ batched: stderr.append });
 
       if (request.packages && request.packages.length > 0) {
         await pyodide.loadPackage(Array.from(request.packages));
@@ -66,6 +68,9 @@ export function createPythonWorkerRequestHandler({
       let value: unknown = null;
 
       try {
+        for (const inputName of request.integerInputNames ?? []) {
+          pyodide.runPython(pythonIntegerConversionCode(inputName), { globals });
+        }
         value = toSerializable(await pyodide.runPythonAsync(request.source ?? '', { globals }));
       } finally {
         globals.destroy();
@@ -75,20 +80,26 @@ export function createPythonWorkerRequestHandler({
         toSerializable(pyodide.runPython('__oxiquill_collect_matplotlib_outputs()'))
       );
 
-      const result = createPythonCellResult({
-        stdout: stdout.join('\n').trimEnd(),
-        stderr: stderr.join('\n').trimEnd(),
-        value,
-        plots: [],
-        displayOutputs: [...displayOutputs, ...matplotlibOutputs]
-      });
+      const stdoutResult = stdout.take();
+      const stderrResult = stderr.take();
+      const result = boundWorkerResult(
+        createPythonCellResult({
+          stdout: stdoutResult.value.trimEnd(),
+          stdoutTruncated: stdoutResult.truncated,
+          stderr: stderrResult.value.trimEnd(),
+          stderrTruncated: stderrResult.truncated,
+          value,
+          plots: [],
+          displayOutputs: [...displayOutputs, ...matplotlibOutputs]
+        })
+      );
 
       postMessage({ requestId: request.requestId, ok: true, result });
     } catch (error) {
       postMessage({
         requestId: request.requestId,
         ok: false,
-        error: error instanceof Error ? error.message : String(error)
+        error: boundedErrorMessage(error)
       });
     }
   };
@@ -115,6 +126,11 @@ export function createPythonRuntimeLoader({
     });
     return pyodideReady;
   };
+}
+
+export function pythonIntegerConversionCode(inputName: string): string {
+  if (!/^[a-z][a-z0-9_]*$/u.test(inputName)) throw new Error(`Invalid integer input name: ${inputName}`);
+  return `${inputName} = int(${inputName})`;
 }
 
 export async function importPyodideModule(

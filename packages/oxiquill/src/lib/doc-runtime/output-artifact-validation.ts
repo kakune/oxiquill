@@ -11,16 +11,9 @@ import type {
   TableColumnType,
   TextArtifact
 } from './types.js';
+import { outputArtifactLimits, truncateUtf8, utf8ByteLength } from './output-limits.mjs';
 
-export const outputArtifactLimits = Object.freeze({
-  artifactsPerRun: 100,
-  bytesPerTextJsonOrHtml: 1024 * 1024,
-  chartDataItems: 100_000,
-  columnsPerTable: 100,
-  decodedBytesPerImage: 10 * 1024 * 1024,
-  rowsPerTable: 10_000,
-  validatedBytesPerRun: 16 * 1024 * 1024
-});
+export { outputArtifactLimits } from './output-limits.mjs';
 
 export interface ValidatedJsonArtifact extends JsonArtifact {
   formattedValue: string;
@@ -108,15 +101,19 @@ const tableColumnTypes = new Set<TableColumnType>([
   'null',
   'unknown'
 ]);
-const utf8Encoder = new TextEncoder();
 const utf8Decoder = new TextDecoder('utf-8', { fatal: true });
 const maximumJsonNestingDepth = 100;
 
-class ArtifactValidationError extends Error {}
+class ArtifactValidationError extends Error {
+  constructor(message: string) {
+    super(truncateUtf8(message, outputArtifactLimits.bytesPerDiagnostic).value);
+  }
+}
 
 export function validateOutputArtifacts(outputs: readonly unknown[]): readonly ValidatedArtifactResult[] {
   const results: ValidatedArtifactResult[] = [];
   let validatedBytes = 0;
+  let diagnosticBytes = 0;
   const artifactCount = Math.min(outputs.length, outputArtifactLimits.artifactsPerRun);
 
   for (let index = 0; index < artifactCount; index += 1) {
@@ -128,18 +125,24 @@ export function validateOutputArtifacts(outputs: readonly unknown[]): readonly V
       validatedBytes += validated.byteLength;
       results.push({ status: 'valid', ...validated, index });
     } catch (error) {
+      const message = boundedDiagnostic(error, outputArtifactLimits.diagnosticBytesPerRun - diagnosticBytes);
+      diagnosticBytes += utf8ByteLength(message);
       results.push({
         status: 'error',
-        message: error instanceof Error ? error.message : String(error),
+        message,
         index
       });
     }
   }
 
   if (outputs.length > outputArtifactLimits.artifactsPerRun) {
+    const message = boundedDiagnostic(
+      `Artifact limit exceeded: received ${outputs.length}, maximum ${outputArtifactLimits.artifactsPerRun}.`,
+      outputArtifactLimits.diagnosticBytesPerRun - diagnosticBytes
+    );
     results.push({
       status: 'error',
-      message: `Artifact limit exceeded: received ${outputs.length}, maximum ${outputArtifactLimits.artifactsPerRun}.`,
+      message,
       index: outputArtifactLimits.artifactsPerRun
     });
   }
@@ -164,6 +167,8 @@ function validateOutputArtifact(value: unknown, remainingBytes: number): Validat
       return validateImageArtifact(record, remainingBytes);
     case 'html':
       return validateHtmlArtifact(record, remainingBytes);
+    case '__oxiquill_error':
+      throw new ArtifactValidationError(requiredString(record, 'message', 'Producer artifact error'));
     default:
       throw new ArtifactValidationError(`Unsupported artifact kind ${quoted(kind)}.`);
   }
@@ -380,9 +385,13 @@ function validateTableColumn(value: unknown, index: number): TableColumn {
   if (type != null && !tableColumnTypes.has(type as TableColumnType)) {
     throw new ArtifactValidationError(`Table artifact column ${index + 1} type ${quoted(type)} is not supported.`);
   }
+  const key = requiredString(record, 'key', `Table artifact column ${index + 1}`);
+  const label = requiredString(record, 'label', `Table artifact column ${index + 1}`);
+  requireMetadataBudget(key, `Table artifact column ${index + 1} key`);
+  requireMetadataBudget(label, `Table artifact column ${index + 1} label`);
   return {
-    key: requiredString(record, 'key', `Table artifact column ${index + 1}`),
-    label: requiredString(record, 'label', `Table artifact column ${index + 1}`),
+    key,
+    label,
     ...(type == null ? {} : { type: type as TableColumnType })
   };
 }
@@ -429,9 +438,18 @@ function validateChartSpec(value: unknown): ChartSpec {
   switch (kind) {
     case 'line':
     case 'scatter':
-    case 'area':
-      return { ...base, kind, series: validateXySeries(requiredOwnValue(record, 'series', `${kind} chart`)) };
+    case 'area': {
+      const xType = base.xType ?? 'value';
+      const yType = base.yType ?? 'value';
+      return {
+        ...base,
+        kind,
+        series: validateXySeries(requiredOwnValue(record, 'series', `${kind} chart`), xType, yType)
+      };
+    }
     case 'bar': {
+      requireEffectiveAxis(base.xType, 'category', 'Bar chart x axis');
+      const yType = numericAxisType(base.yType, 'Bar chart y axis');
       const categories = stringArray(requiredOwnValue(record, 'categories', 'Bar chart'), 'Bar chart categories');
       if (categories.length > outputArtifactLimits.chartDataItems) {
         throw chartLimitError(categories.length);
@@ -450,7 +468,7 @@ function validateChartSpec(value: unknown): ChartSpec {
         }
         const validatedValues = values.map((item, valueIndex) => {
           if (item === null) return null;
-          return finiteNumber(item, `Bar chart series ${seriesIndex + 1} value ${valueIndex + 1}`);
+          return numericCoordinate(item, yType, `Bar chart series ${seriesIndex + 1} value ${valueIndex + 1}`);
         });
         if (validatedValues.length !== categories.length) {
           throw new ArtifactValidationError(
@@ -464,31 +482,44 @@ function validateChartSpec(value: unknown): ChartSpec {
       return { ...base, kind, categories, series };
     }
     case 'histogram': {
+      requireEffectiveAxis(base.xType, 'category', 'Histogram chart x axis');
+      const yType = numericAxisType(base.yType, 'Histogram chart y axis');
       const rawBins = plainArray(requiredOwnValue(record, 'bins', 'Histogram chart'), 'Histogram chart bins');
       if (rawBins.length > outputArtifactLimits.chartDataItems) throw chartLimitError(rawBins.length);
       const bins = rawBins.map((bin, binIndex) => {
         const tuple = fixedTuple(bin, 3, `Histogram chart bin ${binIndex + 1}`);
-        return [
-          finiteNumber(tuple[0], `Histogram chart bin ${binIndex + 1} lower bound`),
-          finiteNumber(tuple[1], `Histogram chart bin ${binIndex + 1} upper bound`),
-          finiteNumber(tuple[2], `Histogram chart bin ${binIndex + 1} count`)
-        ] as const;
+        const lower = finiteNumber(tuple[0], `Histogram chart bin ${binIndex + 1} lower bound`);
+        const upper = finiteNumber(tuple[1], `Histogram chart bin ${binIndex + 1} upper bound`);
+        if (lower >= upper) {
+          throw new ArtifactValidationError(
+            `Histogram chart bin ${binIndex + 1} lower bound must be smaller than its upper bound.`
+          );
+        }
+        const count = numericCoordinate(tuple[2], yType, `Histogram chart bin ${binIndex + 1} count`);
+        if (count < 0) {
+          throw new ArtifactValidationError(`Histogram chart bin ${binIndex + 1} count must not be negative.`);
+        }
+        return [lower, upper, count] as const;
       });
       return { ...base, kind, bins };
     }
     case 'heatmap': {
+      const xCategories = optionalStringArray(record, 'xCategories', 'Heatmap chart');
+      const yCategories = optionalStringArray(record, 'yCategories', 'Heatmap chart');
+      if (xCategories) requireUniqueCategories(xCategories, 'Heatmap chart xCategories');
+      if (yCategories) requireUniqueCategories(yCategories, 'Heatmap chart yCategories');
+      const xType = heatmapAxisType(base.xType, xCategories, 'x');
+      const yType = heatmapAxisType(base.yType, yCategories, 'y');
       const rawData = plainArray(requiredOwnValue(record, 'data', 'Heatmap chart'), 'Heatmap chart data');
       if (rawData.length > outputArtifactLimits.chartDataItems) throw chartLimitError(rawData.length);
       const data = rawData.map((cell, cellIndex) => {
         const tuple = fixedTuple(cell, 3, `Heatmap chart cell ${cellIndex + 1}`);
         return [
-          chartCoordinate(tuple[0], `Heatmap chart cell ${cellIndex + 1} x coordinate`),
-          chartCoordinate(tuple[1], `Heatmap chart cell ${cellIndex + 1} y coordinate`),
+          chartCoordinate(tuple[0], xType, `Heatmap chart cell ${cellIndex + 1} x coordinate`, xCategories),
+          chartCoordinate(tuple[1], yType, `Heatmap chart cell ${cellIndex + 1} y coordinate`, yCategories),
           finiteNumber(tuple[2], `Heatmap chart cell ${cellIndex + 1} value`)
         ] as const;
       });
-      const xCategories = optionalStringArray(record, 'xCategories', 'Heatmap chart');
-      const yCategories = optionalStringArray(record, 'yCategories', 'Heatmap chart');
       return {
         ...base,
         kind,
@@ -529,7 +560,11 @@ function validateBaseChartSpec(record: Record<string, unknown>): Omit<ChartSpec,
   } as Omit<ChartSpec, 'kind'>;
 }
 
-function validateXySeries(value: unknown): Extract<ChartSpec, { kind: 'line' }>['series'] {
+function validateXySeries(
+  value: unknown,
+  xType: ChartAxisType,
+  yType: ChartAxisType
+): Extract<ChartSpec, { kind: 'line' }>['series'] {
   const rawSeries = plainArray(value, 'XY chart series');
   if (rawSeries.length > outputArtifactLimits.chartDataItems) throw chartLimitError(rawSeries.length);
   let dataItems = 0;
@@ -544,8 +579,8 @@ function validateXySeries(value: unknown): Extract<ChartSpec, { kind: 'line' }>[
     const points = rawPoints.map((point, pointIndex) => {
       const tuple = fixedTuple(point, 2, `XY chart series ${seriesIndex + 1} point ${pointIndex + 1}`);
       return [
-        chartCoordinate(tuple[0], `XY chart series ${seriesIndex + 1} point ${pointIndex + 1} x coordinate`),
-        chartCoordinate(tuple[1], `XY chart series ${seriesIndex + 1} point ${pointIndex + 1} y coordinate`)
+        chartCoordinate(tuple[0], xType, `XY chart series ${seriesIndex + 1} point ${pointIndex + 1} x coordinate`),
+        chartCoordinate(tuple[1], yType, `XY chart series ${seriesIndex + 1} point ${pointIndex + 1} y coordinate`)
       ] as const;
     });
     const name = optionalString(record, 'name', `XY chart series ${seriesIndex + 1}`);
@@ -620,7 +655,7 @@ function safeJsonFormat(value: unknown, maxBytes: number, context: string): Json
       tasks.push({
         kind: 'visit',
         input: descriptor.value,
-        path: `${task.path}.${key}`,
+        path: jsonObjectPath(task.path, key),
         depth: task.depth + 1,
         assign: (next) => {
           Object.defineProperty(task.output, key, {
@@ -722,7 +757,9 @@ function validateBase64Image(
   const parsed = parseDataUrl(data);
   const payload = parsed ? parsed.payload : data;
   if (parsed && parsed.mime !== mime) {
-    throw new ArtifactValidationError(`Image artifact MIME mismatch: field is ${mime}, data URL is ${parsed.mime}.`);
+    throw new ArtifactValidationError(
+      `Image artifact MIME mismatch: field is ${quoted(mime)}, data URL is ${quoted(parsed.mime)}.`
+    );
   }
   if (parsed && !parsed.base64) {
     throw new ArtifactValidationError(`${mime} image data URLs must use base64 encoding.`);
@@ -740,7 +777,7 @@ function validateSvgImage(data: string): { data: string; decodedBytes: number; s
   const parsed = parseDataUrl(data);
   if (parsed && parsed.mime !== 'image/svg+xml') {
     throw new ArtifactValidationError(
-      `Image artifact MIME mismatch: field is image/svg+xml, data URL is ${parsed.mime}.`
+      `Image artifact MIME mismatch: field is image/svg+xml, data URL is ${quoted(parsed.mime)}.`
     );
   }
   let svg = data;
@@ -847,31 +884,6 @@ function payloadByteLength(value: unknown): number {
   return utf8ByteLength(JSON.stringify(value));
 }
 
-function truncateUtf8(value: string, maxBytes: number): { byteLength: number; truncated: boolean; value: string } {
-  const byteLength = utf8ByteLength(value);
-  if (byteLength <= maxBytes) return { value, byteLength, truncated: false };
-  if (maxBytes <= 0) return { value: '', byteLength: 0, truncated: true };
-  const marker = '…';
-  const markerBytes = utf8ByteLength(marker);
-  if (maxBytes < markerBytes) return { value: '', byteLength: 0, truncated: true };
-  let low = 0;
-  let high = value.length;
-  while (low < high) {
-    const middle = Math.ceil((low + high) / 2);
-    const candidate = value.slice(0, middle);
-    if (utf8ByteLength(candidate) + markerBytes <= maxBytes) low = middle;
-    else high = middle - 1;
-  }
-  const lastCodeUnit = value.charCodeAt(low - 1);
-  if (low > 0 && lastCodeUnit >= 0xd800 && lastCodeUnit <= 0xdbff) low -= 1;
-  const bounded = `${value.slice(0, low)}${marker}`;
-  return { value: bounded, byteLength: utf8ByteLength(bounded), truncated: true };
-}
-
-function utf8ByteLength(value: string): number {
-  return utf8Encoder.encode(value).byteLength;
-}
-
 function plainRecord(value: unknown, context: string): Record<string, unknown> {
   if (typeof value !== 'object' || value === null || Array.isArray(value)) {
     throw new ArtifactValidationError(`${context} must be a plain record.`);
@@ -924,6 +936,7 @@ function optionalString(record: Record<string, unknown>, key: string, context: s
   if (typeof value !== 'string') {
     throw new ArtifactValidationError(`${context} field ${quoted(key)} must be a string when provided.`);
   }
+  requireMetadataBudget(value, `${context} field ${quoted(key)}`);
   return value;
 }
 
@@ -984,9 +997,103 @@ function finiteNumber(value: unknown, context: string): number {
   return value;
 }
 
-function chartCoordinate(value: unknown, context: string): number | string {
-  if (typeof value === 'string') return value;
-  return finiteNumber(value, context);
+function chartCoordinate(
+  value: unknown,
+  axisType: ChartAxisType,
+  context: string,
+  categories?: readonly string[]
+): number | string {
+  switch (axisType) {
+    case 'value':
+    case 'log':
+      return numericCoordinate(value, axisType, context);
+    case 'time':
+      if (typeof value === 'number') return finiteNumber(value, context);
+      if (typeof value === 'string' && isSupportedIsoDateTime(value)) return value;
+      throw new ArtifactValidationError(
+        `${context} must be finite epoch milliseconds or an ISO-8601 date-time with an explicit time zone.`
+      );
+    case 'category': {
+      if (typeof value !== 'string' && (typeof value !== 'number' || !Number.isFinite(value))) {
+        throw new ArtifactValidationError(`${context} must be a string or finite numeric category coordinate.`);
+      }
+      if (categories && !isCategoryMember(value, categories)) {
+        throw new ArtifactValidationError(`${context} is not present in the declared categories.`);
+      }
+      return value;
+    }
+  }
+}
+
+function numericCoordinate(value: unknown, axisType: 'value' | 'log' | 'time', context: string): number {
+  const number = finiteNumber(value, context);
+  if (axisType === 'log' && number <= 0) {
+    throw new ArtifactValidationError(`${context} must be strictly positive for a log axis.`);
+  }
+  return number;
+}
+
+function heatmapAxisType(
+  declaredType: ChartAxisType | undefined,
+  categories: readonly string[] | undefined,
+  axis: 'x' | 'y'
+): ChartAxisType {
+  if (!categories) return declaredType ?? 'value';
+  requireEffectiveAxis(declaredType, 'category', `Heatmap chart ${axis} axis`);
+  return 'category';
+}
+
+function requireEffectiveAxis(
+  declaredType: ChartAxisType | undefined,
+  effectiveType: ChartAxisType,
+  context: string
+): void {
+  if (declaredType != null && declaredType !== effectiveType) {
+    throw new ArtifactValidationError(`${context} is always ${effectiveType}; received ${declaredType}.`);
+  }
+}
+
+function numericAxisType(declaredType: ChartAxisType | undefined, context: string): 'value' | 'log' | 'time' {
+  if (declaredType === 'category') {
+    throw new ArtifactValidationError(`${context} cannot be category because its data is numeric.`);
+  }
+  return declaredType ?? 'value';
+}
+
+function requireUniqueCategories(categories: readonly string[], context: string): void {
+  if (new Set(categories).size !== categories.length) {
+    throw new ArtifactValidationError(`${context} must not contain duplicate values.`);
+  }
+}
+
+function isCategoryMember(value: string | number, categories: readonly string[]): boolean {
+  if (typeof value === 'string') return categories.includes(value);
+  return Number.isSafeInteger(value) && value >= 0 && value < categories.length;
+}
+
+function isSupportedIsoDateTime(value: string): boolean {
+  const match = /^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2}):(\d{2})(?:\.(\d{1,3}))?(Z|[+-]\d{2}:\d{2})$/u.exec(value);
+  if (!match) return false;
+  const [, yearText, monthText, dayText, hourText, minuteText, secondText, , zone] = match;
+  const year = Number(yearText);
+  const month = Number(monthText);
+  const day = Number(dayText);
+  const hour = Number(hourText);
+  const minute = Number(minuteText);
+  const second = Number(secondText);
+  if (month < 1 || month > 12 || day < 1 || day > daysInMonth(year, month)) return false;
+  if (hour > 23 || minute > 59 || second > 59) return false;
+  if (zone !== 'Z') {
+    const offsetHours = Number(zone?.slice(1, 3));
+    const offsetMinutes = Number(zone?.slice(4, 6));
+    if (offsetHours > 23 || offsetMinutes > 59) return false;
+  }
+  return Number.isFinite(Date.parse(value));
+}
+
+function daysInMonth(year: number, month: number): number {
+  const leapYear = year % 4 === 0 && (year % 100 !== 0 || year % 400 === 0);
+  return [31, leapYear ? 29 : 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31][month - 1] ?? 0;
 }
 
 function chartLimitError(dataItems: number): ArtifactValidationError {
@@ -996,5 +1103,23 @@ function chartLimitError(dataItems: number): ArtifactValidationError {
 }
 
 function quoted(value: string): string {
-  return JSON.stringify(value);
+  return JSON.stringify(truncateUtf8(value, 256).value);
+}
+
+function requireMetadataBudget(value: string, context: string): void {
+  const byteLength = utf8ByteLength(value);
+  if (byteLength > outputArtifactLimits.bytesPerMetadataField) {
+    throw new ArtifactValidationError(
+      `${context} is ${byteLength} bytes; maximum is ${outputArtifactLimits.bytesPerMetadataField}.`
+    );
+  }
+}
+
+function jsonObjectPath(path: string, key: string): string {
+  return truncateUtf8(`${path}.${key}`, outputArtifactLimits.bytesPerDiagnostic / 2).value;
+}
+
+function boundedDiagnostic(value: unknown, remainingBytes: number): string {
+  const message = value instanceof Error ? value.message : String(value);
+  return truncateUtf8(message, Math.min(outputArtifactLimits.bytesPerDiagnostic, Math.max(0, remainingBytes))).value;
 }

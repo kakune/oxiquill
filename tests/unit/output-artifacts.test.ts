@@ -135,13 +135,13 @@ describe('output artifact normalization', () => {
       )
     ).toEqual({
       stdout: '',
-      stderr: 'explicit',
+      stderr: 'from outputs',
       plots: [],
       outputs: [{ kind: 'text', stream: 'stderr', content: 'from outputs' }]
     });
   });
 
-  it('keeps explicit legacy aliases when outputs are already present', () => {
+  it('replaces explicit legacy aliases with equivalents derived from bounded outputs', () => {
     expect(
       publicResult(
         normalizeCellExecutionResult({
@@ -152,9 +152,9 @@ describe('output artifact normalization', () => {
         })
       )
     ).toEqual({
-      stdout: 'alias',
-      value: null,
-      plots: [{ kind: 'line', x_label: 'old-x', y_label: 'old-y', points: [[0, 0]] }],
+      stdout: '',
+      value: { from: 'outputs' },
+      plots: [],
       outputs: [{ kind: 'json', value: { from: 'outputs' } }]
     });
   });

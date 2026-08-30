@@ -5,6 +5,25 @@ import type { Locator, Page } from '@playwright/test';
 const wcag22AATags = ['wcag2a', 'wcag2aa', 'wcag21a', 'wcag21aa', 'wcag22a', 'wcag22aa'];
 
 test.describe('runtime accessibility', () => {
+  test('desktop table-of-contents control remains accessible when expanded and collapsed', async ({
+    browserName,
+    page
+  }) => {
+    await page.setViewportSize({ width: 1280, height: 900 });
+    await page.goto('/features/math/');
+
+    const toggle = page.getByRole('button', { name: 'Collapse table of contents' });
+    await toggle.focus();
+    await toggle.press('Space');
+
+    const expandedToggle = page.getByRole('button', { name: 'Expand table of contents' });
+    await expect(expandedToggle).toHaveAttribute('aria-controls', 'starlight__right-sidebar');
+    await expect(expandedToggle).toHaveAttribute('aria-expanded', 'false');
+    await expect(expandedToggle).toBeFocused();
+    await expect(page.locator('#starlight__right-sidebar')).toHaveAttribute('inert', '');
+    await expectNoWcag22AAViolations(page, browserName);
+  });
+
   test('interactive cells expose localized semantics and support keyboard-only execution', async ({
     browserName,
     page

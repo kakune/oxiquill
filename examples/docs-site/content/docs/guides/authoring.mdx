@@ -32,6 +32,12 @@ Start with what the page helps the reader do, then move into examples. Use headi
 
 Use the same route and general structure in Japanese translations. The Japanese page does not need to be word-for-word identical, but it should cover the same behavior and examples.
 
+## Choose the Page Table of Contents
+
+Regular pages show Starlight's table of contents. On desktop, readers can collapse the right column and Oxiquill remembers that choice for the current browser tab. On mobile, Starlight's existing disclosure remains unchanged.
+
+Use `tableOfContents: false` in frontmatter when a page should have no table of contents or desktop control. Starlight splash pages also omit both automatically. This page-level setting is separate from the project-wide `desktopTableOfContentsToggle` option, which only enables or disables the desktop collapse control.
+
 ## Write Rust Cells
 
 Rust cells are fenced `rust` code blocks with metadata in leading `//|` or `///|` comments. Metadata comments must form one contiguous block at the very start of the cell; later option-looking comments remain source code. The `id` must be unique within the page and match lowercase kebab-case. English and Japanese versions may reuse the same local `id`; the build creates page-scoped internal IDs.
@@ -100,6 +106,8 @@ Common metadata fields:
 - `showSource`: boolean source visibility; defaults to `true`.
 
 These are the only top-level fields. Dependency arrays must contain unique non-empty strings. Supported input types are `range`, `number`, `integer`, `text`, `textarea`, `checkbox`, `select`, and `radio`. See [Interactive Cells](../../features/interactive-cells/) for the exact input fields, defaults, constraints, and option schema.
+
+Integer metadata uses one portable signed 32-bit domain: `-2147483648` through `2147483647`. This limit applies to `value`, `min`, `max`, and `step` so generated Rust, Haskell, and Python bindings receive the same exact integer.
 
 ## Add Math
 

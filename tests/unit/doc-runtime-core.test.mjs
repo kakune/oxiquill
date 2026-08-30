@@ -225,6 +225,21 @@ describe('doc runtime core', () => {
       'inputs.count.value'
     ],
     [
+      'integer default below portable domain',
+      '//| id: bad\n//| inputs:\n//|   count: { type: integer, value: -2147483649 }',
+      'inputs.count.value'
+    ],
+    [
+      'integer maximum above portable domain',
+      '//| id: bad\n//| inputs:\n//|   count: { type: integer, value: 1, max: 2147483648 }',
+      'inputs.count.max'
+    ],
+    [
+      'integer step above portable domain',
+      '//| id: bad\n//| inputs:\n//|   count: { type: integer, value: 1, step: 2147483648 }',
+      'inputs.count.step'
+    ],
+    [
       'empty options',
       '//| id: bad\n//| inputs:\n//|   mode: { type: select, value: a, options: [] }',
       'inputs.mode.options'
@@ -412,7 +427,7 @@ describe('doc runtime core', () => {
       'doc-rust'
     );
     expect(() => packageNameFromCargoToml('[dependencies]\nserde = "1"\n', '/repo/crates/bad/Cargo.toml')).toThrow(
-      'missing [package] name'
+      'missing a [package] table'
     );
     expect(() =>
       helperCratesFromManifests(
@@ -422,7 +437,7 @@ describe('doc runtime core', () => {
         ],
         { rustCellsDir: '/repo/.oxiquill/rust-cells' }
       )
-    ).toThrow('Duplicate helper crate');
+    ).toThrow('use duplicate package name');
   });
 
   it('generates manifest files and Rust support code', () => {
@@ -450,8 +465,8 @@ describe('doc runtime core', () => {
     expect(rustFunctionName('cell-id')).toBe('run_cell_id');
     expect(rustFunctionName('page__cell')).toBe('run_page_cell');
     expect(rustReaderName({ type: 'checkbox' })).toBe('read_bool');
-    expect(rustReaderName({ type: 'integer' })).toBe('read_u32');
-    expect(rustReaderName({ type: 'text', integer: true })).toBe('read_u32');
+    expect(rustReaderName({ type: 'integer' })).toBe('read_i32');
+    expect(rustReaderName({ type: 'text', integer: true })).toBe('read_i32');
     expect(rustReaderName({ type: 'range' })).toBe('read_f64');
     expect(rustReaderName({ type: 'number' })).toBe('read_f64');
     expect(rustReaderName({ type: 'text' })).toBe('read_string');
@@ -520,6 +535,9 @@ describe('doc runtime core', () => {
       inputs: []
     };
     expect(generateRustReaders([rustCell])).toContain('fn read_f64');
+    expect(generateRustReaders([rustCell])).toContain('fn read_i32');
+    expect(generateRustReaders([rustCell])).toContain('.and_then(Value::as_i64)');
+    expect(generateHaskellMain([rustCell])).toContain('value >= -2147483648 && value <= 2147483647');
     expect(generateRustFunction(rustCell)).toContain('macro_rules! println');
     expect(generateRustFunction(rustCell)).toContain('macro_rules! emit_line_plot');
     expect(generateRustFunction(rustCell)).not.toContain('macro_rules! emit_json');
@@ -537,17 +555,24 @@ describe('doc runtime core', () => {
     expect(generateRustFunction(chartCell)).toContain('macro_rules! emit_heatmap');
     expect(generateRustFunction(rustCell)).toContain('Ok(finish_cell_output');
     expect(generateRustFunction({ id: 'plain', source: 'let value = 1;', inputs: [] })).toContain(
-      'let __stdout = std::cell::RefCell::new(String::new());'
+      'let __stdout = std::cell::RefCell::new(BoundedText::new());'
     );
     expect(generateRustLib([])).toContain('let _: Value = serde_json::from_str(inputs_json)');
     expect(generateRustLib([])).toContain('unknown Rust cell');
+    const plainRustLib = generateRustLib([{ id: 'plain', source: 'println!("ok");', inputs: [] }]);
+    expect(plainRustLib).not.toContain('fn bound_output_artifact');
+    expect(plainRustLib).not.toContain('fn push(&mut self, artifact: OutputArtifact)');
+    expect(plainRustLib).not.toContain('OutputArtifact::Json(json)');
+    expect(plainRustLib).not.toContain('OutputArtifact::Html(html)');
+    expect(plainRustLib).not.toContain('OutputArtifact::Image(image)');
     expect(generateRustLib([rustCell])).toContain('enum OutputArtifact');
     expect(generateRustLib([rustCell])).toContain('outputs: Vec<OutputArtifact>');
     expect(generateRustLib([preludeCell])).toContain('Json(JsonArtifact)');
     expect(generateRustLib([preludeCell])).toContain('Html(HtmlArtifact)');
     expect(generateRustLib([preludeCell])).toContain('Image(ImageArtifact)');
-    expect(generateRustLib([preludeCell])).not.toContain('fn ensure_output_size');
-    expect(generateRustLib([tableCell])).toContain('row_count > 10_000');
+    expect(generateRustLib([preludeCell])).toContain('struct OutputCollector');
+    expect(generateRustLib([preludeCell])).toContain('fn serialize_cell_output');
+    expect(generateRustLib([tableCell])).toContain('row_count > 10000');
     expect(generateRustLib([preludeCell])).toContain('fn json_artifact');
     expect(generateRustLib([preludeCell])).toContain('fn html_artifact');
     expect(generateRustLib([preludeCell])).toContain('fn image_artifact');
@@ -559,7 +584,9 @@ describe('doc runtime core', () => {
     expect(generateRustLib([chartCell])).toContain('fn bar_chart_spec');
     expect(generateRustLib([chartCell])).toContain('fn histogram_chart_spec');
     expect(generateRustLib([chartCell])).toContain('fn heatmap_chart_spec');
+    expect(generateRustLib([chartCell])).toContain('fn ensure_chart_data_limit');
     expect(generateRustLib([rustCell])).toContain('generated_plot_cell_runs');
+    expect(generateRustLib([rustCell])).toContain('generated_output_limits_are_enforced');
 
     const haskellCell = {
       id: 'haskell-cell',
