@@ -418,8 +418,15 @@ function mergeMarkdownConfig(
   paths: OxiquillPaths,
   markdown: OxiquillMarkdownConfig
 ) {
-  const { gfm, rehypePlugins = [], remarkRehype, remarkPlugins = [], smartypants, syntaxHighlight, ...markdownRest } =
-    markdown;
+  const {
+    gfm,
+    rehypePlugins = [],
+    remarkRehype,
+    remarkPlugins = [],
+    smartypants,
+    syntaxHighlight,
+    ...markdownRest
+  } = markdown;
 
   return {
     ...markdownRest,
