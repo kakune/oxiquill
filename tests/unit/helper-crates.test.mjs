@@ -37,7 +37,7 @@ describe('helper crate manifests', () => {
     ];
 
     expect(() => helperCratesFromManifests(manifests, { rustCellsDir: '/repo/.oxiquill/rust-cells' })).toThrow(
-      'Helper crate manifests /repo/crates/z/Cargo.toml and /repo/crates/a/Cargo.toml use duplicate package name "same".'
+      'Helper crate manifests /repo/crates/a/Cargo.toml and /repo/crates/z/Cargo.toml use duplicate package name "same".'
     );
 
     const crates = helperCratesFromManifests(

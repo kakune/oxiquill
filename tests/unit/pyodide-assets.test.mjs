@@ -206,10 +206,11 @@ describe('Pyodide assets', () => {
   it('retries a mid-stream failure from a clean temporary file', async () => {
     const fixture = await createInstalledPyodide();
     const paths = createDocRuntimePaths(fixture.workspaceRoot);
-    const runtimeInputs = await resolvePyodideRuntimeInputs({
+    let runtimeInputs = await resolvePyodideRuntimeInputs({
       requestedPackages: ['dependency'],
       resolvePackageJson: fixture.resolvePackageJson
     });
+    runtimeInputs = { ...runtimeInputs, coreAssets: [] };
     const fetchImplementation = vi
       .fn()
       .mockResolvedValueOnce(streamFailureResponse(Buffer.from('partial')))
@@ -221,7 +222,12 @@ describe('Pyodide assets', () => {
         paths,
         requestedPackages: ['dependency'],
         runtimeInputs,
-        sleep: async () => {}
+        sleep: async () => {
+          const cacheDirectory = path.join(paths.downloadCacheDir, 'pyodide', fixtureVersion, runtimeInputs.lockSha256);
+          expect((await readdir(cacheDirectory)).filter((entry) => entry.startsWith('dependency.whl.tmp-'))).toEqual(
+            []
+          );
+        }
       })
     ).resolves.toBe(true);
 

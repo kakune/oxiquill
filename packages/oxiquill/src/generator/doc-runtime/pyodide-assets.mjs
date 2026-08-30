@@ -342,20 +342,26 @@ async function streamResponseToFile(response, temporaryPath, asset, { fileSystem
   if (!fileSystem.open) throw new Error('The configured file system does not support streaming writes.');
 
   const hash = createSha256();
-  const fileHandle = await fileSystem.open(temporaryPath, 'w');
+  await fileSystem.rm(temporaryPath, { force: true });
+  const fileHandle = await fileSystem.open(temporaryPath, 'wx');
   try {
-    for await (const chunk of response.body) {
+    try {
+      for await (const chunk of response.body) {
+        throwIfAborted(signal);
+        const bytes = toBytes(chunk, asset.name ?? asset.fileName);
+        hash.update(bytes);
+        await writeAll(fileHandle, bytes);
+      }
       throwIfAborted(signal);
-      const bytes = toBytes(chunk, asset.name ?? asset.fileName);
-      hash.update(bytes);
-      await writeAll(fileHandle, bytes);
+    } finally {
+      await fileHandle.close();
     }
-    throwIfAborted(signal);
-  } finally {
-    await fileHandle.close();
-  }
 
-  assertSha256(hash.digest('hex'), asset.sha256, asset.name ?? asset.fileName);
+    assertSha256(hash.digest('hex'), asset.sha256, asset.name ?? asset.fileName);
+  } catch (error) {
+    await fileSystem.rm(temporaryPath, { force: true });
+    throw error;
+  }
 }
 
 async function writeAll(fileHandle, bytes) {
@@ -375,27 +381,40 @@ function toBytes(chunk, assetName) {
 }
 
 async function publishVerifiedAsset(temporaryPath, cachePath, expectedSha256, { fileSystem, temporaryName }) {
-  const displacedPath = `${cachePath}.corrupt-${temporaryName()}`;
+  const displacedPaths = [];
   try {
     for (;;) {
-      try {
-        await fileSystem.link(temporaryPath, cachePath);
-        return;
-      } catch (error) {
-        if (!isFileSystemError(error, 'EEXIST')) throw error;
-      }
+      if (await linkOrVerify(temporaryPath, cachePath, expectedSha256, { fileSystem })) return;
 
-      if (await hasPackageContent(cachePath, expectedSha256, { fileSystem })) return;
+      const displacedPath = `${cachePath}.corrupt-${temporaryName()}`;
       try {
         await fileSystem.rename(cachePath, displacedPath);
+        displacedPaths.push(displacedPath);
       } catch (error) {
         if (!isFileSystemError(error, 'ENOENT')) throw error;
+        continue;
       }
-      await fileSystem.rm(displacedPath, { force: true });
+
+      if (
+        (await hasPackageContent(displacedPath, expectedSha256, { fileSystem })) &&
+        (await linkOrVerify(displacedPath, cachePath, expectedSha256, { fileSystem }))
+      ) {
+        return;
+      }
     }
   } finally {
-    await fileSystem.rm(displacedPath, { force: true });
+    await Promise.all(displacedPaths.map((filePath) => fileSystem.rm(filePath, { force: true })));
   }
+}
+
+async function linkOrVerify(sourcePath, cachePath, expectedSha256, { fileSystem }) {
+  try {
+    await fileSystem.link(sourcePath, cachePath);
+    return true;
+  } catch (error) {
+    if (!isFileSystemError(error, 'EEXIST')) throw error;
+  }
+  return hasPackageContent(cachePath, expectedSha256, { fileSystem });
 }
 
 async function mapWithConcurrency(values, concurrency, mapper, { signal } = {}) {

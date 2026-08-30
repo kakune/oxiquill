@@ -9,7 +9,7 @@ export function helperCratesFromManifests(manifests, { rustCellsDir }) {
       manifestPath: manifest.manifestPath,
       name: packageNameFromCargoToml(manifest.content, manifest.manifestPath)
     }))
-    .sort((left, right) => left.name.localeCompare(right.name));
+    .sort((left, right) => left.name.localeCompare(right.name) || left.manifestPath.localeCompare(right.manifestPath));
 
   const duplicate = findDuplicate(helperCrates);
   if (duplicate) {
