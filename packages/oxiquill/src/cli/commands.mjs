@@ -9,43 +9,37 @@ import { createDocRuntimeContext, syncDocRuntime } from '../generator/doc-runtim
 import { cleanOxiquillWorkspace } from '../generator/clean.mjs';
 import { runHelperCargo } from '../generator/run-helper-cargo.mjs';
 import { testGeneratedHaskellCells } from '../generator/doc-runtime/haskell-runtime-test.mjs';
-import { parseConfigOption } from './config-option.mjs';
+import { formatCliHelp, parseCliArguments } from './arguments.mjs';
+import { initializeProject } from './init.mjs';
 
-const projectCommands = new Set([
-  'dev',
-  'dev:runtime',
-  'dev:astro',
-  'preview',
-  'build',
-  'check',
-  'docgen',
-  'clean',
-  'test-rust',
-  'test-rust-coverage',
-  'lint-rust',
-  'doc-rust',
-  'test-wasm'
-]);
-
-export async function runCli(
-  command,
-  args = [],
-  {
+export async function runCli(commandOrArgs = [], argsOrOptions = {}, legacyOptions = {}) {
+  const { args, options } = normalizeRunCliArguments(commandOrArgs, argsOrOptions, legacyOptions);
+  const {
     cwd = process.cwd(),
+    initialize = initializeProject,
+    loadPackageVersion = installedPackageVersion,
     loadProjectConfig = loadOxiquillProjectConfig,
+    log = console.log,
     runCommand = runCommandWithInheritedStdio,
     selectNode = frameworkNode
-  } = {}
-) {
-  if (command === 'help' || command === '--help' || command === '-h') {
-    printHelp();
+  } = options;
+  const parsed = parseCliArguments(args);
+
+  if (parsed.action === 'help') {
+    log(formatCliHelp(parsed.commandName));
     return;
   }
-  if (!projectCommands.has(command)) {
-    throw new Error(`Unknown oxiquill command "${command}".`);
+  if (parsed.action === 'version') {
+    log(await loadPackageVersion());
+    return;
   }
 
-  const { commandArgs, configFile } = parseConfigOption(args);
+  const { commandArgs, commandName: command, configFile, positionals, values } = parsed;
+  if (command === 'init') {
+    await initialize({ cwd, directory: positionals[0], log });
+    return;
+  }
+
   const projectConfig = await loadProjectConfig({ cwd, configFile });
   const paths = projectConfig.paths;
   const astroArgs = [...projectConfig.astroConfigArgs, ...commandArgs];
@@ -53,13 +47,13 @@ export async function runCli(
   switch (command) {
     case 'dev':
       await generateRuntime({ projectConfig, tolerateHaskellBuildFailure: true, wasmMode: 'dev' });
-      await runDevServer({ args: astroArgs, projectConfig, selectNode });
+      await runDevServer({ args: astroArgs, projectConfig, runCommand, selectNode });
       return;
     case 'dev:runtime': {
       const { watchDocRuntime } = await import('../generator/watch-doc-runtime.mjs');
       await watchDocRuntime({
         projectConfig,
-        skipInitial: commandArgs.includes('--skip-initial')
+        skipInitial: values['skip-initial'] === true
       });
       return;
     }
@@ -79,7 +73,7 @@ export async function runCli(
       await runOxiquillCheck(projectConfig, commandArgs, { runCommand, selectNode });
       return;
     case 'docgen':
-      await generateRuntime({ projectConfig, wasmMode: parseWasmMode(commandArgs) });
+      await generateRuntime({ projectConfig, wasmMode: values.wasm });
       return;
     case 'clean':
       await cleanOxiquillWorkspace({ paths });
@@ -133,6 +127,16 @@ export async function runCli(
   }
 }
 
+function normalizeRunCliArguments(commandOrArgs, argsOrOptions, legacyOptions) {
+  if (typeof commandOrArgs === 'string') {
+    return {
+      args: [commandOrArgs, ...(Array.isArray(argsOrOptions) ? argsOrOptions : [])],
+      options: legacyOptions
+    };
+  }
+  return { args: commandOrArgs, options: argsOrOptions };
+}
+
 async function generateRuntime({ projectConfig, tolerateHaskellBuildFailure = false, wasmMode }) {
   const { paths } = projectConfig;
   const context = await createDocRuntimeContext({ paths, pythonOptions: projectConfig.python });
@@ -151,31 +155,20 @@ function warnToleratedHaskellBuildFailure(result) {
   console.warn(`[runtime] Haskell/WASI runtime unavailable: ${result.error.message}`);
 }
 
-async function runDevServer({ args, projectConfig, selectNode }) {
+async function runDevServer({ args, projectConfig, runCommand, selectNode }) {
   const { paths } = projectConfig;
   const nodePath = selectNode(paths);
   const env = frameworkEnv(paths, { nodePath });
   const { watchDocRuntime } = await import('../generator/watch-doc-runtime.mjs');
   const watcher = await watchDocRuntime({ projectConfig, skipInitial: true });
-  const child = spawn(nodePath, [frameworkBinScript(paths, 'astro'), 'dev', ...args], {
-    cwd: projectConfig.cwd,
-    env,
-    stdio: 'inherit'
-  });
 
   try {
-    await new Promise((resolve, reject) => {
-      child.on('error', reject);
-      child.on('exit', (code, signal) => {
-        if (code === 0 || signal === 'SIGTERM') {
-          resolve();
-        } else {
-          reject(new Error(`dev child exited with ${signal ?? code}`));
-        }
-      });
+    await runCommand(nodePath, [frameworkBinScript(paths, 'astro'), 'dev', ...args], {
+      cwd: projectConfig.cwd,
+      env,
+      successfulSignals: ['SIGTERM']
     });
   } finally {
-    if (!child.killed) child.kill('SIGTERM');
     await watcher.close();
   }
 }
@@ -333,22 +326,6 @@ export function frameworkEnv(paths, { env = process.env, nodePath, runtimeOwner 
   return nextEnv;
 }
 
-function parseWasmMode(args) {
-  const wasmIndex = args.indexOf('--wasm');
-  if (wasmIndex === -1) return undefined;
-
-  const mode = args[wasmIndex + 1];
-  if (mode === 'dev' || mode === 'build') return mode;
-
-  throw new Error('--wasm must be followed by "dev" or "build".');
-}
-
-function printHelp() {
-  console.log(
-    'Usage: oxiquill <dev|build|check|docgen|clean|test-rust|lint-rust|doc-rust|test-wasm> [--config <path>]'
-  );
-}
-
 function runCommandWithInheritedStdio(command, args, options) {
   return new Promise((resolve, reject) => {
     const child = spawn(command, args, {
@@ -359,13 +336,18 @@ function runCommandWithInheritedStdio(command, args, options) {
 
     child.on('error', reject);
     child.on('exit', (code, signal) => {
-      if (code === 0) {
+      if (code === 0 || options.successfulSignals?.includes(signal)) {
         resolve();
       } else {
         reject(new Error(`${command} exited with ${signal ?? code}`));
       }
     });
   });
+}
+
+async function installedPackageVersion() {
+  const packageJson = JSON.parse(readFileSync(new URL('../../package.json', import.meta.url), 'utf8'));
+  return packageJson.version;
 }
 
 export function isCliEntrypoint(argvPath = process.argv[1], moduleUrl = import.meta.url) {
