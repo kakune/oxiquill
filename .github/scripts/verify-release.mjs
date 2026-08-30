@@ -1,7 +1,7 @@
 import { execFileSync, spawnSync } from 'node:child_process';
-import { appendFile, readFile } from 'node:fs/promises';
-import path from 'node:path';
+import { appendFile } from 'node:fs/promises';
 import { pathToFileURL } from 'node:url';
+import { verifyReleaseVersions } from './verify-release-version.mjs';
 
 export const BLOCKER_LABEL = 'release-blocker';
 export const RELEASE_MILESTONE = 'npm release readiness';
@@ -72,13 +72,12 @@ export async function verifyRelease({ environment = process.env, repositoryRoot 
   const tag = requireEnvironment(environment, 'RELEASE_TAG');
   const releasePrerelease = parseBooleanEnvironment(environment, 'RELEASE_PRERELEASE');
   const repository = requireEnvironment(environment, 'GITHUB_REPOSITORY');
-  const rootPackage = await readJson(path.join(repositoryRoot, 'package.json'));
-  const publishedPackage = await readJson(path.join(repositoryRoot, 'packages/oxiquill/package.json'));
+  const { version } = await verifyReleaseVersions({ repositoryRoot });
 
   assertReleaseIdentity({
-    packageVersion: publishedPackage.version,
+    packageVersion: version,
     releasePrerelease,
-    rootVersion: rootPackage.version,
+    rootVersion: version,
     tag
   });
 
@@ -101,10 +100,10 @@ export async function verifyRelease({ environment = process.env, repositoryRoot 
   assertNoOpenReleaseBlockers(blockers);
 
   if (environment.GITHUB_OUTPUT) {
-    await appendFile(environment.GITHUB_OUTPUT, `release_tag=${tag}\nrelease_version=${publishedPackage.version}\n`);
+    await appendFile(environment.GITHUB_OUTPUT, `release_tag=${tag}\nrelease_version=${version}\n`);
   }
 
-  return { tag, version: publishedPackage.version };
+  return { tag, version };
 }
 
 async function fetchAllPages(url, { fetchImplementation, token }) {
@@ -150,10 +149,6 @@ function requireEnvironment(environment, name) {
   const value = environment[name];
   if (!value) throw new Error(`${name} must be set.`);
   return value;
-}
-
-async function readJson(filePath) {
-  return JSON.parse(await readFile(filePath, 'utf8'));
 }
 
 const isMainModule = process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href;

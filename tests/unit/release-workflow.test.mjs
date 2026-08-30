@@ -1,7 +1,7 @@
 // @vitest-environment node
 
 import { createHash } from 'node:crypto';
-import { mkdtemp, readFile, readdir, rm, writeFile } from 'node:fs/promises';
+import { cp, mkdir, mkdtemp, readFile, readdir, rm, writeFile } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -19,6 +19,7 @@ import {
   MANIFEST_FILE,
   verifyReleaseArchive
 } from '../../.github/scripts/release-archive.mjs';
+import { verifyReleaseVersions } from '../../.github/scripts/verify-release-version.mjs';
 
 const repositoryRoot = fileURLToPath(new URL('../..', import.meta.url));
 const temporaryDirectories = [];
@@ -26,6 +27,49 @@ const temporaryDirectories = [];
 afterEach(async () => {
   vi.restoreAllMocks();
   await Promise.all(temporaryDirectories.splice(0).map((directory) => rm(directory, { force: true, recursive: true })));
+});
+
+describe('release-bound version verification', () => {
+  it('accepts every current v0.3.0 release reference', async () => {
+    await expect(verifyReleaseVersions({ repositoryRoot })).resolves.toMatchObject({ version: '0.3.0' });
+  });
+
+  it.each([
+    [
+      'templates/basic/package.json',
+      '"oxiquill": "^0.3.0"',
+      '"oxiquill": "^0.2.0"',
+      'templates/basic/package.json oxiquill dependency'
+    ],
+    ['README.md', '"oxiquill": "0.3.0"', '"oxiquill": "0.2.0"', 'README.md contains stale'],
+    [
+      'examples/docs-site/crates/doc-rust/Cargo.toml',
+      'version = "0.3.0"',
+      'version = "0.2.0"',
+      'doc-rust Cargo.toml version'
+    ],
+    [
+      'examples/docs-site/crates/Cargo.lock',
+      'name = "doc-rust"\nversion = "0.3.0"',
+      'name = "doc-rust"\nversion = "0.2.0"',
+      'helper Cargo.lock doc-rust version'
+    ],
+    [
+      'packages/oxiquill/src/generator/license-data/rust/runtime-Cargo.lock',
+      'name = "doc-rust-cells"\nversion = "0.3.0"',
+      'name = "doc-rust-cells"\nversion = "0.2.0"',
+      'generated runtime Cargo.lock doc-rust-cells version'
+    ]
+  ])('rejects stale release metadata in %s', async (relativePath, current, stale, message) => {
+    const fixtureRoot = await createReleaseVersionFixture();
+    const filePath = path.join(fixtureRoot, relativePath);
+    const source = await readFile(filePath, 'utf8');
+    const modified = source.replace(current, stale);
+    expect(modified).not.toBe(source);
+    await writeFile(filePath, modified);
+
+    await expect(verifyReleaseVersions({ repositoryRoot: fixtureRoot })).rejects.toThrow(message);
+  });
 });
 
 describe('release identity verification', () => {
@@ -222,6 +266,33 @@ async function createArtifact() {
     `${JSON.stringify({ archiveSha256, pack, schemaVersion: 1 }, null, 2)}\n`
   );
   await writeFile(path.join(directory, CHECKSUM_FILE), `${archiveSha256}  ${pack.filename}\n`);
+  return directory;
+}
+
+async function createReleaseVersionFixture() {
+  const directory = await mkdtemp(path.join(os.tmpdir(), 'oxiquill-release-version-'));
+  temporaryDirectories.push(directory);
+  const files = [
+    'CHANGELOG.md',
+    'README.md',
+    'SECURITY.md',
+    'examples/docs-site/crates/Cargo.lock',
+    'examples/docs-site/crates/doc-rust-text/Cargo.toml',
+    'examples/docs-site/crates/doc-rust/Cargo.toml',
+    'examples/docs-site/package.json',
+    'package.json',
+    'packages/oxiquill/README.md',
+    'packages/oxiquill/package.json',
+    'packages/oxiquill/src/generator/license-data/rust/runtime-Cargo.lock',
+    'templates/basic/package.json'
+  ];
+  await Promise.all(
+    files.map(async (file) => {
+      const destination = path.join(directory, file);
+      await mkdir(path.dirname(destination), { recursive: true });
+      await cp(path.join(repositoryRoot, file), destination);
+    })
+  );
   return directory;
 }
 
