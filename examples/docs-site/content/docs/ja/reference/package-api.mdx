@@ -7,19 +7,19 @@ Oxiquill は ESM-only です。`node_modules/oxiquill` 配下の file を直接 
 
 ## Export
 
-| Export                                    | Public API                                                                                                                                                                |
-| ----------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `oxiquill`                                | `defineOxiquillConfig`, `oxiquillIntegration`                                                                                                                             |
+| Export                                    | Public API                                                                                                                                                                 |
+| ----------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `oxiquill`                                | `defineOxiquillConfig`, `oxiquillIntegration`                                                                                                                              |
 | `oxiquill/astro`                          | 同じ function と `OxiquillConfig`、`OxiquillIntegrationOptions`、`OxiquillFrameworkOptions`、`OxiquillMarkdownConfig`、`OxiquillPathOptions`、`OxiquillPythonOptions` type |
-| `oxiquill/content`                        | `createOxiquillCollections` と `OxiquillContentDependencies`、`OxiquillCollections` type                                                                                  |
-| `oxiquill/runtime/InteractiveCell`        | interactive-cell remark transform が使う Preact component                                                                                                                 |
-| `oxiquill/runtime/MermaidDiagram`         | Mermaid remark transform が使う Preact renderer                                                                                                                           |
-| `oxiquill/runtime/types`                  | cell manifest、input、worker message、artifact、table、chart の TypeScript type                                                                                           |
-| `oxiquill/components/starlight/PageFrame` | Oxiquill の Starlight page-frame override                                                                                                                                 |
-| `oxiquill/styles/katex.css`               | default integration が読み込む KaTeX style                                                                                                                                |
-| `oxiquill/styles/custom.css`              | runtime、output、media、page-frame の style                                                                                                                               |
-| `oxiquill/tsconfigs/strict`               | consumer project 用 strict TypeScript base config                                                                                                                         |
-| `oxiquill/env`                            | Oxiquill virtual module と asset import の ambient declaration                                                                                                            |
+| `oxiquill/content`                        | `createOxiquillCollections` と `OxiquillContentDependencies`、`OxiquillCollections` type                                                                                   |
+| `oxiquill/runtime/InteractiveCell`        | interactive-cell remark transform が使う Preact component                                                                                                                  |
+| `oxiquill/runtime/MermaidDiagram`         | Mermaid remark transform が使う Preact renderer                                                                                                                            |
+| `oxiquill/runtime/types`                  | cell manifest、input、worker message、artifact、table、chart の TypeScript type                                                                                            |
+| `oxiquill/components/starlight/PageFrame` | Oxiquill の Starlight page-frame override                                                                                                                                  |
+| `oxiquill/styles/katex.css`               | default integration が読み込む KaTeX style                                                                                                                                 |
+| `oxiquill/styles/custom.css`              | runtime、output、media、page-frame の style                                                                                                                                |
+| `oxiquill/tsconfigs/strict`               | consumer project 用 strict TypeScript base config                                                                                                                          |
+| `oxiquill/env`                            | Oxiquill virtual module と asset import の ambient declaration                                                                                                             |
 
 component、style、environment export は高度な composition 用の public API です。通常の project では `defineOxiquillConfig()` が読み込むため、手動 import は不要です。
 
