@@ -565,6 +565,38 @@ describe('doc runtime service', () => {
     ).rejects.toThrow('broken read');
   });
 
+  it('serializes concurrent copies to the same target', async () => {
+    const fileSystem = createMemoryFileSystem({ '/repo/source.bin': Buffer.from([1, 2, 3]) });
+    let activeCopy = false;
+    let copies = 0;
+    const lockingFileSystem = {
+      ...fileSystem,
+      copyFile: async (...arguments_) => {
+        copies += 1;
+        if (activeCopy) {
+          const error = new Error('resource busy');
+          error.code = 'EBUSY';
+          throw error;
+        }
+        activeCopy = true;
+        await new Promise((resolve) => setTimeout(resolve, 5));
+        try {
+          await fileSystem.copyFile(...arguments_);
+        } finally {
+          activeCopy = false;
+        }
+      }
+    };
+
+    await expect(
+      Promise.all([
+        copyFileIfChanged('/repo/source.bin', '/repo/target.bin', { fileSystem: lockingFileSystem }),
+        copyFileIfChanged('/repo/source.bin', '/repo/target.bin', { fileSystem: lockingFileSystem })
+      ])
+    ).resolves.toEqual([true, false]);
+    expect(copies).toBe(1);
+  });
+
   it('copies Pyodide assets from a package-graph resolution', async () => {
     const paths = createDocRuntimePaths('/repo');
     const lockFile = {

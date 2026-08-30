@@ -2,33 +2,41 @@ import { execFileSync } from 'node:child_process';
 import { readFile, readdir } from 'node:fs/promises';
 import path from 'node:path';
 import { pathToFileURL } from 'node:url';
+import { fetchAllGitHubPages, githubHeaders, requestGitHubJson } from './github-api.mjs';
 import { verifyReleaseArchive } from './release-archive.mjs';
-
-const apiVersion = '2022-11-28';
 
 export async function uploadReleaseAssets({
   directory,
   expectedCommit,
+  expectedWorkflowCommit,
   expectedVersion,
   fetchImplementation = fetch,
   repository,
   tag,
   token
 }) {
-  assertInputs({ expectedCommit, expectedVersion, repository, tag, token });
-  await verifyReleaseArchive(directory, expectedVersion, { expectedCommit, outputFile: null });
+  assertInputs({ expectedCommit, expectedVersion, expectedWorkflowCommit, repository, tag, token });
+  await verifyReleaseArchive(directory, expectedVersion, {
+    expectedCommit,
+    expectedWorkflowCommit,
+    outputFile: null
+  });
 
   const apiRoot = `https://api.github.com/repos/${repository}`;
-  const release = await requestJson(fetchImplementation, `${apiRoot}/releases/tags/${encodeURIComponent(tag)}`, token);
+  const release = await requestGitHubJson(
+    fetchImplementation,
+    `${apiRoot}/releases/tags/${encodeURIComponent(tag)}`,
+    token
+  );
   if (release.tag_name !== tag || !Number.isInteger(release.id)) {
     throw new Error(`GitHub Release identity does not match ${tag}.`);
   }
 
-  const assets = await fetchAllPages(
+  const assets = await fetchAllGitHubPages(`${apiRoot}/releases/${release.id}/assets?per_page=100`, {
     fetchImplementation,
-    `${apiRoot}/releases/${release.id}/assets?per_page=100`,
+    responseName: 'GitHub Release assets API',
     token
-  );
+  });
   const filenames = (await readdir(directory)).sort();
   const results = [];
 
@@ -65,31 +73,16 @@ export async function uploadReleaseAssets({
   return results;
 }
 
-function assertInputs({ expectedCommit, expectedVersion, repository, tag, token }) {
+function assertInputs({ expectedCommit, expectedVersion, expectedWorkflowCommit, repository, tag, token }) {
   if (!/^[A-Za-z0-9_.-]+\/[A-Za-z0-9_.-]+$/u.test(repository)) {
     throw new Error(`Invalid GitHub repository identifier: ${repository}`);
   }
   if (!/^[0-9a-f]{40}$/u.test(expectedCommit)) throw new Error('Expected release commit must be a full Git SHA.');
+  if (!/^[0-9a-f]{40}$/u.test(expectedWorkflowCommit)) {
+    throw new Error('Expected workflow commit must be a full Git SHA.');
+  }
   if (tag !== `v${expectedVersion}`) throw new Error(`Release tag ${tag} does not match version ${expectedVersion}.`);
   if (!token) throw new Error('GITHUB_TOKEN must be set.');
-}
-
-async function fetchAllPages(fetchImplementation, url, token) {
-  const results = [];
-  let page = 1;
-  while (true) {
-    const response = await requestJson(fetchImplementation, `${url}&page=${page}`, token);
-    if (!Array.isArray(response)) throw new Error('GitHub Release assets API returned a non-array response.');
-    results.push(...response);
-    if (response.length < 100) return results;
-    page += 1;
-  }
-}
-
-async function requestJson(fetchImplementation, url, token) {
-  const response = await fetchImplementation(url, { headers: githubHeaders(token) });
-  if (!response.ok) throw new Error(`GitHub API request failed with ${response.status}: ${await response.text()}`);
-  return response.json();
 }
 
 async function requestBytes(fetchImplementation, url, token) {
@@ -100,16 +93,6 @@ async function requestBytes(fetchImplementation, url, token) {
     throw new Error(`GitHub Release asset download failed with ${response.status}: ${await response.text()}`);
   }
   return Buffer.from(await response.arrayBuffer());
-}
-
-function githubHeaders(token, accept = 'application/vnd.github+json', additional = {}) {
-  return {
-    Accept: accept,
-    Authorization: `Bearer ${token}`,
-    'User-Agent': 'oxiquill-release-assets',
-    'X-GitHub-Api-Version': apiVersion,
-    ...additional
-  };
 }
 
 function gitOutput(args) {
@@ -126,6 +109,7 @@ if (isMainModule) {
     const results = await uploadReleaseAssets({
       directory,
       expectedCommit: gitOutput(['rev-parse', 'HEAD']),
+      expectedWorkflowCommit: process.env.GITHUB_WORKFLOW_SHA,
       expectedVersion,
       repository: process.env.GITHUB_REPOSITORY,
       tag,

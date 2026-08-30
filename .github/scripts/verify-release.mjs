@@ -1,6 +1,7 @@
 import { execFileSync, spawnSync } from 'node:child_process';
 import { appendFile } from 'node:fs/promises';
 import { pathToFileURL } from 'node:url';
+import { fetchAllGitHubPages } from './github-api.mjs';
 import { verifyReleaseVersions } from './verify-release-version.mjs';
 
 export const BLOCKER_LABEL = 'release-blocker';
@@ -52,7 +53,7 @@ export function assertNoOpenDependabotAlerts(alerts) {
 
 export async function fetchOpenDependabotAlerts({ fetchImplementation = fetch, repository, token }) {
   assertRepositoryIdentifier(repository);
-  const alerts = await fetchAllPages(
+  const alerts = await fetchAllGitHubPages(
     `https://api.github.com/repos/${repository}/dependabot/alerts?state=open&per_page=100`,
     { fetchImplementation, token }
   );
@@ -68,7 +69,7 @@ export async function fetchOpenReleaseBlockers({ fetchImplementation = fetch, re
   assertRepositoryIdentifier(repository);
 
   const apiRoot = `https://api.github.com/repos/${repository}`;
-  const milestones = await fetchAllPages(`${apiRoot}/milestones?state=all&per_page=100`, {
+  const milestones = await fetchAllGitHubPages(`${apiRoot}/milestones?state=all&per_page=100`, {
     fetchImplementation,
     token
   });
@@ -78,7 +79,7 @@ export async function fetchOpenReleaseBlockers({ fetchImplementation = fetch, re
   }
 
   const label = encodeURIComponent(BLOCKER_LABEL);
-  const issues = await fetchAllPages(
+  const issues = await fetchAllGitHubPages(
     `${apiRoot}/issues?milestone=${milestone.number}&state=open&labels=${label}&per_page=100`,
     { fetchImplementation, token }
   );
@@ -129,33 +130,6 @@ export async function verifyRelease({ environment = process.env, repositoryRoot 
 function assertRepositoryIdentifier(repository) {
   if (!/^[A-Za-z0-9_.-]+\/[A-Za-z0-9_.-]+$/u.test(repository)) {
     throw new Error(`Invalid GitHub repository identifier: ${repository}`);
-  }
-}
-
-async function fetchAllPages(url, { fetchImplementation, token }) {
-  const results = [];
-  let page = 1;
-
-  while (true) {
-    const separator = url.includes('?') ? '&' : '?';
-    const response = await fetchImplementation(`${url}${separator}page=${page}`, {
-      headers: {
-        Accept: 'application/vnd.github+json',
-        ...(token ? { Authorization: `Bearer ${token}` } : {}),
-        'X-GitHub-Api-Version': '2022-11-28'
-      }
-    });
-    if (!response.ok) {
-      throw new Error(`GitHub API request failed with ${response.status}: ${await response.text()}`);
-    }
-
-    const values = await response.json();
-    if (!Array.isArray(values)) {
-      throw new Error('GitHub API returned a non-array response.');
-    }
-    results.push(...values);
-    if (values.length < 100) return results;
-    page += 1;
   }
 }
 
