@@ -82,6 +82,11 @@ export function createInteractiveCellRunner(dependencies: RuntimeClientDependenc
 
     try {
       worker.addEventListener('message', (event: MessageEvent<RuntimeWorkerResponse>) => {
+        if (!isRuntimeWorkerResponse(event.data)) {
+          failWorker(worker, new Error(`${language} worker sent an invalid message`));
+          return;
+        }
+
         const request = pending.get(event.data.requestId);
         if (!request || request.worker !== worker) return;
 
@@ -194,6 +199,11 @@ function createDefaultWorker(language: CellLanguage): Worker {
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null;
+}
+
+function isRuntimeWorkerResponse(value: unknown): value is RuntimeWorkerResponse {
+  if (!isRecord(value) || !Number.isSafeInteger(value.requestId) || typeof value.ok !== 'boolean') return false;
+  return value.ok ? isRecord(value.result) : typeof value.error === 'string';
 }
 
 function toError(value: unknown): Error {
