@@ -36,9 +36,11 @@ image data は browser image decoder に渡されます。SVG は page DOM に i
 
 ## Sandboxed HTML
 
-HTML artifact は空の `sandbox` attribute を持つ iframe 内で表示します。`allow-scripts`、`allow-same-origin`、`allow-forms`、`allow-popups`、`allow-top-navigation`、download permission は与えません。そのため script 実行、parent DOM や same-origin storage/cookie への access、form submit、popup、top-level navigation はできません。
+HTML artifact は空の `sandbox` attribute と `referrerPolicy="no-referrer"` を持つ iframe 内で表示します。`allow-scripts`、`allow-same-origin`、`allow-forms`、`allow-popups`、`allow-top-navigation`、download permission は与えません。そのため script 実行、parent DOM や same-origin storage/cookie への access、form submit、popup、download 開始、top-level navigation はできません。
 
-sandbox は HTML sanitizer ではありません。passive subresource/link が network request を発生させることがあり、browser parser は markup を処理します。可能なら typed text、JSON、table、chart、image artifact を使い、HTML は reviewed author からだけ公開してください。
+Oxiquill は `srcdoc` の先頭に `default-src 'none'; img-src data: blob:; media-src data: blob:; style-src 'unsafe-inline'; font-src data:; base-uri 'none'; form-action 'none'` という Content Security Policy を追加します。reviewed presentation artifact に必要な inline style と data/blob image/media だけを残し、HTTP(S) などの external subresource request を block します。明示的な base/form directive により、markup は URL resolution や form destination を変更できません。iframe policy は referrer も抑止します。
+
+sandbox と CSP は isolation control であり、HTML sanitization ではありません。browser は supplied markup を引き続き parse し、user は isolated frame 内の text/link など通常の content を操作できます。可能なら typed text、JSON、table、chart、image artifact を使い、HTML は reviewed author からだけ公開してください。
 
 ## Security issue の報告
 

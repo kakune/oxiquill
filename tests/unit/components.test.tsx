@@ -1192,6 +1192,7 @@ describe('OutputRenderer', () => {
 
     const htmlOutputs = screen.getAllByTestId('html-output');
     expect(htmlOutputs[0]).toHaveAttribute('sandbox', '');
+    expect(htmlOutputs[0]).toHaveAttribute('csp', htmlArtifactContentSecurityPolicy);
     expect(htmlOutputs[0]).toHaveAttribute('referrerpolicy', 'no-referrer');
     expect(htmlOutputs[0].getAttribute('srcdoc')).toContain('<strong>safe</strong>');
     expect(htmlOutputs[0].getAttribute('srcdoc')).toContain(htmlArtifactContentSecurityPolicy);

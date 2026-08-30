@@ -281,6 +281,9 @@ test('interactive cells and math rendering are available', async ({ page }) => {
 test('rich output examples render browser-visible artifacts', async ({ page }) => {
   test.setTimeout(180_000);
   await page.goto('/features/rich-output/');
+  await page.evaluate(() => {
+    document.documentElement.dataset.theme = 'light';
+  });
 
   const rust = page.getByTestId('cell-features__rich-output__rust-rich-outputs');
   await hydrateCell(rust);
@@ -295,10 +298,56 @@ test('rich output examples render browser-visible artifacts', async ({ page }) =
 
   const rustChart = rust.getByTestId('doc-plot');
   await expect(rustChart.locator('canvas')).toHaveCount(1);
+  await expect(rustChart).toHaveAttribute('data-chart-theme', 'light');
   expect((await canvasStats(rustChart.locator('canvas'))).inkPixels).toBeGreaterThan(1_000);
+  await page.evaluate(() => {
+    document.documentElement.dataset.theme = 'dark';
+  });
+  await expect(rustChart).toHaveAttribute('data-chart-theme', 'dark');
+  await expect(rustChart.locator('canvas')).toHaveCount(1);
+  await page.evaluate(() => {
+    document.documentElement.dataset.theme = 'light';
+  });
+  await expect(rustChart).toHaveAttribute('data-chart-theme', 'light');
   await expect(rust.getByTestId('image-output')).toHaveAttribute('src', /data:image\/svg\+xml/);
-  await expect(rust.getByTestId('html-output')).toHaveAttribute('sandbox', '');
-  await expect(rust.getByTestId('html-output')).toHaveAttribute('srcdoc', /Sandboxed HTML/);
+  const htmlOutput = rust.getByTestId('html-output');
+  await expect(htmlOutput).toHaveAttribute('sandbox', '');
+  await expect(htmlOutput).toHaveAttribute('csp', /default-src 'none'/);
+  await expect(htmlOutput).toHaveAttribute('referrerpolicy', 'no-referrer');
+  await expect(htmlOutput).toHaveAttribute('srcdoc', /default-src 'none'/);
+  await expect(htmlOutput).toHaveAttribute('srcdoc', /Sandboxed HTML/);
+
+  const privacyProbeResponses: string[] = [];
+  const privacyProbeFailures: string[] = [];
+  page.on('response', (response) => {
+    if (response.url().includes('__oxiquill_html_privacy_probe__')) privacyProbeResponses.push(response.url());
+  });
+  page.on('requestfailed', (request) => {
+    if (request.url().includes('__oxiquill_html_privacy_probe__')) {
+      privacyProbeFailures.push(request.failure()?.errorText ?? 'blocked');
+    }
+  });
+  await htmlOutput.evaluate((element) => {
+    const iframe = element as HTMLIFrameElement;
+    iframe.srcdoc = (iframe.srcdoc ?? '').replace(
+      '</body>',
+      `<script>
+        document.body.dataset.scriptExecuted = 'true';
+        parent.document.documentElement.dataset.htmlArtifactParentRead = document.title;
+        fetch('/__oxiquill_html_privacy_probe__/script');
+      </script>
+      <img src="/__oxiquill_html_privacy_probe__/image" alt="">
+      <div style="background-image: url('/__oxiquill_html_privacy_probe__/style')">probe</div>
+      </body>`
+    );
+  });
+  const htmlFrame = htmlOutput.contentFrame();
+  await expect(htmlFrame.locator('body')).toBeVisible();
+  await page.waitForTimeout(500);
+  await expect(htmlFrame.locator('body')).not.toHaveAttribute('data-script-executed', 'true');
+  expect(await page.locator('html').getAttribute('data-html-artifact-parent-read')).toBeNull();
+  expect(privacyProbeResponses).toEqual([]);
+  expect(privacyProbeFailures).toHaveLength(2);
 
   const python = page.getByTestId('cell-features__rich-output__python-rich-outputs');
   await hydrateCell(python);
@@ -308,8 +357,44 @@ test('rich output examples render browser-visible artifacts', async ({ page }) =
   await expect(python.getByTestId('table-output').locator('caption')).toHaveText('Pandas table');
   await expect(python.getByTestId('value-output').filter({ hasText: '"status": "ok"' })).toBeVisible();
   await expect(python.getByTestId('html-output')).toHaveAttribute('sandbox', '');
+  await expect(python.getByTestId('html-output')).toHaveAttribute('referrerpolicy', 'no-referrer');
   await expect(python.getByTestId('html-output')).toHaveAttribute('srcdoc', /Sandboxed HTML/);
   await expect(python.getByTestId('image-output')).toHaveAttribute('src', /data:image\/svg\+xml/);
+});
+
+test('chart rendering recovers after a transient chunk load failure', async ({ browserName, page }) => {
+  test.skip(
+    browserName !== 'chromium',
+    'One real-browser recovery path is sufficient for the chunk failure regression.'
+  );
+  test.setTimeout(180_000);
+  let failedOnce = false;
+  await page.route('**/*', async (route) => {
+    const request = route.request();
+    const pathname = new URL(request.url()).pathname;
+    const referrer = request.headers()['referer'] ?? '';
+    if (
+      !failedOnce &&
+      pathname.includes('/ChartOutput.') &&
+      pathname.endsWith('.js') &&
+      referrer.includes('/InteractiveCell.')
+    ) {
+      failedOnce = true;
+      await route.abort('failed');
+      return;
+    }
+    await route.continue();
+  });
+
+  await page.goto('/features/rich-output/');
+  const rust = page.getByTestId('cell-features__rich-output__rust-rich-outputs');
+  await hydrateCell(rust);
+  await rust.getByRole('button', { name: 'Run' }).click();
+  await expect(rust.getByRole('alert')).toContainText('Chart renderer could not be loaded');
+  expect(failedOnce).toBe(true);
+
+  await rust.getByRole('button', { name: 'Retry chart rendering' }).click();
+  await expect(rust.getByTestId('doc-plot').locator('canvas')).toHaveCount(1);
 });
 
 test('theme note and Mermaid examples are available without author-side TSX imports', async ({ page }) => {

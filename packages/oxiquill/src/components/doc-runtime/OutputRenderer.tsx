@@ -18,6 +18,7 @@ type ChartRendererState =
   { status: 'loading' } | { status: 'ready'; module: ChartOutputModule } | { status: 'error'; message: string };
 
 let chartOutputModuleReady: Promise<ChartOutputModule> | undefined;
+let chartOutputLoadAttempt = 0;
 
 interface OutputRendererProps {
   idPrefix?: string;
@@ -198,6 +199,7 @@ function HtmlOutput({
 }) {
   return (
     <iframe
+      {...{ csp: htmlArtifactContentSecurityPolicy }}
       class="doc-html-output"
       data-testid="html-output"
       referrerPolicy="no-referrer"
@@ -252,9 +254,16 @@ function artifactKey(output: ValidatedArtifactResult, index: number): string {
 }
 
 function loadChartOutput(): Promise<ChartOutputModule> {
-  chartOutputModuleReady ??= import('./ChartOutput.js').catch((error: unknown) => {
+  chartOutputModuleReady ??= importChartOutput(chartOutputLoadAttempt).catch((error: unknown) => {
     chartOutputModuleReady = undefined;
+    chartOutputLoadAttempt += 1;
     throw error;
   });
   return chartOutputModuleReady;
+}
+
+function importChartOutput(attempt: number): Promise<ChartOutputModule> {
+  return attempt === 0
+    ? import('./ChartOutput.js')
+    : (import('./ChartOutput.js?oxiquill-retry') as Promise<ChartOutputModule>);
 }
