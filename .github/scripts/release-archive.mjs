@@ -2,14 +2,21 @@ import { execFileSync, spawnSync } from 'node:child_process';
 import { createHash } from 'node:crypto';
 import { appendFile, mkdir, readFile, readdir, writeFile } from 'node:fs/promises';
 import path from 'node:path';
-import { fileURLToPath, pathToFileURL } from 'node:url';
+import { pathToFileURL } from 'node:url';
 
 export const CHECKSUM_FILE = 'SHA256SUMS';
 export const MANIFEST_FILE = 'release-manifest.json';
 
-const packageRoot = fileURLToPath(new URL('../../packages/oxiquill', import.meta.url));
-
-export async function createReleaseArchive(destination, { outputFile = process.env.GITHUB_OUTPUT } = {}) {
+export async function createReleaseArchive(
+  destination,
+  {
+    outputFile = process.env.GITHUB_OUTPUT,
+    repositoryRoot = process.cwd(),
+    workflowCommit = process.env.GITHUB_WORKFLOW_SHA
+  } = {}
+) {
+  assertCommit(workflowCommit, 'Workflow commit');
+  const packageRoot = path.join(repositoryRoot, 'packages/oxiquill');
   await mkdir(destination, { recursive: true });
   const existing = await readdir(destination);
   if (existing.length > 0) {
@@ -43,8 +50,9 @@ export async function createReleaseArchive(destination, { outputFile = process.e
     commit: gitOutput(['rev-parse', 'HEAD'], packageRoot),
     name: pack.name,
     pack,
-    schemaVersion: 2,
-    version: pack.version
+    schemaVersion: 3,
+    version: pack.version,
+    workflowCommit
   };
   await writeFile(path.join(destination, MANIFEST_FILE), `${JSON.stringify(manifest, null, 2)}\n`);
   await writeFile(path.join(destination, CHECKSUM_FILE), `${archiveSha256}  ${pack.filename}\n`);
@@ -63,12 +71,23 @@ export async function createReleaseArchive(destination, { outputFile = process.e
 export async function verifyReleaseArchive(
   destination,
   expectedVersion,
-  { environment = process.env, expectedCommit, outputFile = process.env.GITHUB_OUTPUT, requireOidc = false } = {}
+  {
+    environment = process.env,
+    expectedCommit,
+    expectedWorkflowCommit = process.env.GITHUB_WORKFLOW_SHA,
+    outputFile = process.env.GITHUB_OUTPUT,
+    requireOidc = false
+  } = {}
 ) {
   if (requireOidc) assertPublishEnvironment(environment);
 
   const manifest = JSON.parse(await readFile(path.join(destination, MANIFEST_FILE), 'utf8'));
-  assertReleaseManifest(manifest, { commit: expectedCommit, name: 'oxiquill', version: expectedVersion });
+  assertReleaseManifest(manifest, {
+    commit: expectedCommit,
+    name: 'oxiquill',
+    version: expectedVersion,
+    workflowCommit: expectedWorkflowCommit
+  });
   assertPackManifest(manifest.pack, { name: 'oxiquill', version: expectedVersion });
   await assertArtifactFileSet(destination, manifest.pack.filename);
 
@@ -92,16 +111,23 @@ export async function verifyReleaseArchive(
 
 export function assertReleaseManifest(manifest, expected) {
   if (
-    manifest?.schemaVersion !== 2 ||
+    manifest?.schemaVersion !== 3 ||
     typeof manifest.archiveSha256 !== 'string' ||
     !/^[0-9a-f]{64}$/u.test(manifest.archiveSha256) ||
     typeof manifest.commit !== 'string' ||
-    !/^[0-9a-f]{40}$/u.test(manifest.commit)
+    !/^[0-9a-f]{40}$/u.test(manifest.commit) ||
+    typeof manifest.workflowCommit !== 'string' ||
+    !/^[0-9a-f]{40}$/u.test(manifest.workflowCommit)
   ) {
     throw new Error('Release manifest has an unsupported schema or invalid identity fields.');
   }
   if (!expected.commit || manifest.commit !== expected.commit) {
     throw new Error(`Release manifest commit ${manifest.commit} does not match ${String(expected.commit)}.`);
+  }
+  if (!expected.workflowCommit || manifest.workflowCommit !== expected.workflowCommit) {
+    throw new Error(
+      `Release manifest workflow commit ${manifest.workflowCommit} does not match ${String(expected.workflowCommit)}.`
+    );
   }
   if (manifest.name !== expected.name || manifest.version !== expected.version) {
     throw new Error(`Release manifest identity mismatch: expected ${expected.name}@${expected.version}.`);
@@ -176,6 +202,10 @@ function gitOutput(args, cwd) {
   return execFileSync('git', args, { cwd, encoding: 'utf8' }).trim();
 }
 
+function assertCommit(value, label) {
+  if (!/^[0-9a-f]{40}$/u.test(value)) throw new Error(`${label} must be a full Git SHA.`);
+}
+
 async function main() {
   const [command, destination, expectedVersion, ...flags] = process.argv.slice(2);
   if (command === 'create' && destination && !expectedVersion) {
@@ -185,7 +215,7 @@ async function main() {
   }
   if (command === 'verify' && destination && expectedVersion) {
     const requireOidc = flags.includes('--require-oidc');
-    const expectedCommit = gitOutput(['rev-parse', 'HEAD'], packageRoot);
+    const expectedCommit = gitOutput(['rev-parse', 'HEAD'], process.cwd());
     const { archivePath } = await verifyReleaseArchive(destination, expectedVersion, { expectedCommit, requireOidc });
     console.log(`Verified ${archivePath}.`);
     return;
