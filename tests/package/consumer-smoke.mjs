@@ -1,9 +1,26 @@
 import assert from 'node:assert/strict';
-import { spawnSync } from 'node:child_process';
+import { spawn, spawnSync } from 'node:child_process';
 import { appendFile, cp, mkdir, mkdtemp, readFile, rename, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { chromium } from '@playwright/test';
+
+const supportedPythonPackages = [
+  'contourpy',
+  'cycler',
+  'fonttools',
+  'kiwisolver',
+  'matplotlib',
+  'numpy',
+  'packaging',
+  'pandas',
+  'pillow',
+  'pyparsing',
+  'python-dateutil',
+  'pytz',
+  'six'
+];
 
 const packageManagerArgument = process.argv.indexOf('--package-manager');
 const packageManager = process.argv[packageManagerArgument + 1];
@@ -93,6 +110,7 @@ try {
   const tarballReference = path.relative(consumerRoot, tarballPath).split(path.sep).join('/');
   packageJson.dependencies.oxiquill = `file:${tarballReference}`;
   packageJson.scripts['wasm:dev'] = 'oxiquill docgen --wasm dev';
+  packageJson.scripts['test:wasm'] = 'oxiquill test-wasm';
   await writeFile(packageJsonPath, `${JSON.stringify(packageJson, null, 2)}\n`);
   await writeFile(path.join(projectRoot, 'package-api.ts'), packageApiSource);
   run(packageManager, ['install'], consumerRoot);
@@ -130,28 +148,54 @@ try {
       '',
       '```python',
       '#| id: package-python',
-      '#| packages: [numpy]',
-      'print("packed consumer")',
+      '#| run: autorun',
+      `#| packages: [${supportedPythonPackages.join(', ')}]`,
+      'import contourpy',
+      'import cycler',
+      'import fontTools',
+      'import kiwisolver',
+      'import matplotlib',
+      'import numpy',
+      'import packaging',
+      'import pandas',
+      'from PIL import Image',
+      'import pyparsing',
+      'import dateutil',
+      'import pytz',
+      'import six',
+      'print("packed python imports: ok")',
       '```',
+      ...(process.platform === 'win32'
+        ? []
+        : [
+            '',
+            '```haskell',
+            '--| id: package-haskell',
+            '--| inputs:',
+            '--|   label: { type: text, label: label, value: packed-consumer }',
+            'putStrLn (label ++ ": Haskell/WASI")',
+            '```'
+          ]),
       ''
     ].join('\n')
   );
 
   run(packageManager, ['run', 'check'], consumerRoot);
   run(packageManager, ['run', 'wasm:dev'], consumerRoot);
+  run(packageManager, ['run', 'test:wasm'], consumerRoot);
   run(packageManager, ['run', 'build'], consumerRoot);
 
   const pyodidePublicDir = path.join(projectRoot, 'static files/oxiquill assets/python runtime');
   const pyodideBuildDir = path.join(projectRoot, 'built site/oxiquill assets/python runtime');
   const lockFile = JSON.parse(await readFile(path.join(pyodidePublicDir, 'pyodide-lock.json'), 'utf8'));
-  const numpyWheel = lockFile.packages.numpy.file_name;
+  const packageWheels = supportedPythonPackages.map((packageName) => lockFile.packages[packageName].file_name);
   const requiredPyodideFiles = [
     'pyodide.mjs',
     'pyodide.asm.mjs',
     'pyodide.asm.wasm',
     'python_stdlib.zip',
     'pyodide-lock.json',
-    numpyWheel
+    ...packageWheels
   ];
 
   for (const fileName of requiredPyodideFiles) {
@@ -174,11 +218,18 @@ try {
     'packed consumer emitted an oversized client chunk'
   );
   await assertFile(path.join(projectRoot, 'static files/oxiquill assets/rust runtime/doc_rust_cells_bg.wasm'));
+  if (process.platform !== 'win32') {
+    await assertFile(path.join(projectRoot, 'static files/oxiquill assets/haskell runtime/doc_haskell_cells.wasm'));
+  }
   for (const fileName of ['doc_rust_cells.d.ts', 'doc_rust_cells_bg.wasm.d.ts', 'package.json']) {
     await assertMissing(path.join(projectRoot, 'static files/oxiquill assets/rust runtime', fileName));
     await assertMissing(path.join(projectRoot, 'built site/oxiquill assets/rust runtime', fileName));
   }
   await assertFile(path.join(projectRoot, 'state cache/generated runtime/cells.json'));
+
+  if (process.env.OXIQUILL_PACKED_BROWSER === 'true') {
+    await runPackedPythonBrowserSmoke({ consumerRoot, packedCliPath, projectRoot });
+  }
 
   run(packageManager, ['run', 'clean'], consumerRoot);
   await assertMissing(path.join(projectRoot, 'state cache'));
@@ -189,6 +240,75 @@ try {
   console.log(`Packed consumer smoke test passed with ${packageManager} in ${consumerRoot}.`);
 } finally {
   await rm(temporaryRoot, { force: true, recursive: true });
+}
+
+async function runPackedPythonBrowserSmoke({ consumerRoot, packedCliPath, projectRoot }) {
+  const port = 4_387;
+  const server = spawn(process.execPath, [packedCliPath, 'preview', '--host', '127.0.0.1', '--port', String(port)], {
+    cwd: consumerRoot,
+    env: process.env,
+    stdio: ['ignore', 'pipe', 'pipe']
+  });
+  const serverOutput = [];
+  server.stdout.on('data', (chunk) => serverOutput.push(String(chunk)));
+  server.stderr.on('data', (chunk) => serverOutput.push(String(chunk)));
+  let browser;
+
+  try {
+    await waitForHttp(`http://127.0.0.1:${port}/`, 60_000, server, serverOutput);
+    const executablePath = process.env.PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH?.trim();
+    browser = await chromium.launch({
+      headless: true,
+      ...(executablePath ? { executablePath } : {})
+    });
+    const page = await browser.newPage();
+    await page.goto(`http://127.0.0.1:${port}/`);
+    const manifest = JSON.parse(await readFile(path.join(projectRoot, 'state cache/generated runtime/cells.json')));
+    const pythonCell = manifest.find((cell) => cell.id.endsWith('__package-python'));
+    assert.deepEqual(pythonCell?.packages, supportedPythonPackages);
+    const result = await page.evaluate(
+      async ({ packageNames, source }) => {
+        const indexUrl = new URL('/oxiquill%20assets/python%20runtime/', location.href).href;
+        const response = await fetch(new URL('pyodide.mjs', indexUrl));
+        if (!response.ok) throw new Error(`Unable to load packed Pyodide module: ${response.status}.`);
+        const moduleUrl = URL.createObjectURL(new Blob([await response.text()], { type: 'text/javascript' }));
+        try {
+          const { loadPyodide } = await import(moduleUrl);
+          const pyodide = await loadPyodide({ indexURL: indexUrl });
+          await pyodide.loadPackage(packageNames);
+          return pyodide.runPython(source);
+        } finally {
+          URL.revokeObjectURL(moduleUrl);
+        }
+      },
+      { packageNames: pythonCell.packages, source: pythonCell.source }
+    );
+    assert.equal(result, null);
+  } finally {
+    await browser?.close();
+    if (!server.killed) server.kill('SIGTERM');
+    await Promise.race([
+      new Promise((resolve) => server.once('exit', resolve)),
+      new Promise((resolve) => setTimeout(resolve, 5_000))
+    ]);
+  }
+}
+
+async function waitForHttp(url, timeoutMs, server, output) {
+  const deadline = Date.now() + timeoutMs;
+  while (Date.now() < deadline) {
+    if (server.exitCode !== null) {
+      throw new Error(`Packed preview exited before startup.\n${output.join('')}`);
+    }
+    try {
+      const response = await fetch(url);
+      if (response.ok) return;
+    } catch {
+      // The preview server is still starting.
+    }
+    await new Promise((resolve) => setTimeout(resolve, 250));
+  }
+  throw new Error(`Timed out waiting for packed preview at ${url}.\n${output.join('')}`);
 }
 
 function run(command, args, cwd, capture = false, environment = process.env) {
