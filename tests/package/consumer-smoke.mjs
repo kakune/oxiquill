@@ -77,6 +77,15 @@ try {
   await writeFile(packageJsonPath, `${JSON.stringify(packageJson, null, 2)}\n`);
 
   run(packageManager, ['install'], consumerRoot);
+  const installedManifest = JSON.parse(
+    await readFile(path.join(consumerRoot, 'node_modules/oxiquill/package.json'), 'utf8')
+  );
+  for (const lifecycleHook of ['prepare', 'install', 'postinstall']) {
+    assert.ok(
+      !Object.hasOwn(installedManifest.scripts, lifecycleHook),
+      `packed manifest must not define ${lifecycleHook}`
+    );
+  }
   const packedCliPath = path.join(consumerRoot, 'node_modules/oxiquill/dist/cli/index.mjs');
   const versionResult = run(process.execPath, [packedCliPath, '--version'], consumerRoot, true);
   assert.equal(versionResult.stdout.trim(), packed.version);
