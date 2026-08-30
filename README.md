@@ -103,8 +103,8 @@ pnpm preview
 For an existing project, install Oxiquill together with the Astro and Starlight packages imported by the project:
 
 ```sh
-pnpm add oxiquill astro @astrojs/starlight
-npm install oxiquill astro @astrojs/starlight
+pnpm add oxiquill@0.2.0 astro@7.2.9 @astrojs/starlight@0.41.9
+npm install oxiquill@0.2.0 astro@7.2.9 @astrojs/starlight@0.41.9
 ```
 
 Route project scripts through the CLI:
@@ -304,10 +304,6 @@ See the [licensing guide](./examples/docs-site/content/docs/guides/licensing.mdx
 
 Contributions are welcome. Please open issues for bug reports, questions, and proposals, and send focused pull requests to `main` from topic branches for fixes or documentation improvements. Pull requests are squash-merged after the required checks pass. Contributions are accepted under the inbound dual-license terms in [CONTRIBUTING.md](./CONTRIBUTING.md).
 
-### Contributing
-
-Contributions are welcome. Please open issues for bug reports, questions, and proposals, and send focused pull requests for fixes or documentation improvements.
-
 See [CHANGELOG.md](./CHANGELOG.md) for release history, [SECURITY.md](./SECURITY.md) for private vulnerability reporting and supported versions, and [docs/RELEASING.md](./docs/RELEASING.md) for the maintainer release process.
 
 ### Troubleshooting
@@ -424,8 +420,8 @@ pnpm preview
 既存 project では、project が直接 import する Astro および Starlight とともに Oxiquill を追加します。
 
 ```sh
-pnpm add oxiquill astro @astrojs/starlight
-npm install oxiquill astro @astrojs/starlight
+pnpm add oxiquill@0.2.0 astro@7.2.9 @astrojs/starlight@0.41.9
+npm install oxiquill@0.2.0 astro@7.2.9 @astrojs/starlight@0.41.9
 ```
 
 project script は CLI 経由にします。
@@ -624,10 +620,6 @@ Oxiquill は [MIT License](./LICENSE-MIT) または [Apache License, Version 2.0
 ### コントリビューション
 
 バグ報告、質問、提案は issue で歓迎します。修正やドキュメント改善は topic branch から `main` への小さな pull request として送ってください。必須 check が成功した pull request は squash merge します。Contribution は [CONTRIBUTING.md](./CONTRIBUTING.md) の inbound dual-license 条項に基づいて受け入れます。
-
-### コントリビューション
-
-バグ報告、質問、提案は issue で歓迎します。小さな修正やドキュメント改善の pull request も歓迎します。
 
 ### トラブルシュート
 

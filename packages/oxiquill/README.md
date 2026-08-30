@@ -26,7 +26,7 @@ pnpm add oxiquill@0.2.0 astro@7.2.9 @astrojs/starlight@0.41.9
 ```
 
 ```sh
-npm install oxiquill
+npm install oxiquill@0.2.0 astro@7.2.9 @astrojs/starlight@0.41.9
 ```
 
 Route documentation scripts through the CLI:

@@ -9,6 +9,7 @@ const repositoryRoot = fileURLToPath(new URL('../../', import.meta.url));
 const packageRoot = path.join(repositoryRoot, 'packages/oxiquill');
 const packageReadme = await readFile(path.join(packageRoot, 'README.md'), 'utf8');
 const packageManifest = JSON.parse(await readFile(path.join(packageRoot, 'package.json'), 'utf8'));
+const starterManifest = JSON.parse(await readFile(path.join(repositoryRoot, 'templates/basic/package.json'), 'utf8'));
 const temporaryRoot = await mkdtemp(path.join(tmpdir(), 'oxiquill-package-'));
 
 try {
@@ -50,9 +51,11 @@ try {
     assert.ok(!actualFiles.includes(unusedOutput), `${unusedOutput} must not be published`);
   }
 
+  const supportedInstall = `oxiquill@${packageManifest.version} astro@${starterManifest.dependencies.astro} @astrojs/starlight@${starterManifest.dependencies['@astrojs/starlight']}`;
   for (const requiredText of [
     'pnpm dlx oxiquill init',
-    'npm install oxiquill',
+    `pnpm add ${supportedInstall}`,
+    `npm install ${supportedInstall}`,
     'oxiquill preview',
     'https://kakune.github.io/oxiquill/reference/package-api/',
     'https://github.com/kakune/oxiquill/security/policy',

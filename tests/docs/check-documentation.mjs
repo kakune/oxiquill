@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 import { access, readFile, readdir } from 'node:fs/promises';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { checkMarkdownStructure, headingSlug } from './markdown-structure.mjs';
 
 const repositoryRoot = fileURLToPath(new URL('../..', import.meta.url));
 const contentRoot = path.join(repositoryRoot, 'examples/docs-site/content/docs');
@@ -22,6 +23,7 @@ const documentsPackageJson = await readFile(path.join(repositoryRoot, 'packages/
 const documentsPackageJsonRoot = await readFile(path.join(repositoryRoot, 'package.json'), 'utf8');
 const documentsTemplatePackageJson = await readFile(path.join(repositoryRoot, 'templates/basic/package.json'), 'utf8');
 
+checkDocumentStructures();
 await checkLinks();
 await checkLocalizedRoutes();
 await checkSidebarRoutes();
@@ -31,8 +33,12 @@ checkPackageImports();
 checkShellCommands();
 
 console.log(
-  `Verified ${documents.size} documentation files, internal links, localized routes, contracts, and examples.`
+  `Verified ${documents.size} documentation files, structure, internal links, localized routes, contracts, and examples.`
 );
+
+function checkDocumentStructures() {
+  for (const [filePath, source] of documents) checkMarkdownStructure(relative(filePath), source);
+}
 
 async function checkLinks() {
   const linkPattern = /!?(?:\[[^\]]*\])\(([^)\s]+)(?:\s+"[^"]*")?\)/gu;
@@ -278,16 +284,6 @@ function assertFragment(targetPath, source, fragment, sourcePath = targetPath) {
     anchors.has(decodeURIComponent(fragment)),
     `${relative(sourcePath)} links to missing fragment #${fragment} in ${relative(targetPath)}.`
   );
-}
-
-function headingSlug(heading) {
-  return heading
-    .replace(/`([^`]+)`/gu, '$1')
-    .replace(/\[([^\]]+)\]\([^)]+\)/gu, '$1')
-    .toLowerCase()
-    .replace(/[^\p{Letter}\p{Number}\s-]/gu, '')
-    .trim()
-    .replace(/\s+/gu, '-');
 }
 
 async function markdownFiles(directory) {

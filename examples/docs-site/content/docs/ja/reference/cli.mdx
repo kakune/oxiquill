@@ -28,8 +28,8 @@ unknown option、option value の欠落、unknown command、余分な positional
 | `build`              | 必要な runtime を生成し、check 後に static site を作ります。                             |
 | `preview`            | 既存 production build を preview します。                                                |
 | `check`              | 必要な runtime、Astro type を同期し、Astro diagnostics を実行します。                    |
-| `docgen`             | manifest を同期し、`--wasm dev` または `--wasm build` で必要な runtime も build します。 |
-| `clean`              | resolved generated/Astro output を削除し、verified download cache は保持します。         |
+| `docgen`             | manifest を同期し、`--wasm dev \| build` で必要な runtime も build します。              |
+| `clean`              | Oxiquill 所有の generated/Astro output だけを削除し、verified download cache は保持します。 |
 | `test-rust`          | optional helper crate を test します。                                                   |
 | `test-rust-coverage` | helper crate を 85% coverage threshold 付きで test します。                              |
 | `lint-rust`          | helper crate の全 target に warning deny で Clippy を実行します。                        |
