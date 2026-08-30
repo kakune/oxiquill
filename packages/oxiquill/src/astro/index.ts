@@ -46,6 +46,7 @@ type OxiquillPathOptionName =
   | 'cacheDir'
   | 'cratesDir'
   | 'docsDir'
+  | 'downloadCacheDir'
   | 'frameworkRoot'
   | 'generatedDir'
   | 'haskellCellsDir'

@@ -26,6 +26,7 @@ describe('Oxiquill cleanup', () => {
       ])
     );
     expect(fileSystem.rm).toHaveBeenCalledTimes(3);
+    expect(fileSystem.rm).not.toHaveBeenCalledWith(paths.downloadCacheDir, expect.anything());
   });
 
   it('validates every target before deleting anything', async () => {
@@ -41,5 +42,19 @@ describe('Oxiquill cleanup', () => {
     );
     expect(fileSystem.rm).not.toHaveBeenCalled();
     await expect(cleanOxiquillWorkspace()).rejects.toThrow('requires resolved project paths');
+  });
+
+  it('rejects a download cache nested below a cleaned directory before deleting anything', async () => {
+    const root = path.resolve('/repo');
+    const paths = {
+      ...createOxiquillPaths({ workspaceRoot: root }),
+      downloadCacheDir: path.join(root, '.oxiquill/downloads')
+    };
+    const fileSystem = { rm: vi.fn(async () => undefined) };
+
+    await expect(cleanOxiquillWorkspace({ fileSystem, paths })).rejects.toThrow(
+      'paths.downloadCacheDir must resolve outside directories removed by oxiquill clean'
+    );
+    expect(fileSystem.rm).not.toHaveBeenCalled();
   });
 });

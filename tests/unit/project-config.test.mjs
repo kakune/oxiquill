@@ -32,7 +32,7 @@ describe('Oxiquill project configuration', () => {
         docsDir: path.join(root, 'content/docs'),
         cratesDir: path.join(root, 'crates'),
         cacheDir: path.join(root, '.oxiquill'),
-        downloadCacheDir: path.join(root, '.oxiquill/downloads/v1'),
+        downloadCacheDir: path.join(root, '.cache/oxiquill/downloads/v1'),
         generatedDir: path.join(root, '.oxiquill/generated'),
         outDir: path.join(root, 'dist'),
         publicDir: path.join(root, 'public'),
@@ -58,6 +58,7 @@ describe('Oxiquill project configuration', () => {
       paths: {
         cratesDir: absoluteCrates,
         docsDir: pathToFileURL(path.join(root, 'written docs')),
+        downloadCacheDir: pathToFileURL(path.join(root, 'persistent downloads')),
         generatedDir: 'runtime generated',
         licensesPublicDir: 'legal notices',
         publicAssetsDir: 'runtime assets',
@@ -68,6 +69,7 @@ describe('Oxiquill project configuration', () => {
     expect(projectConfig.paths).toMatchObject({
       cratesDir: absoluteCrates,
       docsDir: path.join(root, 'written docs'),
+      downloadCacheDir: path.join(root, 'persistent downloads'),
       generatedDir: path.join(root, 'state cache/runtime generated'),
       licensesPublicDir: path.join(root, 'site public/runtime assets/legal notices'),
       publicAssetsDir: path.join(root, 'site public/runtime assets'),
@@ -150,6 +152,12 @@ describe('Oxiquill project configuration', () => {
     );
     expect(() => resolveProject({ root, paths: { publicAssetsDir: '..' } })).toThrow(
       'paths.publicAssetsDir must resolve to a directory inside'
+    );
+    expect(() => resolveProject({ root, paths: { downloadCacheDir: '../shared-cache' } })).toThrow(
+      'paths.downloadCacheDir must resolve to a directory inside'
+    );
+    expect(() => resolveProject({ root, paths: { downloadCacheDir: '.oxiquill/downloads' } })).toThrow(
+      'paths.downloadCacheDir must resolve outside directories removed by oxiquill clean'
     );
   });
 

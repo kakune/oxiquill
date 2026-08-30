@@ -14,6 +14,7 @@ import {
   requiredPyodideFiles,
   resolvePyodideRuntimeInputs
 } from '../../packages/oxiquill/src/generator/doc-runtime-service.mjs';
+import { cleanOxiquillWorkspace } from '../../packages/oxiquill/src/generator/clean.mjs';
 
 const fixtureVersion = 'test-release';
 const temporaryDirectories = [];
@@ -75,7 +76,8 @@ describe('Pyodide assets', () => {
     const cacheDirectory = path.join(paths.downloadCacheDir, 'pyodide', fixtureVersion, runtimeInputs.lockSha256);
     expect(await readFile(path.join(cacheDirectory, 'root.whl'))).toEqual(fixture.wheels['root.whl']);
 
-    await rm(paths.pyodidePublicDir, { force: true, recursive: true });
+    await cleanOxiquillWorkspace({ paths });
+    expect(await readFile(path.join(cacheDirectory, 'root.whl'))).toEqual(fixture.wheels['root.whl']);
     await expect(
       copyPyodideAssets({
         ...options,
@@ -114,7 +116,8 @@ describe('Pyodide assets', () => {
         fetchImplementation: async () => response(Buffer.from('invalid wheel')),
         paths,
         requestedPackages: ['root'],
-        runtimeInputs
+        runtimeInputs,
+        temporaryName: () => 'mismatch'
       })
     ).rejects.toThrow('Pyodide asset');
 
@@ -126,7 +129,29 @@ describe('Pyodide assets', () => {
       'root.whl'
     );
     await expect(readFile(cachedWheel)).rejects.toMatchObject({ code: 'ENOENT' });
+    await expect(readFile(`${cachedWheel}.tmp-mismatch`)).rejects.toMatchObject({ code: 'ENOENT' });
     await expect(readFile(path.join(paths.pyodidePublicDir, 'root.whl'))).rejects.toMatchObject({ code: 'ENOENT' });
+  });
+
+  it('uses a new cache namespace when verified runtime inputs change', async () => {
+    const fixture = await createInstalledPyodide();
+    const paths = createDocRuntimePaths(fixture.workspaceRoot);
+    const runtimeInputs = await resolvePyodideRuntimeInputs({
+      requestedPackages: ['root'],
+      resolvePackageJson: fixture.resolvePackageJson
+    });
+    const fetchImplementation = vi.fn(async (url) => response(fixture.wheels[path.basename(new URL(url).pathname)]));
+
+    await copyPyodideAssets({ fetchImplementation, paths, requestedPackages: ['root'], runtimeInputs });
+    await rm(paths.pyodidePublicDir, { force: true, recursive: true });
+    await copyPyodideAssets({
+      fetchImplementation,
+      paths,
+      requestedPackages: ['root'],
+      runtimeInputs: { ...runtimeInputs, lockSha256: 'f'.repeat(64) }
+    });
+
+    expect(fetchImplementation).toHaveBeenCalledTimes(4);
   });
 
   it('bounds retries and backoff, avoids retrying permanent responses, and times out requests', async () => {
