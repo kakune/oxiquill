@@ -20,7 +20,7 @@ export default defineOxiquillConfig({
       },
       ja: {
         label: '日本語',
-        lang: 'ja'
+        lang: 'ja-JP'
       }
     },
     sidebar: [

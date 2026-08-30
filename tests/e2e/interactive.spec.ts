@@ -36,13 +36,27 @@ test('desktop sidebar toggle collapses, expands, and persists across navigation'
   await expect(persistedToggle).toHaveAttribute('aria-label', 'Expand sidebar');
   await expect(page.locator('#starlight__sidebar')).not.toBeVisible();
 
+  await persistedToggle.evaluate((element) => {
+    const toggleElement = element.closest('starlight-sidebar-toggle');
+    const parent = toggleElement?.parentElement;
+    if (toggleElement && parent) parent.append(toggleElement);
+  });
   await persistedToggle.click();
+  await expect(page.locator('html')).not.toHaveAttribute('data-sidebar-collapsed', '');
 
   await expect(page.locator('html')).not.toHaveAttribute('data-sidebar-collapsed', '');
   await expect(persistedToggle).toHaveAttribute('aria-expanded', 'true');
   await expect(persistedToggle).toHaveAttribute('aria-label', 'Collapse sidebar');
   await expect(page.locator('#starlight__sidebar')).toBeVisible();
   expect(await page.evaluate(() => sessionStorage.getItem('oxiquill-sidebar-collapsed'))).toBeNull();
+});
+
+test('sidebar labels use the primary Japanese language subtag', async ({ page }) => {
+  await page.setViewportSize({ width: 1280, height: 900 });
+  await page.goto('/ja/features/math/');
+
+  await expect(page.locator('html')).toHaveAttribute('lang', 'ja-JP');
+  await expect(page.locator('starlight-sidebar-toggle button')).toHaveAttribute('aria-label', 'サイドバーを折りたたむ');
 });
 
 test('desktop sidebar preference does not affect the mobile menu', async ({ page }) => {
