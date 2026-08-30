@@ -6,7 +6,7 @@ Oxiquill provides security fixes for the latest released minor line only. Pre-re
 
 | Version          | Supported |
 | ---------------- | --------- |
-| 0.2.x            | Yes       |
+| 0.3.x            | Yes       |
 | Earlier versions | No        |
 
 This table is updated as part of every release. If a fix cannot be safely backported within the supported line, maintainers may publish the fix in the next minor release and will explain that decision privately to affected reporters before coordinated disclosure.

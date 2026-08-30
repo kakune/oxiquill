@@ -59,14 +59,14 @@ dependencies = [
 
 [[package]]
 name = "doc-rust"
-version = "0.2.0"
+version = "0.3.0"
 dependencies = [
  "serde",
 ]
 
 [[package]]
 name = "doc-rust-cells"
-version = "0.2.0"
+version = "0.3.0"
 dependencies = [
  "console_error_panic_hook",
  "doc-rust",
@@ -79,7 +79,7 @@ dependencies = [
 
 [[package]]
 name = "doc-rust-text"
-version = "0.2.0"
+version = "0.3.0"
 
 [[package]]
 name = "find-msvc-tools"

@@ -1,6 +1,6 @@
 {
   "name": "oxiquill",
-  "version": "0.2.0",
+  "version": "0.3.0",
   "description": "Interactive Astro/Starlight notes with Rust, Python, math, Mermaid, WebAssembly, and Pyodide",
   "author": "kakune",
   "private": false,

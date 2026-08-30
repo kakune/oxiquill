@@ -114,7 +114,7 @@ Route project scripts through the CLI:
   "dependencies": {
     "@astrojs/starlight": "0.41.9",
     "astro": "7.2.9",
-    "oxiquill": "0.2.0"
+    "oxiquill": "0.3.0"
   },
   "scripts": {
     "dev": "oxiquill dev",
@@ -431,7 +431,7 @@ project script は CLI 経由にします。
   "dependencies": {
     "@astrojs/starlight": "0.41.9",
     "astro": "7.2.9",
-    "oxiquill": "0.2.0"
+    "oxiquill": "0.3.0"
   },
   "scripts": {
     "dev": "oxiquill dev",
