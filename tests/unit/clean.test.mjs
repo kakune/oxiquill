@@ -5,7 +5,7 @@ import { mkdir, mkdtemp, readFile, rm, symlink, writeFile } from 'node:fs/promis
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { createOxiquillPaths } from '../../packages/oxiquill/src/config/paths.mjs';
+import { canonicalPath, createOxiquillPaths } from '../../packages/oxiquill/src/config/paths.mjs';
 import { cleanOxiquillWorkspace } from '../../packages/oxiquill/src/generator/clean.mjs';
 import {
   CLEANUP_OWNERSHIP_MARKER,
@@ -206,7 +206,7 @@ describe('Oxiquill cleanup', () => {
 });
 
 async function temporaryDirectory() {
-  const directory = await mkdtemp(path.join(tmpdir(), 'oxiquill-clean-'));
+  const directory = canonicalPath(await mkdtemp(path.join(tmpdir(), 'oxiquill-clean-')));
   temporaryDirectories.push(directory);
   return directory;
 }
