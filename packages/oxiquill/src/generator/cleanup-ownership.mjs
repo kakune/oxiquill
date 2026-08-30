@@ -17,7 +17,7 @@ const ownershipCorrection =
   'Use a missing or empty dedicated directory so Oxiquill can establish ownership, or restore its valid ownership marker.';
 
 export async function prepareCleanupOwnership({
-  configFile,
+  configFile = undefined,
   fields = cleanupRootFields,
   fileSystem = defaultFileSystem,
   paths
@@ -61,7 +61,7 @@ export async function maintainCleanupOwnership({ fileSystem = defaultFileSystem,
 }
 
 export async function verifyCleanupOwnership({
-  configFile,
+  configFile = undefined,
   fields = cleanupRootFields,
   fileSystem = defaultFileSystem,
   paths
