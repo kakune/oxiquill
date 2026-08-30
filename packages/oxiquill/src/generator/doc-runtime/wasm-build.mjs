@@ -54,7 +54,8 @@ export async function buildRustWasm({
       '--out-dir',
       pathFromUrl(resolvedPaths.rustWasmPublicDir),
       '--out-name',
-      'doc_rust_cells'
+      'doc_rust_cells',
+      '--locked'
     ],
     { cwd: pathFromUrl(resolvedPaths.workspaceRoot) }
   );

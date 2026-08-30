@@ -81,7 +81,8 @@ describe('helper cargo runner', () => {
       'test',
       '--manifest-path',
       manifestPath,
-      '--workspace'
+      '--workspace',
+      '--locked'
     ]);
     expect(cargoArgsForHelperWorkspace(['clippy', '--all-targets', '--', '-D', 'warnings'], manifestPath)).toEqual([
       'clippy',
@@ -89,6 +90,7 @@ describe('helper cargo runner', () => {
       '--manifest-path',
       manifestPath,
       '--workspace',
+      '--locked',
       '--',
       '-D',
       'warnings'
@@ -136,7 +138,11 @@ describe('helper cargo runner', () => {
     });
 
     expect(commands).toEqual([
-      ['cargo', ['doc', '--no-deps', '--manifest-path', 'crates/Cargo.toml', '--workspace'], { cwd: repoRoot }]
+      [
+        'cargo',
+        ['doc', '--no-deps', '--manifest-path', 'crates/Cargo.toml', '--workspace', '--locked'],
+        { cwd: repoRoot }
+      ]
     ]);
   });
 

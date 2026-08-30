@@ -32,11 +32,13 @@ describe('Oxiquill project configuration', () => {
         docsDir: path.join(root, 'content/docs'),
         cratesDir: path.join(root, 'crates'),
         cacheDir: path.join(root, '.oxiquill'),
+        downloadCacheDir: path.join(root, '.oxiquill/downloads/v1'),
         generatedDir: path.join(root, '.oxiquill/generated'),
         outDir: path.join(root, 'dist'),
         publicDir: path.join(root, 'public'),
         publicAssetsDir: path.join(root, 'public/oxiquill')
-      }
+      },
+      python: { offline: false }
     });
     expect(Object.isFrozen(projectConfig)).toBe(true);
     expect(Object.isFrozen(projectConfig.paths)).toBe(true);
@@ -97,6 +99,28 @@ describe('Oxiquill project configuration', () => {
       `Conflicting project paths: cacheDir resolves to ${path.join(root, '.astro-cache')}, ` +
         `but paths.cacheDir resolves to ${path.join(root, '.runtime-cache')}.`
     );
+  });
+
+  it('normalizes Python mirror and offline settings before runtime generation', () => {
+    const root = path.resolve('/repo');
+    const projectConfig = resolveProject({
+      python: { offline: true, packageMirror: new URL('https://packages.example/pyodide') },
+      root
+    });
+
+    expect(projectConfig.python).toEqual({
+      offline: true,
+      packageMirror: 'https://packages.example/pyodide/'
+    });
+    expect(Object.isFrozen(projectConfig.python)).toBe(true);
+    expect(() => resolveProject({ python: { offline: 'yes' }, root })).toThrow('python.offline must be a boolean');
+    expect(() => resolveProject({ python: { packageMirror: 'file:///packages' }, root })).toThrow(
+      'python.packageMirror must be an absolute HTTP(S) URL'
+    );
+    expect(() => resolveProject({ python: { packageMirror: 'https://user@example.com/' }, root })).toThrow(
+      'must not contain credentials'
+    );
+    expect(() => resolveProject({ python: { unexpected: true }, root })).toThrow('Unknown python option');
   });
 
   it('canonicalizes symlinked ancestors before comparing explicit settings', async () => {
@@ -197,12 +221,12 @@ describe('Oxiquill project configuration', () => {
   });
 });
 
-function resolveProject({ astro = {}, paths = {}, root }) {
+function resolveProject({ astro = {}, paths = {}, python = {}, root }) {
   return resolveOxiquillProjectConfig({
     astroConfig: { root, ...astro },
     astroExplicitFields: ['root', ...Object.keys(astro)],
     cwd: root,
-    integrationMetadata: createOxiquillIntegrationMetadata({ paths })
+    integrationMetadata: createOxiquillIntegrationMetadata({ paths, python })
   });
 }
 

@@ -20,11 +20,13 @@ import { throwInteractiveCellDiagnostics, validateCellDependencies } from '../li
 import { defaultFileSystem, listFiles, writeIfChanged } from './doc-runtime/file-system.mjs';
 import { listHelperCrates } from './doc-runtime/helper-crate-service.mjs';
 import { normalizePath } from './doc-runtime/path-utils.mjs';
-import { copyPyodideAssets as defaultCopyPyodideAssets, requiredPyodideFiles } from './doc-runtime/pyodide-assets.mjs';
+import {
+  copyPyodideAssets as defaultCopyPyodideAssets,
+  resolvePyodideRuntimeInputs as defaultResolvePyodideRuntimeInputs
+} from './doc-runtime/pyodide-assets.mjs';
 import { syncLicenseArtifacts as defaultSyncLicenseArtifacts, syncRustBuildSupportFiles } from './license-notices.mjs';
 import { createRuntimeVersion, generateRuntimeVersionModule, summarizeCells } from './doc-runtime/runtime-summary.mjs';
 import { hashText, stableFingerprint } from './doc-runtime/hashing.mjs';
-import { vendoredPyodidePackageRoots } from './doc-runtime/constants.mjs';
 import { createRuntimePlan } from './doc-runtime/runtime-plan.mjs';
 import {
   createRuntimeOwnedOutputs,
@@ -32,6 +34,8 @@ import {
   readRuntimeOwnership
 } from './doc-runtime/runtime-ownership.mjs';
 import { createDirectoryStage, discardDirectoryStage, replaceDirectory } from './doc-runtime/atomic-output.mjs';
+import { readRuntimeInputs as defaultReadRuntimeInputs } from './doc-runtime/runtime-inputs.mjs';
+import { preflightRequiredToolchains as defaultPreflightToolchains } from './doc-runtime/toolchain-preflight.mjs';
 import {
   buildHaskellWasm as defaultBuildHaskellWasm,
   buildRustWasm as defaultBuildRustWasm
@@ -43,6 +47,11 @@ export { hashBytes, hashText, stableFingerprint } from './doc-runtime/hashing.mj
 export {
   copyPyodideAssets,
   copyVendoredPyodidePackages,
+  fetchPyodidePackage,
+  PYODIDE_DOWNLOAD_ATTEMPTS,
+  PYODIDE_REQUEST_TIMEOUT_MS,
+  requiredPyodideFiles,
+  resolvePyodideRuntimeInputs,
   resolveVendoredPyodidePackages
 } from './doc-runtime/pyodide-assets.mjs';
 export {
@@ -81,6 +90,12 @@ export {
   readRuntimeOwnership,
   validateRuntimeOwnership
 } from './doc-runtime/runtime-ownership.mjs';
+export { normalizeRepository, normalizeRuntimeInputs, readRuntimeInputs } from './doc-runtime/runtime-inputs.mjs';
+export {
+  preflightHaskellToolchain,
+  preflightRequiredToolchains,
+  preflightRustToolchain
+} from './doc-runtime/toolchain-preflight.mjs';
 
 export function createDocRuntimePaths(rootOrOptions = process.cwd()) {
   const options =
@@ -96,7 +111,9 @@ export async function createDocRuntimeContext({
   highlighter,
   paths: providedPaths,
   pathOptions,
+  pythonOptions = Object.freeze({ offline: false }),
   readManifests,
+  readRuntimeInputs = defaultReadRuntimeInputs,
   root = process.cwd()
 } = {}) {
   const paths = providedPaths ?? createDocRuntimePaths({ workspaceRoot: root, ...pathOptions });
@@ -108,7 +125,9 @@ export async function createDocRuntimeContext({
         themes: Object.values(sourceThemes)
       })),
     paths,
-    helperCrates: await listHelperCrates({ fileSystem, paths, readManifests })
+    pythonOptions,
+    helperCrates: await listHelperCrates({ fileSystem, paths, readManifests }),
+    runtimeInputs: await readRuntimeInputs({ fileSystem, paths })
   };
 }
 
@@ -121,6 +140,10 @@ export async function syncDocRuntime({
   helperCrates,
   mode = undefined,
   paths,
+  preflightToolchains = defaultPreflightToolchains,
+  pythonOptions = Object.freeze({ offline: false }),
+  resolvePyodideInputs = defaultResolvePyodideRuntimeInputs,
+  runtimeInputs,
   syncLicenses = defaultSyncLicenseArtifacts,
   syncPyodide = defaultCopyPyodideAssets,
   syncRustSupport = syncRustBuildSupportFiles,
@@ -135,12 +158,25 @@ export async function syncDocRuntime({
   const haskellCells = cells.filter((cell) => cell.language === 'haskell');
   const pythonCells = cells.filter((cell) => cell.language === 'python');
   const rustCells = cells.filter((cell) => cell.language === 'rust');
+  const requestedPythonPackages = Array.from(new Set(pythonCells.flatMap((cell) => cell.packages))).sort();
   const summary = summarizeCells(cells);
+  const toolchains = await preflightToolchains({
+    fileSystem,
+    haskellCellCount: haskellCells.length,
+    mode,
+    runtimeInputs,
+    rustCellCount: rustCells.length,
+    tolerateHaskellFailure: tolerateHaskellBuildFailure
+  });
+  const pyodideRuntimeInputs =
+    pythonCells.length > 0
+      ? await resolvePyodideInputs({ fileSystem, requestedPackages: requestedPythonPackages })
+      : undefined;
   const generated = {
     cellsJson: generateCellsJson(cells),
     cellsModule: generateCellsModule(cells),
     haskellMain: generateHaskellMain(haskellCells),
-    rustCargo: generateRustCargoToml(rustCells, helperCrates),
+    rustCargo: generateRustCargoToml(rustCells, helperCrates, runtimeInputs),
     rustLib: generateRustLib(rustCells)
   };
   const desired = await createDesiredRuntime({
@@ -148,7 +184,10 @@ export async function syncDocRuntime({
     generated,
     paths,
     pythonCellCount: pythonCells.length,
-    summary
+    pyodideRuntimeInputs,
+    runtimeInputs,
+    summary,
+    toolchains
   });
   const state = await readRuntimeOwnership({ fileSystem, paths });
   const { outputComplete, outputPresent } = runtimeOutputState({ fileSystem, paths, state });
@@ -181,6 +220,9 @@ export async function syncDocRuntime({
       generated,
       paths,
       plan,
+      pyodideRuntimeInputs,
+      pythonOptions,
+      requestedPythonPackages,
       stagedPaths,
       stages,
       syncPyodide,
@@ -236,24 +278,46 @@ export async function syncDocRuntime({
   }
 }
 
-async function createDesiredRuntime({ fileSystem, generated, paths, pythonCellCount, summary }) {
+async function createDesiredRuntime({
+  fileSystem,
+  generated,
+  paths,
+  pythonCellCount,
+  pyodideRuntimeInputs,
+  runtimeInputs,
+  summary,
+  toolchains
+}) {
   const helperFingerprint =
     summary.rustCellCount > 0 ? await fingerprintHelperSources({ fileSystem, paths }) : stableFingerprint([]);
-  const rustSourceFingerprint = hashText(`${generated.rustCargo}\0${generated.rustLib}`);
+  const rustSourceFingerprint = hashText(
+    stableFingerprint({
+      cargo: generated.rustCargo,
+      lib: generated.rustLib,
+      lockSha256: runtimeInputs.rustLockSha256
+    })
+  );
   const haskellSourceFingerprint = hashText(generated.haskellMain);
-  const pythonAssetFingerprint =
-    pythonCellCount > 0 ? await fingerprintPyodideRecipe({ fileSystem, paths }) : stableFingerprint([]);
+  const pythonAssetFingerprint = pythonCellCount > 0 ? pyodideRuntimeInputs.fingerprint : stableFingerprint([]);
 
   return Object.freeze({
     manifestFingerprint: summary.manifestFingerprint,
     rust: Object.freeze({
-      buildFingerprint: stableFingerprint({ helpers: helperFingerprint, source: rustSourceFingerprint }),
+      buildFingerprint: stableFingerprint({
+        helpers: helperFingerprint,
+        source: rustSourceFingerprint,
+        toolchain: toolchains.rust ?? runtimeInputs.rust
+      }),
       cellCount: summary.rustCellCount,
       sourceFingerprint: rustSourceFingerprint
     }),
     python: Object.freeze({ assetFingerprint: pythonAssetFingerprint, cellCount: pythonCellCount }),
     haskell: Object.freeze({
-      buildFingerprint: haskellSourceFingerprint,
+      buildFingerprint: stableFingerprint({
+        cells: summary.haskellFingerprint,
+        source: haskellSourceFingerprint,
+        toolchain: toolchains.haskell ?? runtimeInputs.haskell
+      }),
       cellCount: summary.haskellCellCount,
       sourceFingerprint: haskellSourceFingerprint
     })
@@ -296,6 +360,9 @@ async function stageLanguageOutputs({
   generated,
   paths,
   plan,
+  pyodideRuntimeInputs,
+  pythonOptions,
+  requestedPythonPackages,
   stagedPaths,
   stages,
   syncPyodide,
@@ -314,7 +381,13 @@ async function stageLanguageOutputs({
   }
   if (plan.languages.python.public === 'copy') {
     await addDirectoryStage('pyodidePublicDir', paths, stagedPaths, stages, { fileSystem });
-    await syncPyodide({ fileSystem, paths: stagedPaths });
+    await syncPyodide({
+      fileSystem,
+      paths: stagedPaths,
+      pythonOptions,
+      requestedPackages: requestedPythonPackages,
+      runtimeInputs: pyodideRuntimeInputs
+    });
   }
   if (plan.languages.haskell.source === 'write' || plan.languages.haskell.public === 'build') {
     const stagePath = await addDirectoryStage('haskellCellsDir', paths, stagedPaths, stages, { fileSystem });
@@ -479,21 +552,6 @@ function recordedFilesExist(files, directory, fileSystem) {
         fileSystem.existsSync(pathInUrl(directory, fileName))
     )
   );
-}
-
-async function fingerprintPyodideRecipe({ fileSystem, paths }) {
-  const packageJsonPath = pathInUrl(paths.frameworkRoot, 'package.json');
-  const packageJson = JSON.parse(await fileSystem.readFile(packageJsonPath, 'utf8'));
-  const pyodideVersion = packageJson.dependencies?.pyodide;
-  if (typeof pyodideVersion !== 'string' || pyodideVersion.trim() === '') {
-    throw new Error(`Oxiquill package metadata does not declare Pyodide: ${packageJsonPath}.`);
-  }
-
-  return stableFingerprint({
-    core: requiredPyodideFiles,
-    roots: vendoredPyodidePackageRoots,
-    version: pyodideVersion
-  });
 }
 
 async function fingerprintHelperSources({ fileSystem, paths }) {

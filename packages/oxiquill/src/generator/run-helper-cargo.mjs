@@ -80,7 +80,7 @@ export async function helperWorkspaceState({ fileSystem = defaultFileSystem, pat
 
 export function cargoArgsForHelperWorkspace(argv, manifestPath) {
   const separatorIndex = argv.indexOf('--');
-  const workspaceArgs = ['--manifest-path', manifestPath, '--workspace'];
+  const workspaceArgs = ['--manifest-path', manifestPath, '--workspace', '--locked'];
   if (separatorIndex === -1) return [...argv, ...workspaceArgs];
 
   return [...argv.slice(0, separatorIndex), ...workspaceArgs, ...argv.slice(separatorIndex)];
