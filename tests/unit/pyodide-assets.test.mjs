@@ -303,6 +303,30 @@ describe('Pyodide assets', () => {
     await expectNoTemporaryCacheFiles(paths, runtimeInputs);
   });
 
+  it('does not start work when the operation is already aborted', async () => {
+    const fixture = await createInstalledPyodide();
+    const paths = createDocRuntimePaths(fixture.workspaceRoot);
+    let runtimeInputs = await resolvePyodideRuntimeInputs({
+      requestedPackages: ['dependency'],
+      resolvePackageJson: fixture.resolvePackageJson
+    });
+    runtimeInputs = { ...runtimeInputs, coreAssets: [] };
+    const controller = new AbortController();
+    controller.abort('cancelled');
+    const fetchImplementation = vi.fn();
+
+    await expect(
+      copyPyodideAssets({
+        fetchImplementation,
+        paths,
+        requestedPackages: ['dependency'],
+        runtimeInputs,
+        signal: controller.signal
+      })
+    ).rejects.toThrow('operation aborted');
+    expect(fetchImplementation).not.toHaveBeenCalled();
+  });
+
   it('publishes one verified cache entry when concurrent writers target the same asset', async () => {
     const fixture = await createInstalledPyodide();
     const paths = createDocRuntimePaths(fixture.workspaceRoot);
@@ -488,6 +512,26 @@ describe('Pyodide assets', () => {
       })
     ).rejects.toThrow('after 1 attempt(s): 404 not found');
     expect(permanentFetch).toHaveBeenCalledOnce();
+
+    await expect(
+      fetchPyodidePackage('legacy-response.whl', {
+        fetchImplementation: async () => ({
+          arrayBuffer: async () => Buffer.from('legacy response'),
+          ok: true
+        }),
+        packageBaseUrl: 'https://packages.example/'
+      })
+    ).resolves.toEqual(Buffer.from('legacy response'));
+
+    await expect(
+      fetchPyodidePackage('mixed-chunks.whl', {
+        fetchImplementation: async () => ({
+          body: ReadableStream.from(['mixed ', Uint8Array.from(Buffer.from('chunks')).buffer]),
+          ok: true
+        }),
+        packageBaseUrl: 'https://packages.example/'
+      })
+    ).resolves.toEqual(Buffer.from('mixed chunks'));
 
     const hangingFetch = vi.fn(
       async (_url, { signal }) =>
