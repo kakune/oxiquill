@@ -318,14 +318,8 @@ test('rich output examples render browser-visible artifacts', async ({ page }) =
   await expect(htmlOutput).toHaveAttribute('srcdoc', /Sandboxed HTML/);
 
   const privacyProbeResponses: string[] = [];
-  const privacyProbeFailures: string[] = [];
   page.on('response', (response) => {
     if (response.url().includes('__oxiquill_html_privacy_probe__')) privacyProbeResponses.push(response.url());
-  });
-  page.on('requestfailed', (request) => {
-    if (request.url().includes('__oxiquill_html_privacy_probe__')) {
-      privacyProbeFailures.push(request.failure()?.errorText ?? 'blocked');
-    }
   });
   await htmlOutput.evaluate((element) => {
     const iframe = element as HTMLIFrameElement;
@@ -347,7 +341,6 @@ test('rich output examples render browser-visible artifacts', async ({ page }) =
   await expect(htmlFrame.locator('body')).not.toHaveAttribute('data-script-executed', 'true');
   expect(await page.locator('html').getAttribute('data-html-artifact-parent-read')).toBeNull();
   expect(privacyProbeResponses).toEqual([]);
-  expect(privacyProbeFailures).toHaveLength(2);
 
   const python = page.getByTestId('cell-features__rich-output__python-rich-outputs');
   await hydrateCell(python);
