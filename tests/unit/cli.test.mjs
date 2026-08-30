@@ -1,5 +1,6 @@
 // @vitest-environment node
 
+import { spawnSync } from 'node:child_process';
 import { mkdtemp, rm, symlink } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
@@ -16,7 +17,9 @@ const cliMocks = vi.hoisted(() => ({
   markRuntimeReady: vi.fn(),
   runHelperCargo: vi.fn(),
   syncDocRuntime: vi.fn(),
-  syncLicenseArtifacts: vi.fn()
+  syncLicenseArtifacts: vi.fn(),
+  testGeneratedHaskellCells: vi.fn(),
+  watchDocRuntime: vi.fn()
 }));
 
 vi.mock('../../packages/oxiquill/src/generator/doc-runtime-service.mjs', () => ({
@@ -33,8 +36,14 @@ vi.mock('../../packages/oxiquill/src/generator/clean.mjs', () => ({
 vi.mock('../../packages/oxiquill/src/generator/run-helper-cargo.mjs', () => ({
   runHelperCargo: cliMocks.runHelperCargo
 }));
+vi.mock('../../packages/oxiquill/src/generator/doc-runtime/haskell-runtime-test.mjs', () => ({
+  testGeneratedHaskellCells: cliMocks.testGeneratedHaskellCells
+}));
 vi.mock('../../packages/oxiquill/src/config/project-config.mjs', () => ({
   loadOxiquillProjectConfig: cliMocks.loadProjectConfig
+}));
+vi.mock('../../packages/oxiquill/src/generator/watch-doc-runtime.mjs', () => ({
+  watchDocRuntime: cliMocks.watchDocRuntime
 }));
 
 const cliPath = fileURLToPath(new URL('../../packages/oxiquill/src/cli/index.mjs', import.meta.url));
@@ -48,7 +57,8 @@ const actualProjectConfig = Object.freeze({
 const repoRoot = path.resolve('/repo');
 const { canLoadNativePackage, frameworkEnv, isCliEntrypoint, nodeExecutableCandidates, runCli, selectFrameworkNode } =
   await import('../../packages/oxiquill/src/cli/commands.mjs');
-const { parseConfigOption } = await import('../../packages/oxiquill/src/cli/config-option.mjs');
+const { debugRequested, formatCliError, formatCliHelp, parseCliArguments } =
+  await import('../../packages/oxiquill/src/cli/arguments.mjs');
 const testRoot = path.parse(process.cwd()).root;
 
 beforeEach(() => {
@@ -63,6 +73,8 @@ beforeEach(() => {
     rustCellCount: 1
   });
   cliMocks.buildHaskellWasm.mockResolvedValue({ ok: true });
+  cliMocks.testGeneratedHaskellCells.mockResolvedValue({ cellCount: 1 });
+  cliMocks.watchDocRuntime.mockResolvedValue({ close: vi.fn(async () => undefined) });
 });
 
 afterEach(() => {
@@ -70,17 +82,164 @@ afterEach(() => {
 });
 
 describe('oxiquill CLI', () => {
-  it('parses one config option without forwarding it to command-specific arguments', () => {
-    expect(parseConfigOption(['--host', 'localhost', '--config', 'custom config.mts'])).toEqual({
+  it('parses global and command options without forwarding Oxiquill options', () => {
+    expect(parseCliArguments(['--debug', 'preview', '--host', 'localhost', '--config', 'custom config.mts'])).toEqual({
+      action: 'run',
       commandArgs: ['--host', 'localhost'],
-      configFile: 'custom config.mts'
+      commandName: 'preview',
+      configFile: 'custom config.mts',
+      positionals: [],
+      values: {
+        config: 'custom config.mts',
+        debug: true,
+        host: 'localhost'
+      }
     });
-    expect(parseConfigOption(['--config=custom.mjs'])).toEqual({
-      commandArgs: [],
-      configFile: 'custom.mjs'
+    expect(parseCliArguments(['preview', '--host', '--open'])).toEqual(
+      expect.objectContaining({
+        commandArgs: ['--host', '--open'],
+        values: expect.objectContaining({ 'host-default': true, 'open-default': true })
+      })
+    );
+    expect(() => parseCliArguments(['preview', '--config=a', '--config', 'b'])).toThrow(
+      '--config may only be specified once'
+    );
+  });
+
+  it('forwards explicit optional Astro option values and rejects empty assignments', () => {
+    expect(parseCliArguments(['preview', '--host=127.0.0.1', '--open=/docs'])).toEqual(
+      expect.objectContaining({
+        commandArgs: ['--host=127.0.0.1', '--open=/docs'],
+        values: expect.objectContaining({ host: '127.0.0.1', open: '/docs' })
+      })
+    );
+    expect(() => parseCliArguments(['preview', '--host='])).toThrow(
+      expect.objectContaining({
+        message: '--host requires a non-empty value after =.',
+        usage: expect.stringContaining('Usage: oxiquill preview')
+      })
+    );
+  });
+
+  it('validates and forwards command options after the argument separator', () => {
+    expect(parseCliArguments(['dev', '--', '--host', '0.0.0.0', '--port', '4321'])).toEqual(
+      expect.objectContaining({
+        commandArgs: ['--host', '0.0.0.0', '--port', '4321'],
+        values: expect.objectContaining({ host: '0.0.0.0', port: '4321' })
+      })
+    );
+    expect(() => parseCliArguments(['dev', '--', '--debug'])).toThrow('Unknown option');
+    expect(() => parseCliArguments(['build', '--', 'extra'])).toThrow('does not accept positional Astro arguments');
+    expect(() => parseCliArguments(['clean', '--', '--force'])).toThrow(
+      'separator is only supported by Astro forwarding commands'
+    );
+  });
+
+  it('rejects unknown, missing, invalid, and extra command arguments with command usage', () => {
+    for (const args of [
+      ['preview', '--unknown'],
+      ['preview', '--port'],
+      ['check', '--minimumSeverity', 'notice'],
+      ['docgen', '--wasm', 'release'],
+      ['build', 'extra']
+    ]) {
+      expect(() => parseCliArguments(args)).toThrow(
+        expect.objectContaining({ usage: expect.stringContaining('Usage:') })
+      );
+    }
+  });
+
+  it('renders complete global and command-specific help', () => {
+    const commands = [
+      'init',
+      'dev',
+      'dev:runtime',
+      'dev:astro',
+      'preview',
+      'build',
+      'check',
+      'docgen',
+      'clean',
+      'test-rust',
+      'test-rust-coverage',
+      'lint-rust',
+      'doc-rust',
+      'test-wasm'
+    ];
+    const globalHelp = formatCliHelp();
+
+    commands.forEach((command) => {
+      expect(globalHelp).toContain(command);
+      expect(formatCliHelp(command)).toContain(`Usage: oxiquill ${command}`);
+      expect(parseCliArguments(['help', command])).toEqual({ action: 'help', commandName: command });
+      expect(parseCliArguments([command, '--help'])).toEqual({ action: 'help', commandName: command });
     });
-    expect(() => parseConfigOption(['--config'])).toThrow('--config must be followed by a path');
-    expect(() => parseConfigOption(['--config=a', '--config', 'b'])).toThrow('--config may only be specified once');
+  });
+
+  it('rejects unknown and extra help topics with useful usage', () => {
+    expect(() => parseCliArguments(['help', 'unknown'])).toThrow(
+      expect.objectContaining({
+        message: 'Unknown oxiquill command "unknown".',
+        usage: expect.stringContaining('Usage: oxiquill <command>')
+      })
+    );
+    expect(() => parseCliArguments(['help', 'build', 'preview'])).toThrow(
+      expect.objectContaining({
+        message: 'The help command accepts at most one command name.',
+        usage: expect.stringContaining('Usage: oxiquill help')
+      })
+    );
+  });
+
+  it('prints the installed package version without loading project configuration', async () => {
+    const log = vi.fn();
+
+    await runCli(['--version'], { loadPackageVersion: async () => '9.8.7', log });
+
+    expect(log).toHaveBeenCalledWith('9.8.7');
+    expect(cliMocks.loadProjectConfig).not.toHaveBeenCalled();
+  });
+
+  it('initializes a target without loading project configuration', async () => {
+    const initialize = vi.fn(async () => undefined);
+    const log = vi.fn();
+
+    await runCli(['init', 'My Docs'], { cwd: '/invocation', initialize, log });
+
+    expect(initialize).toHaveBeenCalledWith({ cwd: '/invocation', directory: 'My Docs', log });
+    expect(cliMocks.loadProjectConfig).not.toHaveBeenCalled();
+    expect(() => parseCliArguments(['init', 'first', 'second'])).toThrow(
+      'init received unexpected positional arguments: "second"'
+    );
+    expect(() => parseCliArguments(['init', '--config', 'astro.config.mjs'])).toThrow('Unknown option');
+  });
+
+  it('shows concise expected errors unless debug output is requested', () => {
+    const concise = spawnSync(process.execPath, [cliPath, 'build', 'extra'], { encoding: 'utf8' });
+    const debug = spawnSync(process.execPath, [cliPath, '--debug', 'build', 'extra'], { encoding: 'utf8' });
+
+    expect(concise.status).toBe(1);
+    expect(concise.stderr).toContain('Error: build received unexpected positional arguments');
+    expect(concise.stderr).not.toContain('at parseCliArguments');
+    expect(debug.status).toBe(1);
+    expect(debug.stderr).toContain('CliUsageError: build received unexpected positional arguments');
+    expect(debug.stderr).toContain('at parseCliArguments');
+    expect(formatCliError(new Error('plain failure'))).toBe('Error: plain failure');
+  });
+
+  it('keeps forwarded debug flags scoped to Astro and renders nested causes only on request', () => {
+    const failure = new Error('project initialization failed', {
+      cause: new Error('starter read failed', { cause: 'permission denied' })
+    });
+    const detailedFailure = formatCliError(failure, { debug: true });
+
+    expect(debugRequested(['preview', '--', '--debug'])).toBe(false);
+    expect(debugRequested(['--debug', 'preview', '--', '--host', 'localhost'])).toBe(true);
+    expect(formatCliError(failure)).toBe('Error: project initialization failed');
+    expect(detailedFailure).toContain('Caused by: Error: starter read failed');
+    expect(detailedFailure).toContain('Caused by: permission denied');
+    expect(formatCliError('non-error failure')).toBe('Error: non-error failure');
+    expect(formatCliError('non-error failure', { debug: true })).toBe('non-error failure');
   });
 
   it('loads a selected config once and forwards the resolved Astro arguments', async () => {
@@ -113,6 +272,25 @@ describe('oxiquill CLI', () => {
       ]),
       expect.objectContaining({ cwd: actualRepoRoot })
     );
+  });
+
+  it('forwards documented development server arguments unchanged', async () => {
+    const runCommand = vi.fn(async () => undefined);
+    const nodePath = fakeNodeExecutable(path.join(testRoot, 'node', 'bin'));
+
+    await runCli('dev', ['--host', '0.0.0.0', '--port', '4321'], {
+      cwd: actualRepoRoot,
+      loadProjectConfig: async () => actualProjectConfig,
+      runCommand,
+      selectNode: () => nodePath
+    });
+
+    expect(runCommand).toHaveBeenCalledWith(
+      nodePath,
+      expect.arrayContaining(['dev', '--host', '0.0.0.0', '--port', '4321']),
+      expect.objectContaining({ cwd: actualRepoRoot, successfulSignals: ['SIGTERM'] })
+    );
+    expect(cliMocks.watchDocRuntime).toHaveBeenCalledWith({ projectConfig: actualProjectConfig, skipInitial: true });
   });
 
   it('can be imported without running the command dispatcher', async () => {
@@ -290,7 +468,7 @@ describe('oxiquill CLI', () => {
 
   it('rejects invalid Wasm generation modes before creating a runtime', async () => {
     await expect(runCli('docgen', ['--wasm', 'release'], { cwd: repoRoot })).rejects.toThrow(
-      '--wasm must be followed by "dev" or "build".'
+      '--wasm must be one of: dev, build.'
     );
     expect(cliMocks.createDocRuntimeContext).not.toHaveBeenCalled();
   });
@@ -303,22 +481,28 @@ describe('oxiquill CLI', () => {
 
     expect(runCommand).toHaveBeenCalledWith(
       'wasm-pack',
-      ['test', '--node', path.join(repoRoot, '.oxiquill', 'rust-cells')],
+      ['test', '--node', path.join(repoRoot, '.oxiquill', 'rust-cells'), '--locked'],
       { cwd: repoRoot }
     );
     expect(cliMocks.syncDocRuntime).toHaveBeenCalledWith(expect.objectContaining({ mode: 'dev' }));
+    expect(cliMocks.testGeneratedHaskellCells).toHaveBeenCalledWith({
+      expectedFingerprint: 'haskell-fingerprint',
+      paths: expect.objectContaining({ workspaceRoot: repoRoot })
+    });
     expect(log).toHaveBeenCalled();
   });
 
   it('skips wasm-pack tests when the manifest contains no Rust cells', async () => {
-    cliMocks.syncDocRuntime.mockResolvedValue({ cellCount: 0, rustCellCount: 0 });
+    cliMocks.syncDocRuntime.mockResolvedValue({ cellCount: 0, haskellCellCount: 0, rustCellCount: 0 });
     const log = vi.spyOn(console, 'log').mockImplementation(() => {});
     const runCommand = vi.fn(async () => undefined);
 
     await runCli('test-wasm', [], { cwd: repoRoot, runCommand });
 
     expect(runCommand).not.toHaveBeenCalledWith('wasm-pack', expect.anything(), expect.anything());
+    expect(cliMocks.testGeneratedHaskellCells).not.toHaveBeenCalled();
     expect(log).toHaveBeenCalledWith('[runtime] no Rust cells; skipping wasm-pack test');
+    expect(log).toHaveBeenCalledWith('[runtime] no Haskell cells; skipping Haskell/WASI test');
   });
 
   it('reports missing CLI entrypoints and unusable Node overrides', () => {

@@ -143,7 +143,8 @@ export function resolveOxiquillProjectConfig({
     astroConfigArgs,
     configFile: resolvedConfigFile,
     cwd: invocationCwd,
-    paths
+    paths,
+    python: integrationMetadata.python
   });
 }
 
@@ -197,6 +198,7 @@ function validateOwnedPaths(paths) {
   assertPathWithin(paths.workspaceRoot, paths.cacheDir, 'cacheDir');
   assertPathWithin(paths.workspaceRoot, paths.outDir, 'outDir');
   assertPathWithin(paths.cacheDir, paths.generatedDir, 'paths.generatedDir');
+  assertPathWithin(paths.cacheDir, paths.downloadCacheDir, 'paths.downloadCacheDir');
   assertPathWithin(paths.cacheDir, paths.haskellCellsDir, 'paths.haskellCellsDir');
   assertPathWithin(paths.cacheDir, paths.rustCellsDir, 'paths.rustCellsDir');
   assertPathWithin(paths.publicDir, paths.publicAssetsDir, 'paths.publicAssetsDir');

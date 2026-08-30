@@ -2,15 +2,15 @@
 export { isCliEntrypoint, runCli } from './commands.mjs';
 
 import { isCliEntrypoint, runCli } from './commands.mjs';
+import { debugRequested, formatCliError } from './arguments.mjs';
 
 if (isCliEntrypoint(process.argv[1], import.meta.url)) {
-  const command = process.argv[2] ?? 'help';
-  const args = process.argv.slice(3);
+  const args = process.argv.slice(2);
 
   try {
-    await runCli(command, args);
+    await runCli(args);
   } catch (error) {
-    console.error(error);
+    console.error(formatCliError(error, { debug: debugRequested(args) }));
     process.exitCode = 1;
   }
 }

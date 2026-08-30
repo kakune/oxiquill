@@ -1,6 +1,6 @@
 import chokidar from 'chokidar';
 import { pathToFileURL } from 'node:url';
-import { parseConfigOption } from '../cli/config-option.mjs';
+import { parseArgs } from 'node:util';
 import { pathFromUrl } from '../config/paths.mjs';
 import { loadOxiquillProjectConfig } from '../config/project-config.mjs';
 import { createDocRuntimeContext, syncDocRuntime } from './doc-runtime-service.mjs';
@@ -23,16 +23,21 @@ const defaultServices = {
 
 export async function main(argv = process.argv.slice(2), serviceOverrides = {}) {
   const services = { ...defaultServices, ...serviceOverrides };
-  const { commandArgs, configFile } = parseConfigOption(argv);
-  const unexpectedArgs = commandArgs.filter((argument) => argument !== '--skip-initial');
-  if (unexpectedArgs.length > 0) {
-    throw new Error(`Unknown runtime watcher option: ${unexpectedArgs[0]}.`);
-  }
+  const { values } = parseArgs({
+    allowPositionals: false,
+    args: argv,
+    options: {
+      config: { type: 'string' },
+      'skip-initial': { type: 'boolean' }
+    },
+    strict: true
+  });
+  const configFile = values.config;
   const projectConfig = await services.loadProjectConfig({ cwd: process.cwd(), configFile });
   return watchDocRuntime({
     projectConfig,
     serviceOverrides: services,
-    skipInitial: commandArgs.includes('--skip-initial')
+    skipInitial: values['skip-initial'] === true
   });
 }
 
