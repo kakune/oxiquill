@@ -8,6 +8,7 @@ import { loadOxiquillProjectConfig } from '../config/project-config.mjs';
 import { createDocRuntimeContext, syncDocRuntime } from '../generator/doc-runtime-service.mjs';
 import { cleanOxiquillWorkspace } from '../generator/clean.mjs';
 import { runHelperCargo } from '../generator/run-helper-cargo.mjs';
+import { testGeneratedHaskellCells } from '../generator/doc-runtime/haskell-runtime-test.mjs';
 import { parseConfigOption } from './config-option.mjs';
 
 const projectCommands = new Set([
@@ -108,15 +109,27 @@ export async function runCli(
     case 'doc-rust':
       await runHelperCargo({ argv: ['doc', '--no-deps'], paths });
       return;
-    case 'test-wasm':
-      if ((await generateRuntime({ projectConfig, wasmMode: 'dev' })).rustCellCount === 0) {
+    case 'test-wasm': {
+      const summary = await generateRuntime({ projectConfig, wasmMode: 'dev' });
+      if (summary.rustCellCount === 0) {
         console.log('[runtime] no Rust cells; skipping wasm-pack test');
-        return;
+      } else {
+        await runCommand('wasm-pack', ['test', '--node', pathFromUrl(paths.rustCellsDir), '--locked'], {
+          cwd: pathFromUrl(paths.workspaceRoot)
+        });
       }
-      await runCommand('wasm-pack', ['test', '--node', pathFromUrl(paths.rustCellsDir)], {
-        cwd: pathFromUrl(paths.workspaceRoot)
-      });
+
+      if (summary.haskellCellCount === 0) {
+        console.log('[runtime] no Haskell cells; skipping Haskell/WASI test');
+      } else {
+        const result = await testGeneratedHaskellCells({
+          expectedFingerprint: summary.haskellFingerprint,
+          paths
+        });
+        console.log(`[runtime] tested ${result.cellCount} generated Haskell cell(s)`);
+      }
       return;
+    }
   }
 }
 

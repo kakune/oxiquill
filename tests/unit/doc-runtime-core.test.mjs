@@ -559,7 +559,7 @@ describe('doc runtime core', () => {
     expect(generateRustLib([chartCell])).toContain('fn bar_chart_spec');
     expect(generateRustLib([chartCell])).toContain('fn histogram_chart_spec');
     expect(generateRustLib([chartCell])).toContain('fn heatmap_chart_spec');
-    expect(generateRustLib([rustCell])).toContain('first_generated_cell_runs');
+    expect(generateRustLib([rustCell])).toContain('generated_plot_cell_runs');
 
     const haskellCell = {
       id: 'haskell-cell',

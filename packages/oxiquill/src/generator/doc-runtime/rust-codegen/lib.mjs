@@ -1,7 +1,7 @@
 import { generateRustReaders } from '../rust-readers.mjs';
 import { rustFunctionName } from '../rust-identifiers.mjs';
 import { generatedBanner } from './banners.mjs';
-import { generateRustFunction, generateRustTest } from './functions.mjs';
+import { generateRustFunction, generateRustTests } from './functions.mjs';
 import { generateRustOutputTypes } from './output-types.mjs';
 
 export function generateRustLib(rustCells) {
@@ -29,7 +29,7 @@ ${matchArms}
 }`;
 
   const functions = rustCells.map(generateRustFunction).join('\n\n');
-  const firstCellTest = rustCells[0] ? generateRustTest(rustCells[0]) : '';
+  const tests = generateRustTests(rustCells);
   const readers = generateRustReaders(rustCells);
   const outputTypes = generateRustOutputTypes(rustCells);
   const serdeImport = rustCells.length === 0 ? '' : 'use serde::Serialize;\n';
@@ -52,5 +52,5 @@ fn to_js_error(error: impl std::fmt::Display) -> JsValue {
 ${readers}
 ${functions}
 
-${firstCellTest}`;
+${tests}`;
 }
