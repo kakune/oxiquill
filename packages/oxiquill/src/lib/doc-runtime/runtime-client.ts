@@ -241,7 +241,10 @@ function isRuntimeWorkerResponse(value: unknown): value is RuntimeWorkerResponse
 }
 
 function toError(value: unknown): Error {
-  return new Error(boundedErrorMessage(value));
+  const message = boundedErrorMessage(value);
+  return value instanceof Error && value.name === 'AbortError'
+    ? new ExecutionCancellationError(message)
+    : new Error(message);
 }
 
 function inputArgument(input: CellManifest['inputs'][number], inputs: InputValues): string {
