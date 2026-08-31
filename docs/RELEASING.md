@@ -8,7 +8,7 @@ This runbook covers the one-time npm package bootstrap and every later stable re
 - The `npm release readiness` milestone has no open `release-blocker` issue.
 - Required CI is green on the latest `main`.
 - The release version is stable `MAJOR.MINOR.PATCH`; prereleases require a separately reviewed runbook change.
-- Node.js 24+, npm 11.15.0+, the repository's pinned pnpm/Rust tools, `wasm-pack`, `cargo-llvm-cov`, `wasm32-wasi-ghc`, Playwright, and GitHub CLI are available.
+- Node.js 24.15.0+, npm 11.15.0+, the repository's pinned pnpm/Rust tools, `wasm-pack`, `cargo-llvm-cov`, `wasm32-wasi-ghc`, Playwright, and GitHub CLI are available.
 - The protected publish environment and npm Trusted Publisher are configured for normal releases.
 
 The GitHub environment is named `npm-publish`. It has `kakune` as a required reviewer, permits only tags matching `v*`, allows self-review for the sole maintainer, and contains no npm credential. The npm Trusted Publisher must match repository `kakune/oxiquill`, workflow filename `npm-publish.yml`, environment `npm-publish`, and only the `npm publish` action.

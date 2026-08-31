@@ -115,10 +115,13 @@
             PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD = "1";
           } ''
             node_version="$(node --version)"
-            case "$node_version" in
-              v24.*) ;;
-              *) echo "expected Node.js 24, got $node_version" >&2; exit 1 ;;
-            esac
+            node --eval '
+              const [major, minor] = process.versions.node.split(".").map(Number);
+              if (major !== 24 || minor < 15) {
+                console.error("expected Node.js 24.15.0 or newer in the 24.x series, got " + process.version);
+                process.exit(1);
+              }
+            '
 
             pnpm_version="$(pnpm --version)"
             if [ "$pnpm_version" != "11.2.2" ]; then
