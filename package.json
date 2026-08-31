@@ -4,6 +4,9 @@
   "private": true,
   "type": "module",
   "packageManager": "pnpm@11.2.2",
+  "engines": {
+    "node": ">=24.15.0"
+  },
   "license": "MIT OR Apache-2.0",
   "scripts": {
     "build:package": "pnpm --dir packages/oxiquill build",

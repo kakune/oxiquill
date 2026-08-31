@@ -12,7 +12,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ### Changed
 
-- Nothing yet.
+- Contributor and CI tooling now requires Node.js 24.15.0 or newer; the published package and generated starter continue to support Node.js 24.0.0 or newer.
 
 ### Deprecated
 

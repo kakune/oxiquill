@@ -27,7 +27,7 @@ English is the root documentation language. Japanese pages are published under `
 ### Requirements
 
 - Nix with flakes enabled, or equivalent manual tools
-- Node.js 24 and `pnpm` 11.2.2
+- Node.js 24.15.0 or newer and `pnpm` 11.2.2
 - Rust toolchain `1.95.0` with `wasm32-unknown-unknown`
 - `wasm-pack`
 - `cargo-llvm-cov`
@@ -45,11 +45,11 @@ The Nix shell sets `OXIQUILL_NODE`, `OXIQUILL_HASKELL_GHC`, `LLVM_COV`, `LLVM_PR
 Without Nix, install equivalent tools manually. Haskell cells use GHC's `wasm32-wasi` backend. When using `ghc-wasm-meta`, keep a normal Node.js runtime first in `PATH` and point Oxiquill at the Haskell compiler directly:
 
 ```sh
-nvm alias default 24.2.0
+nvm alias default 24.15.0
 export OXIQUILL_HASKELL_GHC="$HOME/.ghc-wasm/wasm32-wasi-ghc/bin/wasm32-wasi-ghc"
 ```
 
-Avoid putting ghc-wasm's static Node ahead of the normal Node used by Vite, Vitest, and Astro. If your shell sources `~/.ghc-wasm/env`, run `nvm use 24.2.0` afterward or set `OXIQUILL_NODE` to a normal Node.js binary for Oxiquill's Astro/Vite subprocesses.
+Avoid putting ghc-wasm's static Node ahead of the normal Node used by Vite, Vitest, and Astro. If your shell sources `~/.ghc-wasm/env`, run `nvm use 24.15.0` afterward or set `OXIQUILL_NODE` to a normal Node.js binary for Oxiquill's Astro/Vite subprocesses.
 
 ### Setup
 
@@ -344,7 +344,7 @@ Oxiquill は、MDX で書いた技術ノートを静的サイトとして公開�
 ### 前提
 
 - Nix flakes、または同等の手動 tool
-- Node.js 24 と `pnpm` 11.2.2
+- Node.js 24.15.0 以上と `pnpm` 11.2.2
 - `wasm32-unknown-unknown` を含む Rust toolchain `1.95.0`
 - `wasm-pack`
 - `cargo-llvm-cov`
@@ -362,11 +362,11 @@ Nix shell は `OXIQUILL_NODE`、`OXIQUILL_HASKELL_GHC`、`LLVM_COV`、`LLVM_PROF
 Nix を使わない場合は、同等の tool を手動で導入してください。Haskell セルは GHC の `wasm32-wasi` backend を使います。`ghc-wasm-meta` を使う場合は、通常の Node.js runtime を `PATH` の先頭に置いたまま、Oxiquill には Haskell compiler の path を直接指定します。
 
 ```sh
-nvm alias default 24.2.0
+nvm alias default 24.15.0
 export OXIQUILL_HASKELL_GHC="$HOME/.ghc-wasm/wasm32-wasi-ghc/bin/wasm32-wasi-ghc"
 ```
 
-Vite、Vitest、Astro が使う通常の Node より前に ghc-wasm の static Node を置かないでください。shell で `~/.ghc-wasm/env` を source する場合は、その後に `nvm use 24.2.0` を実行するか、Oxiquill の Astro/Vite subprocess 用に `OXIQUILL_NODE` で通常の Node.js binary を指定してください。
+Vite、Vitest、Astro が使う通常の Node より前に ghc-wasm の static Node を置かないでください。shell で `~/.ghc-wasm/env` を source する場合は、その後に `nvm use 24.15.0` を実行するか、Oxiquill の Astro/Vite subprocess 用に `OXIQUILL_NODE` で通常の Node.js binary を指定してください。
 
 ### セットアップ
 
