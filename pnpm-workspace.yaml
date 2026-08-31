@@ -8,4 +8,3 @@ allowBuilds:
 
 overrides:
   '@astrojs/markdown-satteri': 0.3.6
-  'jsdom>undici': 7.29.0
