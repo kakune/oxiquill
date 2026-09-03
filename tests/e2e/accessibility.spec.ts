@@ -72,13 +72,15 @@ test.describe('runtime accessibility', () => {
         path: '/features/rich-output/',
         cellId: 'cell-features__rich-output__rust-rich-outputs',
         runLabel: 'Run',
-        tableLabel: 'Data table'
+        tableLabel: 'Data table',
+        heatmapDescription: /X categories: 2\. Y categories: 2\. Heat value range: 1–4\./u
       },
       {
         path: '/ja/features/rich-output/',
         cellId: 'cell-ja__features__rich-output__rust-rich-outputs',
         runLabel: '実行',
-        tableLabel: 'データ表'
+        tableLabel: 'データ表',
+        heatmapDescription: /X カテゴリ数: 2。Y カテゴリ数: 2。ヒート値の範囲: 1–4。/u
       }
     ]) {
       await page.goto(example.path);
@@ -86,8 +88,13 @@ test.describe('runtime accessibility', () => {
       await hydrateCell(cell);
       await cell.getByRole('button', { name: example.runLabel }).press('Enter');
       await expect(cell.getByRole('table', { name: example.tableLabel }).first()).toBeVisible();
-      await expect(cell.getByRole('figure').first()).toHaveAccessibleDescription(/Data items|データ数/u);
+      const figures = cell.locator('figure.doc-chart-output');
+      await expect(figures).toHaveCount(2);
+      await expect(figures.first()).toHaveAccessibleDescription(/Data items|データ数/u);
+      await expect(figures.nth(1)).toHaveAccessibleDescription(example.heatmapDescription);
+      await expect(cell.getByTestId('doc-plot')).toHaveCount(2);
       await expect(cell.getByTestId('doc-plot').first()).toHaveAttribute('aria-hidden', 'true');
+      await expect(cell.getByTestId('doc-plot').nth(1)).toHaveAttribute('aria-hidden', 'true');
       await expectNoWcag22AAViolations(page, browserName);
     }
   });

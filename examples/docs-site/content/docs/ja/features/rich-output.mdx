@@ -33,18 +33,19 @@ table column は `key`、`label`、optional `type` を持ちます。type は `s
 
 ## Chart schema
 
-すべての chart spec は optional `title`、`xLabel`、`yLabel`、`xType`、`yType`、`legend`、`tooltip`、`dataZoom` を受け取ります。axis type は `value`、`category`、`time`、`log` です。未指定 axis は `value` が default ですが、bar/histogram 固有の category axis と、対応する categories array を持つ heatmap axis は `category` になります。
+すべての chart spec は optional `title`、`xLabel`、`yLabel`、`xType`、`yType`、`legend`、`tooltip`、`dataZoom` を受け取ります。axis type は `value`、`category`、`time`、`log` です。未指定 axis は `value` が default ですが、bar/histogram 固有の axis は category です。heatmap は常に X/Y 両方が category axis であり、`xType` と `yType` は省略するか `category` にできますが、`value`、`time`、`log` は reject されます。
 
 - `value` coordinate は finite number、`log` coordinate は 0 より大きい finite number です。
 - `time` coordinate は finite epoch millisecond、または `YYYY-MM-DDTHH:mm:ss[.sss]Z` / `YYYY-MM-DDTHH:mm:ss[.sss]±HH:mm` 形式の ISO-8601 string です。calendar field と明示的な time zone も valid である必要があります。
-- `category` coordinate は string または finite number です。heatmap が `xCategories` / `yCategories` を持つ場合は、listed string または範囲内の zero-based integer index に限定されます。categories array を宣言した axis は category になり、矛盾する axis type は reject されます。
+- `category` coordinate は string または finite number です。heatmap axis に明示的な `xCategories` / `yCategories` array がある場合、coordinate は完全一致する listed string、または範囲内の safe な zero-based integer index に限定されます。index はその位置の category name に解決され、数値らしい新しい category name には変換されません。
+- heatmap axis に明示的な categories array がない場合、finite number と string は `String(coordinate)` で正規化され、category は初出順に推論されます。`1` と `"1"` のように同じ label に正規化される値は一つの category を共有します。片方の axis だけ categories を宣言した場合も、X と Y は独立して正規化されます。
 
 - `line`、`scatter`、`area`: optional `name` と `[x, y]` point を持つ `series[]`。
 - `bar`: string `categories[]` と同じ length の numeric-or-null `values[]` series。
 - `histogram`: `lower < upper` かつ count が non-negative の finite `[lower, upper, count]` tuple の `bins[]`。
-- `heatmap`: optional `xCategories`/`yCategories` と finite `[x, y, value]` cell。
+- `heatmap`: optional string `xCategories`/`yCategories` array と、二つの category axis 上の finite `[x, y, value]` cell。
 
-empty chart と equal point domain は valid です。heatmap は X、Y、heat value の範囲を別々に示し、color scale には実際の heat value を使います。empty dataset だけは `0–1` を fallback にします。chart は textual title/caption と bounded accessible summary または equivalent table を提供します。equivalent がある場合、implementation canvas は accessibility API から隠されます。
+empty chart と equal point domain は valid です。heatmap は X/Y の category 数と heat value の範囲を示し、color scale には実際の heat value を使います。empty dataset だけは `0–1` を fallback にします。chart は textual title/caption と bounded accessible summary または equivalent table を提供します。equivalent がある場合、implementation canvas は accessibility API から隠されます。
 
 chart は現在の Starlight light/dark theme に合わせた contrast-aware color を使い、`html[data-theme]` の変更時に ECharts instance を作り直します。一時的な renderer load failure の後には retry action を表示します。
 
@@ -131,11 +132,13 @@ let columns = vec![
     serde_json::json!({"key": "label", "label": "Label", "type": "string"}),
     serde_json::json!({"key": "score", "label": "Score", "type": "integer"}),
 ];
+let heatmap = [[0, 0, 1], [1, 0, 3], [0, 1, 2], [1, 1, 4]];
 
 emit_json!(&serde_json::json!({"status": "ok", "rows": rows.len()}));
 emit_records_table!(&rows);
 emit_table_with_columns!(&columns, &rows);
 emit_bar_chart!(&["alpha", "beta", "gamma"], &[3, 5, 4]);
+emit_heatmap!(&heatmap);
 emit_svg!(
     r##"<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 160 48"><rect width="160" height="48" fill="#ecfeff"/><circle cx="32" cy="24" r="14" fill="#0f766e"/><rect x="64" y="12" width="72" height="24" rx="4" fill="#2563eb"/></svg>"##,
     "Simple generated SVG"

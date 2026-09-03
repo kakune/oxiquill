@@ -33,18 +33,19 @@ Table columns contain `key`, `label`, and optional `type`: `string`, `number`, `
 
 ## Chart Schema
 
-All chart specs accept optional `title`, `xLabel`, `yLabel`, `xType`, `yType`, `legend`, `tooltip`, and `dataZoom`. Axis types are `value`, `category`, `time`, and `log`. Unspecified axes default to `value`, except the category axes intrinsic to bar/histogram charts and heatmap axes with a corresponding categories array.
+All chart specs accept optional `title`, `xLabel`, `yLabel`, `xType`, `yType`, `legend`, `tooltip`, and `dataZoom`. Axis types are `value`, `category`, `time`, and `log`. Unspecified axes default to `value`, except the category axes intrinsic to bar/histogram charts. A heatmap always has category axes on both dimensions: its `xType` and `yType` may be omitted or set to `category`, while `value`, `time`, and `log` are rejected.
 
 - `value` coordinates are finite numbers, and `log` coordinates are finite numbers greater than zero.
 - `time` coordinates are finite epoch milliseconds or ISO-8601 strings in `YYYY-MM-DDTHH:mm:ss[.sss]Z` or `YYYY-MM-DDTHH:mm:ss[.sss]±HH:mm` form. Calendar fields and the explicit time zone must be valid.
-- `category` coordinates are strings or finite numbers. When a heatmap supplies `xCategories` or `yCategories`, a coordinate must be a listed string or an in-range zero-based integer index. A declared categories array makes that axis categorical; a conflicting axis type is rejected.
+- `category` coordinates are strings or finite numbers. For a heatmap axis with an explicit `xCategories` or `yCategories` array, each coordinate must be an exact listed string or a safe, in-range zero-based integer index. An index resolves to the category name at that position; it is never converted into a new numeric-looking category name.
+- For a heatmap axis without an explicit categories array, finite numbers and strings are normalized with `String(coordinate)`. Categories are inferred in first-appearance order, so values with the same normalized label, such as `1` and `"1"`, share one category. X and Y are normalized independently when only one axis declares categories.
 
 - `line`, `scatter`, and `area`: `series[]`, each with optional `name` and `[x, y]` points.
 - `bar`: string `categories[]` plus series of numeric-or-null `values[]` with matching length.
 - `histogram`: `bins[]` as finite `[lower, upper, count]` tuples, where `lower < upper` and count is non-negative.
-- `heatmap`: optional `xCategories`/`yCategories` and finite `[x, y, value]` cells.
+- `heatmap`: optional string `xCategories`/`yCategories` arrays and finite `[x, y, value]` cells on two category axes.
 
-Empty charts and equal point domains are valid. Heatmaps report X, Y, and heat-value ranges separately; their color scale uses the actual heat values, with a `0–1` fallback only for an empty dataset. Charts expose a textual title/caption and bounded accessible summary or equivalent table. The implementation canvas is hidden from accessibility APIs when that equivalent is present.
+Empty charts and equal point domains are valid. Heatmaps report X- and Y-category counts plus the heat-value range; their color scale uses the actual heat values, with a `0–1` fallback only for an empty dataset. Charts expose a textual title/caption and bounded accessible summary or equivalent table. The implementation canvas is hidden from accessibility APIs when that equivalent is present.
 
 Charts use contrast-aware colors for the current Starlight light/dark theme, recreate their ECharts instance when `html[data-theme]` changes, and expose a retry action after a transient renderer load failure.
 
@@ -131,11 +132,13 @@ let columns = vec![
     serde_json::json!({"key": "label", "label": "Label", "type": "string"}),
     serde_json::json!({"key": "score", "label": "Score", "type": "integer"}),
 ];
+let heatmap = [[0, 0, 1], [1, 0, 3], [0, 1, 2], [1, 1, 4]];
 
 emit_json!(&serde_json::json!({"status": "ok", "rows": rows.len()}));
 emit_records_table!(&rows);
 emit_table_with_columns!(&columns, &rows);
 emit_bar_chart!(&["alpha", "beta", "gamma"], &[3, 5, 4]);
+emit_heatmap!(&heatmap);
 emit_svg!(
     r##"<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 160 48"><rect width="160" height="48" fill="#ecfeff"/><circle cx="32" cy="24" r="14" fill="#0f766e"/><rect x="64" y="12" width="72" height="24" rx="4" fill="#2563eb"/></svg>"##,
     "Simple generated SVG"
