@@ -1,5 +1,6 @@
 import type {
   ArtifactStream,
+  BaseChartSpec,
   ChartAxisType,
   ChartSpec,
   HtmlArtifact,
@@ -436,8 +437,24 @@ function validateChartSpec(value: unknown): ChartSpec {
   const base = validateBaseChartSpec(record);
 
   switch (kind) {
-    case 'line':
-    case 'scatter':
+    case 'line': {
+      const xType = base.xType ?? 'value';
+      const yType = base.yType ?? 'value';
+      return {
+        ...base,
+        kind,
+        series: validateXySeries(requiredOwnValue(record, 'series', `${kind} chart`), xType, yType)
+      };
+    }
+    case 'scatter': {
+      const xType = base.xType ?? 'value';
+      const yType = base.yType ?? 'value';
+      return {
+        ...base,
+        kind,
+        series: validateXySeries(requiredOwnValue(record, 'series', `${kind} chart`), xType, yType)
+      };
+    }
     case 'area': {
       const xType = base.xType ?? 'value';
       const yType = base.yType ?? 'value';
@@ -504,25 +521,32 @@ function validateChartSpec(value: unknown): ChartSpec {
       return { ...base, kind, bins };
     }
     case 'heatmap': {
+      const { xType: declaredXType, yType: declaredYType, ...heatmapBase } = base;
       const xCategories = optionalStringArray(record, 'xCategories', 'Heatmap chart');
       const yCategories = optionalStringArray(record, 'yCategories', 'Heatmap chart');
-      if (xCategories) requireUniqueCategories(xCategories, 'Heatmap chart xCategories');
-      if (yCategories) requireUniqueCategories(yCategories, 'Heatmap chart yCategories');
-      const xType = heatmapAxisType(base.xType, xCategories, 'x');
-      const yType = heatmapAxisType(base.yType, yCategories, 'y');
+      const xCategoryNames = xCategories
+        ? requireUniqueCategories(xCategories, 'Heatmap chart xCategories')
+        : undefined;
+      const yCategoryNames = yCategories
+        ? requireUniqueCategories(yCategories, 'Heatmap chart yCategories')
+        : undefined;
+      requireEffectiveAxis(declaredXType, 'category', 'Heatmap chart x axis');
+      requireEffectiveAxis(declaredYType, 'category', 'Heatmap chart y axis');
       const rawData = plainArray(requiredOwnValue(record, 'data', 'Heatmap chart'), 'Heatmap chart data');
       if (rawData.length > outputArtifactLimits.chartDataItems) throw chartLimitError(rawData.length);
       const data = rawData.map((cell, cellIndex) => {
         const tuple = fixedTuple(cell, 3, `Heatmap chart cell ${cellIndex + 1}`);
         return [
-          chartCoordinate(tuple[0], xType, `Heatmap chart cell ${cellIndex + 1} x coordinate`, xCategories),
-          chartCoordinate(tuple[1], yType, `Heatmap chart cell ${cellIndex + 1} y coordinate`, yCategories),
+          heatmapCoordinate(tuple[0], `Heatmap chart cell ${cellIndex + 1} x coordinate`, xCategories, xCategoryNames),
+          heatmapCoordinate(tuple[1], `Heatmap chart cell ${cellIndex + 1} y coordinate`, yCategories, yCategoryNames),
           finiteNumber(tuple[2], `Heatmap chart cell ${cellIndex + 1} value`)
         ] as const;
       });
       return {
-        ...base,
+        ...heatmapBase,
         kind,
+        ...(declaredXType == null ? {} : { xType: 'category' as const }),
+        ...(declaredYType == null ? {} : { yType: 'category' as const }),
         ...(xCategories == null ? {} : { xCategories }),
         ...(yCategories == null ? {} : { yCategories }),
         data
@@ -533,7 +557,7 @@ function validateChartSpec(value: unknown): ChartSpec {
   }
 }
 
-function validateBaseChartSpec(record: Record<string, unknown>): Omit<ChartSpec, 'kind'> {
+function validateBaseChartSpec(record: Record<string, unknown>): BaseChartSpec {
   const title = optionalString(record, 'title', 'Chart spec');
   const xLabel = optionalString(record, 'xLabel', 'Chart spec');
   const yLabel = optionalString(record, 'yLabel', 'Chart spec');
@@ -997,12 +1021,7 @@ function finiteNumber(value: unknown, context: string): number {
   return value;
 }
 
-function chartCoordinate(
-  value: unknown,
-  axisType: ChartAxisType,
-  context: string,
-  categories?: readonly string[]
-): number | string {
+function chartCoordinate(value: unknown, axisType: ChartAxisType, context: string): number | string {
   switch (axisType) {
     case 'value':
     case 'log':
@@ -1017,12 +1036,31 @@ function chartCoordinate(
       if (typeof value !== 'string' && (typeof value !== 'number' || !Number.isFinite(value))) {
         throw new ArtifactValidationError(`${context} must be a string or finite numeric category coordinate.`);
       }
-      if (categories && !isCategoryMember(value, categories)) {
-        throw new ArtifactValidationError(`${context} is not present in the declared categories.`);
-      }
       return value;
     }
   }
+}
+
+function heatmapCoordinate(
+  value: unknown,
+  context: string,
+  categories?: readonly string[],
+  categoryNames?: ReadonlySet<string>
+): number | string {
+  if (typeof value === 'string') {
+    if (categoryNames && !categoryNames.has(value)) {
+      throw new ArtifactValidationError(`${context} is not present in the declared categories.`);
+    }
+    return value;
+  }
+
+  if (typeof value !== 'number' || !Number.isFinite(value)) {
+    throw new ArtifactValidationError(`${context} must be a string or finite numeric category coordinate.`);
+  }
+  if (categories && (!Number.isSafeInteger(value) || value < 0 || value >= categories.length)) {
+    throw new ArtifactValidationError(`${context} must be a safe integer index into the declared categories.`);
+  }
+  return value;
 }
 
 function numericCoordinate(value: unknown, axisType: 'value' | 'log' | 'time', context: string): number {
@@ -1031,16 +1069,6 @@ function numericCoordinate(value: unknown, axisType: 'value' | 'log' | 'time', c
     throw new ArtifactValidationError(`${context} must be strictly positive for a log axis.`);
   }
   return number;
-}
-
-function heatmapAxisType(
-  declaredType: ChartAxisType | undefined,
-  categories: readonly string[] | undefined,
-  axis: 'x' | 'y'
-): ChartAxisType {
-  if (!categories) return declaredType ?? 'value';
-  requireEffectiveAxis(declaredType, 'category', `Heatmap chart ${axis} axis`);
-  return 'category';
 }
 
 function requireEffectiveAxis(
@@ -1060,15 +1088,12 @@ function numericAxisType(declaredType: ChartAxisType | undefined, context: strin
   return declaredType ?? 'value';
 }
 
-function requireUniqueCategories(categories: readonly string[], context: string): void {
-  if (new Set(categories).size !== categories.length) {
+function requireUniqueCategories(categories: readonly string[], context: string): ReadonlySet<string> {
+  const categoryNames = new Set(categories);
+  if (categoryNames.size !== categories.length) {
     throw new ArtifactValidationError(`${context} must not contain duplicate values.`);
   }
-}
-
-function isCategoryMember(value: string | number, categories: readonly string[]): boolean {
-  if (typeof value === 'string') return categories.includes(value);
-  return Number.isSafeInteger(value) && value >= 0 && value < categories.length;
+  return categoryNames;
 }
 
 function isSupportedIsoDateTime(value: string): boolean {

@@ -155,6 +155,8 @@ export interface AreaChartSpec extends BaseChartSpec {
 
 export interface HeatmapChartSpec extends BaseChartSpec {
   kind: 'heatmap';
+  xType?: 'category';
+  yType?: 'category';
   xCategories?: readonly string[];
   yCategories?: readonly string[];
   data: readonly (readonly [number | string, number | string, number])[];
