@@ -9,7 +9,9 @@ export type ChartSummaryDetails = {
   seriesCount: number;
   seriesNames: string;
   valueRange?: string;
+  xCategoryCount?: number;
   xRange?: string;
+  yCategoryCount?: number;
   yRange?: string;
 };
 
@@ -127,8 +129,17 @@ const runtimeLabels = {
     chartLoadError: (detail) => `Chart renderer could not be loaded: ${detail}`,
     chartLoading: 'Loading chart renderer...',
     chartRetry: 'Retry chart rendering',
-    chartSummary: ({ dataCount, seriesCount, seriesNames, valueRange, xRange, yRange }) =>
-      `Series: ${seriesCount}${seriesNames ? ` (${seriesNames})` : ''}. Data items: ${dataCount}.${xRange ? ` X range: ${xRange}.` : ''}${yRange ? ` Y range: ${yRange}.` : ''}${valueRange ? ` Heat value range: ${valueRange}.` : ''}`,
+    chartSummary: ({
+      dataCount,
+      seriesCount,
+      seriesNames,
+      valueRange,
+      xCategoryCount,
+      xRange,
+      yCategoryCount,
+      yRange
+    }) =>
+      `Series: ${seriesCount}${seriesNames ? ` (${seriesNames})` : ''}. Data items: ${dataCount}.${xCategoryCount == null ? '' : ` X categories: ${xCategoryCount}.`}${yCategoryCount == null ? '' : ` Y categories: ${yCategoryCount}.`}${xRange ? ` X range: ${xRange}.` : ''}${yRange ? ` Y range: ${yRange}.` : ''}${valueRange ? ` Heat value range: ${valueRange}.` : ''}`,
     chartTitle: (kind) => chartTitles.en[kind],
     clipboardUnavailable: 'Clipboard access is unavailable.',
     copyCsv: 'Copy visible rows as CSV',
@@ -184,8 +195,17 @@ const runtimeLabels = {
     chartLoadError: (detail) => `グラフ表示を読み込めませんでした: ${detail}`,
     chartLoading: 'グラフ表示を読み込んでいます…',
     chartRetry: 'グラフ表示を再試行',
-    chartSummary: ({ dataCount, seriesCount, seriesNames, valueRange, xRange, yRange }) =>
-      `系列数: ${seriesCount}${seriesNames ? `（${seriesNames}）` : ''}。データ数: ${dataCount}。${xRange ? `X の範囲: ${xRange}。` : ''}${yRange ? `Y の範囲: ${yRange}。` : ''}${valueRange ? `ヒート値の範囲: ${valueRange}。` : ''}`,
+    chartSummary: ({
+      dataCount,
+      seriesCount,
+      seriesNames,
+      valueRange,
+      xCategoryCount,
+      xRange,
+      yCategoryCount,
+      yRange
+    }) =>
+      `系列数: ${seriesCount}${seriesNames ? `（${seriesNames}）` : ''}。データ数: ${dataCount}。${xCategoryCount == null ? '' : `X カテゴリ数: ${xCategoryCount}。`}${yCategoryCount == null ? '' : `Y カテゴリ数: ${yCategoryCount}。`}${xRange ? `X の範囲: ${xRange}。` : ''}${yRange ? `Y の範囲: ${yRange}。` : ''}${valueRange ? `ヒート値の範囲: ${valueRange}。` : ''}`,
     chartTitle: (kind) => chartTitles.ja[kind],
     clipboardUnavailable: 'クリップボードを利用できません。',
     copyCsv: '表示中の行を CSV としてコピー',
