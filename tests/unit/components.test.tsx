@@ -1084,15 +1084,103 @@ describe('ChartOutput options', () => {
           [1, 0, -2]
         ]
       })
-    ).toMatchObject({ visualMap: { min: -8, max: -2 } });
+    ).toMatchObject({
+      xAxis: { type: 'category', data: ['0', '1'] },
+      yAxis: { type: 'category', data: ['0'] },
+      visualMap: { min: -8, max: -2 },
+      series: [
+        {
+          type: 'heatmap',
+          data: [
+            ['0', '0', -8],
+            ['1', '0', -2]
+          ]
+        }
+      ]
+    });
     expect(chartSpecToEChartsOptions({ kind: 'heatmap', data: [] })).toMatchObject({
-      visualMap: { min: 0, max: 1 }
+      xAxis: { type: 'category', data: [] },
+      yAxis: { type: 'category', data: [] },
+      visualMap: { min: 0, max: 1 },
+      series: [{ type: 'heatmap', data: [] }]
     });
     expect(chartSpecToEChartsOptions({ kind: 'line', series: [] }, 'dark')).toMatchObject({
       textStyle: { color: '#f3f4f6' },
       xAxis: { axisLabel: { color: '#d1d5db' } },
       yAxis: { axisLabel: { color: '#d1d5db' } }
     });
+  });
+
+  it('normalizes explicit and inferred heatmap axes independently', () => {
+    expect(
+      chartSpecToEChartsOptions({
+        kind: 'heatmap',
+        data: [
+          [2, 'row-b', 3],
+          [1, 'row-a', 4],
+          ['2', 'row-b', 5]
+        ]
+      })
+    ).toMatchObject({
+      xAxis: { type: 'category', data: ['2', '1'] },
+      yAxis: { type: 'category', data: ['row-b', 'row-a'] },
+      visualMap: { min: 3, max: 5 },
+      series: [
+        {
+          type: 'heatmap',
+          data: [
+            ['2', 'row-b', 3],
+            ['1', 'row-a', 4],
+            ['2', 'row-b', 5]
+          ]
+        }
+      ]
+    });
+
+    expect(
+      chartSpecToEChartsOptions({
+        kind: 'heatmap',
+        xCategories: ['first', 'second'],
+        yCategories: ['top', 'bottom'],
+        data: [[1, 0, 7]]
+      })
+    ).toMatchObject({
+      xAxis: { data: ['first', 'second'] },
+      yAxis: { data: ['top', 'bottom'] },
+      series: [{ type: 'heatmap', data: [['second', 'top', 7]] }]
+    });
+
+    expect(
+      chartSpecToEChartsOptions({
+        kind: 'heatmap',
+        xCategories: ['first', 'second'],
+        data: [
+          [1, 2, 4],
+          ['first', '2', 5]
+        ]
+      })
+    ).toMatchObject({
+      xAxis: { data: ['first', 'second'] },
+      yAxis: { data: ['2'] },
+      series: [
+        {
+          type: 'heatmap',
+          data: [
+            ['second', '2', 4],
+            ['first', '2', 5]
+          ]
+        }
+      ]
+    });
+
+    expect(() =>
+      chartSpecToEChartsOptions({
+        kind: 'heatmap',
+        xCategories: ['only'],
+        yCategories: ['row'],
+        data: [[1, 0, 1]]
+      })
+    ).toThrow('Validated heatmap category index is out of range');
   });
 
   it('summarizes chart series and ranges in the selected locale', () => {
@@ -1130,7 +1218,7 @@ describe('ChartOutput options', () => {
         },
         labelsForLanguage('en')
       )
-    ).toBe('Series: 1. Data items: 2. X range: -2–4. Y range: 10–20. Heat value range: -8–6.');
+    ).toBe('Series: 1. Data items: 2. X categories: 2. Y categories: 2. Heat value range: -8–6.');
     expect(
       chartDataSummary(
         {
@@ -1141,11 +1229,19 @@ describe('ChartOutput options', () => {
         },
         labelsForLanguage('ja')
       )
-    ).toBe('系列数: 1。データ数: 1。ヒート値の範囲: 3。');
+    ).toBe('系列数: 1。データ数: 1。X カテゴリ数: 1。Y カテゴリ数: 1。ヒート値の範囲: 3。');
 
     const exactLimit = Array.from({ length: 100_000 }, (_, index) => [index, -index] as const);
     expect(chartDataSummary({ kind: 'line', series: [{ points: exactLimit }] }, labelsForLanguage('en'))).toContain(
       'Data items: 100000. X range: 0–99,999. Y range: -99,999–0.'
+    );
+
+    const exactHeatmapLimit = Array.from({ length: 100_000 }, (_, index) => [index, index % 2, index % 3] as const);
+    expect(chartDataSummary({ kind: 'heatmap', data: exactHeatmapLimit }, labelsForLanguage('en'))).toBe(
+      'Series: 1. Data items: 100000. X categories: 100000. Y categories: 2. Heat value range: 0–2.'
+    );
+    expect(chartDataSummary({ kind: 'heatmap', data: exactHeatmapLimit }, labelsForLanguage('ja'))).toBe(
+      '系列数: 1。データ数: 100000。X カテゴリ数: 100000。Y カテゴリ数: 2。ヒート値の範囲: 0–2。'
     );
   });
 

@@ -151,6 +151,61 @@ describe('doc runtime core', () => {
     expect(cells[0].sourceHtml).toContain('data-lang="rust"');
   });
 
+  it('parses MDX math before discovering interactive cells', () => {
+    const source = [
+      'Inline math: $\\text{hello world}$.',
+      '',
+      'Complex inline math: $\\operatorname{arg max}_{x \\in X} f(x)$.',
+      '',
+      '$$',
+      '\\begin{aligned}',
+      'f(x) &= {x + 1} \\\\',
+      'g(x) &= \\frac{x}{2}',
+      '\\end{aligned}',
+      '$$',
+      '',
+      '```python',
+      '#| id: math-cell',
+      'print("ok")',
+      '```'
+    ].join('\n');
+
+    const parsed = parseCellsFromMarkdown(source, 'content/docs/page.mdx');
+    const inlineMathNodes = parsed.tree.children
+      .flatMap((node) => node.children ?? [])
+      .filter((node) => node.type === 'inlineMath');
+
+    expect(parsed.diagnostics).toEqual([]);
+    expect(parsed.cells).toMatchObject([
+      {
+        id: 'page__math-cell',
+        language: 'python',
+        source: 'print("ok")',
+        fenceStartLine: 12
+      }
+    ]);
+    expect(inlineMathNodes).toMatchObject([
+      { type: 'inlineMath', value: '\\text{hello world}' },
+      { type: 'inlineMath', value: '\\operatorname{arg max}_{x \\in X} f(x)' }
+    ]);
+    expect(parsed.tree.children).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          type: 'math',
+          value: ['\\begin{aligned}', 'f(x) &= {x + 1} \\\\', 'g(x) &= \\frac{x}{2}', '\\end{aligned}'].join('\n')
+        })
+      ])
+    );
+  });
+
+  it('rejects malformed MDX outside math spans', () => {
+    const source = 'Valid math $\\text{ok}$ and invalid MDX {not valid JavaScript here}.';
+
+    expect(() => parseCellsFromMarkdown(source, 'content/docs/page.mdx')).toThrow(
+      'Could not parse expression with acorn'
+    );
+  });
+
   it.each([
     ['malformed YAML', '//| id: [', 'metadata'],
     ['invalid id', '//| id: Bad.id', 'id'],

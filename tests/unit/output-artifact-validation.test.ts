@@ -1,10 +1,11 @@
 import { Buffer } from 'node:buffer';
-import { describe, expect, it } from 'vitest';
+import { describe, expect, expectTypeOf, it } from 'vitest';
 import {
   outputArtifactLimits,
   validateOutputArtifacts,
   type ValidatedOutputArtifact
 } from '../../packages/oxiquill/src/lib/doc-runtime/output-artifact-validation';
+import type { HeatmapChartSpec } from '../../packages/oxiquill/src/lib/doc-runtime/types';
 
 const pngBase64 = 'iVBORw0KGgo=';
 const jpegBase64 = '/9j/';
@@ -24,6 +25,11 @@ function validationError(value: unknown): string {
 }
 
 describe('output artifact validation', () => {
+  it('exposes category-only heatmap axis declarations', () => {
+    expectTypeOf<HeatmapChartSpec['xType']>().toEqualTypeOf<'category' | undefined>();
+    expectTypeOf<HeatmapChartSpec['yType']>().toEqualTypeOf<'category' | undefined>();
+  });
+
   it('validates every public artifact kind and copies supported metadata', () => {
     expect(
       validArtifact({
@@ -319,6 +325,75 @@ describe('output artifact validation', () => {
         spec: { kind: 'line', xType: 'time', series: [{ points: [['2026-02-30T00:00:00Z', 1]] }] }
       })
     ).toContain('ISO-8601');
+  });
+
+  it.each([
+    ['numeric inferred coordinates', { kind: 'heatmap', data: [[0, 1, 2]] }],
+    ['string inferred coordinates', { kind: 'heatmap', data: [['column', 'row', 2]] }],
+    ['mixed explicit and inferred axes', { kind: 'heatmap', xCategories: ['first', 'second'], data: [[1, 'row', 2]] }],
+    [
+      'explicit category names',
+      {
+        kind: 'heatmap',
+        xCategories: ['column'],
+        yCategories: ['row'],
+        data: [['column', 'row', 2]]
+      }
+    ],
+    [
+      'explicit category indices',
+      {
+        kind: 'heatmap',
+        xCategories: ['first', 'second'],
+        yCategories: ['row'],
+        data: [[1, 0, 2]]
+      }
+    ],
+    ['empty categories and data', { kind: 'heatmap', xCategories: [], yCategories: [], data: [] }],
+    [
+      'colliding inferred labels',
+      {
+        kind: 'heatmap',
+        data: [
+          [1, 0, 2],
+          ['1', '0', 3]
+        ]
+      }
+    ]
+  ])('accepts heatmaps with $0', (_label, spec) => {
+    expect(validArtifact({ kind: 'chart', spec })).toMatchObject({ kind: 'chart' });
+  });
+
+  it.each([
+    ['fractional', 0.5],
+    ['negative', -1],
+    ['non-finite', Number.POSITIVE_INFINITY],
+    ['unsafe', Number.MAX_SAFE_INTEGER + 1],
+    ['out-of-range', 2]
+  ])('rejects $0 explicit heatmap category indices', (_label, coordinate) => {
+    expect(
+      validationError({
+        kind: 'chart',
+        spec: {
+          kind: 'heatmap',
+          xCategories: ['first', 'second'],
+          yCategories: ['row'],
+          data: [[coordinate, 0, 1]]
+        }
+      })
+    ).toContain(coordinate === Number.POSITIVE_INFINITY ? 'finite numeric' : 'safe integer index');
+  });
+
+  it.each(['value', 'time', 'log'] as const)('rejects explicit %s axes for heatmaps', (axisType) => {
+    expect(validationError({ kind: 'chart', spec: { kind: 'heatmap', xType: axisType, data: [] } })).toContain(
+      `x axis is always category; received ${axisType}`
+    );
+    expect(validationError({ kind: 'chart', spec: { kind: 'heatmap', yType: axisType, data: [] } })).toContain(
+      `y axis is always category; received ${axisType}`
+    );
+  });
+
+  it('rejects unknown and duplicate explicit heatmap categories', () => {
     expect(
       validationError({
         kind: 'chart',
@@ -331,16 +406,11 @@ describe('output artifact validation', () => {
       })
     ).toContain('declared categories');
     expect(
-      validArtifact({
+      validationError({
         kind: 'chart',
-        spec: {
-          kind: 'heatmap',
-          xCategories: ['first', 'second'],
-          yCategories: ['row'],
-          data: [[1, 0, 1]]
-        }
+        spec: { kind: 'heatmap', xCategories: ['duplicate', 'duplicate'], data: [] }
       })
-    ).toMatchObject({ kind: 'chart' });
+    ).toContain('duplicate values');
   });
 
   it('accepts empty and equal chart domains while rejecting invalid histogram bins and axis overrides', () => {
@@ -483,6 +553,23 @@ describe('output artifact validation', () => {
   ])('accepts the exact $kind data limit and rejects one item over it', ({ exact, excessive }) => {
     expect(validArtifact({ kind: 'chart', spec: exact() })).toMatchObject({ kind: 'chart' });
     expect(validationError({ kind: 'chart', spec: excessive() })).toContain('maximum');
+  });
+
+  it('validates explicit heatmap category membership at the exact data limit', () => {
+    const categories = Array.from({ length: outputArtifactLimits.chartDataItems }, (_, index) => `category-${index}`);
+    const lastCategory = categories.at(-1);
+    expect(lastCategory).toBeDefined();
+    expect(
+      validArtifact({
+        kind: 'chart',
+        spec: {
+          kind: 'heatmap',
+          xCategories: categories,
+          yCategories: ['row'],
+          data: Array.from({ length: outputArtifactLimits.chartDataItems }, () => [lastCategory, 'row', 1])
+        }
+      })
+    ).toMatchObject({ kind: 'chart' });
   });
 
   it('validates image encodings, MIME declarations, signatures, and SVG payloads', () => {

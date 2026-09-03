@@ -1,4 +1,5 @@
 import { unified } from 'unified';
+import remarkMath from 'remark-math';
 import remarkMdx from 'remark-mdx';
 import remarkParse from 'remark-parse';
 import {
@@ -11,7 +12,7 @@ import { sourceThemes } from './constants.mjs';
 import { assertUniqueCellIds } from './validators.mjs';
 
 const markdownParser = unified().use(remarkParse);
-const mdxParser = unified().use(remarkParse).use(remarkMdx);
+const mdxParser = unified().use(remarkParse).use(remarkMath).use(remarkMdx);
 
 export function parseCellsFromMarkdown(source, pagePath) {
   const parser = String(pagePath).endsWith('.mdx') ? mdxParser : markdownParser;

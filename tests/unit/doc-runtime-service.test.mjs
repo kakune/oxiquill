@@ -424,6 +424,40 @@ describe('doc runtime service', () => {
     await expect(listFiles('/repo/content/docs', { fileSystem: oddFileSystem })).resolves.toEqual([]);
   });
 
+  it('collects interactive cells from MDX pages containing math', async () => {
+    const fileSystem = createMemoryFileSystem({
+      '/repo/content/docs/page.mdx': [
+        'Inline math: $\\text{hello world}$.',
+        '',
+        '$$',
+        '\\frac{x + 1}{y}',
+        '$$',
+        '',
+        '```python',
+        '#| id: example',
+        'print("ok")',
+        '```'
+      ].join('\n')
+    });
+
+    await expect(
+      collectCells({
+        fileSystem,
+        helperCrates: new Map(),
+        highlighter,
+        paths: createDocRuntimePaths('/repo'),
+        root: '/repo'
+      })
+    ).resolves.toMatchObject([
+      {
+        id: 'page__example',
+        language: 'python',
+        pagePath: 'content/docs/page.mdx',
+        source: 'print("ok")'
+      }
+    ]);
+  });
+
   it('fails clearly when an MDX Rust cell references an unknown helper crate', async () => {
     const fileSystem = createMemoryFileSystem({
       '/repo/content/docs/page.mdx': '```rust\n//| id: a\n//| crates: [missing-helper]\nprintln!("a");\n```'

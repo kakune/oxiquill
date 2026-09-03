@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'preact/hooks';
+import { normalizeHeatmapSpec, type NormalizedHeatmapSpec } from '../../lib/doc-runtime/heatmap-normalization.js';
 import { boundedErrorMessage } from '../../lib/doc-runtime/output-limits.mjs';
 import type { RuntimeLabels } from '../../lib/doc-runtime/runtime-localization.js';
 import type { ChartArtifact, ChartSpec } from '../../lib/doc-runtime/types.js';
@@ -175,7 +176,8 @@ export function currentChartTheme(): ChartTheme {
 }
 
 export function chartSpecToEChartsOptions(spec: ChartSpec, theme: ChartTheme = 'light'): EChartsOptions {
-  const series = chartSeries(spec);
+  const structure = chartStructure(spec);
+  const { series } = structure;
   const colors = chartColors[theme];
   const axisStyle = {
     axisLabel: { color: colors.axis },
@@ -202,14 +204,14 @@ export function chartSpecToEChartsOptions(spec: ChartSpec, theme: ChartTheme = '
     title: spec.title
       ? { text: spec.title, left: 'center', textStyle: { color: colors.text, fontSize: 14, fontWeight: 600 } }
       : undefined,
-    xAxis: { ...xAxis(spec), ...axisStyle },
-    yAxis: { ...yAxis(spec), ...axisStyle },
+    xAxis: { ...structure.xAxis, ...axisStyle },
+    yAxis: { ...structure.yAxis, ...axisStyle },
     dataZoom: spec.dataZoom === false ? undefined : [{ type: 'inside' }],
     series
   };
 
-  if (spec.kind === 'heatmap') {
-    const valueRange = numericBounds(spec.data, (item) => item[2]);
+  if (structure.heatmap) {
+    const valueRange = numericBounds(structure.heatmap.data, (item) => item[2]);
     return {
       ...base,
       dataZoom: undefined,
@@ -308,24 +310,20 @@ function chartSummaryDetails(spec: ChartSpec, labels: RuntimeLabels) {
           spec.yType
         )
       };
-    case 'heatmap':
+    case 'heatmap': {
+      const heatmap = normalizeHeatmapSpec(spec);
       return {
         dataCount: spec.data.length,
         seriesCount: 1,
         seriesNames: '',
-        xRange: range(
-          spec.data.map((item) => item[0]),
-          spec.xCategories ? 'category' : spec.xType
-        ),
-        yRange: range(
-          spec.data.map((item) => item[1]),
-          spec.yCategories ? 'category' : spec.yType
-        ),
+        xCategoryCount: heatmap.xCategories.length,
+        yCategoryCount: heatmap.yCategories.length,
         valueRange: numericRange(
-          spec.data.map((item) => item[2]),
+          heatmap.data.map((item) => item[2]),
           numberFormat
         )
       };
+    }
   }
 }
 
@@ -380,7 +378,30 @@ function boundedSummary(value: string, maximumLength = 4_000): string {
   return value.length <= maximumLength ? value : `${value.slice(0, maximumLength - 1)}…`;
 }
 
-function chartSeries(spec: ChartSpec): readonly Record<string, unknown>[] {
+function chartStructure(spec: ChartSpec): {
+  heatmap?: NormalizedHeatmapSpec;
+  series: readonly Record<string, unknown>[];
+  xAxis: Record<string, unknown>;
+  yAxis: Record<string, unknown>;
+} {
+  if (spec.kind === 'heatmap') {
+    const heatmap = normalizeHeatmapSpec(spec);
+    return {
+      heatmap,
+      series: [{ type: 'heatmap', data: heatmap.data }],
+      xAxis: categoryAxis(heatmap.xCategories, spec.xLabel),
+      yAxis: categoryAxis(heatmap.yCategories, spec.yLabel)
+    };
+  }
+
+  return {
+    series: chartSeries(spec),
+    xAxis: xAxis(spec),
+    yAxis: yAxis(spec)
+  };
+}
+
+function chartSeries(spec: Exclude<ChartSpec, { kind: 'heatmap' }>): readonly Record<string, unknown>[] {
   switch (spec.kind) {
     case 'line':
       return spec.series.map((series) => ({
@@ -418,14 +439,12 @@ function chartSeries(spec: ChartSpec): readonly Record<string, unknown>[] {
         areaStyle: { opacity: 0.18 },
         data: series.points
       }));
-    case 'heatmap':
-      return [{ type: 'heatmap', data: spec.data }];
     default:
       return [];
   }
 }
 
-function xAxis(spec: ChartSpec): Record<string, unknown> {
+function xAxis(spec: Exclude<ChartSpec, { kind: 'heatmap' }>): Record<string, unknown> {
   if (spec.kind === 'bar') {
     return categoryAxis(spec.categories, spec.xLabel);
   }
@@ -437,18 +456,10 @@ function xAxis(spec: ChartSpec): Record<string, unknown> {
     );
   }
 
-  if (spec.kind === 'heatmap' && spec.xCategories) {
-    return categoryAxis(spec.xCategories, spec.xLabel);
-  }
-
   return valueAxis(spec.xType ?? 'value', spec.xLabel);
 }
 
-function yAxis(spec: ChartSpec): Record<string, unknown> {
-  if (spec.kind === 'heatmap' && spec.yCategories) {
-    return categoryAxis(spec.yCategories, spec.yLabel);
-  }
-
+function yAxis(spec: Exclude<ChartSpec, { kind: 'heatmap' }>): Record<string, unknown> {
   return valueAxis(spec.yType ?? 'value', spec.yLabel);
 }
 
