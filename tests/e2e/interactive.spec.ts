@@ -421,19 +421,32 @@ test('rich output examples render browser-visible artifacts', async ({ page }) =
   await explicitTable.getByRole('button', { name: 'Score' }).click();
   await expect(explicitTable.getByRole('columnheader', { name: 'Score' })).toHaveAttribute('aria-sort', 'ascending');
 
-  const rustChart = rust.getByTestId('doc-plot');
-  await expect(rustChart.locator('canvas')).toHaveCount(1);
-  await expect(rustChart).toHaveAttribute('data-chart-theme', 'light');
-  expect((await canvasStats(rustChart.locator('canvas'))).inkPixels).toBeGreaterThan(1_000);
+  const rustCharts = rust.getByTestId('doc-plot');
+  await expect(rustCharts).toHaveCount(2);
+  const rustBarChart = rustCharts.first();
+  const rustHeatmap = rustCharts.nth(1);
+  await expect(rustBarChart.locator('canvas')).toHaveCount(1);
+  await expect(rustHeatmap.locator('canvas').first()).toBeVisible();
+  await expect(rustBarChart).toHaveAttribute('data-chart-theme', 'light');
+  await expect(rustHeatmap).toHaveAttribute('data-chart-theme', 'light');
+  expect((await canvasStats(rustBarChart.locator('canvas'))).inkPixels).toBeGreaterThan(1_000);
+  const heatmapCanvases = rustHeatmap.locator('canvas');
+  const heatmapStats = await Promise.all(
+    Array.from({ length: await heatmapCanvases.count() }, (_, index) => canvasStats(heatmapCanvases.nth(index)))
+  );
+  expect(Math.max(...heatmapStats.map(({ inkPixels }) => inkPixels))).toBeGreaterThan(500);
   await page.evaluate(() => {
     document.documentElement.dataset.theme = 'dark';
   });
-  await expect(rustChart).toHaveAttribute('data-chart-theme', 'dark');
-  await expect(rustChart.locator('canvas')).toHaveCount(1);
+  await expect(rustBarChart).toHaveAttribute('data-chart-theme', 'dark');
+  await expect(rustHeatmap).toHaveAttribute('data-chart-theme', 'dark');
+  await expect(rustBarChart.locator('canvas')).toHaveCount(1);
+  await expect(rustHeatmap.locator('canvas').first()).toBeVisible();
   await page.evaluate(() => {
     document.documentElement.dataset.theme = 'light';
   });
-  await expect(rustChart).toHaveAttribute('data-chart-theme', 'light');
+  await expect(rustBarChart).toHaveAttribute('data-chart-theme', 'light');
+  await expect(rustHeatmap).toHaveAttribute('data-chart-theme', 'light');
   await expect(rust.getByTestId('image-output')).toHaveAttribute('src', /data:image\/svg\+xml/);
   const htmlOutput = rust.getByTestId('html-output');
   await expect(htmlOutput).toHaveAttribute('sandbox', '');
@@ -508,11 +521,23 @@ test('chart rendering recovers after a transient chunk load failure', async ({ b
   const rust = page.getByTestId('cell-features__rich-output__rust-rich-outputs');
   await hydrateCell(rust);
   await rust.getByRole('button', { name: 'Run' }).click();
-  await expect(rust.getByRole('alert')).toContainText('Chart renderer could not be loaded');
+  const alerts = rust.getByRole('alert');
+  const charts = rust.getByTestId('doc-plot');
+  await expect.poll(async () => (await alerts.count()) + (await charts.count())).toBe(2);
+  const failedChartCount = await alerts.count();
+  expect(failedChartCount).toBeGreaterThan(0);
+  await expect(alerts.first()).toContainText('Chart renderer could not be loaded');
   expect(failedOnce).toBe(true);
 
-  await rust.getByRole('button', { name: 'Retry chart rendering' }).click();
-  await expect(rust.getByTestId('doc-plot').locator('canvas')).toHaveCount(1);
+  const retryButtons = rust.getByRole('button', { name: 'Retry chart rendering' });
+  await expect(retryButtons).toHaveCount(failedChartCount);
+  for (let remaining = failedChartCount; remaining > 0; remaining -= 1) {
+    await retryButtons.first().click();
+    await expect(retryButtons).toHaveCount(remaining - 1);
+  }
+  await expect(charts).toHaveCount(2);
+  await expect(charts.first().locator('canvas').first()).toBeVisible();
+  await expect(charts.nth(1).locator('canvas').first()).toBeVisible();
 });
 
 test('theme note and Mermaid examples are available without author-side TSX imports', async ({ page }) => {
