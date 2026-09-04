@@ -295,6 +295,7 @@ describe('oxiquill CLI', () => {
       expect.arrayContaining(['dev', '--host', '0.0.0.0', '--port', '4321']),
       expect.objectContaining({ cwd: actualRepoRoot, successfulSignals: ['SIGTERM'] })
     );
+    expect(cliMocks.syncDocRuntime).toHaveBeenCalledOnce();
     expect(cliMocks.watchDocRuntime).toHaveBeenCalledWith({ projectConfig: actualProjectConfig, skipInitial: true });
   });
 
