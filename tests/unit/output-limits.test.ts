@@ -34,6 +34,43 @@ describe('producer output limits', () => {
     expect(oversized.endsWith('…')).toBe(true);
   });
 
+  it('returns a stable bounded fallback for missing and unstringifiable errors', () => {
+    const errorWithThrowingMessage = new Error('hidden');
+    Object.defineProperty(errorWithThrowingMessage, 'message', {
+      get: () => {
+        throw new Error('message getter failed');
+      }
+    });
+    const revoked = Proxy.revocable({}, {});
+    revoked.revoke();
+
+    const missingMessages = [
+      new Error(),
+      new Error('   '),
+      '',
+      ' \n\t ',
+      Object.create(null),
+      {
+        toString: () => {
+          throw new Error('toString failed');
+        }
+      },
+      {
+        [Symbol.toPrimitive]: () => {
+          throw new Error('primitive conversion failed');
+        }
+      },
+      errorWithThrowingMessage,
+      revoked.proxy
+    ];
+
+    for (const value of missingMessages) {
+      const normalized = boundedErrorMessage(value);
+      expect(normalized).toBe('Unknown error.');
+      expect(utf8ByteLength(normalized)).toBeLessThanOrEqual(outputArtifactLimits.bytesPerError);
+    }
+  });
+
   it('normalizes aliases from bounded outputs and caps complete worker responses', () => {
     const rawAlias = 'x'.repeat(outputArtifactLimits.workerResponseBytes + 1);
     const boundedAlias = boundWorkerResult({

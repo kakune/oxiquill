@@ -516,4 +516,19 @@ describe('runtime client', () => {
 
     await expect(runner.runInteractiveCell(makeCell('rust'), {})).rejects.toThrow('worker construction failed');
   });
+
+  it('normalizes uninspectable worker failures without escaping error handling', async () => {
+    const revoked = Proxy.revocable({}, {});
+    revoked.revoke();
+    const worker = new FakeWorker();
+    worker.postMessageFailure = revoked.proxy;
+    const runner = createInteractiveCellRunner({
+      clearTimeout,
+      createWorker: () => worker as unknown as Worker,
+      setTimeout
+    });
+
+    await expect(runner.runInteractiveCell(makeCell('rust'), {})).rejects.toThrow('Unknown error.');
+    expect(worker.terminated).toBe(true);
+  });
 });
