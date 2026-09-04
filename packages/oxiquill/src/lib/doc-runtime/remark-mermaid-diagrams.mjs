@@ -1,25 +1,35 @@
-import { createDefaultImport, expressionAttribute, visit } from './remark-mdx-helpers.mjs';
+import {
+  allocateMdxIdentifier,
+  collectReservedMdxIdentifiers,
+  createDefaultImport,
+  expressionAttribute,
+  visit
+} from './remark-mdx-helpers.mjs';
 
 const mermaidLanguage = 'mermaid';
 
 export default function remarkMermaidDiagrams() {
   return (tree) => {
-    let needsImport = false;
-    let diagramIndex = 0;
+    const diagrams = [];
 
     visit(tree, (node) => {
       if (!node || node.type !== 'code' || normalizeLanguage(node.lang) !== mermaidLanguage) return;
 
-      needsImport = true;
-      diagramIndex += 1;
+      diagrams.push(node);
+    });
 
+    if (diagrams.length === 0) return;
+
+    const componentIdentifier = allocateMdxIdentifier(collectReservedMdxIdentifiers(tree), '__OxiquillMermaidDiagram');
+
+    diagrams.forEach((node, index) => {
       Object.assign(node, {
         type: 'mdxJsxFlowElement',
-        name: 'MermaidDiagram',
+        name: componentIdentifier,
         attributes: [
           { type: 'mdxJsxAttribute', name: 'client:load', value: null },
           expressionAttribute('source', node.value ?? ''),
-          { type: 'mdxJsxAttribute', name: 'diagramId', value: `mermaid-${diagramIndex}` }
+          { type: 'mdxJsxAttribute', name: 'diagramId', value: `mermaid-${index + 1}` }
         ],
         children: []
       });
@@ -29,8 +39,8 @@ export default function remarkMermaidDiagrams() {
       delete node.value;
     });
 
-    if (needsImport && Array.isArray(tree.children)) {
-      tree.children.unshift(createDefaultImport('MermaidDiagram', 'oxiquill/runtime/MermaidDiagram'));
+    if (Array.isArray(tree.children)) {
+      tree.children.unshift(createDefaultImport(componentIdentifier, 'oxiquill/runtime/MermaidDiagram'));
     }
   };
 }

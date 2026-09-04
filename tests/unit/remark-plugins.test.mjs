@@ -24,7 +24,7 @@ describe('remark interactive cells', () => {
       path: '/repo/content/docs/page.mdx'
     });
 
-    expect(tree.children[0].value).toContain('import InteractiveCell');
+    expect(tree.children[0].value).toContain('import __OxiquillInteractiveCell');
     expect(tree.children[0].value).toContain(
       'import { cell as __oxiquillCell0 } from "virtual:oxiquill/cell?cellId=page__rust-one";'
     );
@@ -36,7 +36,7 @@ describe('remark interactive cells', () => {
     });
     expect(tree.children[2]).toMatchObject({
       type: 'mdxJsxFlowElement',
-      name: 'InteractiveCell',
+      name: '__OxiquillInteractiveCell',
       attributes: [
         { type: 'mdxJsxAttribute', name: 'client:visible', value: null },
         { type: 'mdxJsxAttribute', name: 'cellId', value: 'page__rust-one' },
@@ -69,7 +69,9 @@ describe('remark interactive cells', () => {
 
     remarkInteractiveCells({ root: '/repo' })(tree, {});
 
-    expect(tree.children[0].value).toContain('import InteractiveCell from "oxiquill/runtime/InteractiveCell";');
+    expect(tree.children[0].value).toContain(
+      'import __OxiquillInteractiveCell from "oxiquill/runtime/InteractiveCell";'
+    );
     expect(tree.children[0].value).toContain(
       'import { cell as __oxiquillCell0 } from "virtual:oxiquill/cell?cellId=rust-one";'
     );
@@ -107,7 +109,9 @@ describe('remark interactive cells', () => {
       path: '/repo/src/components/doc-runtime/example.mdx'
     });
 
-    expect(tree.children[0].value).toContain('import InteractiveCell from "oxiquill/runtime/InteractiveCell";');
+    expect(tree.children[0].value).toContain(
+      'import __OxiquillInteractiveCell from "oxiquill/runtime/InteractiveCell";'
+    );
   });
 
   it('leaves trees without interactive cells unchanged', () => {
@@ -199,10 +203,10 @@ describe('remark Mermaid diagrams', () => {
       path: '/repo/content/docs/page.mdx'
     });
 
-    expect(tree.children[0].value).toContain('import MermaidDiagram');
+    expect(tree.children[0].value).toContain('import __OxiquillMermaidDiagram');
     expect(tree.children[1]).toMatchObject({
       type: 'mdxJsxFlowElement',
-      name: 'MermaidDiagram',
+      name: '__OxiquillMermaidDiagram',
       attributes: [
         { type: 'mdxJsxAttribute', name: 'client:load', value: null },
         {
@@ -235,7 +239,7 @@ describe('remark Mermaid diagrams', () => {
 
     remarkMermaidDiagrams({ root: '/repo' })(tree, {});
 
-    expect(tree.children[0].value).toBe("import MermaidDiagram from 'oxiquill/runtime/MermaidDiagram';");
+    expect(tree.children[0].value).toBe("import __OxiquillMermaidDiagram from 'oxiquill/runtime/MermaidDiagram';");
   });
 
   it('keeps package-stable Mermaid imports for non-docs files', () => {
@@ -248,7 +252,7 @@ describe('remark Mermaid diagrams', () => {
       path: '/repo/src/components/doc-runtime/example.mdx'
     });
 
-    expect(tree.children[0].value).toBe("import MermaidDiagram from 'oxiquill/runtime/MermaidDiagram';");
+    expect(tree.children[0].value).toBe("import __OxiquillMermaidDiagram from 'oxiquill/runtime/MermaidDiagram';");
   });
 
   it('leaves trees without Mermaid diagrams unchanged', () => {
@@ -262,6 +266,138 @@ describe('remark Mermaid diagrams', () => {
     });
 
     expect(tree.children).toHaveLength(1);
+  });
+});
+
+describe('remark runtime binding allocation', () => {
+  it('allocates distinct component aliases when preferred names are already imported', () => {
+    const tree = parseMdxTree(`import __OxiquillInteractiveCell from './InteractiveCell.astro';
+import __OxiquillMermaidDiagram from './MermaidDiagram.astro';
+
+\`\`\`rust
+//| id: rust-one
+println!("ok");
+\`\`\`
+
+\`\`\`mermaid
+flowchart LR
+  A --> B
+\`\`\``);
+
+    applyRuntimeRemarkPlugins(tree);
+
+    expect(runtimeImportLocal(tree, 'oxiquill/runtime/InteractiveCell')).toBe('__OxiquillInteractiveCell1');
+    expect(runtimeImportLocal(tree, 'oxiquill/runtime/MermaidDiagram')).toBe('__OxiquillMermaidDiagram1');
+  });
+
+  it('reserves variable, function, and class declarations', () => {
+    const tree = parseMdxTree(`export const __OxiquillInteractiveCell = null;
+export function __OxiquillMermaidDiagram() {}
+export class __oxiquillCell0 {}
+
+\`\`\`python
+#| id: python-one
+print("ok")
+\`\`\`
+
+\`\`\`mermaid
+flowchart LR
+  A --> B
+\`\`\``);
+
+    applyRuntimeRemarkPlugins(tree);
+
+    expect(runtimeImportLocal(tree, 'oxiquill/runtime/InteractiveCell')).toBe('__OxiquillInteractiveCell1');
+    expect(runtimeImportLocal(tree, 'oxiquill/runtime/MermaidDiagram')).toBe('__OxiquillMermaidDiagram1');
+    expect(cellImportLocals(tree)).toEqual(['__oxiquillCell01']);
+  });
+
+  it('reserves destructured names and fills free preferred numeric names deterministically', () => {
+    const tree = parseMdxTree(`export const { __oxiquillCell0, __oxiquillCell01, __oxiquillCell2 } = bindings;
+
+\`\`\`rust
+//| id: cell-zero
+println!("zero");
+\`\`\`
+
+\`\`\`python
+#| id: cell-one
+print("one")
+\`\`\`
+
+\`\`\`haskell
+--| id: cell-two
+putStrLn "two"
+\`\`\``);
+
+    remarkInteractiveCells({ root: '/repo' })(tree, { path: '/repo/content/docs/page.mdx' });
+
+    expect(cellImportLocals(tree)).toEqual(['__oxiquillCell02', '__oxiquillCell1', '__oxiquillCell21']);
+  });
+
+  it('reserves simple and root JSX component identifiers', () => {
+    const tree = parseMdxTree(`<__OxiquillInteractiveCell />
+
+<__OxiquillMermaidDiagram.Part />
+
+\`\`\`rust
+//| id: rust-one
+println!("ok");
+\`\`\`
+
+\`\`\`mermaid
+flowchart LR
+  A --> B
+\`\`\`
+
+\`\`\`mermaid
+flowchart LR
+  B --> C
+\`\`\``);
+
+    applyRuntimeRemarkPlugins(tree);
+
+    expect(runtimeImportLocal(tree, 'oxiquill/runtime/InteractiveCell')).toBe('__OxiquillInteractiveCell1');
+    expect(runtimeImportLocal(tree, 'oxiquill/runtime/MermaidDiagram')).toBe('__OxiquillMermaidDiagram1');
+    expect(transformedElements(tree, 'client:load').map(({ name }) => name)).toEqual([
+      '__OxiquillMermaidDiagram1',
+      '__OxiquillMermaidDiagram1'
+    ]);
+  });
+
+  it('produces identical trees and keeps textual ESM, ESTree, JSX, and expressions aligned', () => {
+    const source = `export const __OxiquillInteractiveCell = null;
+export const __OxiquillMermaidDiagram = null;
+export const __oxiquillCell0 = null;
+
+\`\`\`rust
+//| id: rust-one
+println!("ok");
+\`\`\`
+
+\`\`\`python
+#| id: python-one
+print("ok")
+\`\`\`
+
+\`\`\`mermaid
+flowchart LR
+  A --> B
+\`\`\`
+
+\`\`\`mermaid
+sequenceDiagram
+  A->>B: hi
+\`\`\``;
+    const first = parseMdxTree(source);
+    const second = parseMdxTree(source);
+
+    applyRuntimeRemarkPlugins(first);
+    applyRuntimeRemarkPlugins(second);
+
+    expect(first).toEqual(second);
+    expectInjectedBindingsAgree(first, 'oxiquill/runtime/InteractiveCell', 'client:visible');
+    expectInjectedBindingsAgree(first, 'oxiquill/runtime/MermaidDiagram', 'client:load');
   });
 });
 
@@ -353,3 +489,59 @@ describe('remark public asset base', () => {
     expect(tree.children[2].attributes[1].value).toBe('/media/media/docs/guide.pdf');
   });
 });
+
+function parseMdxTree(source) {
+  const parsed = parseCellsFromMarkdown(source, 'content/docs/page.mdx');
+  expect(parsed.diagnostics).toEqual([]);
+  return parsed.tree;
+}
+
+function applyRuntimeRemarkPlugins(tree) {
+  remarkInteractiveCells({ root: '/repo' })(tree, { path: '/repo/content/docs/page.mdx' });
+  remarkMermaidDiagrams()(tree);
+}
+
+function runtimeImportNode(tree, source) {
+  return tree.children.find((node) =>
+    node?.data?.estree?.body?.some(
+      (declaration) => declaration.type === 'ImportDeclaration' && declaration.source.value === source
+    )
+  );
+}
+
+function runtimeImportLocal(tree, source) {
+  const declaration = runtimeImportNode(tree, source).data.estree.body.find(
+    (candidate) => candidate.type === 'ImportDeclaration' && candidate.source.value === source
+  );
+  return declaration.specifiers[0].local.name;
+}
+
+function cellImportLocals(tree) {
+  return runtimeImportNode(tree, 'oxiquill/runtime/InteractiveCell')
+    .data.estree.body.filter((declaration) => declaration.source.value.startsWith('virtual:oxiquill/cell?'))
+    .map((declaration) => declaration.specifiers[0].local.name);
+}
+
+function transformedElements(tree, clientDirective) {
+  return tree.children.filter(
+    (node) =>
+      node?.type === 'mdxJsxFlowElement' && node.attributes.some((attribute) => attribute.name === clientDirective)
+  );
+}
+
+function expectInjectedBindingsAgree(tree, componentSource, clientDirective) {
+  const importNode = runtimeImportNode(tree, componentSource);
+  const localNames = importNode.data.estree.body.map((declaration) => declaration.specifiers[0].local.name);
+
+  localNames.forEach((name) => expect(importNode.value).toContain(name));
+
+  const elements = transformedElements(tree, clientDirective);
+  elements.forEach((element, index) => {
+    expect(element.name).toBe(localNames[0]);
+    if (clientDirective !== 'client:visible') return;
+
+    const expression = element.attributes.find((attribute) => attribute.name === 'cell').value;
+    expect(expression.value).toBe(localNames[index + 1]);
+    expect(expression.data.estree.body[0].expression.name).toBe(localNames[index + 1]);
+  });
+}
