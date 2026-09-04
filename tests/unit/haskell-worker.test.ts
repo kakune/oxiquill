@@ -7,6 +7,7 @@ import {
   createOutputCapture,
   fetchHaskellModule,
   fetchHaskellRuntimeStatus,
+  type HaskellRuntimeStatus,
   parseHaskellRuntimeStatus,
   resolveHaskellRuntimeStatusUrl,
   resolveHaskellWasmUrl
@@ -103,6 +104,76 @@ describe('haskell worker helpers', () => {
     expect(fetchStatus).toHaveBeenCalledOnce();
     expect(fetchModule).toHaveBeenCalledOnce();
     await expect(loadModule('hash-two')).rejects.toThrow('generated runtime is stale');
+    expect(fetchStatus).toHaveBeenCalledTimes(2);
+    expect(fetchModule).toHaveBeenCalledOnce();
+  });
+
+  it('shares failures, retries only on later matching-fingerprint calls, and caches recovery', async () => {
+    const firstAttempt = createDeferred<HaskellRuntimeStatus>();
+    const firstFailure = new Error('first status request failed');
+    const secondFailure = new Error('second status request failed');
+    const module = {} as WebAssembly.Module;
+    const fetchStatus = vi
+      .fn()
+      .mockImplementationOnce(() => firstAttempt.promise)
+      .mockRejectedValueOnce(secondFailure)
+      .mockResolvedValueOnce({ status: 'ready', haskellFingerprintHash: 'hash-one', message: '' });
+    const fetchModule = vi.fn(async () => module);
+    const loadModule = createHaskellModuleLoader({
+      fetchModule,
+      fetchStatus,
+      statusUrl: '/status.json',
+      wasmUrl: '/runtime.wasm'
+    });
+
+    const first = loadModule('hash-one');
+    const second = loadModule('hash-one');
+    expect(first).toBe(second);
+    expect(fetchStatus).toHaveBeenCalledOnce();
+
+    firstAttempt.reject(firstFailure);
+    const failedCalls = await Promise.allSettled([first, second]);
+    expect(failedCalls).toEqual([
+      { reason: firstFailure, status: 'rejected' },
+      { reason: firstFailure, status: 'rejected' }
+    ]);
+
+    await expect(loadModule('hash-one')).rejects.toBe(secondFailure);
+    expect(fetchStatus).toHaveBeenCalledTimes(2);
+
+    const recovered = loadModule('hash-one');
+    await expect(recovered).resolves.toBe(module);
+    expect(loadModule('hash-one')).toBe(recovered);
+    expect(fetchStatus).toHaveBeenCalledTimes(3);
+    expect(fetchModule).toHaveBeenCalledOnce();
+  });
+
+  it('does not let a late fingerprint failure clear a newer fingerprint cache', async () => {
+    const firstAttempt = createDeferred<HaskellRuntimeStatus>();
+    const secondAttempt = createDeferred<HaskellRuntimeStatus>();
+    const firstFailure = new Error('fingerprint A failed late');
+    const module = {} as WebAssembly.Module;
+    const fetchStatus = vi
+      .fn()
+      .mockImplementationOnce(() => firstAttempt.promise)
+      .mockImplementationOnce(() => secondAttempt.promise);
+    const fetchModule = vi.fn(async () => module);
+    const loadModule = createHaskellModuleLoader({
+      fetchModule,
+      fetchStatus,
+      statusUrl: '/status.json',
+      wasmUrl: '/runtime.wasm'
+    });
+
+    const fingerprintA = loadModule('hash-a');
+    const fingerprintB = loadModule('hash-b');
+    firstAttempt.reject(firstFailure);
+    await expect(fingerprintA).rejects.toBe(firstFailure);
+    expect(loadModule('hash-b')).toBe(fingerprintB);
+
+    secondAttempt.resolve({ status: 'ready', haskellFingerprintHash: 'hash-b', message: '' });
+    await expect(fingerprintB).resolves.toBe(module);
+    expect(loadModule('hash-b')).toBe(fingerprintB);
     expect(fetchStatus).toHaveBeenCalledTimes(2);
     expect(fetchModule).toHaveBeenCalledOnce();
   });
@@ -239,3 +310,14 @@ describe('haskell worker helpers', () => {
     }
   });
 });
+
+function createDeferred<T>() {
+  let reject!: (reason: Error) => void;
+  let resolve!: (value: T) => void;
+  const promise = new Promise<T>((resolvePromise, rejectPromise) => {
+    reject = rejectPromise;
+    resolve = resolvePromise;
+  });
+
+  return { promise, reject, resolve };
+}

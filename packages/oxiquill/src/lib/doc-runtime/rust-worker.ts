@@ -9,7 +9,7 @@ type WorkerScope = {
 };
 
 const worker = self as unknown as WorkerScope;
-let wasmReady: Promise<void> | undefined;
+const ensureWasm = createRustRuntimeLoader({ init });
 
 worker.addEventListener('message', (event) => {
   void handleRequest(event.data);
@@ -32,6 +32,18 @@ async function handleRequest(request: RuntimeWorkerRequest): Promise<void> {
   }
 }
 
-function ensureWasm(): Promise<void> {
-  return (wasmReady ??= init().then(() => undefined));
+export function createRustRuntimeLoader({ init }: { init: () => Promise<unknown> }): () => Promise<void> {
+  let wasmReady: Promise<void> | undefined;
+
+  return () => {
+    if (!wasmReady) {
+      const runtime = init().then(() => undefined);
+      wasmReady = runtime;
+      void runtime.catch(() => {
+        if (wasmReady === runtime) wasmReady = undefined;
+      });
+    }
+
+    return wasmReady;
+  };
 }

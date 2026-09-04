@@ -4,6 +4,8 @@ import { outputArtifactLimits, utf8ByteLength } from '../../packages/oxiquill/sr
 import { initializeRustWasm, run_rust_cell } from './mocks/virtual-runtime';
 
 type MessageListener = (event: MessageEvent<RuntimeWorkerRequest>) => void;
+type CreateRustRuntimeLoader =
+  typeof import('../../packages/oxiquill/src/lib/doc-runtime/rust-worker').createRustRuntimeLoader;
 
 const worker = {
   listener: undefined as MessageListener | undefined,
@@ -12,10 +14,11 @@ const worker = {
   }),
   postMessage: vi.fn<(response: RuntimeWorkerResponse) => void>()
 };
+let createRustRuntimeLoader: CreateRustRuntimeLoader;
 
 beforeAll(async () => {
   vi.stubGlobal('self', worker);
-  await import('../../packages/oxiquill/src/lib/doc-runtime/rust-worker');
+  ({ createRustRuntimeLoader } = await import('../../packages/oxiquill/src/lib/doc-runtime/rust-worker'));
 });
 
 beforeEach(() => {
@@ -92,8 +95,53 @@ describe('Rust runtime worker', () => {
   });
 });
 
+describe('Rust runtime loader', () => {
+  it('shares each attempt, retries only on later calls, and retains successful initialization', async () => {
+    const firstAttempt = createDeferred();
+    const firstFailure = new Error('first initialization failed');
+    const secondFailure = new Error('second initialization failed');
+    const init = vi
+      .fn<() => Promise<unknown>>()
+      .mockImplementationOnce(() => firstAttempt.promise)
+      .mockRejectedValueOnce(secondFailure)
+      .mockResolvedValueOnce(undefined);
+    const ensureRuntime = createRustRuntimeLoader({ init });
+
+    const first = ensureRuntime();
+    const second = ensureRuntime();
+    expect(first).toBe(second);
+    expect(init).toHaveBeenCalledOnce();
+
+    firstAttempt.reject(firstFailure);
+    const failedCalls = await Promise.allSettled([first, second]);
+    expect(failedCalls).toEqual([
+      { reason: firstFailure, status: 'rejected' },
+      { reason: firstFailure, status: 'rejected' }
+    ]);
+
+    await expect(ensureRuntime()).rejects.toBe(secondFailure);
+    expect(init).toHaveBeenCalledTimes(2);
+
+    const recovered = ensureRuntime();
+    await expect(recovered).resolves.toBeUndefined();
+    expect(ensureRuntime()).toBe(recovered);
+    expect(init).toHaveBeenCalledTimes(3);
+  });
+});
+
 async function flushMicrotasks(): Promise<void> {
   await Promise.resolve();
   await Promise.resolve();
   await Promise.resolve();
+}
+
+function createDeferred() {
+  let reject!: (reason: Error) => void;
+  let resolve!: () => void;
+  const promise = new Promise<void>((resolvePromise, rejectPromise) => {
+    reject = rejectPromise;
+    resolve = resolvePromise;
+  });
+
+  return { promise, reject, resolve };
 }
