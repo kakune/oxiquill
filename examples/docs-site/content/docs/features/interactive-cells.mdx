@@ -16,7 +16,7 @@ Only these top-level fields are accepted; unknown fields are errors:
 | Field        | Type and rule                                                                                                              | Default  |
 | ------------ | -------------------------------------------------------------------------------------------------------------------------- | -------- |
 | `id`         | Required lowercase kebab-case matching `^[a-z][a-z0-9]*(?:-[a-z0-9]+)*$`; unique within the page and after route scoping.  | —        |
-| `title`      | String shown in the cell header.                                                                                           | `id`     |
+| `title`      | Non-empty string shown in the cell header; explicit values are trimmed.                                                    | `id`     |
 | `run`        | `button`, `reactive`, or `autorun`.                                                                                        | `button` |
 | `inputs`     | Mapping from lowercase cross-language identifiers matching `^[a-z][a-z0-9_]*$` to input specs. Not allowed with `autorun`. | `{}`     |
 | `packages`   | Unique non-empty Pyodide package names; Python only.                                                                       | `[]`     |
@@ -190,11 +190,15 @@ Haskell cells use `--|` metadata comments. Input values become Haskell variables
 --|   factor: { type: integer, label: factor, min: 1, max: 5, step: 1, value: 3 }
 --|   label: { type: text, label: label, value: sample }
 --|   include_squares: { type: checkbox, label: include squares, value: true }
-import Data.List (intercalate)
+{- Imports may use normal multiline Haskell layout. -}
+import Data.List
+  ( intercalate
+  , sort
+  )
 
 let base = [1 .. 4 :: Int]
 let scaled = map (* factor) base
-let displayed = if include_squares then map (\value -> value * value) scaled else scaled
+let displayed = sort (if include_squares then map (\value -> value * value) scaled else scaled)
 
 putStrLn (label ++ ": " ++ intercalate ", " (map show displayed))
 putStrLn ("total = " ++ show (sum displayed))

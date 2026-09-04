@@ -97,7 +97,7 @@ standard library module だけを使います。Haskell セルでは外部 packa
 主な metadata field:
 
 - `id`: 必須の lowercase kebab-case ページ内 cell ID。
-- `title`: cell UI に表示される string の見出し。default は `id`。
+- `title`: cell UI に表示される non-empty string の見出し。明示した値は前後の空白を除去し、省略時は `id` を使います。
 - `run`: `button`、`reactive`、`autorun`。default は `button`。
 - `inputs`: lowercase cross-language identifier から input definition への mapping。`autorun` では指定できません。
 - `crates`: Rust helper crate。Rust のみ。

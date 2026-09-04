@@ -89,7 +89,7 @@ export function parseInteractiveCellNode(node, pagePath) {
   const context = { ...location, cellId };
   const diagnostics = unknownFieldDiagnostics(metadata, cellFields, context, '');
   const localId = normalizeLocalId(metadata.id, context, diagnostics);
-  const title = normalizeString(metadata, 'title', localId ?? '', context, diagnostics);
+  const title = normalizeTitle(metadata, localId ?? '', context, diagnostics);
   const run = normalizeRunMode(metadata, context, diagnostics);
   const timeoutMs = normalizeTimeout(metadata, context, diagnostics);
   const showSource = normalizeBoolean(metadata, 'showSource', true, context, diagnostics);
@@ -240,10 +240,17 @@ function normalizeLocalId(value, context, diagnostics) {
   return value;
 }
 
-function normalizeString(metadata, field, fallback, context, diagnostics) {
-  if (!hasOwn(metadata, field)) return fallback;
-  if (typeof metadata[field] === 'string') return metadata[field];
-  diagnostics.push(diagnostic(context, field, 'Expected a string.'));
+function normalizeTitle(metadata, fallback, context, diagnostics) {
+  if (!hasOwn(metadata, 'title')) return fallback;
+  if (typeof metadata.title !== 'string') {
+    diagnostics.push(diagnostic(context, 'title', 'Expected a string.'));
+    return fallback;
+  }
+
+  const title = metadata.title.trim();
+  if (title) return title;
+
+  diagnostics.push(diagnostic(context, 'title', 'Expected a non-empty string.'));
   return fallback;
 }
 
