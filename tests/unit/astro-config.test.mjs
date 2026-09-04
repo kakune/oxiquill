@@ -203,7 +203,7 @@ describe('defineOxiquillConfig', () => {
     const update = runConfigSetup(config);
     const renderer = await update.markdown.processor.createRenderer(update.markdown);
     const rendered = await renderer.render('![Sample](/media/examples/sample.png)\n\n[Guide](/media/docs/guide.pdf)', {
-      fileURL: new URL('file:///repo/content/docs/page.md')
+      fileURL: pathToFileURL(path.join(os.tmpdir(), 'oxiquill-render-fixture', 'content', 'docs', 'page.md'))
     });
 
     expect(rendered.code).toContain('src="/media/media/examples/sample.png"');
