@@ -49,7 +49,7 @@ export function CellOutput({
       <p class="doc-visually-hidden" aria-atomic="true" aria-live="polite" role="status">
         {liveMessage}
       </p>
-      {error ? (
+      {error !== undefined ? (
         <p class="error-state" role="alert">
           {labels.executionErrorLabel} <span>{labels.diagnosticDetail(error)}</span>
         </p>

@@ -15,6 +15,7 @@ export const outputArtifactLimits = Object.freeze({
 });
 
 const utf8Encoder = new TextEncoder();
+const unknownErrorMessage = 'Unknown error.';
 
 export function utf8ByteLength(value) {
   return utf8Encoder.encode(value).byteLength;
@@ -42,8 +43,16 @@ export function truncateUtf8(value, maxBytes) {
 }
 
 export function boundedErrorMessage(value) {
-  const message = value instanceof Error ? value.message : String(value);
-  return truncateUtf8(message, outputArtifactLimits.bytesPerError).value;
+  let message;
+  try {
+    const extracted = value instanceof Error ? value.message : value;
+    message = typeof extracted === 'string' ? extracted : String(extracted);
+  } catch {
+    message = unknownErrorMessage;
+  }
+
+  const normalized = message.trim() === '' ? unknownErrorMessage : message;
+  return truncateUtf8(normalized, outputArtifactLimits.bytesPerError).value;
 }
 
 export function createBoundedTextAccumulator(maxBytes = outputArtifactLimits.bytesPerStream, separator = '') {

@@ -1,4 +1,5 @@
 import { useLayoutEffect, useMemo, useRef, useState } from 'preact/hooks';
+import { boundedErrorMessage } from '../../lib/doc-runtime/output-limits.mjs';
 import { labelsForLanguage, type RuntimeLabels } from '../../lib/doc-runtime/runtime-localization.js';
 import type { TableArtifact, TableColumn } from '../../lib/doc-runtime/types.js';
 
@@ -96,7 +97,7 @@ export default function TableOutput({
       if (resultGenerationRef.current === resultGeneration) {
         setCopyStatus({
           kind: 'error',
-          message: labels.copyCsvError(error instanceof Error ? error.message : String(error))
+          message: labels.copyCsvError(boundedErrorMessage(error))
         });
       }
     }
@@ -241,7 +242,7 @@ export function tableToCsv(
       ].join('\n')
     };
   } catch (error) {
-    return { ok: false, error: error instanceof Error ? error.message : String(error) };
+    return { ok: false, error: boundedErrorMessage(error) };
   }
 }
 

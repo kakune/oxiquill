@@ -4,6 +4,7 @@ import type {
   ValidatedJsonArtifact,
   ValidatedOutputArtifact
 } from '../../lib/doc-runtime/output-artifact-validation.js';
+import { boundedErrorMessage } from '../../lib/doc-runtime/output-limits.mjs';
 import type { RuntimeLabels } from '../../lib/doc-runtime/runtime-localization.js';
 import { labelsForLanguage } from '../../lib/doc-runtime/runtime-localization.js';
 import type { ComponentChildren } from 'preact';
@@ -113,7 +114,7 @@ export function LazyChartOutput({
         if (!cancelled) {
           setState({
             status: 'error',
-            message: caught instanceof Error ? caught.message : String(caught)
+            message: boundedErrorMessage(caught)
           });
         }
       });

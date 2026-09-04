@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'preact/hooks';
 import { initialValues } from '../../lib/doc-runtime/interactive-cell-model.js';
 import { createLatestRequestScheduler, createRunOnceCache } from '../../lib/doc-runtime/interactive-cell-scheduler.js';
+import { boundedErrorMessage } from '../../lib/doc-runtime/output-limits.mjs';
 import { runInteractiveCell } from '../../lib/doc-runtime/runtime-client.js';
 import type { NormalizedCellExecutionResult } from '../../lib/doc-runtime/output-artifacts.js';
 import type { CellManifest, InputValues } from '../../lib/doc-runtime/types.js';
@@ -44,7 +45,7 @@ export function useInteractiveCellRun(cell: CellManifest, runtimeVersion: string
       setExecution({ status: 'idle' });
     },
     onError: (caught) => {
-      setExecution({ error: caught instanceof Error ? caught.message : String(caught), status: 'error' });
+      setExecution({ error: boundedErrorMessage(caught), status: 'error' });
     },
     onResult: (result) => {
       setExecution({ result, status: 'success' });

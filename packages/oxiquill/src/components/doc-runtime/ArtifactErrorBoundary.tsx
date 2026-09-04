@@ -10,24 +10,24 @@ interface ArtifactErrorBoundaryProps {
 }
 
 interface ArtifactErrorBoundaryState {
-  error?: string;
+  error: string | undefined;
 }
 
 export default class ArtifactErrorBoundary extends Component<ArtifactErrorBoundaryProps, ArtifactErrorBoundaryState> {
-  state: ArtifactErrorBoundaryState = {};
+  state: ArtifactErrorBoundaryState = { error: undefined };
 
   componentDidCatch(error: unknown): void {
     this.setState({ error: boundedErrorMessage(error) });
   }
 
   componentDidUpdate(previousProps: ArtifactErrorBoundaryProps): void {
-    if (previousProps.resetKey !== this.props.resetKey && this.state.error) {
+    if (previousProps.resetKey !== this.props.resetKey && this.state.error !== undefined) {
       this.setState({ error: undefined });
     }
   }
 
   render({ children, index, labels }: ArtifactErrorBoundaryProps, { error }: ArtifactErrorBoundaryState) {
-    if (error) {
+    if (error !== undefined) {
       return <ArtifactError message={labels.artifactRenderError(index + 1, error)} />;
     }
     return children;
