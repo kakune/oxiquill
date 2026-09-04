@@ -66,6 +66,17 @@ const runtimeInputs = {
   }
 };
 
+function makeHaskellCell(source, overrides = {}) {
+  return {
+    id: 'haskell-cell',
+    pagePath: 'content/docs/page.mdx',
+    language: 'haskell',
+    source,
+    inputs: [],
+    ...overrides
+  };
+}
+
 describe('doc runtime core', () => {
   it('creates stable page-scoped authoring ids', () => {
     expect(pageIdFromPath('content/docs/ja/notes/example.mdx')).toBe('ja__notes__example');
@@ -839,6 +850,91 @@ describe('doc runtime core', () => {
     expect(() => splitHaskellCellSource({ ...haskellCell, source: 'module Example where\nmain = pure ()' })).toThrow(
       'cannot declare a module'
     );
+  });
+
+  it('extracts multiline Haskell pragmas and imports through nested preamble comments', () => {
+    const source = [
+      '{- explain the preamble {- including a nested comment -} -}',
+      'import Data.List',
+      '  ( intercalate',
+      '  -- keep comments inside a declaration valid',
+      '  , sort',
+      '  )',
+      '{- interstitial {- nested -} comment -}',
+      '{-# LANGUAGE',
+      '  ScopedTypeVariables',
+      '#-}',
+      'putStrLn (intercalate "," (sort values))'
+    ].join('\n');
+
+    expect(splitHaskellCellSource(makeHaskellCell(source))).toEqual({
+      pragmas: ['{-# LANGUAGE\n  ScopedTypeVariables\n#-}'],
+      imports: ['import Data.List\n  ( intercalate\n  -- keep comments inside a declaration valid\n  , sort\n  )'],
+      body: 'putStrLn (intercalate "," (sort values))'
+    });
+  });
+
+  it('extracts qualified, import-as, and hiding forms split across lines', () => {
+    const source = [
+      'import qualified',
+      '  Data.Map.Strict',
+      '  as',
+      '  Map',
+      '  hiding',
+      '  ( map',
+      '  , null',
+      '  )',
+      'print (Map.size values)'
+    ].join('\n');
+
+    expect(splitHaskellCellSource(makeHaskellCell(source))).toEqual({
+      pragmas: [],
+      imports: [
+        ['import qualified', '  Data.Map.Strict', '  as', '  Map', '  hiding', '  ( map', '  , null', '  )'].join('\n')
+      ],
+      body: 'print (Map.size values)'
+    });
+  });
+
+  it('ignores module declaration text in comments, strings, and character literals', () => {
+    const source = ['{- module Commented where -}', 'putStrLn "module Example where"', "print 'm'"].join('\n');
+
+    expect(splitHaskellCellSource(makeHaskellCell(source)).body).toBe(
+      ['putStrLn "module Example where"', "print 'm'"].join('\n')
+    );
+  });
+
+  it('rejects a real Haskell module declaration with cell and page context', () => {
+    const cell = makeHaskellCell('module Example (main) where\nmain = pure ()', {
+      id: 'module-cell',
+      pagePath: 'content/docs/module.mdx'
+    });
+
+    expect(() => splitHaskellCellSource(cell)).toThrow(
+      'Haskell cell "module-cell" in content/docs/module.mdx cannot declare a module; write a snippet body instead.'
+    );
+  });
+
+  it('preserves imports and pragma-looking text after the first body token', () => {
+    const body = ['putStrLn "start"', 'import Data.List (sort)', '{-# LANGUAGE LambdaCase #-}'].join('\n');
+
+    expect(splitHaskellCellSource(makeHaskellCell(body))).toEqual({ body, imports: [], pragmas: [] });
+  });
+
+  it.each([
+    ['block comment', '{- unfinished', 'unterminated block comment'],
+    ['pragma', '{-# LANGUAGE LambdaCase', 'unterminated pragma'],
+    ['string literal', 'putStrLn "unfinished', 'unterminated string literal'],
+    ['character literal', "print 'x", 'unterminated character literal'],
+    ['import list', 'import Data.List (sort', 'unbalanced import list']
+  ])('reports an unterminated Haskell %s with cell context', (_name, source, message) => {
+    expect(() => splitHaskellCellSource(makeHaskellCell(source))).toThrow(
+      `Haskell cell "haskell-cell" in content/docs/page.mdx has an ${message}.`
+    );
+  });
+
+  it('keeps the empty Haskell body fallback after lifting declarations', () => {
+    expect(generateHaskellFunction(makeHaskellCell('import Data.List (sort)'))).toContain('    pure ()');
   });
 
   it('detects Rust output capabilities from source tokens', () => {
