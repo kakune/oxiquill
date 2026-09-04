@@ -97,7 +97,7 @@ Use standard-library modules only. Haskell cells do not support external package
 Common metadata fields:
 
 - `id`: required lowercase kebab-case page-local cell identifier.
-- `title`: string heading shown in the cell UI; defaults to `id`.
+- `title`: non-empty string heading shown in the cell UI; explicit values are trimmed and omission defaults to `id`.
 - `run`: `button`, `reactive`, or `autorun`; defaults to `button`.
 - `inputs`: mapping of lowercase cross-language identifiers to input definitions; forbidden for `autorun`.
 - `crates`: Rust helper crates; Rust only.

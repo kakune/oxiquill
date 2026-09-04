@@ -64,33 +64,35 @@ ${body}
 export function splitHaskellCellSource(cellOrSource) {
   const source = typeof cellOrSource === 'string' ? cellOrSource : cellOrSource.source;
   const cell = typeof cellOrSource === 'string' ? undefined : cellOrSource;
-  assertSupportedHaskellSource(source, cell);
+  const tokens = assertSupportedHaskellSource(source, cell);
 
   const pragmas = [];
   const imports = [];
-  const body = [];
-  let isPreamble = true;
+  let tokenIndex = 0;
 
-  for (const line of source.split('\n')) {
-    const trimmed = line.trim();
-
-    if (isPreamble && trimmed === '') continue;
-    if (isPreamble && /^--(?!\|)/u.test(trimmed)) continue;
-    if (isPreamble && /^\{-#\s+LANGUAGE\b/u.test(trimmed)) {
-      pragmas.push(trimmed);
+  while (tokenIndex < tokens.length) {
+    const token = tokens[tokenIndex];
+    if (isLanguagePragma(token)) {
+      pragmas.push(source.slice(token.start, token.end).trim());
+      tokenIndex += 1;
       continue;
     }
-    if (isPreamble && /^import\s+/u.test(trimmed)) {
-      imports.push(trimmed);
+    if (isIdentifierToken(token, 'import')) {
+      const declaration = consumeImportDeclaration(tokens, tokenIndex, cell);
+      imports.push(source.slice(token.start, declaration.end).trim());
+      tokenIndex = declaration.nextTokenIndex;
       continue;
     }
 
-    isPreamble = false;
-    body.push(line);
+    return {
+      body: source.slice(token.start).trim(),
+      imports,
+      pragmas
+    };
   }
 
   return {
-    body: body.join('\n').trim(),
+    body: '',
     imports,
     pragmas
   };
@@ -137,11 +139,250 @@ readStringInput _ raw = pure raw`;
 }
 
 function assertSupportedHaskellSource(source, cell) {
-  const moduleMatch = source.match(/^\s*module\s+\S+\s+where\b/mu);
-  if (!moduleMatch) return;
+  const tokens = scanHaskellTokens(source, cell);
+  if (!hasModuleDeclaration(tokens)) return tokens;
 
   const context = cell ? ` "${cell.id}" in ${cell.pagePath}` : '';
   throw new Error(`Haskell cell${context} cannot declare a module; write a snippet body instead.`);
+}
+
+function scanHaskellTokens(source, cell) {
+  const tokens = [];
+  let cursor = 0;
+
+  while (cursor < source.length) {
+    const character = source[cursor];
+    if (/\s/u.test(character)) {
+      cursor += 1;
+      continue;
+    }
+    if (startsHaskellLineComment(source, cursor)) {
+      cursor = skipHaskellLineComment(source, cursor);
+      continue;
+    }
+    if (source.startsWith('{-#', cursor)) {
+      const end = source.indexOf('#-}', cursor + 3);
+      if (end === -1) throwHaskellSourceError(cell, 'has an unterminated pragma.');
+      tokens.push({ type: 'pragma', value: source.slice(cursor, end + 3), start: cursor, end: end + 3 });
+      cursor = end + 3;
+      continue;
+    }
+    if (source.startsWith('{-', cursor)) {
+      cursor = skipHaskellBlockComment(source, cursor, cell);
+      continue;
+    }
+    if (character === '"') {
+      const end = scanHaskellQuotedLiteral(source, cursor, '"', cell, 'string literal');
+      tokens.push({ type: 'string', start: cursor, end });
+      cursor = end;
+      continue;
+    }
+    if (character === "'") {
+      const end = scanHaskellQuotedLiteral(source, cursor, "'", cell, 'character literal');
+      tokens.push({ type: 'character', start: cursor, end });
+      cursor = end;
+      continue;
+    }
+    if (isHaskellIdentifierStart(character)) {
+      const start = cursor;
+      cursor += 1;
+      while (cursor < source.length && isHaskellIdentifierContinuation(source[cursor])) cursor += 1;
+      tokens.push({ type: 'identifier', value: source.slice(start, cursor), start, end: cursor });
+      continue;
+    }
+
+    tokens.push({ type: 'symbol', value: character, start: cursor, end: cursor + 1 });
+    cursor += 1;
+  }
+
+  return tokens;
+}
+
+function startsHaskellLineComment(source, start) {
+  if (!source.startsWith('--', start)) return false;
+
+  let cursor = start + 2;
+  while (source[cursor] === '-') cursor += 1;
+  return cursor >= source.length || !isHaskellSymbol(source[cursor]);
+}
+
+function skipHaskellLineComment(source, start) {
+  const end = source.indexOf('\n', start + 2);
+  return end === -1 ? source.length : end;
+}
+
+function skipHaskellBlockComment(source, start, cell) {
+  let cursor = start + 2;
+  let depth = 1;
+
+  while (cursor < source.length) {
+    if (source.startsWith('{-', cursor)) {
+      depth += 1;
+      cursor += 2;
+      continue;
+    }
+    if (source.startsWith('-}', cursor)) {
+      depth -= 1;
+      cursor += 2;
+      if (depth === 0) return cursor;
+      continue;
+    }
+    cursor += 1;
+  }
+
+  throwHaskellSourceError(cell, 'has an unterminated block comment.');
+}
+
+function scanHaskellQuotedLiteral(source, start, quote, cell, description) {
+  let cursor = start + 1;
+
+  while (cursor < source.length) {
+    if (source[cursor] === quote) return cursor + 1;
+    if (source[cursor] === '\n' || source[cursor] === '\r') {
+      throwHaskellSourceError(cell, `has an unterminated ${description}.`);
+    }
+    if (source[cursor] === '\\') {
+      if (quote === '"' && /\s/u.test(source[cursor + 1] ?? '')) {
+        cursor += 1;
+        while (cursor < source.length && /\s/u.test(source[cursor])) cursor += 1;
+        if (source[cursor] !== '\\') throwHaskellSourceError(cell, `has an unterminated ${description}.`);
+        cursor += 1;
+        continue;
+      }
+      cursor += 2;
+      continue;
+    }
+    cursor += 1;
+  }
+
+  throwHaskellSourceError(cell, `has an unterminated ${description}.`);
+}
+
+function consumeImportDeclaration(tokens, start, cell) {
+  let cursor = start + 1;
+  const consumeIdentifier = (value) => {
+    if (!isIdentifierToken(tokens[cursor], value)) return false;
+    cursor += 1;
+    return true;
+  };
+
+  if (isSourcePragma(tokens[cursor])) cursor += 1;
+  consumeIdentifier('safe');
+  consumeIdentifier('qualified');
+  if (tokens[cursor]?.type === 'string') cursor += 1;
+
+  cursor = consumeHaskellModuleName(tokens, cursor, cell);
+  consumeIdentifier('qualified');
+  if (consumeIdentifier('as')) cursor = consumeHaskellModuleName(tokens, cursor, cell);
+
+  const hidesImports = consumeIdentifier('hiding');
+  if (isSymbolToken(tokens[cursor], '(')) {
+    cursor = consumeBalancedImportList(tokens, cursor, cell);
+  } else if (hidesImports) {
+    throwHaskellSourceError(cell, 'has an unbalanced import list.');
+  }
+
+  if (isSymbolToken(tokens[cursor], ')')) throwHaskellSourceError(cell, 'has an unbalanced import list.');
+
+  return { end: tokens[cursor - 1].end, nextTokenIndex: cursor };
+}
+
+function consumeHaskellModuleName(tokens, start, cell) {
+  let cursor = start;
+  if (tokens[cursor]?.type !== 'identifier') throwHaskellSourceError(cell, 'has an incomplete import declaration.');
+  cursor += 1;
+
+  while (isSymbolToken(tokens[cursor], '.')) {
+    cursor += 1;
+    if (tokens[cursor]?.type !== 'identifier') {
+      throwHaskellSourceError(cell, 'has an incomplete import declaration.');
+    }
+    cursor += 1;
+  }
+
+  return cursor;
+}
+
+function consumeBalancedImportList(tokens, start, cell) {
+  let depth = 0;
+
+  for (let cursor = start; cursor < tokens.length; cursor += 1) {
+    if (isSymbolToken(tokens[cursor], '(')) depth += 1;
+    if (isSymbolToken(tokens[cursor], ')')) depth -= 1;
+    if (depth === 0) return cursor + 1;
+  }
+
+  throwHaskellSourceError(cell, 'has an unbalanced import list.');
+}
+
+function hasModuleDeclaration(tokens) {
+  const nesting = { '(': 0, '[': 0, '{': 0 };
+
+  for (let index = 0; index < tokens.length; index += 1) {
+    const token = tokens[index];
+    const isTopLevel = Object.values(nesting).every((depth) => depth === 0);
+    if (isTopLevel && isIdentifierToken(token, 'module') && matchesModuleDeclaration(tokens, index)) return true;
+
+    if (token.type !== 'symbol') continue;
+    if (Object.hasOwn(nesting, token.value)) nesting[token.value] += 1;
+    if (token.value === ')') nesting['('] = Math.max(0, nesting['('] - 1);
+    if (token.value === ']') nesting['['] = Math.max(0, nesting['['] - 1);
+    if (token.value === '}') nesting['{'] = Math.max(0, nesting['{'] - 1);
+  }
+
+  return false;
+}
+
+function matchesModuleDeclaration(tokens, start) {
+  let cursor = start + 1;
+  if (tokens[cursor]?.type !== 'identifier') return false;
+  cursor += 1;
+
+  while (isSymbolToken(tokens[cursor], '.') && tokens[cursor + 1]?.type === 'identifier') cursor += 2;
+  if (isSymbolToken(tokens[cursor], '(')) {
+    let depth = 0;
+    do {
+      if (isSymbolToken(tokens[cursor], '(')) depth += 1;
+      if (isSymbolToken(tokens[cursor], ')')) depth -= 1;
+      cursor += 1;
+    } while (cursor < tokens.length && depth > 0);
+    if (depth !== 0) return false;
+  }
+
+  return isIdentifierToken(tokens[cursor], 'where');
+}
+
+function isLanguagePragma(token) {
+  return token?.type === 'pragma' && /^\{-#\s*LANGUAGE\b/u.test(token.value);
+}
+
+function isSourcePragma(token) {
+  return token?.type === 'pragma' && /^\{-#\s*SOURCE\b/u.test(token.value);
+}
+
+function isIdentifierToken(token, value) {
+  return token?.type === 'identifier' && token.value === value;
+}
+
+function isSymbolToken(token, value) {
+  return token?.type === 'symbol' && token.value === value;
+}
+
+function isHaskellIdentifierStart(character) {
+  return /[\p{L}_]/u.test(character);
+}
+
+function isHaskellIdentifierContinuation(character) {
+  return /[\p{L}\p{M}\p{N}_']/u.test(character);
+}
+
+function isHaskellSymbol(character) {
+  return '!#$%&*+./<=>?@\\^|-~:'.includes(character);
+}
+
+function throwHaskellSourceError(cell, detail) {
+  const context = cell ? ` "${cell.id}" in ${cell.pagePath}` : '';
+  throw new Error(`Haskell cell${context} ${detail}`);
 }
 
 function haskellStringLiteral(value) {

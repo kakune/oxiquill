@@ -16,7 +16,7 @@ interactive fence は `rust`、`python`、`haskell`（Markdown の `{.rust}` for
 | Field        | Type と rule                                                                                                          | Default  |
 | ------------ | --------------------------------------------------------------------------------------------------------------------- | -------- |
 | `id`         | 必須の lowercase kebab-case `^[a-z][a-z0-9]*(?:-[a-z0-9]+)*$`。page 内と route scope 後で unique。                    | —        |
-| `title`      | cell header に表示する string。                                                                                       | `id`     |
+| `title`      | cell header に表示する non-empty string。明示した値は前後の空白を除去。                                               | `id`     |
 | `run`        | `button`、`reactive`、`autorun`。                                                                                     | `button` |
 | `inputs`     | `^[a-z][a-z0-9_]*$` に一致する lowercase cross-language identifier から input spec への mapping。`autorun` では禁止。 | `{}`     |
 | `packages`   | unique non-empty Pyodide package name。Python 専用。                                                                  | `[]`     |
@@ -190,11 +190,15 @@ Haskell セルは `--|` metadata comment を使います。input value は Haske
 --|   factor: { type: integer, label: factor, min: 1, max: 5, step: 1, value: 3 }
 --|   label: { type: text, label: label, value: sample }
 --|   include_squares: { type: checkbox, label: include squares, value: true }
-import Data.List (intercalate)
+{- Imports may use normal multiline Haskell layout. -}
+import Data.List
+  ( intercalate
+  , sort
+  )
 
 let base = [1 .. 4 :: Int]
 let scaled = map (* factor) base
-let displayed = if include_squares then map (\value -> value * value) scaled else scaled
+let displayed = sort (if include_squares then map (\value -> value * value) scaled else scaled)
 
 putStrLn (label ++ ": " ++ intercalate ", " (map show displayed))
 putStrLn ("total = " ++ show (sum displayed))

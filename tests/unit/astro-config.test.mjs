@@ -1,5 +1,6 @@
 // @vitest-environment node
 
+import { createRequire } from 'node:module';
 import os from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -23,6 +24,9 @@ const { defineOxiquillConfig: definePackageConfig, oxiquillIntegration } =
   await import('../../packages/oxiquill/src/astro/index.ts');
 const { readOxiquillMetadata } = await import('../../packages/oxiquill/src/config/metadata.mjs');
 const { canonicalPath } = await import('../../packages/oxiquill/src/config/paths.mjs');
+const requireFromPackage = createRequire(path.resolve(process.cwd(), 'packages/oxiquill/package.json'));
+const requireFromStarlight = createRequire(requireFromPackage.resolve('@astrojs/starlight'));
+const { default: astroMdx } = await import(pathToFileURL(requireFromStarlight.resolve('@astrojs/mdx')).href);
 const linkedConsumerRoot = new URL('../fixtures/linked-consumer/', import.meta.url);
 const tempRoot = pathToFileURL(canonicalPath(os.tmpdir()));
 const preactExportSpecifiers = [
@@ -106,6 +110,30 @@ async function resolveWithVite(update, ids) {
   } finally {
     await server.close();
   }
+}
+
+async function compileMdxWithAstro(update, source, filePath) {
+  const integration = astroMdx();
+  const config = {
+    markdown: update.markdown,
+    srcDir: new URL('./src/', linkedConsumerRoot)
+  };
+  let vitePlugins;
+
+  await integration.hooks['astro:config:setup']({
+    addContentEntryType: vi.fn(),
+    addPageExtension: vi.fn(),
+    addRenderer: vi.fn(),
+    config,
+    updateConfig: (value) => {
+      vitePlugins = value.vite.plugins;
+    }
+  });
+  integration.hooks['astro:config:done']({ config, logger: { warn: vi.fn() } });
+
+  const plugin = vitePlugins.find(({ name }) => name === '@mdx-js/rolldown');
+  plugin.configResolved({ build: { sourcemap: false }, plugins: [] });
+  return plugin.transform.handler(source, filePath);
 }
 
 describe('defineOxiquillConfig', () => {
@@ -196,6 +224,32 @@ describe('defineOxiquillConfig', () => {
     expect(rehypePlugins.map(pluginName)).toEqual(['rehypeKatex', 'rehypePlugin']);
     expect(update.markdown).not.toHaveProperty('remarkPlugins');
     expect(update.markdown).not.toHaveProperty('rehypePlugins');
+  });
+
+  it('compiles MDX whose author bindings collide with every preferred runtime alias', async () => {
+    const config = defineOxiquillConfig({ sidebar: [], title: 'Docs' });
+    const update = runConfigSetup(config);
+    const rendered = await compileMdxWithAstro(
+      update,
+      `export const __OxiquillInteractiveCell = () => null;
+export const __OxiquillMermaidDiagram = () => null;
+export const __oxiquillCell0 = {};
+
+\`\`\`rust
+//| id: collision
+println!("ok");
+\`\`\`
+
+\`\`\`mermaid
+flowchart LR
+  A --> B
+\`\`\``,
+      path.join(fileURLToPath(linkedConsumerRoot), 'content', 'docs', 'collision.mdx')
+    );
+
+    expect(rendered.code).toContain('__OxiquillInteractiveCell1');
+    expect(rendered.code).toContain('__OxiquillMermaidDiagram1');
+    expect(rendered.code).toContain('__oxiquillCell01');
   });
 
   it('renders overlapping public media bases through the configured Markdown processor', async () => {

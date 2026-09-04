@@ -4,7 +4,12 @@ import {
   throwInteractiveCellDiagnostics,
   uniqueCellIdDiagnostics
 } from './cell-authoring.mjs';
-import { identifierAttribute, visit } from './remark-mdx-helpers.mjs';
+import {
+  allocateMdxIdentifier,
+  collectReservedMdxIdentifiers,
+  identifierAttribute,
+  visit
+} from './remark-mdx-helpers.mjs';
 
 export default function remarkInteractiveCells({ root = process.cwd() } = {}) {
   return (tree, file) => {
@@ -21,14 +26,20 @@ export default function remarkInteractiveCells({ root = process.cwd() } = {}) {
     throwInteractiveCellDiagnostics(diagnostics);
     throwInteractiveCellDiagnostics(uniqueCellIdDiagnostics(cells.map(({ cell }) => cell)));
 
+    const reservedIdentifiers = collectReservedMdxIdentifiers(tree);
+    const componentIdentifier = allocateMdxIdentifier(reservedIdentifiers, '__OxiquillInteractiveCell');
+    const cellIdentifiers = cells.map((_, index) =>
+      allocateMdxIdentifier(reservedIdentifiers, interactiveCellIdentifier(index))
+    );
+
     cells.forEach(({ cell, node }, index) => {
       Object.assign(node, {
         type: 'mdxJsxFlowElement',
-        name: 'InteractiveCell',
+        name: componentIdentifier,
         attributes: [
           { type: 'mdxJsxAttribute', name: 'client:visible', value: null },
           { type: 'mdxJsxAttribute', name: 'cellId', value: cell.id },
-          identifierAttribute('cell', interactiveCellIdentifier(index))
+          identifierAttribute('cell', cellIdentifiers[index])
         ],
         children: []
       });
@@ -39,19 +50,20 @@ export default function remarkInteractiveCells({ root = process.cwd() } = {}) {
     });
 
     if (cells.length > 0 && Array.isArray(tree.children)) {
-      tree.children.unshift(createInteractiveCellImports(cells.map(({ cell }) => cell.id)));
+      tree.children.unshift(
+        createInteractiveCellImports(
+          componentIdentifier,
+          cells.map(({ cell }, index) => ({ cellId: cell.id, identifier: cellIdentifiers[index] }))
+        )
+      );
     }
   };
 }
 
-function createInteractiveCellImports(cellIds) {
-  const componentImport = createImportDeclaration('InteractiveCell', 'oxiquill/runtime/InteractiveCell', true);
-  const cellImports = cellIds.map((cellId, index) =>
-    createImportDeclaration(
-      interactiveCellIdentifier(index),
-      `virtual:oxiquill/cell?cellId=${encodeURIComponent(cellId)}`,
-      false
-    )
+function createInteractiveCellImports(componentIdentifier, cells) {
+  const componentImport = createImportDeclaration(componentIdentifier, 'oxiquill/runtime/InteractiveCell', true);
+  const cellImports = cells.map(({ cellId, identifier }) =>
+    createImportDeclaration(identifier, `virtual:oxiquill/cell?cellId=${encodeURIComponent(cellId)}`, false)
   );
   const declarations = [componentImport, ...cellImports];
 
