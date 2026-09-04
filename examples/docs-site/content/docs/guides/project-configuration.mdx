@@ -131,7 +131,7 @@ Runtime fingerprints contain semantic build inputs rather than machine-local pat
 
 ## Base Paths and Public Assets
 
-Set Astro's `base` when publishing below a subpath. Oxiquill applies it to interactive-cell manifests, language runtimes, diagrams, and `/media/...` references. Keep authored public URLs root-relative; the Markdown transform adds the configured base exactly once.
+Set Astro's `base` when publishing below a subpath. Oxiquill applies it to interactive-cell manifests, language runtimes, diagrams, and `/media/...` references. Keep every authored public URL in root-relative `/media/...` form, even when `base` itself is `/media` or starts the same way. Do not add the configured base manually; the normal Markdown pass prefixes the authored URL.
 
 Generated runtime files belong under `.oxiquill` and `public/oxiquill`; the verified download cache belongs under `.cache/oxiquill/downloads/v1`; and the final static site belongs under Astro's `outDir` (normally `dist`). Generated directories and their ownership markers must not be edited directly. The download cache may be retained across builds and reconstructed outputs, but its files are verified before every use.
 

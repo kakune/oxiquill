@@ -3,7 +3,7 @@ title: Media
 description: Embed PNG, JPEG, PDF, and similar static files in MDX notes.
 ---
 
-Use `public/media` for static files that should be served as-is. MDX pages can reference those files with `/media/...` URLs, so authors do not need imports for common images or PDFs.
+Use `public/media` for static files that should be served as-is. MDX pages can reference those files with root-relative `/media/...` URLs, so authors do not need imports for common images or PDFs. Always use that source form: do not include Astro's configured `base`, because Oxiquill adds it during the Markdown transform.
 
 ## Image Files
 
@@ -40,6 +40,6 @@ For PDFs, include both an embedded frame and a normal link. The frame lets reade
 ## Placement Rules
 
 - Put public files under `public/media`.
-- Reference them with absolute `/media/...` URLs.
+- Reference them with root-relative `/media/...` URLs; never add Astro's configured `base` manually.
 - Keep generated media out of the docs tree unless the file itself is the intended source asset.
 - Use stable sample files so tests and screenshots remain deterministic.

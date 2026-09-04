@@ -141,7 +141,7 @@ Mermaid source は repository-owned MDX に置きます。信頼できない外�
 
 ## メディアを追加する
 
-PNG、JPEG、PDF など処理せずに配信したい静的 file は `public/media` に置きます。MDX からは `/media/...` URL で参照します。
+PNG、JPEG、PDF など処理せずに配信したい静的 file は `public/media` に置きます。MDX からは root-relative の `/media/...` URL で参照します。Astro の configured `base` は含めず、Oxiquill の Markdown transform に追加させます。
 
 ```md
 ![Sample image](/media/examples/sample.png)

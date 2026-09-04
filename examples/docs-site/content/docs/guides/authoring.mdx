@@ -141,7 +141,7 @@ Keep Mermaid source in repository-owned MDX. Do not pass untrusted external inpu
 
 ## Add Media
 
-Put unprocessed static files such as PNG, JPEG, and PDF files in `public/media`. Reference them from MDX with `/media/...` URLs.
+Put unprocessed static files such as PNG, JPEG, and PDF files in `public/media`. Reference them from MDX with root-relative `/media/...` URLs. Do not include Astro's configured `base`; Oxiquill adds it during the Markdown transform.
 
 ```md
 ![Sample image](/media/examples/sample.png)
