@@ -1,3 +1,5 @@
+import { createRequire } from 'node:module';
+import { resolve } from 'node:path';
 import { describe, expect, it } from 'vitest';
 import {
   pageIdFromPath,
@@ -37,6 +39,9 @@ import {
   splitHaskellCellSource,
   splitCellSource
 } from '../../packages/oxiquill/src/generator/doc-runtime-core.mjs';
+
+const requireFromPackage = createRequire(resolve(process.cwd(), 'packages/oxiquill/package.json'));
+const { parse: parseToml } = requireFromPackage('smol-toml');
 
 const highlighter = {
   codeToHtml: (source, options) => Promise.resolve(`<pre data-lang="${options.lang}">${source}</pre>`)
@@ -561,6 +566,9 @@ describe('doc runtime core', () => {
     expect(packageNameFromCargoToml('[package]\nname = "doc-rust"\n', '/repo/crates/doc-rust/Cargo.toml')).toBe(
       'doc-rust'
     );
+    expect(packageNameFromCargoToml('[package]\nname = "補助-crate٢"\n', '/repo/crates/unicode/Cargo.toml')).toBe(
+      '補助-crate٢'
+    );
     expect(() => packageNameFromCargoToml('[dependencies]\nserde = "1"\n', '/repo/crates/bad/Cargo.toml')).toThrow(
       'missing a [package] table'
     );
@@ -573,6 +581,37 @@ describe('doc runtime core', () => {
         { rustCellsDir: '/repo/.oxiquill/rust-cells' }
       )
     ).toThrow('use duplicate package name');
+  });
+
+  it('quotes and parses every generated helper-crate dependency key in deterministic order', () => {
+    const crates = new Map([
+      ['ascii', { name: 'ascii', relativePath: '../../crates/ascii' }],
+      ['hyphen-crate', { name: 'hyphen-crate', relativePath: '../../crates/hyphen' }],
+      ['under_score', { name: 'under_score', relativePath: '../../crates/underscore' }],
+      ['補助-crate٢', { name: '補助-crate٢', relativePath: '../../crates/unicode' }]
+    ]);
+    const manifest = generateRustCargoToml(
+      [{ crates: ['補助-crate٢', 'under_score', 'hyphen-crate', 'ascii'] }],
+      crates,
+      runtimeInputs
+    );
+
+    const dependencyLines = [
+      '"ascii" = { path = "../../crates/ascii" }',
+      '"hyphen-crate" = { path = "../../crates/hyphen" }',
+      '"under_score" = { path = "../../crates/underscore" }',
+      '"補助-crate٢" = { path = "../../crates/unicode" }'
+    ];
+    const dependencyPositions = dependencyLines.map((line) => manifest.indexOf(line));
+    expect(dependencyPositions.every((position) => position >= 0)).toBe(true);
+    expect(dependencyPositions).toEqual([...dependencyPositions].sort((left, right) => left - right));
+    expect(generateRustDependency('補助-crate٢', crates)).toBe('"補助-crate٢" = { path = "../../crates/unicode" }');
+
+    const parsed = parseToml(manifest);
+    expect(parsed.dependencies.ascii.path).toBe('../../crates/ascii');
+    expect(parsed.dependencies['hyphen-crate'].path).toBe('../../crates/hyphen');
+    expect(parsed.dependencies.under_score.path).toBe('../../crates/underscore');
+    expect(parsed.dependencies['補助-crate٢'].path).toBe('../../crates/unicode');
   });
 
   it('generates manifest files and Rust support code', () => {
@@ -588,9 +627,9 @@ describe('doc runtime core', () => {
     );
     expect(generateRustCargoToml([], helperCrates, runtimeInputs)).toContain('serde_json = "=1.0.150"');
     expect(generateRustCargoToml([{ crates: ['doc-rust'] }], helperCrates, runtimeInputs)).toContain(
-      'doc-rust = { path = "../../crates/doc-rust" }'
+      '"doc-rust" = { path = "../../crates/doc-rust" }'
     );
-    expect(generateRustDependency('doc-rust', helperCrates)).toContain('doc-rust');
+    expect(generateRustDependency('doc-rust', helperCrates)).toBe('"doc-rust" = { path = "../../crates/doc-rust" }');
     expect(() => generateRustDependency('missing', helperCrates)).toThrow('unknown Rust crate');
 
     expect(rustIdentifier('1-bad id')).toBe('cell_1_bad_id');
