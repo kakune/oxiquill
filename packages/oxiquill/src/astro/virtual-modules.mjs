@@ -97,10 +97,6 @@ export function oxiquillVirtualModulesPlugin(paths) {
     },
     configureServer(server) {
       server.watcher.add(watchedFiles);
-      server.watcher.on('change', (file) => {
-        const resolvedId = changedFileModuleIds.get(normalizePath(file));
-        if (resolvedId) sendManifestChanged(server, resolvedId);
-      });
       server.middlewares.use((request, response, next) => {
         const requestUrl = new URL(request.url ?? '/', 'http://localhost');
         if (requestUrl.pathname !== '/__oxiquill/manifest.json') {
@@ -177,14 +173,6 @@ function isMatchingVirtualModuleId(id, resolvedId) {
 
 function virtualModuleName(resolvedId) {
   return resolvedId.slice('\0virtual:oxiquill/'.length);
-}
-
-function sendManifestChanged(server, resolvedId) {
-  server.environments?.client?.hot?.send({
-    type: 'custom',
-    event: 'oxiquill:manifest-changed',
-    data: { module: virtualModuleName(resolvedId) }
-  });
 }
 
 function readGeneratedCellsJson(file) {
