@@ -93,6 +93,20 @@ describe('Rust runtime worker', () => {
       expect(utf8ByteLength(response.error)).toBeLessThanOrEqual(outputArtifactLimits.bytesPerError);
     }
   });
+
+  it('posts one fallback response for an unstringifiable thrown value', async () => {
+    run_rust_cell.mockImplementationOnce(() => {
+      throw Object.create(null);
+    });
+
+    worker.listener?.({
+      data: { requestId: 6, cellId: 'unstringifiable-error', inputs: {} }
+    } as MessageEvent<RuntimeWorkerRequest>);
+    await flushMicrotasks();
+
+    expect(worker.postMessage).toHaveBeenCalledOnce();
+    expect(worker.postMessage).toHaveBeenCalledWith({ requestId: 6, ok: false, error: 'Unknown error.' });
+  });
 });
 
 describe('Rust runtime loader', () => {

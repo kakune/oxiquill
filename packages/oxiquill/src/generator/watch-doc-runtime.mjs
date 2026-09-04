@@ -10,6 +10,8 @@ import {
   createRuntimeWatchPaths,
   createSerialTaskQueue,
   describeChangeKinds,
+  isExcludedCratePath,
+  isRuntimeWatchFileEvent,
   mergeChangeKinds,
   shouldSyncRuntime,
   toWatchEventRelativePath
@@ -94,10 +96,13 @@ export async function watchDocRuntime({ projectConfig, serviceOverrides = {}, sk
   // Chokidar v4 does not expand globs, so watch stable roots and classify events ourselves.
   const watcher = services.watch(createRuntimeWatchPaths(paths), {
     cwd: workspaceRoot,
+    ignored: (filePath) => isExcludedCratePath(toWatchEventRelativePath(workspaceRoot, filePath), paths),
     ignoreInitial: true
   });
 
-  watcher.on('all', (_event, filePath) => {
+  watcher.on('all', (event, filePath) => {
+    if (!isRuntimeWatchFileEvent(event)) return;
+
     const kind = classifyChangedPath(toWatchEventRelativePath(workspaceRoot, filePath), paths);
     if (kind === 'other') return;
 
@@ -106,7 +111,7 @@ export async function watchDocRuntime({ projectConfig, serviceOverrides = {}, sk
   });
 
   watcher.on('ready', () => {
-    console.log('[runtime] watching MDX, Rust, and Haskell cell sources');
+    console.log('[runtime] watching documentation and helper-crate inputs');
   });
 
   if (!skipInitial) {

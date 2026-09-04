@@ -6,8 +6,12 @@ export class ExecutionCancellationError extends Error {
 }
 
 export function isExecutionCancellation(error: unknown): boolean {
-  return (
-    error instanceof ExecutionCancellationError ||
-    (typeof error === 'object' && error !== null && 'name' in error && error.name === 'AbortError')
-  );
+  try {
+    return (
+      error instanceof ExecutionCancellationError ||
+      (typeof error === 'object' && error !== null && 'name' in error && error.name === 'AbortError')
+    );
+  } catch {
+    return false;
+  }
 }

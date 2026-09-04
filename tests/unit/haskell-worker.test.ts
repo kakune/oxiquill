@@ -82,6 +82,16 @@ describe('haskell worker helpers', () => {
     });
     await failingHandler(request);
     expect(failureResponses).toEqual([{ requestId: 4, ok: false, error: 'runtime unavailable' }]);
+
+    const unstringifiableResponses: RuntimeWorkerResponse[] = [];
+    const unstringifiableHandler = createHaskellWorkerRequestHandler({
+      loadModule: async () => {
+        throw Object.create(null);
+      },
+      postMessage: (response) => unstringifiableResponses.push(response)
+    });
+    await unstringifiableHandler(request);
+    expect(unstringifiableResponses).toEqual([{ requestId: 4, ok: false, error: 'Unknown error.' }]);
   });
 
   it('caches modules by expected fingerprint and rejects stale status before loading wasm', async () => {

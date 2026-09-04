@@ -229,6 +229,42 @@ const runtimeSyncOptions = Object.freeze({
   runtimeInputs
 });
 
+function createRustRuntimeHarness(helperFiles) {
+  const paths = createDocRuntimePaths('/repo');
+  const fileSystem = createMemoryFileSystem({
+    '/repo/content/docs/index.mdx': '```rust\n//| id: rust\n//| crates: []\nprintln!("ok");\n```',
+    ...helperFiles
+  });
+  const buildRust = vi.fn(async ({ paths: runtimePaths }) => {
+    await Promise.all([
+      fileSystem.writeFile(path.join(runtimePaths.rustWasmPublicDir, 'doc_rust_cells.js'), 'generated js'),
+      fileSystem.writeFile(path.join(runtimePaths.rustWasmPublicDir, 'doc_rust_cells_bg.wasm'), 'generated wasm')
+    ]);
+  });
+  const syncRustSupport = async ({ fileSystem: runtimeFileSystem, paths: runtimePaths }) => {
+    await Promise.all(
+      ['Cargo.lock', 'LICENSE-MIT', 'LICENSE-APACHE'].map((fileName) =>
+        runtimeFileSystem.writeFile(path.join(runtimePaths.rustCellsDir, fileName), fileName)
+      )
+    );
+  };
+  const options = {
+    ...runtimeSyncOptions,
+    buildHaskell: vi.fn(),
+    buildRust,
+    fileSystem,
+    helperCrates: new Map(),
+    highlighter,
+    mode: 'build',
+    paths,
+    syncLicenses: async () => false,
+    syncPyodide: vi.fn(),
+    syncRustSupport
+  };
+
+  return { buildRust, fileSystem, paths, sync: () => syncDocRuntime(options) };
+}
+
 function pyodidePackage(name, fileName, content, depends = []) {
   return {
     depends,
@@ -942,6 +978,90 @@ describe('doc runtime service', () => {
       rustChanged: false
     });
     expect(fileSystem.writes).toEqual([]);
+  });
+
+  it('rebuilds Rust when authored text and extensionless helper inputs change', async () => {
+    const { buildRust, fileSystem, sync } = createRustRuntimeHarness({
+      '/repo/crates/Cargo.lock': 'lock one',
+      '/repo/crates/doc-rust/build.rs': 'fn main() {}',
+      '/repo/crates/doc-rust/help': 'help one'
+    });
+
+    await sync();
+    expect(buildRust).toHaveBeenCalledTimes(1);
+    await expect(sync()).resolves.toMatchObject({ plan: { languages: { rust: { public: 'keep' } } } });
+
+    await fileSystem.writeFile('/repo/crates/doc-rust/help', 'help two');
+    await expect(sync()).resolves.toMatchObject({ plan: { languages: { rust: { public: 'build' } } } });
+
+    await fileSystem.writeFile('/repo/crates/doc-rust/template.html', '<p>template</p>');
+    await expect(sync()).resolves.toMatchObject({ plan: { languages: { rust: { public: 'build' } } } });
+
+    await fileSystem.rm('/repo/crates/doc-rust/help');
+    await expect(sync()).resolves.toMatchObject({ plan: { languages: { rust: { public: 'build' } } } });
+
+    await fileSystem.writeFile('/repo/crates/Cargo.lock', 'lock two');
+    await expect(sync()).resolves.toMatchObject({ plan: { languages: { rust: { public: 'build' } } } });
+
+    await fileSystem.writeFile('/repo/crates/doc-rust/build.rs', 'fn main() { println!("changed"); }');
+    await expect(sync()).resolves.toMatchObject({ plan: { languages: { rust: { public: 'build' } } } });
+    expect(buildRust).toHaveBeenCalledTimes(6);
+  });
+
+  it('fingerprints binary helper inputs byte-for-byte', async () => {
+    const { buildRust, fileSystem, sync } = createRustRuntimeHarness({
+      '/repo/crates/doc-rust/logo.bin': Buffer.from([0x80])
+    });
+
+    await sync();
+    await fileSystem.writeFile('/repo/crates/doc-rust/logo.bin', Buffer.from([0x81]));
+    await expect(sync()).resolves.toMatchObject({ plan: { languages: { rust: { public: 'build' } } } });
+    expect(buildRust).toHaveBeenCalledTimes(2);
+  });
+
+  it('keeps helper fingerprints stable across directory entry order', async () => {
+    const { buildRust, fileSystem, sync } = createRustRuntimeHarness({
+      '/repo/crates/doc-rust/alpha.txt': 'alpha',
+      '/repo/crates/doc-rust/nested/beta.bin': Buffer.from([0, 1, 2])
+    });
+    const readdir = fileSystem.readdir;
+    let reverseHelperEntries = false;
+    fileSystem.readdir = async (directory, options) => {
+      const entries = await readdir(directory, options);
+      return reverseHelperEntries && memoryPath(directory).startsWith('/repo/crates') ? entries.reverse() : entries;
+    };
+
+    await sync();
+    reverseHelperEntries = true;
+    await expect(sync()).resolves.toMatchObject({ plan: { languages: { rust: { public: 'keep' } } } });
+    expect(buildRust).toHaveBeenCalledOnce();
+  });
+
+  it('ignores Cargo output and nested VCS metadata in helper fingerprints', async () => {
+    const ignoredFiles = {
+      '/repo/crates/doc-rust/target/debug/generated.rs': 'generated one',
+      '/repo/crates/doc-rust/target/debug/build.toml': 'generated one',
+      '/repo/crates/doc-rust/target/debug/logo.bin': Buffer.from([1]),
+      '/repo/crates/doc-rust/nested/.git/config': 'git one',
+      '/repo/crates/doc-rust/nested/.hg/store': 'hg one',
+      '/repo/crates/doc-rust/nested/.svn/entries': 'svn one'
+    };
+    const { buildRust, fileSystem, sync } = createRustRuntimeHarness({
+      '/repo/crates/doc-rust/src/lib.rs': 'pub fn helper() {}',
+      ...ignoredFiles
+    });
+
+    await sync();
+    for (const [filePath, content] of Object.entries(ignoredFiles)) {
+      const changed = Buffer.isBuffer(content) ? Buffer.from([2]) : `${content} changed`;
+      await fileSystem.writeFile(filePath, changed);
+    }
+    await expect(sync()).resolves.toMatchObject({ plan: { languages: { rust: { public: 'keep' } } } });
+    expect(buildRust).toHaveBeenCalledOnce();
+
+    await fileSystem.writeFile('/repo/crates/doc-rust/src/lib.rs', 'pub fn helper() { println!("changed"); }');
+    await expect(sync()).resolves.toMatchObject({ plan: { languages: { rust: { public: 'build' } } } });
+    expect(buildRust).toHaveBeenCalledTimes(2);
   });
 
   it('keeps a zero-cell project free of language runtimes and tool invocations', async () => {

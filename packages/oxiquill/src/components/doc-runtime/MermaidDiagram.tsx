@@ -1,5 +1,6 @@
 import type { MermaidConfig } from 'mermaid';
 import { useEffect, useMemo, useRef, useState } from 'preact/hooks';
+import { boundedErrorMessage } from '../../lib/doc-runtime/output-limits.mjs';
 import { labelsForLanguage, type MermaidDiagramKind } from '../../lib/doc-runtime/runtime-localization.js';
 
 interface MermaidDiagramProps {
@@ -7,7 +8,8 @@ interface MermaidDiagramProps {
   source: string;
 }
 
-type RenderState = 'idle' | 'rendering' | 'ready' | 'error';
+type RenderState =
+  { status: 'idle' } | { status: 'rendering' } | { status: 'ready' } | { message: string; status: 'error' };
 type MermaidColorScheme = 'light' | 'dark';
 type MermaidApi = (typeof import('mermaid'))['default'];
 
@@ -16,8 +18,7 @@ let mermaidReady: Promise<MermaidApi> | undefined;
 
 export default function MermaidDiagram({ diagramId, source }: MermaidDiagramProps) {
   const container = useRef<HTMLDivElement>(null);
-  const [error, setError] = useState<string>();
-  const [state, setState] = useState<RenderState>('idle');
+  const [state, setState] = useState<RenderState>({ status: 'idle' });
   const [colorScheme, setColorScheme] = useState<MermaidColorScheme>(() => getMermaidColorScheme());
   const renderId = useMemo(() => `doc-${diagramId}`, [diagramId]);
   const labels = useMemo(() => labelsForLanguage(globalThis.document?.documentElement.lang), []);
@@ -45,8 +46,7 @@ export default function MermaidDiagram({ diagramId, source }: MermaidDiagramProp
     let cancelled = false;
 
     async function renderDiagram(renderElement: HTMLDivElement) {
-      setState('rendering');
-      setError(undefined);
+      setState({ status: 'rendering' });
       renderElement.replaceChildren();
 
       try {
@@ -60,13 +60,11 @@ export default function MermaidDiagram({ diagramId, source }: MermaidDiagramProp
         renderElement.innerHTML = svg;
         hideRenderedSvgFromAccessibility(renderElement);
         bindFunctions?.(renderElement);
-        setState('ready');
+        setState({ status: 'ready' });
       } catch (caught) {
         if (cancelled) return;
 
-        const message = caught instanceof Error ? caught.message : String(caught);
-        setError(message);
-        setState('error');
+        setState({ message: boundedErrorMessage(caught), status: 'error' });
       }
     }
 
@@ -83,7 +81,7 @@ export default function MermaidDiagram({ diagramId, source }: MermaidDiagramProp
       class="mermaid-diagram"
       aria-labelledby={ids.title}
       aria-describedby={ids.description}
-      data-state={state}
+      data-state={state.status}
       data-testid="mermaid-diagram"
     >
       <span id={ids.title} class="doc-visually-hidden">
@@ -99,13 +97,13 @@ export default function MermaidDiagram({ diagramId, source }: MermaidDiagramProp
         aria-labelledby={ids.title}
         role="img"
       />
-      {state === 'idle' || state === 'rendering' ? (
+      {state.status === 'idle' || state.status === 'rendering' ? (
         <figcaption class="empty-state" role="status">
           {labels.mermaidLoading}
         </figcaption>
-      ) : error ? (
+      ) : state.status === 'error' ? (
         <figcaption class="error-state" role="alert">
-          {labels.mermaidError(error)}
+          {labels.mermaidError(state.message)}
         </figcaption>
       ) : null}
     </figure>

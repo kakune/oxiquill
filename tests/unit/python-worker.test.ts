@@ -328,6 +328,16 @@ describe('python worker request handling', () => {
     await evaluationHandler(pythonRequest({ packages: [] }));
     expect(globals.destroy).toHaveBeenCalledOnce();
     expect(evaluationResponses).toEqual([{ requestId: 7, ok: false, error: 'evaluation failed' }]);
+
+    const unstringifiableResponses: RuntimeWorkerResponse[] = [];
+    const unstringifiableHandler = createPythonWorkerRequestHandler({
+      ensurePyodide: async () => {
+        throw Object.create(null);
+      },
+      postMessage: (response) => unstringifiableResponses.push(response)
+    });
+    await unstringifiableHandler(pythonRequest());
+    expect(unstringifiableResponses).toEqual([{ requestId: 7, ok: false, error: 'Unknown error.' }]);
   });
 });
 

@@ -3,6 +3,7 @@ import {
   createLatestRequestScheduler,
   createRunOnceCache
 } from '../../packages/oxiquill/src/lib/doc-runtime/interactive-cell-scheduler';
+import { isExecutionCancellation } from '../../packages/oxiquill/src/lib/doc-runtime/execution-cancellation';
 
 function createDeferred<Result>() {
   let reject!: (reason: Error) => void;
@@ -137,6 +138,13 @@ describe('interactive cell request scheduler', () => {
 
     scheduler.schedule('request');
     await vi.waitFor(() => expect(onCancelled).toHaveBeenCalledOnce());
+  });
+
+  it('treats an uninspectable thrown value as a regular failure', () => {
+    const revoked = Proxy.revocable({}, {});
+    revoked.revoke();
+
+    expect(isExecutionCancellation(revoked.proxy)).toBe(false);
   });
 
   it('shares successful and failed executions by key', async () => {

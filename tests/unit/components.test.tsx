@@ -48,6 +48,8 @@ vi.mock('../../packages/oxiquill/src/lib/doc-runtime/runtime-client', () => ({
 
 await import('./mocks/mermaid');
 const { default: InteractiveCell } = await import('../../packages/oxiquill/src/components/doc-runtime/InteractiveCell');
+const { default: ArtifactErrorBoundary } =
+  await import('../../packages/oxiquill/src/components/doc-runtime/ArtifactErrorBoundary');
 const {
   default: MermaidDiagram,
   getMermaidColorScheme,
@@ -476,12 +478,14 @@ describe('InteractiveCell', () => {
 
   it('coerces non-Error failures to strings', async () => {
     setManifestCells([makeCell()]);
-    mocks.runInteractiveCell.mockRejectedValue('string failure');
+    mocks.runInteractiveCell.mockRejectedValueOnce('string failure').mockRejectedValueOnce(Object.create(null));
 
     render(<InteractiveCell cellId="cell-one" />);
     fireEvent.click(screen.getByRole('button', { name: 'Run' }));
 
     await waitFor(() => expect(screen.getByText('string failure')).toBeVisible());
+    fireEvent.click(screen.getByRole('button', { name: 'Run' }));
+    await waitFor(() => expect(screen.getByRole('alert')).toHaveTextContent('Cell execution failed: Unknown error.'));
   });
 
   it('announces localized timeout failures as an alert', async () => {
@@ -756,6 +760,63 @@ describe('InteractiveCell', () => {
   });
 });
 
+describe('ArtifactErrorBoundary', () => {
+  function TestArtifact({ fail }: { fail: boolean }) {
+    if (fail) throw new Error();
+    return <p>replacement artifact</p>;
+  }
+
+  it('renders empty-message failures and resets even a legacy empty error state', async () => {
+    const firstResetKey = {};
+    const secondResetKey = {};
+    const consoleError = vi.spyOn(console, 'error').mockImplementation(() => undefined);
+    let boundary: InstanceType<typeof ArtifactErrorBoundary> | undefined;
+
+    try {
+      const { rerender } = render(
+        <ArtifactErrorBoundary
+          ref={(instance) => {
+            boundary = instance ?? undefined;
+          }}
+          index={0}
+          labels={labelsForLanguage('en')}
+          resetKey={firstResetKey}
+        >
+          <TestArtifact fail />
+        </ArtifactErrorBoundary>
+      );
+
+      await waitFor(() =>
+        expect(screen.getByRole('alert')).toHaveTextContent('Artifact 1 failed to render: Unknown error.')
+      );
+      rerender(
+        <ArtifactErrorBoundary
+          ref={(instance) => {
+            boundary = instance ?? undefined;
+          }}
+          index={0}
+          labels={labelsForLanguage('en')}
+          resetKey={firstResetKey}
+        >
+          <TestArtifact fail={false} />
+        </ArtifactErrorBoundary>
+      );
+      act(() => boundary?.setState({ error: '' }));
+      expect(screen.getByRole('alert')).toHaveTextContent('Artifact 1 failed to render:');
+
+      rerender(
+        <ArtifactErrorBoundary index={0} labels={labelsForLanguage('en')} resetKey={secondResetKey}>
+          <TestArtifact fail={false} />
+        </ArtifactErrorBoundary>
+      );
+      await waitFor(() => expect(screen.getByText('replacement artifact')).toBeVisible());
+      expect(screen.queryByRole('alert')).not.toBeInTheDocument();
+    } finally {
+      consoleError.mockRestore();
+    }
+  });
+});
+
 describe('MermaidDiagram', () => {
   it('falls back to the light Mermaid palette without a document', () => {
     vi.stubGlobal('document', undefined);
@@ -886,13 +947,21 @@ describe('MermaidDiagram', () => {
   });
 
   it('renders Mermaid errors from Error and non-Error values', async () => {
-    mocks.mermaidRender.mockRejectedValueOnce(new Error('bad diagram')).mockRejectedValueOnce('string diagram error');
+    mocks.mermaidRender
+      .mockRejectedValueOnce(new Error('bad diagram'))
+      .mockRejectedValueOnce('string diagram error')
+      .mockRejectedValueOnce(new Error());
 
     const { rerender } = render(<MermaidDiagram diagramId="bad" source="bad" />);
     await waitFor(() => expect(screen.getByRole('alert')).toHaveTextContent('bad diagram'));
 
     rerender(<MermaidDiagram diagramId="bad" source="still bad" />);
     await waitFor(() => expect(screen.getByRole('alert')).toHaveTextContent('string diagram error'));
+
+    rerender(<MermaidDiagram diagramId="bad" source="empty error" />);
+    await waitFor(() =>
+      expect(screen.getByRole('alert')).toHaveTextContent('Mermaid diagram could not be rendered: Unknown error.')
+    );
   });
 
   it('ignores resolved or rejected Mermaid renders after unmount', async () => {
@@ -965,6 +1034,14 @@ describe('lazy chart renderer', () => {
     await Promise.resolve();
 
     expect(screen.queryByTestId('doc-plot')).not.toBeInTheDocument();
+  });
+
+  it('normalizes an unstringifiable chart import failure', async () => {
+    render(<LazyChartOutput spec={spec} load={() => Promise.reject(Object.create(null))} />);
+
+    await waitFor(() =>
+      expect(screen.getByRole('alert')).toHaveTextContent('Chart renderer could not be loaded: Unknown error.')
+    );
   });
 
   it('retries a transient chart-module load failure', async () => {
@@ -1517,7 +1594,10 @@ describe('TableOutput', () => {
   });
 
   it('surfaces clipboard and CSV conversion failures', async () => {
-    const writeText = vi.fn().mockRejectedValue(new Error('permission denied'));
+    const writeText = vi
+      .fn()
+      .mockRejectedValueOnce(new Error('permission denied'))
+      .mockRejectedValueOnce(Object.create(null));
     Object.defineProperty(globalThis.navigator, 'clipboard', {
       configurable: true,
       value: { writeText }
@@ -1534,6 +1614,9 @@ describe('TableOutput', () => {
 
     fireEvent.click(screen.getByTestId('table-copy-csv'));
     await waitFor(() => expect(screen.getByRole('alert')).toHaveTextContent('permission denied'));
+
+    fireEvent.click(screen.getByTestId('table-copy-csv'));
+    await waitFor(() => expect(screen.getByRole('alert')).toHaveTextContent('Unable to copy CSV: Unknown error.'));
 
     rerender(
       <TableOutput

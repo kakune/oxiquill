@@ -18,6 +18,7 @@ import {
 } from './doc-runtime-core.mjs';
 import { throwInteractiveCellDiagnostics, validateCellDependencies } from '../lib/doc-runtime/cell-authoring.mjs';
 import { defaultFileSystem, listFiles, writeIfChanged } from './doc-runtime/file-system.mjs';
+import { listAuthoredHelperInputFiles } from './doc-runtime/helper-inputs.mjs';
 import { listHelperCrates } from './doc-runtime/helper-crate-service.mjs';
 import { normalizePath } from './doc-runtime/path-utils.mjs';
 import {
@@ -31,7 +32,7 @@ import {
   generateRuntimeVersionModule,
   summarizeCells
 } from './doc-runtime/runtime-summary.mjs';
-import { hashText, stableFingerprint } from './doc-runtime/hashing.mjs';
+import { hashBytes, hashText, stableFingerprint } from './doc-runtime/hashing.mjs';
 import { createRuntimePlan } from './doc-runtime/runtime-plan.mjs';
 import {
   createRuntimeOwnedOutputs,
@@ -563,35 +564,14 @@ function recordedFilesExist(files, directory, fileSystem) {
 }
 
 async function fingerprintHelperSources({ fileSystem, paths }) {
-  const files = await listSelectedFiles(paths.cratesDir, { fileSystem });
+  const files = await listAuthoredHelperInputFiles(paths.cratesDir, { fileSystem });
   const entries = await Promise.all(
-    files.map(async (filePath) => ({
-      content: await fileSystem.readFile(filePath, 'utf8'),
-      path: normalizePath(path.relative(paths.cratesDir, filePath))
+    files.map(async ({ filePath, path: relativePath }) => ({
+      digest: hashBytes(await fileSystem.readFile(filePath)),
+      path: relativePath
     }))
   );
   return stableFingerprint(entries);
-}
-
-async function listSelectedFiles(directory, { fileSystem }) {
-  let entries;
-  try {
-    entries = await fileSystem.readdir(directory, { withFileTypes: true });
-  } catch (error) {
-    if (error?.code === 'ENOENT') return [];
-    throw error;
-  }
-
-  const nested = await Promise.all(
-    entries
-      .filter((entry) => entry.name !== 'target' && entry.name !== '.git')
-      .map(async (entry) => {
-        const entryPath = path.join(directory, entry.name);
-        if (entry.isDirectory()) return listSelectedFiles(entryPath, { fileSystem });
-        return entry.isFile() && /(?:\.rs|\.toml|Cargo\.lock)$/u.test(entry.name) ? [entryPath] : [];
-      })
-  );
-  return nested.flat().sort();
 }
 
 export async function collectCells({ fileSystem = defaultFileSystem, helperCrates, highlighter, paths }) {

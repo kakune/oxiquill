@@ -1,5 +1,8 @@
 import path from 'node:path';
 import { pathFromUrl, relativePathFromUrl } from '../config/paths.mjs';
+import { isAuthoredHelperInputPath, isExcludedHelperInputPath } from './doc-runtime/helper-inputs.mjs';
+
+const runtimeWatchFileEvents = new Set(['add', 'change', 'unlink']);
 
 export function classifyChangedPath(filePath, paths) {
   const normalized = normalizePath(filePath);
@@ -16,6 +19,17 @@ export function createRuntimeWatchPaths(paths) {
   if (!paths) return ['content/docs', 'crates'];
 
   return [pathFromUrl(paths.docsDir), pathFromUrl(paths.cratesDir)];
+}
+
+export function isExcludedCratePath(filePath, paths) {
+  const normalized = normalizePath(filePath);
+  const cratesDir = paths ? relativePathFromUrl(paths.workspaceRoot, paths.cratesDir) : 'crates';
+  const relativePath = relativePathWithin(normalized, cratesDir);
+  return relativePath !== undefined && isExcludedHelperInputPath(relativePath);
+}
+
+export function isRuntimeWatchFileEvent(event) {
+  return runtimeWatchFileEvents.has(event);
 }
 
 export function shouldSyncRuntime(changeKinds) {
@@ -83,6 +97,11 @@ function isDocsPath(filePath, docsDir) {
 }
 
 function isCratePath(filePath, cratesDir) {
-  const prefix = normalizePath(cratesDir).replace(/\/$/u, '');
-  return filePath.startsWith(`${prefix}/`) && /\.(rs|toml)$/u.test(filePath);
+  const relativePath = relativePathWithin(filePath, cratesDir);
+  return relativePath !== undefined && isAuthoredHelperInputPath(relativePath);
+}
+
+function relativePathWithin(filePath, directory) {
+  const prefix = normalizePath(directory).replace(/\/$/u, '');
+  return filePath.startsWith(`${prefix}/`) ? filePath.slice(prefix.length + 1) : undefined;
 }
