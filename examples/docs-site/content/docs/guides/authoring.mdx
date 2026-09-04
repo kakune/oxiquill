@@ -102,7 +102,7 @@ Common metadata fields:
 - `inputs`: mapping of lowercase cross-language identifiers to input definitions; forbidden for `autorun`.
 - `crates`: Rust helper crates; Rust only.
 - `packages`: Pyodide packages; Python only.
-- `timeoutMs`: positive integer timeout in milliseconds; defaults to `30000`.
+- `timeoutMs`: integer timeout from `1` through `2147483647` milliseconds, inclusive; defaults to `30000`.
 - `showSource`: boolean source visibility; defaults to `true`.
 
 These are the only top-level fields. Dependency arrays must contain unique non-empty strings. Supported input types are `range`, `number`, `integer`, `text`, `textarea`, `checkbox`, `select`, and `radio`. See [Interactive Cells](../../features/interactive-cells/) for the exact input fields, defaults, constraints, and option schema.

@@ -21,7 +21,7 @@ Only these top-level fields are accepted; unknown fields are errors:
 | `inputs`     | Mapping from lowercase cross-language identifiers matching `^[a-z][a-z0-9_]*$` to input specs. Not allowed with `autorun`. | `{}`     |
 | `packages`   | Unique non-empty Pyodide package names; Python only.                                                                       | `[]`     |
 | `crates`     | Unique non-empty helper package names from direct children of `cratesDir`; Rust only.                                      | `[]`     |
-| `timeoutMs`  | Positive integer milliseconds.                                                                                             | `30000`  |
+| `timeoutMs`  | Integer milliseconds from `1` through `2147483647`, inclusive.                                                             | `30000`  |
 | `showSource` | Boolean controlling initial source visibility.                                                                             | `true`   |
 
 The source must contain non-metadata code. Malformed YAML, a wrong scalar/collection type, duplicate normalized ID/binding/function, unknown package/crate, or language-mismatched dependency field fails before output is written. Diagnostics include page path, fence start line, cell ID when available, and the exact field path.

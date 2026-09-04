@@ -21,7 +21,7 @@ interactive fence は `rust`、`python`、`haskell`（Markdown の `{.rust}` for
 | `inputs`     | `^[a-z][a-z0-9_]*$` に一致する lowercase cross-language identifier から input spec への mapping。`autorun` では禁止。 | `{}`     |
 | `packages`   | unique non-empty Pyodide package name。Python 専用。                                                                  | `[]`     |
 | `crates`     | `cratesDir` 直下の helper package name の unique non-empty list。Rust 専用。                                          | `[]`     |
-| `timeoutMs`  | positive integer millisecond。                                                                                        | `30000`  |
+| `timeoutMs`  | `1` 以上 `2147483647` 以下の integer millisecond。                                                                    | `30000`  |
 | `showSource` | initial source visibility を指定する boolean。                                                                        | `true`   |
 
 source には metadata 以外の code が必要です。malformed YAML、wrong scalar/collection type、duplicate normalized ID/binding/function、unknown package/crate、language-mismatched dependency field は output を書く前に失敗します。diagnostic は page path、fence start line、可能なら cell ID、正確な field path を含みます。

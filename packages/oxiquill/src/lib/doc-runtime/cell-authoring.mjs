@@ -35,6 +35,7 @@ const optionFields = new Set(['label', 'value']);
 const localIdPattern = /^[a-z][a-z0-9]*(?:-[a-z0-9]+)*$/u;
 const inputNamePattern = /^[a-z][a-z0-9_]*$/u;
 const anyOptionPattern = /^\s*(?:\/\/\/?\||#\||--\|)/u;
+const MAX_CELL_TIMEOUT_MS = 2_147_483_647;
 const optionPatterns = {
   haskell: /^\s*--\|\s?(.*)$/u,
   python: /^\s*#\|\s?(.*)$/u,
@@ -263,8 +264,12 @@ function normalizeRunMode(metadata, context, diagnostics) {
 function normalizeTimeout(metadata, context, diagnostics) {
   if (!hasOwn(metadata, 'timeoutMs')) return 30_000;
   const value = metadata.timeoutMs;
-  if (typeof value === 'number' && Number.isFinite(value) && Number.isInteger(value) && value > 0) return value;
-  diagnostics.push(diagnostic(context, 'timeoutMs', 'Expected a positive finite integer.'));
+  if (typeof value === 'number' && Number.isSafeInteger(value) && value >= 1 && value <= MAX_CELL_TIMEOUT_MS) {
+    return value;
+  }
+  diagnostics.push(
+    diagnostic(context, 'timeoutMs', `Expected an integer from 1 through ${MAX_CELL_TIMEOUT_MS} milliseconds.`)
+  );
   return 30_000;
 }
 

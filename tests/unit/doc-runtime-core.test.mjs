@@ -339,6 +339,41 @@ describe('doc runtime core', () => {
     );
   });
 
+  it.each([1, 2_147_483_647])('accepts the timeout boundary %s', (timeoutMs) => {
+    const source = ['```python', '#| id: timeout-boundary', `#| timeoutMs: ${timeoutMs}`, 'print("ok")', '```'].join(
+      '\n'
+    );
+    const parsed = parseCellsFromMarkdown(source, 'content/docs/page.mdx');
+
+    expect(parsed.diagnostics).toEqual([]);
+    expect(parsed.cells[0].timeoutMs).toBe(timeoutMs);
+  });
+
+  it.each(['0', '-1', '1.5', '.nan', '.inf', '-.inf', '2147483648', '9007199254740991', '9007199254740992'])(
+    'rejects timeoutMs %s outside the supported timer range',
+    (timeoutMs) => {
+      const source = ['```python', '#| id: invalid-timeout', `#| timeoutMs: ${timeoutMs}`, 'print("ok")', '```'].join(
+        '\n'
+      );
+      const parsed = parseCellsFromMarkdown(source, 'content/docs/page.mdx');
+
+      expect(parsed.cells).toEqual([]);
+      expect(parsed.diagnostics).toContainEqual(
+        expect.objectContaining({
+          fieldPath: 'timeoutMs',
+          message: 'Expected an integer from 1 through 2147483647 milliseconds.'
+        })
+      );
+    }
+  );
+
+  it('defaults timeoutMs to 30000 when the field is omitted', () => {
+    const parsed = parseCellsFromMarkdown('```python\n#| id: default-timeout\nprint("ok")\n```', 'page.mdx');
+
+    expect(parsed.diagnostics).toEqual([]);
+    expect(parsed.cells[0].timeoutMs).toBe(30_000);
+  });
+
   it.each([
     ['button', 'number'],
     ['reactive', 'number'],
