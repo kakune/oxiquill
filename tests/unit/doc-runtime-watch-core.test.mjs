@@ -1,3 +1,4 @@
+import path from 'node:path';
 import { describe, expect, it } from 'vitest';
 import { createOxiquillPaths } from '../../packages/oxiquill/src/config/paths.mjs';
 import {
@@ -5,6 +6,8 @@ import {
   createRuntimeWatchPaths,
   createSerialTaskQueue,
   describeChangeKinds,
+  isExcludedCratePath,
+  isRuntimeWatchFileEvent,
   mergeChangeKinds,
   shouldSyncRuntime,
   toRelativePath,
@@ -15,11 +18,30 @@ describe('doc runtime watch core', () => {
   it('classifies paths that affect runtime generation', () => {
     expect(classifyChangedPath('content/docs/index.mdx')).toBe('docs');
     expect(classifyChangedPath('content/docs/page.md')).toBe('docs');
+    expect(classifyChangedPath('content/docs/data.json')).toBe('other');
     expect(classifyChangedPath('crates/doc-rust/src/lib.rs')).toBe('crate');
     expect(classifyChangedPath('crates/doc-rust/Cargo.toml')).toBe('crate');
     expect(classifyChangedPath('crates/Cargo.toml')).toBe('crate');
+    expect(classifyChangedPath('crates/Cargo.lock')).toBe('crate');
+    expect(classifyChangedPath('crates/doc-rust/build.rs')).toBe('crate');
+    expect(classifyChangedPath('crates/doc-rust/help')).toBe('crate');
+    expect(classifyChangedPath('crates/doc-rust/logo.bin')).toBe('crate');
+    expect(classifyChangedPath('crates/doc-rust/target/debug/generated.rs')).toBe('other');
+    expect(classifyChangedPath('crates/doc-rust/target/debug/build.toml')).toBe('other');
+    expect(classifyChangedPath('crates/doc-rust/target/debug/logo.bin')).toBe('other');
+    expect(classifyChangedPath('crates/doc-rust/nested/.git/config')).toBe('other');
+    expect(classifyChangedPath('crates/doc-rust/nested/.hg/store')).toBe('other');
+    expect(classifyChangedPath('crates/doc-rust/nested/.svn/entries')).toBe('other');
     expect(classifyChangedPath('Cargo.toml')).toBe('other');
     expect(classifyChangedPath('src/styles/custom.css')).toBe('other');
+  });
+
+  it('accepts only file change events from the runtime watcher', () => {
+    expect(isRuntimeWatchFileEvent('add')).toBe(true);
+    expect(isRuntimeWatchFileEvent('change')).toBe(true);
+    expect(isRuntimeWatchFileEvent('unlink')).toBe(true);
+    expect(isRuntimeWatchFileEvent('addDir')).toBe(false);
+    expect(isRuntimeWatchFileEvent('unlinkDir')).toBe(false);
   });
 
   it('merges, describes, and filters change kinds', () => {
@@ -53,8 +75,26 @@ describe('doc runtime watch core', () => {
 
     expect(createRuntimeWatchPaths(paths)).toEqual([paths.docsDir, paths.cratesDir]);
     expect(classifyChangedPath('written docs/guide.mdx', paths)).toBe('docs');
-    expect(classifyChangedPath('helper crates/example/src/lib.rs', paths)).toBe('crate');
+    expect(classifyChangedPath('helper crates/example/assets/logo.bin', paths)).toBe('crate');
+    expect(classifyChangedPath('helper crates/example/target/generated.rs', paths)).toBe('other');
     expect(classifyChangedPath('content/docs/guide.mdx', paths)).toBe('other');
+  });
+
+  it('classifies absolute configured crate roots outside the workspace', () => {
+    const paths = createOxiquillPaths({
+      cratesDir: path.resolve('/shared/helper crates'),
+      workspaceRoot: path.resolve('/repo')
+    });
+    const assetPath = toWatchEventRelativePath(paths.workspaceRoot, path.join(paths.cratesDir, 'assets/logo.bin'));
+    const targetPath = toWatchEventRelativePath(
+      paths.workspaceRoot,
+      path.join(paths.cratesDir, 'example/target/debug/generated.rs')
+    );
+
+    expect(classifyChangedPath(assetPath, paths)).toBe('crate');
+    expect(classifyChangedPath(targetPath, paths)).toBe('other');
+    expect(isExcludedCratePath(assetPath, paths)).toBe(false);
+    expect(isExcludedCratePath(targetPath, paths)).toBe(true);
   });
 
   it('serializes tasks and coalesces pending enqueues', async () => {

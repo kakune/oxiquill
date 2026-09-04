@@ -35,10 +35,14 @@ describe('runtime watcher entrypoint', () => {
       fields: ['cacheDir', 'publicAssetsDir'],
       paths
     });
-    expect(services.watch).toHaveBeenCalledWith(expect.arrayContaining([expect.any(String)]), {
-      cwd: workspaceRoot,
-      ignoreInitial: true
-    });
+    expect(services.watch).toHaveBeenCalledWith(
+      expect.arrayContaining([expect.any(String)]),
+      expect.objectContaining({
+        cwd: workspaceRoot,
+        ignored: expect.any(Function),
+        ignoreInitial: true
+      })
+    );
     expect(handlers.has('all')).toBe(true);
     expect(handlers.has('ready')).toBe(true);
     expect(services.createDocRuntimeContext).not.toHaveBeenCalled();
@@ -63,7 +67,7 @@ describe('runtime watcher entrypoint', () => {
       })
     );
     expect(warning).toHaveBeenCalledWith('[runtime] Haskell/WASI runtime unavailable: compiler failed');
-    expect(log).toHaveBeenCalledWith('[runtime] watching MDX, Rust, and Haskell cell sources');
+    expect(log).toHaveBeenCalledWith('[runtime] watching documentation and helper-crate inputs');
     expect(log).not.toHaveBeenCalledWith(expect.stringContaining('baseline ready'));
   });
 
@@ -130,6 +134,32 @@ describe('runtime watcher entrypoint', () => {
     );
     expect(log).toHaveBeenCalledWith('[runtime] rebuilt Rust/Wasm cells');
     expect(log).toHaveBeenCalledWith('[runtime] rebuilt Haskell/WASI cells');
+  });
+
+  it('rebuilds for helper data-file add, change, and unlink events while ignoring generated paths', async () => {
+    const { handlers, services } = createServices({
+      syncDocRuntime: vi.fn(async () => runtimeSummary({ rustPlan: 'build' }))
+    });
+    vi.spyOn(console, 'log').mockImplementation(() => undefined);
+
+    await main(['--skip-initial'], services);
+    const watchOptions = services.watch.mock.calls[0][1];
+    const assetPath = path.join(workspaceRoot, 'crates/doc-rust/assets/help.txt');
+    const targetPath = path.join(workspaceRoot, 'crates/doc-rust/target/debug/generated.rs');
+    expect(watchOptions.ignored(assetPath)).toBe(false);
+    expect(watchOptions.ignored(targetPath)).toBe(true);
+
+    for (const event of ['add', 'change', 'unlink']) {
+      const expectedCallCount = services.syncDocRuntime.mock.calls.length + 1;
+      handlers.get('all')(event, assetPath);
+      await waitForCallCount(services.syncDocRuntime, expectedCallCount);
+      expect(services.syncDocRuntime).toHaveBeenLastCalledWith(expect.objectContaining({ forceRustBuild: true }));
+    }
+
+    handlers.get('all')('addDir', path.dirname(assetPath));
+    handlers.get('all')('change', targetPath);
+    await flushMicrotasks();
+    expect(services.syncDocRuntime).toHaveBeenCalledTimes(3);
   });
 });
 
