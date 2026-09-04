@@ -171,7 +171,7 @@ async function checkPublicContracts() {
       assert.ok(reference.includes(`\`${command}`), `CLI reference is missing ${command}.`);
     }
   }
-  for (const option of ['--help', '-h', '--version', '--debug', '--config', '--']) {
+  for (const option of ['--help', '-h', '--version', '--debug', '--config', '--skip-initial', '--']) {
     for (const reference of cliReferences) {
       assert.ok(reference.includes(option), `CLI reference is missing ${option}.`);
     }

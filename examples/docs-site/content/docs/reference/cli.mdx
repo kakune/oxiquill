@@ -36,6 +36,8 @@ Unknown options, missing option values, unknown commands, and extra positional a
 | `doc-rust`           | Build helper-crate documentation without dependencies.                                                                 |
 | `test-wasm`          | Generate runtimes and execute every generated Rust/Haskell cell with defaults.                                         |
 
+`dev:runtime` performs one initial runtime synchronization before waiting for source changes. Use `oxiquill dev:runtime --skip-initial` when the runtime has already been generated: it registers the watcher without synchronizing at startup and waits for the first relevant docs or crate event. The combined `dev` command performs its explicit startup generation once and uses this mode internally.
+
 `dev`, `dev:astro`, `build`, `preview`, and `check` accept their documented Astro arguments, including values after `--`. For example:
 
 ```sh
