@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import {
   applyCellsSnapshot,
   applyGeneratedSnapshot,
@@ -15,11 +15,18 @@ import type { CellManifest } from '../../packages/oxiquill/src/lib/doc-runtime/t
 
 const firstCell = makeCell('first', '<pre>first</pre>');
 const secondCell = makeCell('second', '<pre>second</pre>');
+let disposeRefresh: (() => void) | undefined;
 
 beforeEach(() => {
   document.body.replaceChildren();
   applyGeneratedSnapshot({ cells: [], version: 'test-runtime-version' });
   vi.restoreAllMocks();
+});
+
+afterEach(() => {
+  disposeRefresh?.();
+  disposeRefresh = undefined;
+  vi.useRealTimers();
 });
 
 describe('generated manifest state', () => {
@@ -62,19 +69,25 @@ describe('generated manifest state', () => {
         })
     );
 
-    await refreshGeneratedManifest({ fetchImpl, hasHotRuntime: true, now: () => 123, windowObject: window });
+    await expect(
+      refreshGeneratedManifest({ fetchImpl, hasHotRuntime: true, now: () => 123, windowObject: window })
+    ).resolves.toEqual({
+      snapshot: { cells: [firstCell], version: 'fresh-version' },
+      status: 'success'
+    });
 
     expect(fetchImpl).toHaveBeenCalledWith(expect.stringMatching(/oxiquill-fresh=123-\d+$/u), {
       cache: 'no-store'
     });
-    expect(getManifestSnapshot()).toEqual({ cells: [firstCell], version: 'fresh-version' });
 
     const warning = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
-    await refreshGeneratedManifest({
-      fetchImpl: vi.fn(async () => new Response('', { status: 503 })),
-      hasHotRuntime: true,
-      windowObject: window
-    });
+    await expect(
+      refreshGeneratedManifest({
+        fetchImpl: vi.fn(async () => new Response('', { status: 503 })),
+        hasHotRuntime: true,
+        windowObject: window
+      })
+    ).resolves.toEqual({ status: 'failure' });
     expect(warning).toHaveBeenCalledWith(
       'Oxiquill could not refresh the generated interactive cell manifest.',
       expect.objectContaining({ message: expect.stringContaining('503') })
@@ -83,35 +96,139 @@ describe('generated manifest state', () => {
 
   it('ignores unavailable hot runtimes and transient network errors', async () => {
     const fetchImpl = vi.fn();
-    await refreshGeneratedManifest({ fetchImpl, hasHotRuntime: false, windowObject: window });
+    await expect(refreshGeneratedManifest({ fetchImpl, hasHotRuntime: false, windowObject: window })).resolves.toEqual({
+      status: 'failure'
+    });
     expect(fetchImpl).not.toHaveBeenCalled();
 
     const warning = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
-    await refreshGeneratedManifest({
-      fetchImpl: vi.fn(async () => {
-        throw new TypeError('network changed during HMR');
-      }),
-      hasHotRuntime: true,
-      windowObject: window
-    });
+    await expect(
+      refreshGeneratedManifest({
+        fetchImpl: vi.fn(async () => {
+          throw new TypeError('network changed during HMR');
+        }),
+        hasHotRuntime: true,
+        windowObject: window
+      })
+    ).resolves.toEqual({ status: 'failure' });
     expect(warning).not.toHaveBeenCalled();
   });
 
-  it('schedules bounded refresh attempts and skips missing documents', () => {
-    const refresh = vi.fn(async () => undefined);
-    const setTimeout = vi.fn((callback: TimerHandler, delay?: number) => {
-      void delay;
-      if (typeof callback === 'function') callback();
-      return 1;
-    });
+  it('coalesces many refresh triggers into one shared successful retry stream', async () => {
+    vi.useFakeTimers();
+    const setTimeout = vi.spyOn(window, 'setTimeout');
+    const refresh = vi.fn(async () => successfulRefresh([firstCell], 'shared-version'));
 
-    scheduleGeneratedManifestRefresh({
-      refresh,
-      windowObject: { setTimeout } as unknown as Window
-    });
+    for (let index = 0; index < 24; index += 1) {
+      disposeRefresh = scheduleGeneratedManifestRefresh({ refresh, windowObject: window });
+    }
 
-    expect(setTimeout.mock.calls.map(([, delay]) => delay)).toEqual([0, 250, 1_000, 2_500, 5_000]);
-    expect(refresh).toHaveBeenCalledTimes(5);
+    expect(vi.getTimerCount()).toBe(5);
+    expect(setTimeout.mock.calls.slice(-5).map(([, delay]) => delay)).toEqual([0, 250, 1_000, 2_500, 5_000]);
+
+    await vi.advanceTimersByTimeAsync(0);
+    expect(refresh).toHaveBeenCalledOnce();
+    expect(getManifestSnapshot()).toEqual({ cells: [firstCell], version: 'shared-version' });
+
+    await vi.runAllTimersAsync();
+    expect(refresh).toHaveBeenCalledOnce();
+  });
+
+  it('aborts obsolete generations and rejects their late responses', async () => {
+    vi.useFakeTimers();
+    const obsolete = createDeferred<TestManifestRefreshResult>();
+    const current = createDeferred<TestManifestRefreshResult>();
+    const refresh = vi
+      .fn<TestManifestRefresh>()
+      .mockImplementationOnce(() => obsolete.promise)
+      .mockImplementationOnce(() => current.promise);
+
+    disposeRefresh = scheduleGeneratedManifestRefresh({ refresh, windowObject: window });
+    await vi.advanceTimersByTimeAsync(0);
+    const obsoleteSignal = refresh.mock.calls[0]?.[0]?.signal;
+
+    scheduleGeneratedManifestRefresh({ refresh, windowObject: window });
+    disposeRefresh = scheduleGeneratedManifestRefresh({ refresh, windowObject: window });
+    expect(obsoleteSignal?.aborted).toBe(true);
+    expect(vi.getTimerCount()).toBe(5);
+
+    await vi.advanceTimersByTimeAsync(0);
+    expect(refresh).toHaveBeenCalledTimes(2);
+
+    current.resolve(successfulRefresh([secondCell], 'current-version'));
+    await flushMicrotasks();
+    expect(getManifestSnapshot()).toEqual({ cells: [secondCell], version: 'current-version' });
+
+    obsolete.resolve(successfulRefresh([firstCell], 'obsolete-version'));
+    await flushMicrotasks();
+    expect(getManifestSnapshot()).toEqual({ cells: [secondCell], version: 'current-version' });
+  });
+
+  it('runs one attempt at a time within a generation and coalesces elapsed retries', async () => {
+    vi.useFakeTimers();
+    const firstAttempt = createDeferred<TestManifestRefreshResult>();
+    const secondAttempt = createDeferred<TestManifestRefreshResult>();
+    const refresh = vi
+      .fn<TestManifestRefresh>()
+      .mockImplementationOnce(() => firstAttempt.promise)
+      .mockImplementationOnce(() => secondAttempt.promise);
+
+    disposeRefresh = scheduleGeneratedManifestRefresh({ refresh, windowObject: window });
+    await vi.advanceTimersByTimeAsync(5_000);
+    expect(refresh).toHaveBeenCalledOnce();
+
+    firstAttempt.resolve({ status: 'failure' });
+    await flushMicrotasks();
+    expect(refresh).toHaveBeenCalledTimes(2);
+
+    secondAttempt.resolve(successfulRefresh([firstCell], 'retry-version'));
+    await flushMicrotasks();
+    expect(getManifestSnapshot()).toEqual({ cells: [firstCell], version: 'retry-version' });
+  });
+
+  it('retries a failed attempt at the next delay and cancels later retries after success', async () => {
+    vi.useFakeTimers();
+    const listener = vi.fn();
+    const unsubscribe = subscribeManifest(listener);
+    const refresh = vi
+      .fn<TestManifestRefresh>()
+      .mockResolvedValueOnce({ status: 'failure' })
+      .mockResolvedValueOnce(successfulRefresh([firstCell], 'recovered-version'));
+
+    disposeRefresh = scheduleGeneratedManifestRefresh({ refresh, windowObject: window });
+    await vi.advanceTimersByTimeAsync(0);
+    expect(refresh).toHaveBeenCalledOnce();
+    expect(listener).not.toHaveBeenCalled();
+
+    await vi.advanceTimersByTimeAsync(250);
+    expect(refresh).toHaveBeenCalledTimes(2);
+    expect(listener).toHaveBeenCalledOnce();
+
+    await vi.runAllTimersAsync();
+    expect(refresh).toHaveBeenCalledTimes(2);
+    unsubscribe();
+  });
+
+  it('clears pending retries and aborts in-flight work when disposed', async () => {
+    vi.useFakeTimers();
+    const attempt = createDeferred<TestManifestRefreshResult>();
+    const refresh = vi.fn<TestManifestRefresh>(() => attempt.promise);
+
+    disposeRefresh = scheduleGeneratedManifestRefresh({ refresh, windowObject: window });
+    await vi.advanceTimersByTimeAsync(0);
+    const signal = refresh.mock.calls[0]?.[0]?.signal;
+
+    disposeRefresh();
+    expect(signal?.aborted).toBe(true);
+    await vi.runAllTimersAsync();
+    expect(refresh).toHaveBeenCalledOnce();
+
+    attempt.resolve(successfulRefresh([firstCell], 'disposed-version'));
+    await flushMicrotasks();
+    expect(getManifestSnapshot()).toEqual({ cells: [], version: 'test-runtime-version' });
+  });
+
+  it('skips missing documents when synchronizing rendered source blocks', () => {
     expect(() => syncRenderedSourceBlocks(undefined)).not.toThrow();
     expect(freshManifestUrl(() => 456)).toMatch(/oxiquill-fresh=456-\d+$/u);
   });
@@ -132,4 +249,29 @@ function makeCell(id: string, sourceHtml: string): CellManifest {
     timeoutMs: 1_000,
     title: id
   };
+}
+
+type TestManifestRefreshResult = ReturnType<typeof successfulRefresh> | { status: 'failure' };
+type TestManifestRefresh = (options?: { signal?: AbortSignal }) => Promise<TestManifestRefreshResult>;
+
+function successfulRefresh(cells: readonly CellManifest[], version: string) {
+  return {
+    snapshot: { cells, version },
+    status: 'success' as const
+  };
+}
+
+function createDeferred<T>() {
+  let resolve!: (value: T) => void;
+  const promise = new Promise<T>((resolvePromise) => {
+    resolve = resolvePromise;
+  });
+
+  return { promise, resolve };
+}
+
+async function flushMicrotasks(): Promise<void> {
+  await Promise.resolve();
+  await Promise.resolve();
+  await Promise.resolve();
 }

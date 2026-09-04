@@ -176,9 +176,16 @@ export function createHaskellModuleLoader({
   return (expectedFingerprintHash) => {
     if (!wasmModuleReady || wasmModuleFingerprintHash !== expectedFingerprintHash) {
       wasmModuleFingerprintHash = expectedFingerprintHash;
-      wasmModuleReady = fetchStatus(statusUrl).then((status) => {
+      const runtime = fetchStatus(statusUrl).then((status) => {
         assertReadyHaskellRuntimeStatus(status, expectedFingerprintHash);
         return fetchModule(wasmUrl);
+      });
+      wasmModuleReady = runtime;
+      void runtime.catch(() => {
+        if (wasmModuleReady !== runtime || wasmModuleFingerprintHash !== expectedFingerprintHash) return;
+
+        wasmModuleReady = undefined;
+        wasmModuleFingerprintHash = undefined;
       });
     }
     return wasmModuleReady;

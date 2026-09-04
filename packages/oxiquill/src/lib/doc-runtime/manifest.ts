@@ -18,11 +18,39 @@ type ManifestSnapshot = {
 
 type ManifestHotData = Partial<ManifestSnapshot>;
 
+type ManifestRefreshResult =
+  | {
+      snapshot: ManifestSnapshot;
+      status: 'success';
+    }
+  | {
+      status: 'failure';
+    };
+
+type ManifestRefreshWindow = Pick<Window, 'clearTimeout' | 'setTimeout'>;
+
+type ManifestRefreshGeneration = {
+  generation: number;
+  queued: boolean;
+  refresh: (options?: Pick<ManifestRefreshOptions, 'signal'>) => Promise<ManifestRefreshResult>;
+  succeeded: boolean;
+  timers: Set<number>;
+  windowObject: ManifestRefreshWindow;
+};
+
+type ActiveManifestRefresh = {
+  abortController: AbortController | undefined;
+  generation: ManifestRefreshGeneration;
+};
+
 const hotData = import.meta.hot?.data as ManifestHotData | undefined;
 let cellsSnapshot = initialCellsSnapshot(hotData);
 let versionSnapshot = initialVersionSnapshot(hotData);
 const listeners = new Set<() => void>();
 let freshImportSequence = 0;
+let refreshGenerationSequence = 0;
+let currentRefreshGeneration: ManifestRefreshGeneration | undefined;
+let activeManifestRefresh: ActiveManifestRefresh | undefined;
 
 export function getCell(cellId: string): CellManifest | undefined {
   return cellsSnapshot.find((cell) => cell.id === cellId);
@@ -52,6 +80,8 @@ if (import.meta.hot?.data) {
       applyRuntimeVersionSnapshot((module as unknown as RuntimeVersionModule).runtimeVersion);
     }
   });
+
+  import.meta.hot.dispose(disposeGeneratedManifestRefresh);
 }
 
 function initialCellsSnapshot(data: ManifestHotData | undefined): readonly CellManifest[] {
@@ -117,6 +147,7 @@ type ManifestRefreshOptions = {
   fetchImpl?: typeof fetch;
   hasHotRuntime?: boolean;
   now?: () => number;
+  signal?: AbortSignal;
   windowObject?: Window;
 };
 
@@ -124,44 +155,150 @@ export async function refreshGeneratedManifest({
   fetchImpl = globalThis.fetch,
   hasHotRuntime = Boolean(import.meta.hot),
   now = Date.now,
+  signal,
   windowObject = globalThis.window
-}: ManifestRefreshOptions = {}): Promise<void> {
-  if (!hasHotRuntime || !windowObject || typeof fetchImpl !== 'function') return;
+}: ManifestRefreshOptions = {}): Promise<ManifestRefreshResult> {
+  if (!hasHotRuntime || !windowObject || typeof fetchImpl !== 'function') return { status: 'failure' };
 
   try {
-    const response = await fetchImpl(freshManifestUrl(now), { cache: 'no-store' });
+    const response = await fetchImpl(freshManifestUrl(now), {
+      cache: 'no-store',
+      ...(signal ? { signal } : {})
+    });
     if (!response.ok) {
       throw new Error(`Received ${response.status} from the generated manifest endpoint.`);
     }
 
     const payload = (await response.json()) as GeneratedManifestPayload;
 
-    applyGeneratedSnapshot({
-      cells: payload.cells,
-      version: payload.runtimeVersion
-    });
+    return {
+      snapshot: {
+        cells: payload.cells,
+        version: payload.runtimeVersion
+      },
+      status: 'success'
+    };
   } catch (error) {
-    if (error instanceof TypeError) return;
+    if (signal?.aborted || error instanceof TypeError) return { status: 'failure' };
     console.warn('Oxiquill could not refresh the generated interactive cell manifest.', error);
+    return { status: 'failure' };
   }
 }
 
 type ManifestScheduleOptions = {
-  refresh?: () => Promise<void>;
-  windowObject?: Pick<Window, 'setTimeout'>;
+  refresh?: (options?: Pick<ManifestRefreshOptions, 'signal'>) => Promise<ManifestRefreshResult>;
+  windowObject?: ManifestRefreshWindow;
 };
 
 export function scheduleGeneratedManifestRefresh({
   refresh = refreshGeneratedManifest,
   windowObject = globalThis.window
-}: ManifestScheduleOptions = {}): void {
-  if (!windowObject) return;
+}: ManifestScheduleOptions = {}): () => void {
+  if (!windowObject) return disposeGeneratedManifestRefresh;
+
+  cancelRefreshGeneration(currentRefreshGeneration);
+  abortActiveManifestRefresh();
+
+  const generation: ManifestRefreshGeneration = {
+    generation: ++refreshGenerationSequence,
+    queued: false,
+    refresh,
+    succeeded: false,
+    timers: new Set(),
+    windowObject
+  };
+  currentRefreshGeneration = generation;
 
   for (const delay of [0, 250, 1_000, 2_500, 5_000]) {
-    windowObject.setTimeout(() => {
-      void refresh();
+    const timer = windowObject.setTimeout(() => {
+      generation.timers.delete(timer);
+      requestManifestRefresh(generation);
     }, delay);
+    generation.timers.add(timer);
   }
+
+  return disposeGeneratedManifestRefresh;
+}
+
+function requestManifestRefresh(generation: ManifestRefreshGeneration): void {
+  if (currentRefreshGeneration !== generation || generation.succeeded) return;
+
+  if (activeManifestRefresh) {
+    generation.queued = true;
+    return;
+  }
+
+  const attempt: ActiveManifestRefresh = {
+    abortController: typeof AbortController === 'undefined' ? undefined : new AbortController(),
+    generation
+  };
+  activeManifestRefresh = attempt;
+
+  void generation.refresh({ signal: attempt.abortController?.signal }).then(
+    (result) => finishManifestRefresh(attempt, result),
+    (error: unknown) => {
+      console.warn('Oxiquill could not refresh the generated interactive cell manifest.', error);
+      finishManifestRefresh(attempt, { status: 'failure' });
+    }
+  );
+}
+
+function finishManifestRefresh(attempt: ActiveManifestRefresh, result: ManifestRefreshResult): void {
+  if (activeManifestRefresh !== attempt) return;
+
+  activeManifestRefresh = undefined;
+  const generation = attempt.generation;
+  if (currentRefreshGeneration !== generation) {
+    requestQueuedManifestRefresh();
+    return;
+  }
+
+  if (result.status === 'success') {
+    generation.succeeded = true;
+    generation.queued = false;
+    cancelRefreshTimers(generation);
+    applyGeneratedSnapshot(result.snapshot);
+    return;
+  }
+
+  if (generation.queued) {
+    generation.queued = false;
+    requestManifestRefresh(generation);
+  }
+}
+
+function requestQueuedManifestRefresh(): void {
+  const generation = currentRefreshGeneration;
+  if (!generation?.queued) return;
+
+  generation.queued = false;
+  requestManifestRefresh(generation);
+}
+
+function disposeGeneratedManifestRefresh(): void {
+  cancelRefreshGeneration(currentRefreshGeneration);
+  currentRefreshGeneration = undefined;
+  abortActiveManifestRefresh();
+}
+
+function abortActiveManifestRefresh(): void {
+  const activeRefresh = activeManifestRefresh;
+  activeManifestRefresh = undefined;
+  activeRefresh?.abortController?.abort();
+}
+
+function cancelRefreshGeneration(generation: ManifestRefreshGeneration | undefined): void {
+  if (!generation) return;
+
+  generation.queued = false;
+  cancelRefreshTimers(generation);
+}
+
+function cancelRefreshTimers(generation: ManifestRefreshGeneration): void {
+  for (const timer of generation.timers) {
+    generation.windowObject.clearTimeout(timer);
+  }
+  generation.timers.clear();
 }
 
 export function freshManifestUrl(now: () => number = Date.now): string {

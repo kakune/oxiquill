@@ -17,6 +17,8 @@ const runtimeMocks = vi.hoisted(() => ({
   getCell: vi.fn(),
   getManifestSnapshot: vi.fn<() => ManifestSnapshot>(() => ({ cells: [], version: 'v1' })),
   manifestListeners: [] as Array<() => void>,
+  manifestUnsubscribers: [] as Array<ReturnType<typeof vi.fn>>,
+  scheduleGeneratedManifestRefresh: vi.fn(),
   runInteractiveCell: vi.fn()
 }));
 
@@ -32,10 +34,12 @@ const mocks = {
 vi.mock('../../packages/oxiquill/src/lib/doc-runtime/manifest', () => ({
   getCell: runtimeMocks.getCell,
   getManifestSnapshot: runtimeMocks.getManifestSnapshot,
-  refreshGeneratedManifest: vi.fn(() => Promise.resolve()),
+  scheduleGeneratedManifestRefresh: runtimeMocks.scheduleGeneratedManifestRefresh,
   subscribeManifest: vi.fn((listener: () => void) => {
     runtimeMocks.manifestListeners.push(listener);
-    return vi.fn();
+    const unsubscribe = vi.fn();
+    runtimeMocks.manifestUnsubscribers.push(unsubscribe);
+    return unsubscribe;
   })
 }));
 vi.mock('../../packages/oxiquill/src/lib/doc-runtime/runtime-client', () => ({
@@ -157,7 +161,9 @@ beforeEach(() => {
   vi.clearAllMocks();
   setManifestCells([]);
   runtimeMocks.manifestListeners = [];
+  runtimeMocks.manifestUnsubscribers = [];
   mocks.manifestListeners = runtimeMocks.manifestListeners;
+  mocks.manifestUnsubscribers = runtimeMocks.manifestUnsubscribers;
   TestResizeObserver.instances = [];
   document.documentElement.lang = 'en';
   document.documentElement.removeAttribute('data-theme');
@@ -729,6 +735,24 @@ describe('InteractiveCell', () => {
     });
 
     await waitFor(() => expect(screen.getByText('println!("new");')).toBeVisible());
+  });
+
+  it('requests shared manifest refreshes and unsubscribes each mounted consumer independently', () => {
+    setManifestCells([makeCell()]);
+
+    const first = render(<InteractiveCell cellId="cell-one" />);
+    const second = render(<InteractiveCell cellId="cell-one" />);
+
+    expect(mocks.scheduleGeneratedManifestRefresh).toHaveBeenCalledTimes(2);
+    expect(mocks.manifestListeners).toHaveLength(2);
+    expect(mocks.manifestUnsubscribers).toHaveLength(2);
+
+    first.unmount();
+    expect(mocks.manifestUnsubscribers[0]).toHaveBeenCalledOnce();
+    expect(mocks.manifestUnsubscribers[1]).not.toHaveBeenCalled();
+
+    second.unmount();
+    expect(mocks.manifestUnsubscribers[1]).toHaveBeenCalledOnce();
   });
 });
 
