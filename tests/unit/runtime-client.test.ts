@@ -374,6 +374,31 @@ describe('runtime client', () => {
     expect(workers[1].terminated).toBe(true);
   });
 
+  it('passes the maximum supported timeout unchanged to the timer dependency', async () => {
+    const workers: FakeWorker[] = [];
+    const scheduledTimeout = 1 as unknown as ReturnType<typeof setTimeout>;
+    const setTimer = vi.fn((handler: () => void, timeout: number) => {
+      void handler;
+      void timeout;
+      return scheduledTimeout;
+    });
+    const runner = createInteractiveCellRunner({
+      clearTimeout: vi.fn(),
+      createWorker: () => {
+        const worker = new FakeWorker();
+        workers.push(worker);
+        return worker as unknown as Worker;
+      },
+      setTimeout: setTimer
+    });
+
+    const promise = runner.runInteractiveCell(makeCell('rust', { timeoutMs: 2_147_483_647 }), {});
+
+    expect(setTimer).toHaveBeenCalledWith(expect.any(Function), 2_147_483_647);
+    workers[0].emitMessage({ requestId: 1, ok: true, result });
+    await expect(promise).resolves.toEqual(normalizedResult);
+  });
+
   it('cancels active worker requests, clears their timers, and recovers with a replacement worker', async () => {
     const workers: FakeWorker[] = [];
     const clearTimer = vi.fn(clearTimeout);

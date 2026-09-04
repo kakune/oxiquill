@@ -26,12 +26,13 @@ export default function remarkPublicAssetBase({ base = '' } = {}) {
 }
 
 export function withPublicAssetBase(url, base) {
-  if (!shouldPrefixPublicAsset(url, base)) return url;
-  return `${base}${url}`;
+  const normalizedBase = normalizeBase(base);
+  if (!normalizedBase || !shouldPrefixPublicAsset(url)) return url;
+  return `${normalizedBase}${url}`;
 }
 
-function shouldPrefixPublicAsset(url, base) {
-  return publicAssetPrefixes.some((prefix) => url.startsWith(prefix)) && !url.startsWith(`${base}/`);
+function shouldPrefixPublicAsset(url) {
+  return publicAssetPrefixes.some((prefix) => url.startsWith(prefix));
 }
 
 function isUrlAttribute(attribute) {

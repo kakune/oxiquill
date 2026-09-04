@@ -131,7 +131,7 @@ runtime fingerprint には machine-local path ではなく semantic build input 
 
 ## Base path と public asset
 
-subpath 配下へ公開するときは Astro の `base` を設定します。Oxiquill は interactive-cell manifest、language runtime、diagram、`/media/...` reference に適用します。authoring では public URL を root-relative のまま記述し、Markdown transform が base を一度だけ追加します。
+subpath 配下へ公開するときは Astro の `base` を設定します。Oxiquill は interactive-cell manifest、language runtime、diagram、`/media/...` reference に適用します。`base` 自体が `/media` または同じ prefix で始まる場合も、authoring ではすべての public URL を root-relative の `/media/...` 形式で記述します。configured base は手動で追加せず、通常の Markdown pass に authored URL を prefix させます。
 
 生成 runtime は `.oxiquill` と `public/oxiquill`、verified download cache は `.cache/oxiquill/downloads/v1`、最終 static site は Astro の `outDir`（通常 `dist`）に置かれます。生成 directory と ownership marker を直接編集しないでください。download cache は build や output 再生成をまたいで保持できますが、file は利用前に毎回検証されます。
 

@@ -53,7 +53,7 @@ clean は削除前に3つの target をすべて preflight します。そのた
 
 ## Worker timeout と browser failure
 
-cell timeout の default は 30,000 ms で、`timeoutMs` には別の positive integer を指定できます。timeout 時は failed language worker を終了し、その worker が持つ request を reject して、次回用に fresh worker を作ります。workload を減らすか妥当な長い timeout を選び、security sandbox として使わないでください。
+cell timeout の default は 30,000 ms です。`timeoutMs` には 1 以上 2,147,483,647 以下の integer millisecond を指定できます。timeout 時は failed language worker を終了し、その worker が持つ request を reject して、次回用に fresh worker を作ります。workload を減らすか妥当な長い timeout を選び、security sandbox として使わないでください。
 
 browser failure では site rebuild、`public/oxiquill` 下の expected file、deployment が `.wasm`/JavaScript asset を保持すること、configured base path と deploy URL の一致を確認します。supported current Chromium、Firefox、WebKit で test してください。
 

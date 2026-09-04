@@ -1,4 +1,5 @@
 import type { CellManifest, InputSpec, InputValues } from './types.js';
+import { effectiveNumericStep, numericStepGrid } from './numeric-step.mjs';
 import { isPortableInteger, PORTABLE_INTEGER_MAX, PORTABLE_INTEGER_MIN } from './portable-integer.mjs';
 
 export type NumericInputValidation =
@@ -22,7 +23,7 @@ export function validateNumericInputValue(input: InputSpec, value: unknown): Num
   const maximum = effectiveMaximum(input);
   if (minimum !== undefined && value < minimum) return 'rangeUnderflow';
   if (maximum !== undefined && value > maximum) return 'rangeOverflow';
-  if (hasStepMismatch(input, value)) return 'stepMismatch';
+  if (numericStepGrid(input, value).stepMismatch) return 'stepMismatch';
   return undefined;
 }
 
@@ -65,7 +66,7 @@ export function effectiveMaximum(input: InputSpec): number | undefined {
 }
 
 export function effectiveStep(input: InputSpec): number {
-  return input.step ?? 1;
+  return effectiveNumericStep(input);
 }
 
 export function stepNumericInputValue(input: InputSpec, value: number, direction: -1 | 1): number {
@@ -83,14 +84,6 @@ export function isIntegerInput(input: InputSpec): boolean {
 
 export function isNumericInput(input: InputSpec): boolean {
   return input.type === 'range' || input.type === 'number' || input.type === 'integer';
-}
-
-function hasStepMismatch(input: InputSpec, value: number): boolean {
-  const step = effectiveStep(input);
-  const base = input.min ?? (typeof input.value === 'number' ? input.value : 0);
-  const steps = (value - base) / step;
-  const tolerance = Number.EPSILON * Math.max(1, Math.abs(steps)) * 8;
-  return Math.abs(steps - Math.round(steps)) > tolerance;
 }
 
 function decimalPlaces(value: number): number {

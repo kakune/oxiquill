@@ -198,6 +198,18 @@ describe('defineOxiquillConfig', () => {
     expect(update.markdown).not.toHaveProperty('rehypePlugins');
   });
 
+  it('renders overlapping public media bases through the configured Markdown processor', async () => {
+    const config = defineOxiquillConfig({ base: '/media', sidebar: [], title: 'Docs' });
+    const update = runConfigSetup(config);
+    const renderer = await update.markdown.processor.createRenderer(update.markdown);
+    const rendered = await renderer.render('![Sample](/media/examples/sample.png)\n\n[Guide](/media/docs/guide.pdf)', {
+      fileURL: pathToFileURL(path.join(os.tmpdir(), 'oxiquill-render-fixture', 'content', 'docs', 'page.md'))
+    });
+
+    expect(rendered.code).toContain('src="/media/media/examples/sample.png"');
+    expect(rendered.code).toContain('href="/media/media/docs/guide.pdf"');
+  });
+
   it.each([
     ['disabled highlighting', false],
     ['Prism highlighting', 'prism'],
