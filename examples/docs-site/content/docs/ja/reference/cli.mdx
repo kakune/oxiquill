@@ -36,6 +36,8 @@ unknown option、option value の欠落、unknown command、余分な positional
 | `doc-rust`           | dependency を除いて helper crate documentation を build します。                                                    |
 | `test-wasm`          | runtime を生成し、すべての generated Rust/Haskell cell を default input で実行します。                              |
 
+`dev:runtime` は source change の監視を始める前に、runtime を一度初回同期します。runtime が生成済みの場合は `oxiquill dev:runtime --skip-initial` を使います。この option は起動時に同期せず watcher を登録し、最初の関連 docs/crate event を待ちます。統合された `dev` command は明示的な起動時生成を一度だけ行い、内部でこの mode を使います。
+
 `dev`、`dev:astro`、`build`、`preview`、`check` は documented Astro argument を受け取り、`--` より後の値もそのまま渡します。
 
 ```sh

@@ -51,25 +51,17 @@ export async function watchDocRuntime({ projectConfig, serviceOverrides = {}, sk
     fields: ['cacheDir', 'publicAssetsDir'],
     paths
   });
-  const initialContext = await services.createDocRuntimeContext({ paths });
-  const workspaceRoot = pathFromUrl(initialContext.paths.workspaceRoot);
+  const workspaceRoot = pathFromUrl(paths.workspaceRoot);
+  let highlighter;
   let changeKinds = skipInitial ? new Set() : new Set(['docs']);
-
-  if (skipInitial) {
-    const baseline = await services.syncDocRuntime({
-      ...initialContext,
-      mode: 'dev',
-      tolerateHaskellBuildFailure: true
-    });
-    console.log(`[runtime] baseline ready: ${baseline.cellCount} interactive cell(s)`);
-  }
 
   async function syncRuntime() {
     if (!shouldSyncRuntime(changeKinds)) return;
 
     const currentKinds = changeKinds;
     changeKinds = new Set();
-    const context = await services.createDocRuntimeContext({ paths, highlighter: initialContext.highlighter });
+    const context = await services.createDocRuntimeContext({ paths, highlighter });
+    highlighter = context.highlighter;
 
     console.log(`[runtime] syncing after ${describeChangeKinds(currentKinds)}`);
     const current = await services.syncDocRuntime({
@@ -99,18 +91,14 @@ export async function watchDocRuntime({ projectConfig, serviceOverrides = {}, sk
     }
   });
 
-  if (!skipInitial) {
-    queue.enqueue();
-  }
-
   // Chokidar v4 does not expand globs, so watch stable roots and classify events ourselves.
-  const watcher = services.watch(createRuntimeWatchPaths(initialContext.paths), {
+  const watcher = services.watch(createRuntimeWatchPaths(paths), {
     cwd: workspaceRoot,
     ignoreInitial: true
   });
 
   watcher.on('all', (_event, filePath) => {
-    const kind = classifyChangedPath(toWatchEventRelativePath(workspaceRoot, filePath), initialContext.paths);
+    const kind = classifyChangedPath(toWatchEventRelativePath(workspaceRoot, filePath), paths);
     if (kind === 'other') return;
 
     changeKinds = mergeChangeKinds(changeKinds, kind);
@@ -120,6 +108,10 @@ export async function watchDocRuntime({ projectConfig, serviceOverrides = {}, sk
   watcher.on('ready', () => {
     console.log('[runtime] watching MDX, Rust, and Haskell cell sources');
   });
+
+  if (!skipInitial) {
+    queue.enqueue();
+  }
 
   return watcher;
 }
