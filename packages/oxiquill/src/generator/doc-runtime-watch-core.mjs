@@ -54,10 +54,12 @@ export function createSerialTaskQueue(task, { onError = console.error } = {}) {
     try {
       do {
         pending = false;
-        await task();
+        try {
+          await task();
+        } catch (error) {
+          onError(error);
+        }
       } while (pending);
-    } catch (error) {
-      onError(error);
     } finally {
       running = false;
     }

@@ -81,8 +81,10 @@ describe('doc runtime watch core', () => {
   it('reports task errors and allows later tasks', async () => {
     const errors = [];
     let shouldFail = true;
+    let runs = 0;
     const queue = createSerialTaskQueue(
       async () => {
+        runs += 1;
         if (shouldFail) {
           shouldFail = false;
           throw new Error('failed');
@@ -92,12 +94,126 @@ describe('doc runtime watch core', () => {
     );
 
     queue.enqueue();
-    await Promise.resolve();
-    await Promise.resolve();
+    await waitForQueueIdle(queue);
     queue.enqueue();
-    await Promise.resolve();
+    await waitForQueueIdle(queue);
 
+    expect(runs).toBe(2);
     expect(errors).toEqual(['failed']);
     expect(queue.isRunning()).toBe(false);
   });
+
+  it('runs a pending task after the active task fails', async () => {
+    const firstRun = createDeferred();
+    const errors = [];
+    let runs = 0;
+    const queue = createSerialTaskQueue(
+      async () => {
+        runs += 1;
+        if (runs === 1) await firstRun.promise;
+      },
+      { onError: (error) => errors.push(error.message) }
+    );
+
+    queue.enqueue();
+    queue.enqueue();
+    firstRun.reject(new Error('first failed'));
+    await waitForQueueIdle(queue);
+
+    expect(runs).toBe(2);
+    expect(errors).toEqual(['first failed']);
+    expect(queue.isRunning()).toBe(false);
+  });
+
+  it('coalesces multiple pending enqueues after an active task fails', async () => {
+    const firstRun = createDeferred();
+    const errors = [];
+    let runs = 0;
+    const queue = createSerialTaskQueue(
+      async () => {
+        runs += 1;
+        if (runs === 1) await firstRun.promise;
+      },
+      { onError: (error) => errors.push(error.message) }
+    );
+
+    queue.enqueue();
+    queue.enqueue();
+    queue.enqueue();
+    queue.enqueue();
+    firstRun.reject(new Error('first failed'));
+    await waitForQueueIdle(queue);
+
+    expect(runs).toBe(2);
+    expect(errors).toEqual(['first failed']);
+  });
+
+  it('reports a failure without a pending enqueue and leaves the queue idle', async () => {
+    const activeRun = createDeferred();
+    const errors = [];
+    let runs = 0;
+    const queue = createSerialTaskQueue(
+      async () => {
+        runs += 1;
+        await activeRun.promise;
+      },
+      { onError: (error) => errors.push(error.message) }
+    );
+
+    queue.enqueue();
+    activeRun.reject(new Error('failed'));
+    await waitForQueueIdle(queue);
+
+    expect(runs).toBe(1);
+    expect(errors).toEqual(['failed']);
+    expect(queue.isRunning()).toBe(false);
+  });
+
+  it('reports consecutive failures once without overlapping tasks', async () => {
+    const firstRun = createDeferred();
+    const errors = [];
+    let active = 0;
+    let maximumActive = 0;
+    let runs = 0;
+    const queue = createSerialTaskQueue(
+      async () => {
+        runs += 1;
+        active += 1;
+        maximumActive = Math.max(maximumActive, active);
+
+        try {
+          if (runs === 1) await firstRun.promise;
+          throw new Error('second failed');
+        } finally {
+          active -= 1;
+        }
+      },
+      { onError: (error) => errors.push(error.message) }
+    );
+
+    queue.enqueue();
+    queue.enqueue();
+    firstRun.reject(new Error('first failed'));
+    await waitForQueueIdle(queue);
+
+    expect(runs).toBe(2);
+    expect(maximumActive).toBe(1);
+    expect(errors).toEqual(['first failed', 'second failed']);
+    expect(queue.isRunning()).toBe(false);
+  });
 });
+
+function createDeferred() {
+  let resolve;
+  let reject;
+  const promise = new Promise((resolvePromise, rejectPromise) => {
+    resolve = resolvePromise;
+    reject = rejectPromise;
+  });
+
+  return { promise, reject, resolve };
+}
+
+async function waitForQueueIdle(queue) {
+  while (queue.isRunning()) await Promise.resolve();
+}
