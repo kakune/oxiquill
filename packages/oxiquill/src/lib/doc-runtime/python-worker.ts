@@ -118,12 +118,26 @@ export function createPythonRuntimeLoader({
   let loadPyodideReady: Promise<LoadPyodide> | undefined;
 
   return () => {
-    loadPyodideReady ??= importModule(moduleUrl).then((module) => module.loadPyodide);
-    pyodideReady ??= loadPyodideReady.then(async (loadPyodide) => {
-      const pyodide = await loadPyodide({ indexURL: indexUrl });
-      await pyodide.runPythonAsync(pythonDisplaySupportCode);
-      return pyodide;
-    });
+    if (!loadPyodideReady) {
+      const importedLoader = importModule(moduleUrl).then((module) => module.loadPyodide);
+      loadPyodideReady = importedLoader;
+      void importedLoader.catch(() => {
+        if (loadPyodideReady === importedLoader) loadPyodideReady = undefined;
+      });
+    }
+
+    if (!pyodideReady) {
+      const runtime = loadPyodideReady.then(async (loadPyodide) => {
+        const pyodide = await loadPyodide({ indexURL: indexUrl });
+        await pyodide.runPythonAsync(pythonDisplaySupportCode);
+        return pyodide;
+      });
+      pyodideReady = runtime;
+      void runtime.catch(() => {
+        if (pyodideReady === runtime) pyodideReady = undefined;
+      });
+    }
+
     return pyodideReady;
   };
 }

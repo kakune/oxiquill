@@ -116,7 +116,7 @@ describe('python worker asset URLs', () => {
     });
   });
 
-  it('loads and initializes Pyodide once for repeated requests', async () => {
+  it('loads and initializes Pyodide once for concurrent and repeated requests', async () => {
     const pyodide = { runPythonAsync: vi.fn(async () => undefined) };
     const loadPyodide = vi.fn(async () => pyodide);
     const importModule = vi.fn(async () => ({ loadPyodide: loadPyodide as never }));
@@ -126,8 +126,11 @@ describe('python worker asset URLs', () => {
       moduleUrl: '/runtime/pyodide.mjs'
     });
 
-    await expect(loadRuntime()).resolves.toBe(pyodide);
-    await expect(loadRuntime()).resolves.toBe(pyodide);
+    const first = loadRuntime();
+    const second = loadRuntime();
+    expect(first).toBe(second);
+    await expect(first).resolves.toBe(pyodide);
+    expect(loadRuntime()).toBe(first);
     expect(importModule).toHaveBeenCalledOnce();
     expect(importModule).toHaveBeenCalledWith('/runtime/pyodide.mjs');
     expect(loadPyodide).toHaveBeenCalledOnce();
@@ -135,6 +138,83 @@ describe('python worker asset URLs', () => {
     expect(pyodide.runPythonAsync).toHaveBeenCalledOnce();
     expect(pyodide.runPythonAsync).toHaveBeenCalledWith(pythonDisplaySupportCode);
   });
+
+  it('retries both import and initialization after a shared module-import failure', async () => {
+    const importFailure = new Error('module import failed');
+    const pyodide = { runPythonAsync: vi.fn(async () => undefined) };
+    const loadPyodide = vi.fn(async () => pyodide);
+    const importModule = vi
+      .fn()
+      .mockRejectedValueOnce(importFailure)
+      .mockResolvedValueOnce({ loadPyodide: loadPyodide as never });
+    const loadRuntime = createPythonRuntimeLoader({
+      importModule,
+      indexUrl: '/runtime/',
+      moduleUrl: '/runtime/pyodide.mjs'
+    });
+
+    const first = loadRuntime();
+    const second = loadRuntime();
+    expect(first).toBe(second);
+    const failedCalls = await Promise.allSettled([first, second]);
+    expect(failedCalls).toEqual([
+      { reason: importFailure, status: 'rejected' },
+      { reason: importFailure, status: 'rejected' }
+    ]);
+
+    const recovered = loadRuntime();
+    await expect(recovered).resolves.toBe(pyodide);
+    expect(loadRuntime()).toBe(recovered);
+    expect(importModule).toHaveBeenCalledTimes(2);
+    expect(loadPyodide).toHaveBeenCalledOnce();
+  });
+
+  it.each(['runtime loading', 'display support'] as const)(
+    'reuses the imported module while retrying failed %s on later explicit requests',
+    async (failureStage) => {
+      const firstFailure = new Error(`first ${failureStage} failure`);
+      const secondFailure = new Error(`second ${failureStage} failure`);
+      const readyPyodide = { runPythonAsync: vi.fn(async () => undefined) };
+      const loadPyodide =
+        failureStage === 'runtime loading'
+          ? vi
+              .fn()
+              .mockRejectedValueOnce(firstFailure)
+              .mockRejectedValueOnce(secondFailure)
+              .mockResolvedValue(readyPyodide)
+          : vi
+              .fn()
+              .mockResolvedValueOnce({ runPythonAsync: vi.fn().mockRejectedValue(firstFailure) })
+              .mockResolvedValueOnce({ runPythonAsync: vi.fn().mockRejectedValue(secondFailure) })
+              .mockResolvedValue(readyPyodide);
+      const importModule = vi.fn(async () => ({ loadPyodide: loadPyodide as never }));
+      const loadRuntime = createPythonRuntimeLoader({
+        importModule,
+        indexUrl: '/runtime/',
+        moduleUrl: '/runtime/pyodide.mjs'
+      });
+
+      const first = loadRuntime();
+      const second = loadRuntime();
+      expect(first).toBe(second);
+      const failedCalls = await Promise.allSettled([first, second]);
+      expect(failedCalls).toEqual([
+        { reason: firstFailure, status: 'rejected' },
+        { reason: firstFailure, status: 'rejected' }
+      ]);
+      expect(loadPyodide).toHaveBeenCalledOnce();
+
+      await expect(loadRuntime()).rejects.toBe(secondFailure);
+      expect(loadPyodide).toHaveBeenCalledTimes(2);
+
+      const recovered = loadRuntime();
+      await expect(recovered).resolves.toBe(readyPyodide);
+      expect(loadRuntime()).toBe(recovered);
+      expect(importModule).toHaveBeenCalledOnce();
+      expect(loadPyodide).toHaveBeenCalledTimes(3);
+      expect(readyPyodide.runPythonAsync).toHaveBeenCalledOnce();
+    }
+  );
 
   it('loads blob modules, reports HTTP failures, and always revokes temporary URLs', async () => {
     const unavailable = vi.fn(async () => ({ ok: false, status: 503, statusText: 'Unavailable' }) as Response);

@@ -60,6 +60,7 @@ describe('oxiquill virtual modules', () => {
       event: 'oxiquill:manifest-changed',
       data: { module: 'cells' }
     });
+    expect(hot.send).toHaveBeenCalledTimes(1);
     expect(plugin.hotUpdate.call(context, { file: pathFromUrl(paths.runtimeVersionPath) })).toEqual([versionNode]);
     expect(plugin.hotUpdate.call(context, { file: pathFromUrl(paths.cellsJsonPath) })).toEqual([singleCellNode]);
     expect(plugin.hotUpdate.call(context, { file: rustWasmFile(paths) })).toEqual([rustNode]);
@@ -127,7 +128,7 @@ describe('oxiquill virtual modules', () => {
     }
   });
 
-  it('watches generated files without forcing full-page reloads', () => {
+  it('registers generated files without installing a duplicate raw change sender', () => {
     const { paths, plugin } = createPlugin();
     const hot = { send: vi.fn() };
     const server = {
@@ -151,16 +152,9 @@ describe('oxiquill virtual modules', () => {
       pathFromUrl(paths.cellsJsonPath),
       rustWasmFile(paths)
     ]);
-    expect(server.watcher.on).toHaveBeenCalledWith('change', expect.any(Function));
+    expect(server.watcher.on).not.toHaveBeenCalled();
     expect(server.middlewares.use).toHaveBeenCalledOnce();
-
-    const changeHandler = server.watcher.on.mock.calls[0][1];
-    changeHandler(pathFromUrl(paths.cellsModulePath));
-    expect(hot.send).toHaveBeenCalledWith({
-      type: 'custom',
-      event: 'oxiquill:manifest-changed',
-      data: { module: 'cells' }
-    });
+    expect(hot.send).not.toHaveBeenCalled();
     expect(hot.send).not.toHaveBeenCalledWith(expect.objectContaining({ type: 'full-reload' }));
   });
 
