@@ -16,7 +16,7 @@ interactive fence は `rust`、`python`、`haskell`（Markdown の `{.rust}` for
 | Field        | Type と rule                                                                                                          | Default  |
 | ------------ | --------------------------------------------------------------------------------------------------------------------- | -------- |
 | `id`         | 必須の lowercase kebab-case `^[a-z][a-z0-9]*(?:-[a-z0-9]+)*$`。page 内と route scope 後で unique。                    | —        |
-| `title`      | cell header に表示する string。                                                                                       | `id`     |
+| `title`      | cell header に表示する non-empty string。明示した値は前後の空白を除去。                                               | `id`     |
 | `run`        | `button`、`reactive`、`autorun`。                                                                                     | `button` |
 | `inputs`     | `^[a-z][a-z0-9_]*$` に一致する lowercase cross-language identifier から input spec への mapping。`autorun` では禁止。 | `{}`     |
 | `packages`   | unique non-empty Pyodide package name。Python 専用。                                                                  | `[]`     |

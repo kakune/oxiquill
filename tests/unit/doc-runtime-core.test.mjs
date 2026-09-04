@@ -344,6 +344,48 @@ describe('doc runtime core', () => {
     );
   });
 
+  it.each([
+    ['empty', '""', 'Expected a non-empty string.'],
+    ['whitespace-only', '"   "', 'Expected a non-empty string.'],
+    ['non-string', '12', 'Expected a string.']
+  ])('rejects an explicitly %s title with a title diagnostic', (_name, title, message) => {
+    const source = ['```rust', '//| id: titled-cell', `//| title: ${title}`, 'println!("ok");', '```'].join('\n');
+    const parsed = parseCellsFromMarkdown(source, 'content/docs/page.mdx');
+
+    expect(parsed.cells).toEqual([]);
+    expect(parsed.diagnostics).toContainEqual(
+      expect.objectContaining({
+        pagePath: 'content/docs/page.mdx',
+        fenceStartLine: 1,
+        cellId: 'titled-cell',
+        fieldPath: 'title',
+        message
+      })
+    );
+  });
+
+  it('trims explicit titles and keeps the local id fallback for omitted titles', () => {
+    const source = [
+      '```rust',
+      '//| id: explicit-title',
+      '//| title: "  Example cell  "',
+      'println!("explicit");',
+      '```',
+      '',
+      '```python',
+      '#| id: omitted-title',
+      'print("omitted")',
+      '```'
+    ].join('\n');
+    const parsed = parseCellsFromMarkdown(source, 'content/docs/page.mdx');
+
+    expect(parsed.diagnostics).toEqual([]);
+    expect(parsed.cells).toMatchObject([
+      { localId: 'explicit-title', title: 'Example cell' },
+      { localId: 'omitted-title', title: 'omitted-title' }
+    ]);
+  });
+
   it.each([1, 2_147_483_647])('accepts the timeout boundary %s', (timeoutMs) => {
     const source = ['```python', '#| id: timeout-boundary', `#| timeoutMs: ${timeoutMs}`, 'print("ok")', '```'].join(
       '\n'

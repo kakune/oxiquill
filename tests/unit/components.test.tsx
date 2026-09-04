@@ -193,7 +193,8 @@ describe('InteractiveCell', () => {
     render(<InteractiveCell cellId="cell-one" cell={makeCell()} />);
 
     expect(screen.getByTestId('cell-cell-one')).toBeVisible();
-    expect(screen.getByText('Cell one')).toBeVisible();
+    expect(screen.getByRole('heading', { name: 'Cell one' })).toBeVisible();
+    expect(screen.getByRole('region', { name: 'Output for Cell one' })).toBeVisible();
   });
 
   it('renders controls, toggles source, runs button cells, and displays all output types', async () => {

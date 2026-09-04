@@ -16,7 +16,7 @@ Only these top-level fields are accepted; unknown fields are errors:
 | Field        | Type and rule                                                                                                              | Default  |
 | ------------ | -------------------------------------------------------------------------------------------------------------------------- | -------- |
 | `id`         | Required lowercase kebab-case matching `^[a-z][a-z0-9]*(?:-[a-z0-9]+)*$`; unique within the page and after route scoping.  | —        |
-| `title`      | String shown in the cell header.                                                                                           | `id`     |
+| `title`      | Non-empty string shown in the cell header; explicit values are trimmed.                                                    | `id`     |
 | `run`        | `button`, `reactive`, or `autorun`.                                                                                        | `button` |
 | `inputs`     | Mapping from lowercase cross-language identifiers matching `^[a-z][a-z0-9_]*$` to input specs. Not allowed with `autorun`. | `{}`     |
 | `packages`   | Unique non-empty Pyodide package names; Python only.                                                                       | `[]`     |
