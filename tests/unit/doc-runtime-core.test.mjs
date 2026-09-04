@@ -339,6 +339,51 @@ describe('doc runtime core', () => {
     );
   });
 
+  it.each([
+    ['button', 'number'],
+    ['reactive', 'number'],
+    ['button', 'range'],
+    ['button', 'integer']
+  ])('rejects a step-mismatched %s %s default before manifest generation', (run, type) => {
+    const source = [
+      '```python',
+      '#| id: mismatched-default',
+      `#| run: ${run}`,
+      '#| inputs:',
+      `#|   count: { type: ${type}, min: 0, step: 2, value: 1 }`,
+      'print(count)',
+      '```'
+    ].join('\n');
+    const parsed = parseCellsFromMarkdown(source, 'content/docs/page.mdx');
+
+    expect(parsed.cells).toEqual([]);
+    expect(parsed.diagnostics).toContainEqual(
+      expect.objectContaining({
+        fieldPath: 'inputs.count.value',
+        message: 'Expected the default value to align with effective step 2 from base 0.'
+      })
+    );
+  });
+
+  it('accepts numeric defaults aligned to integer, decimal, scientific, and implicit step grids', () => {
+    const source = [
+      '```python',
+      '#| id: aligned-defaults',
+      '#| inputs:',
+      '#|   integer: { type: integer, min: 0, step: 2, value: 4 }',
+      '#|   decimal: { type: range, min: 0.1, step: 0.1, value: 0.3 }',
+      '#|   scientific: { type: number, min: 1e-7, step: 1e-7, value: 3e-7 }',
+      '#|   implicit_step: { type: number, min: 0, value: 2 }',
+      '#|   default_base: { type: number, step: 2, value: 1 }',
+      'print(integer, decimal, scientific, implicit_step, default_base)',
+      '```'
+    ].join('\n');
+    const parsed = parseCellsFromMarkdown(source, 'content/docs/page.mdx');
+
+    expect(parsed.diagnostics).toEqual([]);
+    expect(parsed.cells).toHaveLength(1);
+  });
+
   it('normalizes strict input defaults and option mappings', () => {
     const source = [
       '```python',

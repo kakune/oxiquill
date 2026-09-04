@@ -109,6 +109,8 @@ top-level ではこれらの field だけを指定できます。dependency arra
 
 integer metadata の portable domain は `-2147483648` 以上 `2147483647` 以下の signed 32-bit です。この制限は `value`、`min`、`max`、`step` に適用され、generated Rust/Haskell/Python binding に同じ正確な integer を渡します。
 
+numeric default は input の step grid にも揃える必要があります。effective step は明示した `step`、または `1` です。base は `min` があればその値、なければ明示または default の numeric `value` です。不一致の default は丸めたり clamp したりせず、authoring 時に拒否されます。
+
 ## 数式を追加する
 
 inline math は `$...$`、block math は `$$...$$` で書きます。

@@ -109,6 +109,8 @@ These are the only top-level fields. Dependency arrays must contain unique non-e
 
 Integer metadata uses one portable signed 32-bit domain: `-2147483648` through `2147483647`. This limit applies to `value`, `min`, `max`, and `step` so generated Rust, Haskell, and Python bindings receive the same exact integer.
 
+Numeric defaults must also align with the input's step grid. The effective step is the declared `step` or `1`; the base is `min` when present and otherwise the declared or default numeric `value`. Misaligned defaults fail authoring and are never rounded or clamped.
+
 ## Add Math
 
 Inline math uses `$...$`, and block math uses `$$...$$`.

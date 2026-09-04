@@ -1,5 +1,6 @@
 import YAML from 'yaml';
 import { scopedCellId } from './authoring-ids.mjs';
+import { numericStepGrid } from './numeric-step.mjs';
 import { isPortableInteger, PORTABLE_INTEGER_MAX, PORTABLE_INTEGER_MIN } from './portable-integer.mjs';
 
 export const inputTypes = ['range', 'number', 'integer', 'text', 'textarea', 'checkbox', 'select', 'radio'];
@@ -329,7 +330,13 @@ function normalizeInput(name, value, context, diagnostics) {
   const step = normalizeInputNumber(value, 'step', type, inputPath, context, diagnostics);
   const options = normalizeOptions(value, type, inputPath, context, diagnostics);
 
-  validateNumericConstraints({ integer, max, min, step, type, value: inputValue }, inputPath, context, diagnostics);
+  validateNumericConstraints(
+    { integer, max, min, step, type, value: inputValue },
+    value,
+    inputPath,
+    context,
+    diagnostics
+  );
   validateOptionDefault(type, inputValue, options, inputPath, context, diagnostics);
 
   return {
@@ -462,20 +469,32 @@ function normalizeNonEmptyOptionString(value, fieldPath, context, diagnostics) {
   return undefined;
 }
 
-function validateNumericConstraints(input, inputPath, context, diagnostics) {
+function validateNumericConstraints(input, metadata, inputPath, context, diagnostics) {
   if (!isNumericInput(input.type)) return;
-  if (input.step !== undefined && input.step <= 0) {
+  const hasValidFields = ['value', 'min', 'max', 'step'].every(
+    (field) => !hasOwn(metadata, field) || (typeof metadata[field] === 'number' && Number.isFinite(metadata[field]))
+  );
+  const hasValidIntegerFlag = !hasOwn(metadata, 'integer') || typeof metadata.integer === 'boolean';
+  const hasValidStep = input.step === undefined || input.step > 0;
+  const hasOrderedBounds = input.min === undefined || input.max === undefined || input.min <= input.max;
+  const isWithinMinimum = input.min === undefined || input.value >= input.min;
+  const isWithinMaximum = input.max === undefined || input.value <= input.max;
+  const integerFieldsArePortable =
+    !input.integer ||
+    ['value', 'min', 'max', 'step'].every((field) => input[field] === undefined || isPortableInteger(input[field]));
+
+  if (!hasValidStep) {
     diagnostics.push(diagnostic(context, `${inputPath}.step`, 'Expected a number greater than zero.'));
   }
-  if (input.min !== undefined && input.max !== undefined && input.min > input.max) {
+  if (!hasOrderedBounds) {
     diagnostics.push(diagnostic(context, `${inputPath}.min`, 'Expected min to be less than or equal to max.'));
   }
-  if (input.min !== undefined && input.value < input.min) {
+  if (!isWithinMinimum) {
     diagnostics.push(
       diagnostic(context, `${inputPath}.value`, 'Expected the default value to be greater than or equal to min.')
     );
   }
-  if (input.max !== undefined && input.value > input.max) {
+  if (!isWithinMaximum) {
     diagnostics.push(
       diagnostic(context, `${inputPath}.value`, 'Expected the default value to be less than or equal to max.')
     );
@@ -491,6 +510,26 @@ function validateNumericConstraints(input, inputPath, context, diagnostics) {
           )
         );
       }
+    }
+  }
+  if (
+    hasValidFields &&
+    hasValidIntegerFlag &&
+    hasValidStep &&
+    hasOrderedBounds &&
+    isWithinMinimum &&
+    isWithinMaximum &&
+    integerFieldsArePortable
+  ) {
+    const grid = numericStepGrid(input, input.value);
+    if (grid.stepMismatch) {
+      diagnostics.push(
+        diagnostic(
+          context,
+          `${inputPath}.value`,
+          `Expected the default value to align with effective step ${JSON.stringify(grid.effectiveStep)} from base ${JSON.stringify(grid.base)}.`
+        )
+      );
     }
   }
 }
