@@ -42,5 +42,5 @@ export function generateRustDependency(crateName, helperCrates) {
     throw new Error(`Cannot generate dependency for unknown Rust crate "${crateName}".`);
   }
 
-  return `${crateName} = { path = ${JSON.stringify(crateInfo.relativePath)} }`;
+  return `${JSON.stringify(crateName)} = { path = ${JSON.stringify(crateInfo.relativePath)} }`;
 }

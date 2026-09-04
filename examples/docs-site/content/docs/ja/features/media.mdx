@@ -3,7 +3,7 @@ title: メディア
 description: PNG、JPEG、PDF などの静的 file を MDX ノートに埋め込みます。
 ---
 
-そのまま配信したい静的 file は `public/media` に置きます。MDX ページからは `/media/...` URL で参照できるため、一般的な画像や PDF に import は不要です。
+そのまま配信したい静的 file は `public/media` に置きます。MDX ページからは root-relative の `/media/...` URL で参照できるため、一般的な画像や PDF に import は不要です。source では常にこの形式を使い、Astro の configured `base` を含めないでください。Oxiquill が Markdown transform 中に追加します。
 
 ## 画像 file
 
@@ -40,6 +40,6 @@ PDF には embedded frame と通常 link の両方を置きます。frame でペ
 ## 配置 rule
 
 - public file は `public/media` に置きます。
-- `/media/...` の absolute URL で参照します。
+- root-relative の `/media/...` URL で参照し、Astro の configured `base` は手動で追加しません。
 - file 自体が source asset でない限り、生成 media を docs tree に置かないでください。
 - test や screenshot が安定するよう、sample file は stable にします。

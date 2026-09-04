@@ -266,7 +266,7 @@ describe('remark Mermaid diagrams', () => {
 });
 
 describe('remark public asset base', () => {
-  it('prefixes public media URLs with the configured base path', () => {
+  it('prefixes Markdown and string-valued MDX media URLs with the configured base path', () => {
     const tree = {
       type: 'root',
       children: [
@@ -278,6 +278,12 @@ describe('remark public asset base', () => {
           name: 'iframe',
           attributes: [
             { type: 'mdxJsxAttribute', name: 'src', value: '/media/examples/sample.pdf' },
+            { type: 'mdxJsxAttribute', name: 'href', value: '/media/examples/sample.png' },
+            {
+              type: 'mdxJsxAttribute',
+              name: 'src',
+              value: { type: 'mdxJsxAttributeValueExpression', value: 'dynamicSource' }
+            },
             { type: 'mdxJsxAttribute', name: 'title', value: 'Sample PDF' }
           ],
           children: []
@@ -291,22 +297,59 @@ describe('remark public asset base', () => {
     expect(tree.children[1].url).toBe('/oxiquill/media/examples/sample.pdf');
     expect(tree.children[2].url).toBe('/features/media/');
     expect(tree.children[3].attributes[0].value).toBe('/oxiquill/media/examples/sample.pdf');
+    expect(tree.children[3].attributes[1].value).toBe('/oxiquill/media/examples/sample.png');
+    expect(tree.children[3].attributes[2].value).toEqual({
+      type: 'mdxJsxAttributeValueExpression',
+      value: 'dynamicSource'
+    });
   });
 
-  it('leaves URLs unchanged when no base path is configured', () => {
-    const tree = {
-      type: 'root',
-      children: [{ type: 'image', url: '/media/examples/sample.png' }]
-    };
+  it.each([
+    ['/media/examples/sample.png', '/media', '/media/media/examples/sample.png'],
+    ['/media/docs/guide.pdf', '/media/docs', '/media/docs/media/docs/guide.pdf'],
+    ['/media/examples/sample.png', '/oxiquill', '/oxiquill/media/examples/sample.png']
+  ])('prefixes authored media URL %s under base %s', (url, base, expected) => {
+    expect(withPublicAssetBase(url, base)).toBe(expected);
+  });
 
-    remarkPublicAssetBase()(tree);
+  it.each([undefined, '', '/'])('leaves media URLs unchanged when base is %s', (base) => {
+    const tree = { type: 'root', children: [{ type: 'image', url: '/media/examples/sample.png' }] };
+
+    remarkPublicAssetBase({ base })(tree);
 
     expect(tree.children[0].url).toBe('/media/examples/sample.png');
   });
 
-  it('does not double-prefix public media URLs', () => {
-    expect(withPublicAssetBase('/oxiquill/media/examples/sample.png', '/oxiquill')).toBe(
-      '/oxiquill/media/examples/sample.png'
-    );
+  it.each(['/features/media/', 'media/examples/sample.png', 'https://example.com/media/sample.png', '#media'])(
+    'leaves non-media URL %s unchanged',
+    (url) => {
+      expect(withPublicAssetBase(url, '/media')).toBe(url);
+    }
+  );
+
+  it('applies an overlapping base consistently to Markdown and MDX nodes', () => {
+    const tree = {
+      type: 'root',
+      children: [
+        { type: 'image', url: '/media/examples/sample.png' },
+        { type: 'link', url: '/media/docs/guide.pdf' },
+        {
+          type: 'mdxJsxFlowElement',
+          name: 'a',
+          attributes: [
+            { type: 'mdxJsxAttribute', name: 'src', value: '/media/examples/sample.png' },
+            { type: 'mdxJsxAttribute', name: 'href', value: '/media/docs/guide.pdf' }
+          ],
+          children: []
+        }
+      ]
+    };
+
+    remarkPublicAssetBase({ base: '/media' })(tree);
+
+    expect(tree.children[0].url).toBe('/media/media/examples/sample.png');
+    expect(tree.children[1].url).toBe('/media/media/docs/guide.pdf');
+    expect(tree.children[2].attributes[0].value).toBe('/media/media/examples/sample.png');
+    expect(tree.children[2].attributes[1].value).toBe('/media/media/docs/guide.pdf');
   });
 });

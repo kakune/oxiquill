@@ -21,7 +21,7 @@ interactive fence は `rust`、`python`、`haskell`（Markdown の `{.rust}` for
 | `inputs`     | `^[a-z][a-z0-9_]*$` に一致する lowercase cross-language identifier から input spec への mapping。`autorun` では禁止。 | `{}`     |
 | `packages`   | unique non-empty Pyodide package name。Python 専用。                                                                  | `[]`     |
 | `crates`     | `cratesDir` 直下の helper package name の unique non-empty list。Rust 専用。                                          | `[]`     |
-| `timeoutMs`  | positive integer millisecond。                                                                                        | `30000`  |
+| `timeoutMs`  | `1` 以上 `2147483647` 以下の integer millisecond。                                                                    | `30000`  |
 | `showSource` | initial source visibility を指定する boolean。                                                                        | `true`   |
 
 source には metadata 以外の code が必要です。malformed YAML、wrong scalar/collection type、duplicate normalized ID/binding/function、unknown package/crate、language-mismatched dependency field は output を書く前に失敗します。diagnostic は page path、fence start line、可能なら cell ID、正確な field path を含みます。
@@ -64,7 +64,7 @@ reactive run が supersede されると、その worker request を active に c
 
 | Type               | Value と constraint                                                                               |
 | ------------------ | ------------------------------------------------------------------------------------------------- |
-| `range`, `number`  | finite number。`step > 0`、`min <= max`、default が bound 内。                                    |
+| `range`, `number`  | finite number。`step > 0`、`min <= max`、default が bound 内かつ step grid 上。                   |
 | `integer`          | `-2147483648` 以上 `2147483647` 以下の signed 32-bit integer。bound/step も同じ domain。          |
 | `text`, `textarea` | string value。                                                                                    |
 | `checkbox`         | boolean value。                                                                                   |
@@ -73,6 +73,8 @@ reactive run が supersede されると、その worker request を active に c
 `type` の default は `text`、`label` の default は input name です。`description` は control と assistive technology 向けに関連付ける optional non-empty string です。default value は checkbox が `false`、numeric input が `0`、text input が空 string です。numeric 専用 field は non-numeric control で拒否され、`options` は `select`/`radio` 以外では使えません。
 
 signed 32-bit integer domain は JavaScript で正確に表現でき、Rust `i32`、Haskell `Int`、Python `int` に同じ値として渡されます。domain 外の integer `value`、`min`、`max`、`step` は authoring 時に拒否されます。browser control と worker request も、`integer: true` の numeric input を含めて同じ domain を適用します。
+
+numeric default は browser control と同じ step grid に揃える必要があります。effective step は `step` があればその値、なければ `1` です。grid の base は `min` があればその値、なければ明示または default の numeric `value` です。Oxiquill は不一致の default を丸めたり clamp したりせず、authoring 時に拒否します。
 
 number/integer control は raw edit text と committed runtime value を分離します。空、入力途中、non-finite、range 外、step 不一致の text は表示を保ちますが cell input を更新しません。どれか一つでも invalid なら Run button は disabled になり、reactive execution は validity が戻った後に最新の complete value set を一度だけ実行します。range label の表示精度は `step` から決まります。
 

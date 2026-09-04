@@ -102,12 +102,14 @@ standard library module だけを使います。Haskell セルでは外部 packa
 - `inputs`: lowercase cross-language identifier から input definition への mapping。`autorun` では指定できません。
 - `crates`: Rust helper crate。Rust のみ。
 - `packages`: Pyodide package。Python のみ。
-- `timeoutMs`: 正の integer で指定する millisecond timeout。default は `30000`。
+- `timeoutMs`: `1` 以上 `2147483647` 以下の integer で指定する millisecond timeout。default は `30000`。
 - `showSource`: source の初期表示を決める boolean。default は `true`。
 
 top-level ではこれらの field だけを指定できます。dependency array は重複のない空でない string で構成します。対応 input type は `range`、`number`、`integer`、`text`、`textarea`、`checkbox`、`select`、`radio` です。input field、default、constraint、option schema の正確な仕様は[実行可能セル](../../features/interactive-cells/)を参照してください。
 
 integer metadata の portable domain は `-2147483648` 以上 `2147483647` 以下の signed 32-bit です。この制限は `value`、`min`、`max`、`step` に適用され、generated Rust/Haskell/Python binding に同じ正確な integer を渡します。
+
+numeric default は input の step grid にも揃える必要があります。effective step は明示した `step`、または `1` です。base は `min` があればその値、なければ明示または default の numeric `value` です。不一致の default は丸めたり clamp したりせず、authoring 時に拒否されます。
 
 ## 数式を追加する
 
@@ -139,7 +141,7 @@ Mermaid source は repository-owned MDX に置きます。信頼できない外�
 
 ## メディアを追加する
 
-PNG、JPEG、PDF など処理せずに配信したい静的 file は `public/media` に置きます。MDX からは `/media/...` URL で参照します。
+PNG、JPEG、PDF など処理せずに配信したい静的 file は `public/media` に置きます。MDX からは root-relative の `/media/...` URL で参照します。Astro の configured `base` は含めず、Oxiquill の Markdown transform に追加させます。
 
 ```md
 ![Sample image](/media/examples/sample.png)

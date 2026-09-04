@@ -8,9 +8,11 @@ import {
   localeFromLanguage,
   parseNumericInput,
   stepNumericInputValue,
+  validateNumericInputValue,
   shouldShowInputControls,
   shouldShowRunButton
 } from '../../packages/oxiquill/src/lib/doc-runtime/interactive-cell-model';
+import { numericStepGrid } from '../../packages/oxiquill/src/lib/doc-runtime/numeric-step.mjs';
 import type { InputSpec } from '../../packages/oxiquill/src/lib/doc-runtime/types';
 
 const textInput: InputSpec = {
@@ -118,6 +120,26 @@ describe('interactive cell model', () => {
     expect(parseNumericInput(numberInput, '1.25')).toEqual({ valid: false, validation: 'stepMismatch' });
     expect(parseNumericInput(numberInput, '-1.5')).toEqual({ valid: true, value: -1.5 });
   });
+
+  it.each([
+    ['aligned integer', { value: 4, min: 0, step: 2 }, 4, 0, 2, undefined],
+    ['aligned decimal', { value: 0.3, min: 0.1, step: 0.1 }, 0.3, 0.1, 0.1, undefined],
+    ['scientific notation', { value: 3e-7, min: 1e-7, step: 1e-7 }, 3e-7, 1e-7, 1e-7, undefined],
+    ['omitted step', { value: 0, min: 0 }, 2, 0, 1, undefined],
+    ['provided minimum base', { value: 1, min: 0, step: 2 }, 1, 0, 2, 'stepMismatch'],
+    ['declared default base', { value: 1, step: 2 }, 3, 1, 2, undefined],
+    ['accepted floating boundary', { value: 0.1, min: 0.1, step: 0.1 }, 0.30000000000000004, 0.1, 0.1, undefined],
+    ['rejected floating boundary', { value: 0.1, min: 0.1, step: 0.1 }, 0.300000000000001, 0.1, 0.1, 'stepMismatch']
+  ] as const)(
+    'shares the authoring step grid with runtime validation for %s',
+    (_name, overrides, candidate, base, effectiveStep, validation) => {
+      const input: InputSpec = { ...textInput, type: 'number', ...overrides };
+      const grid = numericStepGrid(input, candidate);
+
+      expect(grid).toEqual({ base, effectiveStep, stepMismatch: validation === 'stepMismatch' });
+      expect(validateNumericInputValue(input, candidate)).toBe(validation);
+    }
+  );
 
   it('enforces the portable signed 32-bit integer domain', () => {
     const integerInput: InputSpec = { ...textInput, type: 'integer', value: 0 };

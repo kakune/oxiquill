@@ -53,7 +53,7 @@ Clean preflights all three targets before deleting any of them. A diagnostic for
 
 ## Worker Timeouts and Browser Failures
 
-A cell defaults to a 30,000 ms timeout unless `timeoutMs` specifies another positive integer. A timeout terminates the failed language worker, rejects requests owned by it, and creates a fresh worker for later runs. Reduce the workload or choose a justified larger timeout; do not use timeout as a security sandbox.
+A cell defaults to a 30,000 ms timeout. `timeoutMs` can select an integer from 1 through 2,147,483,647 ms, inclusive. A timeout terminates the failed language worker, rejects requests owned by it, and creates a fresh worker for later runs. Reduce the workload or choose a justified larger timeout; do not use timeout as a security sandbox.
 
 For browser failures, verify the site was rebuilt, the expected files exist below `public/oxiquill`, the deployment preserves `.wasm` and JavaScript assets, and the configured base path matches the deployed URL. Test in a supported current Chromium, Firefox, or WebKit browser.
 

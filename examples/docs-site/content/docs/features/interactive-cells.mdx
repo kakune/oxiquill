@@ -21,7 +21,7 @@ Only these top-level fields are accepted; unknown fields are errors:
 | `inputs`     | Mapping from lowercase cross-language identifiers matching `^[a-z][a-z0-9_]*$` to input specs. Not allowed with `autorun`. | `{}`     |
 | `packages`   | Unique non-empty Pyodide package names; Python only.                                                                       | `[]`     |
 | `crates`     | Unique non-empty helper package names from direct children of `cratesDir`; Rust only.                                      | `[]`     |
-| `timeoutMs`  | Positive integer milliseconds.                                                                                             | `30000`  |
+| `timeoutMs`  | Integer milliseconds from `1` through `2147483647`, inclusive.                                                             | `30000`  |
 | `showSource` | Boolean controlling initial source visibility.                                                                             | `true`   |
 
 The source must contain non-metadata code. Malformed YAML, a wrong scalar/collection type, duplicate normalized ID/binding/function, unknown package/crate, or language-mismatched dependency field fails before output is written. Diagnostics include page path, fence start line, cell ID when available, and the exact field path.
@@ -64,7 +64,7 @@ Every input accepts only fields relevant to its type. Common fields are `type`, 
 
 | Type               | Value and constraints                                                                                  |
 | ------------------ | ------------------------------------------------------------------------------------------------------ |
-| `range`, `number`  | Finite number; `step > 0`, `min <= max`, and the default must be within bounds.                        |
+| `range`, `number`  | Finite number; `step > 0`, `min <= max`, and the default must be within bounds and on the step grid.   |
 | `integer`          | Signed 32-bit integer from `-2147483648` through `2147483647`; bounds and step use the same domain.    |
 | `text`, `textarea` | String value.                                                                                          |
 | `checkbox`         | Boolean value.                                                                                         |
@@ -73,6 +73,8 @@ Every input accepts only fields relevant to its type. Common fields are `type`, 
 `type` defaults to `text`, and `label` defaults to the input name. `description` is an optional non-empty string associated with the control for assistive technology. Default values are `false` for checkbox, `0` for numeric inputs, and an empty string for text inputs. Numeric-only fields are rejected on non-numeric controls, and `options` is rejected outside `select` and `radio`.
 
 The signed 32-bit integer domain is exactly representable by JavaScript and maps consistently to Rust `i32`, Haskell `Int`, and Python `int`. Authoring rejects an integer `value`, `min`, `max`, or `step` outside that domain. Browser controls apply the same domain before constructing a worker request, including for `integer: true` numeric inputs.
+
+Numeric defaults must align with the same step grid enforced by browser controls. The effective step is `step` when provided and `1` otherwise. The grid starts at `min` when provided; without `min`, the declared or default numeric `value` is the base. Oxiquill rejects a misaligned default during authoring instead of rounding or clamping it.
 
 Number and integer controls keep their raw edit text separate from committed runtime values. Empty, incomplete, non-finite, out-of-range, and step-mismatched text remains visible but cannot update cell inputs. The Run button is disabled while any control is invalid, and reactive execution resumes exactly once with the latest complete value set after validity returns. Range labels derive their displayed precision from `step`.
 
