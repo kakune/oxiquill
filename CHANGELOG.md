@@ -47,6 +47,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 ### Fixed
 
 - Runtime watcher startup ordering, pending rebuilds after synchronization failures, manifest refresh coordination, initialization recovery, and helper-crate input tracking.
+- Reactive and autorun cell execution after out-of-order source and runtime-version updates during development.
 - Error normalization, numeric input validation, authoring metadata boundaries, public asset paths, collision-free MDX bindings, and multiline Haskell preambles.
 - Rust output macro discovery, generated collector isolation, and empty `println!` output handling.
 - MDX math discovery, production Pagefind search, KaTeX script sizing, and categorical heatmap validation and rendering.
