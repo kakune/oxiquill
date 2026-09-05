@@ -45,7 +45,7 @@ function InteractiveCellPanel({
   const [isSourceVisible, setIsSourceVisible] = useState(cell.showSource);
   const runtime = useInteractiveCellRun(cell, runtimeVersion);
   const ids = interactiveCellIds(cell.id);
-  const [pythonPreparation, setPythonPreparation] = useState(getPythonPreparationState);
+  const [pythonPreparation, setPythonPreparation] = useState<ReturnType<typeof getPythonPreparationState>>('idle');
   useEffect(() => {
     if (cell.language !== 'python') return;
     const update = () => setPythonPreparation(getPythonPreparationState());
