@@ -38,7 +38,7 @@ describe('Oxiquill project configuration', () => {
         publicDir: path.join(root, 'public'),
         publicAssetsDir: path.join(root, 'public/oxiquill')
       },
-      python: { offline: false }
+      python: { offline: false, preload: false }
     });
     expect(Object.isFrozen(projectConfig)).toBe(true);
     expect(Object.isFrozen(projectConfig.paths)).toBe(true);
@@ -127,6 +127,7 @@ describe('Oxiquill project configuration', () => {
 
     expect(projectConfig.python).toEqual({
       offline: true,
+      preload: false,
       packageMirror: 'https://packages.example/pyodide/'
     });
     expect(Object.isFrozen(projectConfig.python)).toBe(true);

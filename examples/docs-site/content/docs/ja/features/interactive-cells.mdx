@@ -205,3 +205,5 @@ let displayed = sort (if include_squares then map (\value -> value * value) scal
 putStrLn (label ++ ": " ++ intercalate ", " (map show displayed))
 putStrLn ("total = " ++ show (sum displayed))
 ```
+
+Python の初期化と package 読み込み中は「Python を準備中…」、執筆した code の実行中は「実行中…」と表示します。`python.preload` による page 単位の先読みは [Python runtime asset](/ja/guides/python-runtime/#browser-の準備) を参照してください。

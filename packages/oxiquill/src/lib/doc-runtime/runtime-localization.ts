@@ -63,6 +63,7 @@ export type RuntimeLabels = {
   rowsRange: (first: number, last: number, total: number, truncated: boolean) => string;
   run: string;
   runtimeLanguage: (language: 'haskell' | 'python' | 'rust') => string;
+  pythonPreparing: string;
   running: string;
   runningCell: string;
   showCode: string;
@@ -176,6 +177,7 @@ const runtimeLabels = {
     rowsRange: (first, last, total, truncated) => `Rows ${first}-${last} of ${total}${truncated ? ' (truncated)' : ''}`,
     run: 'Run',
     runtimeLanguage: runtimeLanguageLabel,
+    pythonPreparing: 'Preparing Python…',
     running: 'Running',
     runningCell: 'Running cell...',
     showCode: 'Show code',
@@ -245,6 +247,7 @@ const runtimeLabels = {
     rowsRange: (first, last, total, truncated) => `${total} 行中 ${first}–${last} 行${truncated ? '（省略あり）' : ''}`,
     run: '実行',
     runtimeLanguage: runtimeLanguageLabel,
+    pythonPreparing: 'Python を準備中…',
     running: '実行中…',
     runningCell: 'セルを実行中…',
     showCode: 'コードを表示',

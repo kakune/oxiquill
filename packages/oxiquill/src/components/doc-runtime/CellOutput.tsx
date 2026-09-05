@@ -13,6 +13,7 @@ export function CellOutput({
   error,
   isComplete = true,
   isRunning,
+  isPreparing = false,
   labels,
   outputId,
   result,
@@ -24,6 +25,7 @@ export function CellOutput({
   error?: string;
   isComplete?: boolean;
   isRunning: boolean;
+  isPreparing?: boolean;
   labels: RuntimeLabels;
   outputId: string;
   result?: CellExecutionResult | NormalizedCellExecutionResult;
@@ -37,7 +39,9 @@ export function CellOutput({
       : normalizeCellExecutionResult(result).outputResults
     : undefined;
   const liveMessage = isRunning
-    ? labels.cellRunningAnnouncement
+    ? isPreparing
+      ? labels.pythonPreparing
+      : labels.cellRunningAnnouncement
     : result && isComplete && error === undefined
       ? outputResults?.length
         ? labels.cellCompleted
@@ -73,7 +77,7 @@ export function CellOutput({
           {outputResults?.length ? null : <p class="empty-state">{labels.cellCompletedWithoutOutput}</p>}
         </div>
       ) : error !== undefined ? null : isRunning ? (
-        <p class="empty-state">{labels.runningCell}</p>
+        <p class="empty-state">{isPreparing ? labels.pythonPreparing : labels.runningCell}</p>
       ) : (
         <p class="empty-state">{idleOutputMessage(runMode, labels)}</p>
       )}

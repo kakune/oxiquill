@@ -1,4 +1,5 @@
-import { useLayoutEffect, useState } from 'preact/hooks';
+import { useEffect, useLayoutEffect, useState } from 'preact/hooks';
+import { getPythonPreparationState, subscribePythonPreparation } from '../../lib/doc-runtime/runtime-client.js';
 import { markRuntimeEvent } from '../../lib/doc-runtime/runtime-timing.js';
 import { shouldShowInputControls, shouldShowRunButton } from '../../lib/doc-runtime/interactive-cell-model.js';
 import type { RuntimeLabels } from '../../lib/doc-runtime/runtime-localization.js';
@@ -44,6 +45,14 @@ function InteractiveCellPanel({
   const [isSourceVisible, setIsSourceVisible] = useState(cell.showSource);
   const runtime = useInteractiveCellRun(cell, runtimeVersion);
   const ids = interactiveCellIds(cell.id);
+  const [pythonPreparation, setPythonPreparation] = useState(getPythonPreparationState);
+  useEffect(() => {
+    if (cell.language !== 'python') return;
+    const update = () => setPythonPreparation(getPythonPreparationState());
+    const unsubscribe = subscribePythonPreparation(update);
+    update();
+    return unsubscribe;
+  }, [cell.language]);
   useLayoutEffect(() => {
     markRuntimeEvent('hydrated', cell.id);
   }, [cell.id]);
@@ -57,6 +66,8 @@ function InteractiveCellPanel({
       aria-labelledby={ids.title}
       data-cell-id={cell.id}
       data-language={cell.language}
+      data-python-packages={cell.language === 'python' ? JSON.stringify(cell.packages) : undefined}
+      data-python-timeout={cell.language === 'python' ? cell.timeoutMs : undefined}
       data-testid={`cell-${cell.id}`}
     >
       <div class="doc-cell__header">
@@ -89,7 +100,11 @@ function InteractiveCellPanel({
                 if (!runtime.isRunning && runtime.inputsValid) runtime.run();
               }}
             >
-              {runtime.isRunning ? labels.running : labels.run}
+              {runtime.isRunning
+                ? runtime.phase === 'preparing'
+                  ? labels.pythonPreparing
+                  : labels.running
+                : labels.run}
             </button>
           ) : null}
         </div>
@@ -124,11 +139,17 @@ function InteractiveCellPanel({
         />
       ) : null}
 
+      {cell.language === 'python' && pythonPreparation === 'preparing' && !runtime.isRunning ? (
+        <p class="doc-cell__preparing" role="status">
+          {labels.pythonPreparing}
+        </p>
+      ) : null}
       <CellOutput
         cellTitle={cell.title}
         result={runtime.result}
         error={runtime.error}
         isRunning={runtime.isRunning}
+        isPreparing={runtime.phase === 'preparing'}
         isComplete={runtime.isComplete}
         retry={runtime.run}
         canRetry={runtime.inputsValid}

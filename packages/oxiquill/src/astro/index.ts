@@ -1,7 +1,7 @@
 import { existsSync, readFileSync } from 'node:fs';
 import { createRequire } from 'node:module';
 import path from 'node:path';
-import { pathToFileURL } from 'node:url';
+import { fileURLToPath, pathToFileURL } from 'node:url';
 import { defineConfig } from 'astro/config';
 import { unified } from '@astrojs/markdown-remark';
 import preact from '@astrojs/preact';
@@ -105,6 +105,7 @@ export interface OxiquillFrameworkOptions<StarlightOptions extends object = obje
 }
 
 export interface OxiquillPythonOptions {
+  preload?: boolean;
   offline?: boolean;
   packageMirror?: string | URL;
 }
@@ -149,7 +150,7 @@ export interface OxiquillIntegrationOptions {
 
 const createDocRuntimeContextForPaths = createDocRuntimeContext as unknown as (options: {
   paths: OxiquillPaths;
-  pythonOptions?: Readonly<{ offline: boolean; packageMirror?: string }>;
+  pythonOptions?: Readonly<{ offline: boolean; preload: boolean; packageMirror?: string }>;
 }) => Promise<DocRuntimeContext>;
 const syncDocRuntimeForBuild = syncDocRuntime as unknown as (
   options: DocRuntimeContext & { mode: 'build' }
@@ -257,7 +258,7 @@ function createOxiquillIntegration(
   rejectCustomMarkdownProcessor(markdown);
   const metadata = createOxiquillIntegrationMetadata({ astro: astroOptions, paths: pathOptions, python });
   let paths: OxiquillPaths | undefined;
-  let pythonOptions: Readonly<{ offline: boolean; packageMirror?: string }> | undefined;
+  let pythonOptions: Readonly<{ offline: boolean; preload: boolean; packageMirror?: string }> | undefined;
   let buildOwnership: Awaited<ReturnType<typeof prepareCleanupOwnership>> = Object.freeze([]);
   const bundledModules = createBundledModuleCollector();
   const browserBundle = createBrowserBundleCollector();
@@ -265,7 +266,7 @@ function createOxiquillIntegration(
   const integration: AstroIntegration = {
     name: 'oxiquill',
     hooks: {
-      'astro:config:setup': ({ addWatchFile, config, updateConfig }) => {
+      'astro:config:setup': ({ addWatchFile, config, updateConfig, injectScript }) => {
         const projectConfig = resolveOxiquillProjectConfig({
           astroConfig: config,
           astroExplicitFields: inferAstroDirectoryFields(config),
@@ -274,6 +275,14 @@ function createOxiquillIntegration(
         });
         paths = projectConfig.paths;
         pythonOptions = projectConfig.python;
+        if (pythonOptions?.preload) {
+          injectScript(
+            'page',
+            'import ' +
+              JSON.stringify(fileURLToPath(new URL('../lib/doc-runtime/python-preload.js', import.meta.url))) +
+              ';'
+          );
+        }
         addWatchFile(paths.docsDir);
         addWatchFile(paths.cratesDir);
 

@@ -36,15 +36,19 @@ function normalizePythonOptions(options) {
   if (!options || typeof options !== 'object' || Array.isArray(options)) {
     throw new TypeError('python must be an object.');
   }
-  const unknownFields = Object.keys(options).filter((name) => name !== 'offline' && name !== 'packageMirror');
+  const unknownFields = Object.keys(options).filter(
+    (name) => name !== 'offline' && name !== 'packageMirror' && name !== 'preload'
+  );
   if (unknownFields.length > 0) {
     throw new TypeError(`Unknown python option: ${unknownFields.sort().join(', ')}.`);
   }
 
+  const preload = options.preload ?? false;
+  if (typeof preload !== 'boolean') throw new TypeError('python.preload must be a boolean.');
   const offline = options.offline ?? false;
   if (typeof offline !== 'boolean') throw new TypeError('python.offline must be a boolean.');
   const packageMirror = normalizePackageMirror(options.packageMirror);
-  return Object.freeze({ offline, ...(packageMirror ? { packageMirror } : {}) });
+  return Object.freeze({ offline, preload, ...(packageMirror ? { packageMirror } : {}) });
 }
 
 function normalizePackageMirror(value) {

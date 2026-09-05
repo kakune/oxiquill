@@ -4,7 +4,7 @@ import { createLatestRequestScheduler, createRunOnceCache } from '../../lib/doc-
 import { boundedErrorMessage } from '../../lib/doc-runtime/output-limits.mjs';
 import { runInteractiveCell } from '../../lib/doc-runtime/runtime-client.js';
 import type { NormalizedCellExecutionResult } from '../../lib/doc-runtime/output-artifacts.js';
-import type { CellManifest, InputValues } from '../../lib/doc-runtime/types.js';
+import type { CellManifest, InputValues, RuntimeExecutionPhase } from '../../lib/doc-runtime/types.js';
 
 type InputValue = InputValues[string];
 
@@ -16,6 +16,7 @@ type CellRunRequest = {
 };
 
 type ExecutionState = {
+  phase?: RuntimeExecutionPhase;
   status: 'idle' | 'running' | 'success' | 'error';
   result?: NormalizedCellExecutionResult;
   error?: string;
@@ -38,7 +39,12 @@ export function useInteractiveCellRun(cell: CellManifest, runtimeVersion: string
       { autorunKey, cell: requestedCell, runtimeVersion: requestedVersion, values: requestedValues },
       signal
     ) => {
-      const execute = () => runInteractiveCell(requestedCell, requestedValues, requestedVersion, signal);
+      const execute = () =>
+        requestedCell.language === 'python'
+          ? runInteractiveCell(requestedCell, requestedValues, requestedVersion, signal, (phase) => {
+              if (!signal.aborted) setExecution((previous) => ({ ...previous, phase }));
+            })
+          : runInteractiveCell(requestedCell, requestedValues, requestedVersion, signal);
       return autorunKey ? autorunRequests.getOrCreate(autorunKey, execute) : execute();
     },
     onCancelled: () => {
@@ -51,7 +57,11 @@ export function useInteractiveCellRun(cell: CellManifest, runtimeVersion: string
       setExecution({ result, status: 'success' });
     },
     onScheduled: () => {
-      setExecution((previous) => ({ ...previous, status: 'running' }));
+      setExecution((previous) => ({
+        ...previous,
+        phase: cell.language === 'python' ? 'preparing' : 'executing',
+        status: 'running'
+      }));
     }
   });
 
@@ -105,6 +115,7 @@ export function useInteractiveCellRun(cell: CellManifest, runtimeVersion: string
   }
 
   return {
+    phase: execution.phase,
     error: execution.error,
     isComplete: execution.status === 'success',
     inputsValid,

@@ -219,7 +219,8 @@ test('static pages do not reference optional browser runtimes', async ({ page })
   expect(requests.filter(isOptionalRuntimeRequest)).toEqual([]);
 });
 
-test('off-screen reactive cells wait for visible hydration', async ({ page }) => {
+test('off-screen reactive cells wait for visible hydration while Python prepares', async ({ page }) => {
+  await captureWorkerMessages(page);
   await page.setViewportSize({ width: 800, height: 240 });
   const requests = captureRequestPaths(page);
 
@@ -236,7 +237,8 @@ test('off-screen reactive cells wait for visible hydration', async ({ page }) =>
 
   expect(requests.some((request) => request.includes('/rust-worker-'))).toBe(true);
   expect(requests.some((request) => request.includes('/rust-wasm/'))).toBe(true);
-  expect(requests.some((request) => request.includes('/python-worker-'))).toBe(false);
+  expect(requests.some((request) => request.includes('/python-worker-'))).toBe(true);
+  expect(await workerMessagesForCell(page, 'features__interactive-cells__python-controls')).toHaveLength(0);
   expect(requests.some((request) => request.includes('/haskell-worker-'))).toBe(false);
 });
 

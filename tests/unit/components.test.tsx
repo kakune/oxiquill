@@ -43,6 +43,8 @@ vi.mock('../../packages/oxiquill/src/lib/doc-runtime/manifest', () => ({
   })
 }));
 vi.mock('../../packages/oxiquill/src/lib/doc-runtime/runtime-client', () => ({
+  getPythonPreparationState: () => 'idle',
+  subscribePythonPreparation: () => () => undefined,
   runInteractiveCell: runtimeMocks.runInteractiveCell
 }));
 
@@ -795,6 +797,35 @@ describe('InteractiveCell', () => {
     await waitFor(() => expect(mocks.runInteractiveCell).toHaveBeenCalled());
     expect(screen.queryByTestId('run-output')).not.toBeInTheDocument();
     expect(screen.queryByTestId('value-output')).not.toBeInTheDocument();
+  });
+
+  it('distinguishes Python preparation from execution without announcing completion early', async () => {
+    setManifestCells([makeCell({ language: 'python', inputs: [] })]);
+    let reportPhase: ((phase: 'preparing' | 'executing') => void) | undefined;
+    let finish: ((value: CellExecutionResult) => void) | undefined;
+    mocks.runInteractiveCell.mockImplementation((_cell, _inputs, _version, _signal, phase) => {
+      reportPhase = phase;
+      return new Promise((resolve) => {
+        finish = resolve;
+      });
+    });
+    render(<InteractiveCell cellId="cell-one" />);
+    fireEvent.click(screen.getByRole('button', { name: 'Run' }));
+    await waitFor(() => expect(screen.getByRole('button', { name: 'Preparing Python…' })).toBeVisible());
+    expect(screen.getByRole('status')).toHaveTextContent('Preparing Python…');
+    act(() => reportPhase?.('executing'));
+    expect(screen.getByRole('button', { name: 'Running' })).toBeVisible();
+    expect(screen.getByRole('region', { name: labelsForLanguage('en').cellOutput(makeCell().title) })).toHaveAttribute(
+      'aria-busy',
+      'true'
+    );
+    act(() => finish?.({ stdout: 'done', plots: [], outputs: [{ kind: 'text', stream: 'stdout', content: 'done' }] }));
+    await waitFor(() =>
+      expect(
+        screen.getByRole('region', { name: labelsForLanguage('en').cellOutput(makeCell().title) })
+      ).toHaveAttribute('aria-busy', 'false')
+    );
+    expect(screen.getByTestId('run-output')).toHaveTextContent('done');
   });
 
   it('refreshes rendered cell data when the generated manifest changes without a runtime rebuild', async () => {

@@ -205,3 +205,5 @@ let displayed = sort (if include_squares then map (\value -> value * value) scal
 putStrLn (label ++ ": " ++ intercalate ", " (map show displayed))
 putStrLn ("total = " ++ show (sum displayed))
 ```
+
+Python cells show **Preparing Python…** during initialization and package loading, then **Running** while authored code executes. See [Python Runtime Assets](/guides/python-runtime/#browser-preparation) for optional page preparation with `python.preload`.
