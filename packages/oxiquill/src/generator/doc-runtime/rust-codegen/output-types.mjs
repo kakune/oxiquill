@@ -2,10 +2,9 @@ import { rustOutputCapabilities } from './capabilities.mjs';
 import { generateRustChartHelpers } from './chart-helpers.mjs';
 import { outputArtifactLimits } from '../../../lib/doc-runtime/output-limits.mjs';
 
-export function generateRustOutputTypes(rustCells) {
+export function generateRustOutputTypes(rustCells, capabilities = rustOutputCapabilities(rustCells)) {
   if (rustCells.length === 0) return '';
 
-  const capabilities = rustOutputCapabilities(rustCells);
   const outputVariants = [
     `    #[serde(rename = "__oxiquill_error")]
     ProducerError(ProducerErrorArtifact),`,

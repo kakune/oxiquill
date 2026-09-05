@@ -48,6 +48,8 @@ jobs:
         run: pnpm audit --prod --audit-level=low
       - name: Run unit coverage
         run: pnpm test:unit:coverage
+      - name: Run documentation contract checks
+        run: pnpm test:docs
 
   rust-quality:
     name: Rust quality
@@ -242,6 +244,8 @@ jobs:
         run: pnpm exec playwright install --with-deps chromium
       - name: Exercise packed interactive cells
         run: pnpm test:packed-browser
+      - name: Run development HMR smoke
+        run: pnpm test:dev-hmr
 
   runtime:
     name: Runtime (${{ matrix.label }})
@@ -293,6 +297,9 @@ jobs:
         run: pnpm install --frozen-lockfile
       - name: Run generated runtime and static build tests
         run: pnpm test:runtime
+      - name: Run browser bundle contract checks
+        if: matrix.label == 'Linux'
+        run: pnpm test:bundle
       - name: Upload Linux browser site
         if: matrix.label == 'Linux'
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1

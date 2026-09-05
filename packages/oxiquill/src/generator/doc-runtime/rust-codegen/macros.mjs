@@ -1,37 +1,39 @@
-import { hasAnyToken } from './capabilities.mjs';
+import { scanRustMacroInvocations } from './macro-invocations.mjs';
+import { hasAnyMacro } from './capabilities.mjs';
 
 const macroDescriptors = [
-  [['println!'], generatePrintlnMacro],
-  [['emit_text!'], generateTextMacro],
-  [['emit_json!'], generateJsonMacro],
-  [['emit_html!'], generateHtmlMacro],
-  [['emit_image_svg!', 'emit_svg!'], generateImageSvgMacro],
-  [['emit_image_png!', 'emit_png_base64!'], generateImagePngMacro],
-  [['emit_svg!'], generateSvgMacro],
-  [['emit_png_base64!'], generatePngBase64Macro],
-  [['emit_table!'], generateTableMacro],
-  [['emit_table_with_columns!'], generateTableWithColumnsMacro],
-  [['emit_records_table!'], generateRecordsTableMacro],
-  [['emit_line_chart!'], generateLineChartMacro],
-  [['emit_scatter_chart!'], generateScatterChartMacro],
-  [['emit_bar_chart!'], generateBarChartMacro],
-  [['emit_histogram!'], generateHistogramMacro],
-  [['emit_heatmap!'], generateHeatmapMacro],
-  [['emit_line_plot!'], generateLinePlotMacro]
+  [['println'], generatePrintlnMacro],
+  [['emit_text'], generateTextMacro],
+  [['emit_json'], generateJsonMacro],
+  [['emit_html'], generateHtmlMacro],
+  [['emit_image_svg', 'emit_svg'], generateImageSvgMacro],
+  [['emit_image_png', 'emit_png_base64'], generateImagePngMacro],
+  [['emit_svg'], generateSvgMacro],
+  [['emit_png_base64'], generatePngBase64Macro],
+  [['emit_table'], generateTableMacro],
+  [['emit_table_with_columns'], generateTableWithColumnsMacro],
+  [['emit_records_table'], generateRecordsTableMacro],
+  [['emit_line_chart'], generateLineChartMacro],
+  [['emit_scatter_chart'], generateScatterChartMacro],
+  [['emit_bar_chart'], generateBarChartMacro],
+  [['emit_histogram'], generateHistogramMacro],
+  [['emit_heatmap'], generateHeatmapMacro],
+  [['emit_line_plot'], generateLinePlotMacro]
 ];
 
-export function generateRustPreludeMacros(source) {
+export function generateRustPreludeMacros(source, macros = scanRustMacroInvocations(source)) {
   return macroDescriptors
-    .filter(([tokens]) => hasAnyToken(source, tokens))
+    .filter(([tokens]) => hasAnyMacro(macros, tokens))
     .map(([, generate]) => generate())
     .join('\n\n');
 }
 
 function generatePrintlnMacro() {
   return `    macro_rules! println {
-        () => {
-            __stdout.borrow_mut().push('\\n');
-        };
+        () => {{
+            use std::fmt::Write as _;
+            writeln!(&mut *__stdout.borrow_mut()).map_err(|error| error.to_string())?;
+        }};
         ($($arg:tt)*) => {{
             use std::fmt::Write as _;
             let mut stdout = __stdout.borrow_mut();
