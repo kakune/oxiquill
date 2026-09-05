@@ -25,8 +25,11 @@ export type RuntimeLabels = {
   cellInputs: string;
   cellOutput: (title: string) => string;
   cellRunningAnnouncement: string;
+  cellRetry: string;
+  cellUpdating: string;
   chartCaption: string;
   chartLoadError: (detail: string) => string;
+  chartUpdateError: (detail: string) => string;
   chartLoading: string;
   chartRetry: string;
   chartSummary: (details: ChartSummaryDetails) => string;
@@ -60,6 +63,7 @@ export type RuntimeLabels = {
   rowsRange: (first: number, last: number, total: number, truncated: boolean) => string;
   run: string;
   runtimeLanguage: (language: 'haskell' | 'python' | 'rust') => string;
+  pythonPreparing: string;
   running: string;
   runningCell: string;
   showCode: string;
@@ -125,8 +129,11 @@ const runtimeLabels = {
     cellInputs: 'Cell inputs',
     cellOutput: (title) => `Output for ${title}`,
     cellRunningAnnouncement: 'Cell execution started.',
+    cellRetry: 'Retry cell',
+    cellUpdating: 'Updating…',
     chartCaption: 'Chart data summary',
     chartLoadError: (detail) => `Chart renderer could not be loaded: ${detail}`,
+    chartUpdateError: (detail) => `Chart could not be updated: ${detail}`,
     chartLoading: 'Loading chart renderer...',
     chartRetry: 'Retry chart rendering',
     chartSummary: ({
@@ -170,6 +177,7 @@ const runtimeLabels = {
     rowsRange: (first, last, total, truncated) => `Rows ${first}-${last} of ${total}${truncated ? ' (truncated)' : ''}`,
     run: 'Run',
     runtimeLanguage: runtimeLanguageLabel,
+    pythonPreparing: 'Preparing Python…',
     running: 'Running',
     runningCell: 'Running cell...',
     showCode: 'Show code',
@@ -191,8 +199,11 @@ const runtimeLabels = {
     cellInputs: 'セルの入力',
     cellOutput: (title) => `${title} の出力`,
     cellRunningAnnouncement: 'セルの実行を開始しました。',
+    cellRetry: 'セルの実行を再試行',
+    cellUpdating: '更新中…',
     chartCaption: 'グラフデータの概要',
     chartLoadError: (detail) => `グラフ表示を読み込めませんでした: ${detail}`,
+    chartUpdateError: (detail) => `グラフを更新できませんでした: ${detail}`,
     chartLoading: 'グラフ表示を読み込んでいます…',
     chartRetry: 'グラフ表示を再試行',
     chartSummary: ({
@@ -236,6 +247,7 @@ const runtimeLabels = {
     rowsRange: (first, last, total, truncated) => `${total} 行中 ${first}–${last} 行${truncated ? '（省略あり）' : ''}`,
     run: '実行',
     runtimeLanguage: runtimeLanguageLabel,
+    pythonPreparing: 'Python を準備中…',
     running: '実行中…',
     runningCell: 'セルを実行中…',
     showCode: 'コードを表示',

@@ -3,6 +3,9 @@ import type {
   BaseChartSpec,
   ChartAxisType,
   ChartSpec,
+  ChartPalette,
+  LineChartStyle,
+  ScatterChartStyle,
   HtmlArtifact,
   ImageArtifact,
   JsonArtifact,
@@ -434,7 +437,12 @@ function validateTableCell(
 function validateChartSpec(value: unknown): ChartSpec {
   const record = plainRecord(value, 'Chart spec');
   const kind = requiredString(record, 'kind', 'Chart spec');
-  const base = validateBaseChartSpec(record);
+  const base = {
+    ...validateBaseChartSpec(record),
+    ...(Object.hasOwn(record, 'style')
+      ? { style: validateChartStyle(requiredOwnValue(record, 'style', 'Chart spec'), kind) }
+      : {})
+  };
 
   switch (kind) {
     case 'line': {
@@ -554,6 +562,85 @@ function validateChartSpec(value: unknown): ChartSpec {
     }
     default:
       throw new ArtifactValidationError(`Chart kind ${quoted(kind)} is not supported.`);
+  }
+}
+
+function validateChartStyle(value: unknown, kind: string): LineChartStyle & ScatterChartStyle {
+  const context = `${kind} chart style`;
+  const record = plainRecord(value, context);
+  const line = kind === 'line' || kind === 'area';
+  rejectUnknownStyleFields(
+    record,
+    [
+      'palette',
+      'showGrid',
+      'animation',
+      'animationDurationMs',
+      ...(line ? ['lineWidth'] : []),
+      ...(kind === 'scatter' ? ['symbolSize'] : [])
+    ],
+    context
+  );
+  const style: LineChartStyle & ScatterChartStyle = {};
+  for (const field of ['showGrid', 'animation'] as const) {
+    if (Object.hasOwn(record, field)) style[field] = optionalBoolean(record, field, context);
+  }
+  for (const [field, minimum, maximum] of [
+    ['animationDurationMs', 0, 2000],
+    ['lineWidth', 1, 8],
+    ['symbolSize', 2, 32]
+  ] as const) {
+    if (!Object.hasOwn(record, field)) continue;
+    const number = requiredOwnValue(record, field, context);
+    if (
+      typeof number !== 'number' ||
+      !Number.isFinite(number) ||
+      number < minimum ||
+      number > maximum ||
+      (field === 'animationDurationMs' && !Number.isInteger(number))
+    ) {
+      throw new ArtifactValidationError(
+        `${context} ${field} must be ${field === 'animationDurationMs' ? 'an integer' : 'finite'} within ${minimum}–${maximum}.`
+      );
+    }
+    style[field] = number;
+  }
+  if (Object.hasOwn(record, 'palette')) {
+    const palette = plainRecord(requiredOwnValue(record, 'palette', context), `${context} palette`);
+    rejectUnknownStyleFields(palette, ['light', 'dark'], `${context} palette`);
+    if (Reflect.ownKeys(palette).length === 0)
+      throw new ArtifactValidationError(`${context} palette must contain light or dark colors.`);
+    const validated: ChartPalette = {};
+    for (const theme of ['light', 'dark'] as const) {
+      if (!Object.hasOwn(palette, theme)) continue;
+      const colors = plainArray(requiredOwnValue(palette, theme, context), `${context} palette.${theme}`);
+      const minimum = kind === 'heatmap' ? 2 : 1;
+      if (colors.length < minimum || colors.length > 12)
+        throw new ArtifactValidationError(`${context} palette.${theme} must contain ${minimum}–12 colors.`);
+      const seen = new Set<string>();
+      validated[theme] = colors.map((color) => {
+        if (typeof color !== 'string' || !/^#(?:[\da-f]{3}|[\da-f]{6})$/iu.test(color)) {
+          throw new ArtifactValidationError(`${context} palette colors must be #RGB or #RRGGBB.`);
+        }
+        const normalized = (
+          color.length === 4 ? Array.from(color.slice(1), (part) => part + part).join('') : color.slice(1)
+        ).toLowerCase();
+        if (seen.has(normalized))
+          throw new ArtifactValidationError(`${context} palette.${theme} colors must be unique.`);
+        seen.add(normalized);
+        return color;
+      });
+    }
+    style.palette = validated;
+  }
+  return style;
+}
+
+function rejectUnknownStyleFields(record: Record<string, unknown>, allowed: readonly string[], context: string): void {
+  for (const field of Reflect.ownKeys(record)) {
+    if (typeof field !== 'string' || !allowed.includes(field)) {
+      throw new ArtifactValidationError(`${context} has unknown field ${quoted(String(field))}.`);
+    }
   }
 }
 

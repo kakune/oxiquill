@@ -106,7 +106,28 @@ export interface HtmlArtifact extends BaseArtifact {
   sandboxed: true;
 }
 
+export interface ChartPalette {
+  light?: readonly string[];
+  dark?: readonly string[];
+}
+
+export interface BaseChartStyle {
+  palette?: ChartPalette;
+  showGrid?: boolean;
+  animation?: boolean;
+  animationDurationMs?: number;
+}
+
+export interface LineChartStyle extends BaseChartStyle {
+  lineWidth?: number;
+}
+
+export interface ScatterChartStyle extends BaseChartStyle {
+  symbolSize?: number;
+}
+
 export interface BaseChartSpec {
+  style?: BaseChartStyle;
   title?: string;
   xLabel?: string;
   yLabel?: string;
@@ -123,11 +144,13 @@ export interface XyChartSeries {
 }
 
 export interface LineChartSpec extends BaseChartSpec {
+  style?: LineChartStyle;
   kind: 'line';
   series: readonly XyChartSeries[];
 }
 
 export interface ScatterChartSpec extends BaseChartSpec {
+  style?: ScatterChartStyle;
   kind: 'scatter';
   series: readonly XyChartSeries[];
 }
@@ -149,6 +172,7 @@ export interface HistogramChartSpec extends BaseChartSpec {
 }
 
 export interface AreaChartSpec extends BaseChartSpec {
+  style?: LineChartStyle;
   kind: 'area';
   series: readonly XyChartSeries[];
 }
@@ -188,6 +212,20 @@ export interface RuntimeWorkerRequest {
   source?: string;
   packages?: readonly string[];
 }
+
+export type RuntimeExecutionPhase = 'preparing' | 'executing';
+
+export interface PythonPrepareRequest {
+  type: 'prepare';
+  requestId: number;
+  packages: readonly string[];
+}
+
+export type PythonWorkerRequest = RuntimeWorkerRequest | PythonPrepareRequest;
+export type PythonWorkerResponse =
+  | RuntimeWorkerResponse
+  | { type: 'ready'; requestId: number; ok: true }
+  | { type: 'progress'; requestId: number; phase: RuntimeExecutionPhase };
 
 export type RuntimeWorkerResponse =
   | {

@@ -1,6 +1,9 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import {
   createInteractiveCellRunner,
+  preparePythonRuntime,
+  getPythonPreparationState,
+  subscribePythonPreparation,
   resetInteractiveRuntime,
   runtimeHaskellFingerprintHash,
   runInteractiveCell
@@ -105,6 +108,73 @@ afterEach(() => {
 });
 
 describe('runtime client', () => {
+  it('shares preparation with execution, deduplicates dependencies, and keeps progress pending', async () => {
+    const { runner, workers } = makeRunner();
+    const listener = vi.fn();
+    const unsubscribe = runner.subscribePythonPreparation(listener);
+    const prepared = runner.preparePythonRuntime(['pandas', 'numpy', 'numpy']);
+    expect(runner.preparePythonRuntime(['numpy', 'pandas'])).toBe(prepared);
+    expect(runner.getPythonPreparationState()).toBe('preparing');
+    const phase = vi.fn();
+    const execution = runner.runInteractiveCell(makeCell('python'), {}, undefined, undefined, phase);
+    expect(workers).toHaveLength(1);
+    expect(workers[0].messages[0]).toEqual({ type: 'prepare', requestId: 1, packages: ['numpy', 'pandas'] });
+    workers[0].emitMessage({ type: 'progress', requestId: 1, phase: 'preparing' });
+    workers[0].emitMessage({ type: 'ready', requestId: 1, ok: true });
+    await prepared;
+    expect(runner.getPythonPreparationState()).toBe('ready');
+    workers[0].emitMessage({ type: 'progress', requestId: 2, phase: 'preparing' });
+    workers[0].emitMessage({ type: 'progress', requestId: 2, phase: 'executing' });
+    expect(phase.mock.calls).toEqual([['preparing'], ['executing']]);
+    workers[0].emitMessage({ requestId: 2, ok: true, result });
+    await expect(execution).resolves.toEqual(normalizedResult);
+    expect(runner.preparePythonRuntime(['pandas', 'numpy'])).toBe(prepared);
+    unsubscribe();
+    runner.resetWorker('python');
+    expect(runner.getPythonPreparationState()).toBe('idle');
+    expect(listener).toHaveBeenCalledTimes(2);
+  });
+
+  it.each(['error', 'timeout', 'reset', 'cancel', 'invalid', 'unexpected'] as const)(
+    'recovers preparation and execution together after %s',
+    async (failure) => {
+      vi.useFakeTimers();
+      const { runner, workers } = makeRunner();
+      const prepared = runner.preparePythonRuntime(['numpy'], 50);
+      const abort = new AbortController();
+      const execution = runner.runInteractiveCell(makeCell('python'), {}, undefined, abort.signal);
+      const settled = Promise.allSettled([prepared, execution]);
+      const worker = workers[0];
+      if (failure === 'error') worker.emitError('failed');
+      if (failure === 'timeout') vi.advanceTimersByTime(50);
+      if (failure === 'reset') runner.resetWorker('python');
+      if (failure === 'cancel') abort.abort();
+      if (failure === 'invalid') worker.emitMessage({ type: 'progress', requestId: 1, phase: 'unknown' });
+      if (failure === 'unexpected') worker.emitMessage({ requestId: 1, ok: true, result });
+      expect((await settled).every((entry) => entry.status === 'rejected')).toBe(true);
+      expect(worker.terminated).toBe(true);
+      const retry = runner.preparePythonRuntime(['numpy']);
+      worker.emitMessage({ requestId: 3, ok: true, result });
+      workers[1].emitMessage({ type: 'ready', requestId: 3, ok: true });
+      await retry;
+      expect(runner.getPythonPreparationState()).toBe('ready');
+      runner.resetWorker('python');
+      expect(vi.getTimerCount()).toBe(0);
+    }
+  );
+
+  it('retries a rejected preparation on the same worker and accepts new dependency sets', async () => {
+    const { runner, workers } = makeRunner();
+    const prepared = runner.preparePythonRuntime(['numpy']);
+    workers[0].emitMessage({ requestId: 1, ok: false, error: 'download failed' });
+    await expect(prepared).rejects.toThrow('download failed');
+    expect(runner.getPythonPreparationState()).toBe('idle');
+    const retry = runner.preparePythonRuntime(['pandas']);
+    workers[0].emitMessage({ requestId: 2, type: 'ready', ok: true });
+    await retry;
+    runner.resetWorker('python');
+  });
+
   it('delegates the default browser runner to Worker adapters', async () => {
     const originalWorker = globalThis.Worker;
     const defaultWorkers: DefaultFakeWorker[] = [];
@@ -144,6 +214,29 @@ describe('runtime client', () => {
     expect(defaultWorkers[1].terminated).toBe(true);
     expect(defaultWorkers[2].terminated).toBe(true);
     globalThis.Worker = originalWorker;
+  });
+
+  it('exposes background preparation through the default browser adapter', async () => {
+    const worker = new FakeWorker();
+    vi.stubGlobal(
+      'Worker',
+      vi.fn(function () {
+        return worker;
+      })
+    );
+    try {
+      const listener = vi.fn();
+      const unsubscribe = subscribePythonPreparation(listener);
+      const prepared = preparePythonRuntime([]);
+      expect(getPythonPreparationState()).toBe('preparing');
+      worker.emitMessage({ requestId: worker.messages[0].requestId, type: 'ready', ok: true });
+      await prepared;
+      expect(getPythonPreparationState()).toBe('ready');
+      unsubscribe();
+      resetInteractiveRuntime('python');
+    } finally {
+      vi.unstubAllGlobals();
+    }
   });
 
   it('sends Python source and resolves successful worker responses', async () => {

@@ -25,6 +25,16 @@ export default defineOxiquillConfig({
 
 `offline` defaults to `false`. `packageMirror` and `downloadCacheDir` accept either a string or URL. TypeScript consumers can import `OxiquillPythonOptions` and `OxiquillPathOptions` from `oxiquill/astro`.
 
+## Browser Preparation
+
+Set `python: { preload: true }` to prepare Python as soon as the page DOM is ready. The default is `false`; this documentation site enables it. Pages without Python cells do not start a Python worker. Preparation uses only the first Python cell's declared packages and does not execute authored code. Button cells still wait for **Run**, and reactive and autorun cells retain their visible hydration behavior.
+
+The first request passes its declared packages into Pyodide initialization so their downloads overlap runtime startup. Preparation and execution share one worker, one initialization promise, and a serial queue. Later cells load additional declared packages and discover imports before execution. The UI distinguishes **Preparing Python…** from **Running**. A failed preparation can be retried by running a cell; cancellation, timeout, and runtime reset clear the worker and preparation state together.
+
+Browser assets remain on the site's origin and respect its base path, including `/oxiquill/`. This option adds no CDN dependency, service worker, custom Pyodide distribution, or persistent browser cache. Normal HTTP caching still applies. Display helpers use pandas and Matplotlib only when authored imports have loaded them; Matplotlib keeps the noninteractive Agg backend and automatic figure collection.
+
+For local profiling, browser User Timing entries named `oxiquill:<phase>:<cell-id>` record hydration, worker startup, initialization, display support, package loading, import discovery, execution, and output rendering. Initialization entries use `python` as their ID. Entries retain the latest measurement per phase and cell and are never sent to a server. The repository's `tests/performance/python-startup.mjs` measures fresh contexts, reloads, and repeated runs against a gzip-served production build.
+
 ## Verified Downloads
 
 For each wheel, Oxiquill takes the filename, release location, and expected SHA-256 from the installed `pyodide-lock.json`. A configured mirror changes only the download base; it never weakens or replaces the lockfile hash.

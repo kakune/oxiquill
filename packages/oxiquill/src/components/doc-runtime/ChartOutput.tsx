@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'preact/hooks';
+import { useEffect, useMemo, useRef, useState } from 'preact/hooks';
 import { normalizeHeatmapSpec, type NormalizedHeatmapSpec } from '../../lib/doc-runtime/heatmap-normalization.js';
 import { boundedErrorMessage } from '../../lib/doc-runtime/output-limits.mjs';
 import type { RuntimeLabels } from '../../lib/doc-runtime/runtime-localization.js';
@@ -22,7 +22,7 @@ const chartColors = {
   dark: {
     axis: '#d1d5db',
     border: '#6b7280',
-    palette: ['#5eead4', '#60a5fa', '#c084fc', '#fb7185', '#facc15', '#d1d5db'],
+    palette: ['#5eead4', '#60a5fa', '#c4b5fd', '#f9a8d4', '#fbbf24', '#cbd5e1'],
     splitLine: '#4b5563',
     text: '#f3f4f6',
     tooltipBackground: '#111827'
@@ -30,7 +30,7 @@ const chartColors = {
   light: {
     axis: '#374151',
     border: '#9ca3af',
-    palette: ['#0f766e', '#1d4ed8', '#7e22ce', '#be123c', '#a16207', '#374151'],
+    palette: ['#0f766e', '#2563eb', '#7c3aed', '#be185d', '#b45309', '#475569'],
     splitLine: '#d1d5db',
     text: '#111827',
     tooltipBackground: '#ffffff'
@@ -70,14 +70,58 @@ function loadECharts(): Promise<EChartsCore> {
 }
 
 export default function ChartOutput({ artifact, idPrefix, labels }: ChartOutputProps) {
-  const { spec } = artifact;
   const element = useRef<HTMLDivElement>(null);
-  const chart = useRef<EChartsInstance>();
-  const latestSpec = useRef(spec);
+  const chart = useRef<{
+    instance: EChartsInstance;
+    signature?: string;
+    spec?: ChartSpec;
+    reducedMotion?: boolean;
+    replace?: boolean;
+  }>();
+  const reducedMotion = useReducedMotion();
+  const latest = useRef({ artifact, reducedMotion });
+  latest.current = { artifact, reducedMotion };
+  const [displayed, setDisplayed] = useState(artifact);
   const [theme, setTheme] = useState<ChartTheme>(() => currentChartTheme());
-  const [renderError, setRenderError] = useState<Error>();
+  const [renderError, setRenderError] = useState<{ message: string; initialization: boolean }>();
   const [renderAttempt, setRenderAttempt] = useState(0);
-  latestSpec.current = spec;
+
+  function applyLatest(force = false): void {
+    const current = chart.current;
+    if (!current) return;
+    const { artifact: next, reducedMotion: motion } = latest.current;
+    try {
+      if (force || current.spec !== next.spec || current.reducedMotion !== motion || current.replace) {
+        const signature = chartStructuralSignature(next.spec);
+        const notMerge = force || current.replace || current.signature !== signature;
+        const options = chartSpecToEChartsOptions(next.spec, theme, {
+          reducedMotion: motion,
+          chrome: resolveChartChrome(theme, element.current ?? undefined)
+        });
+        // Leaving the dataZoom component out of a merge retains the reader's current window.
+        if (!notMerge) delete options.dataZoom;
+        current.instance.setOption(
+          options,
+          notMerge
+            ? { notMerge: true }
+            : {
+                notMerge: false,
+                lazyUpdate: true,
+                replaceMerge: ['series']
+              }
+        );
+        current.signature = signature;
+        current.spec = next.spec;
+        current.reducedMotion = motion;
+        current.replace = false;
+      }
+      setDisplayed(next);
+      setRenderError(undefined);
+    } catch (error) {
+      current.replace = true;
+      setRenderError({ message: boundedErrorMessage(error), initialization: current.spec === undefined });
+    }
+  }
 
   useEffect(() => {
     const root = globalThis.document?.documentElement;
@@ -91,63 +135,38 @@ export default function ChartOutput({ artifact, idPrefix, labels }: ChartOutputP
     const chartElement = element.current;
     if (!chartElement) return undefined;
     let cancelled = false;
-    let nextChart: EChartsInstance | undefined;
+    let instance: EChartsInstance | undefined;
     let resizeObserver: ResizeObserver | undefined;
-
     void loadECharts()
       .then((echarts) => {
         if (cancelled) return;
-
-        nextChart = echarts.init(chartElement, chartThemeDefinition(theme), { renderer: 'canvas' });
-        chart.current = nextChart;
-        nextChart.setOption(chartSpecToEChartsOptions(latestSpec.current, theme), true);
-        resizeObserver = new ResizeObserver(() => nextChart?.resize());
+        instance = echarts.init(chartElement, chartThemeDefinition(theme, resolveChartChrome(theme, chartElement)), {
+          renderer: 'canvas'
+        });
+        chart.current = { instance };
+        resizeObserver = new ResizeObserver(() => instance?.resize());
         resizeObserver.observe(chartElement);
+        applyLatest(true);
       })
       .catch((error: unknown) => {
-        if (!cancelled) setRenderError(toError(error));
+        if (!cancelled) setRenderError({ message: boundedErrorMessage(error), initialization: true });
       });
-
     return () => {
       cancelled = true;
       resizeObserver?.disconnect();
-      nextChart?.dispose();
+      instance?.dispose();
       chart.current = undefined;
     };
   }, [renderAttempt, theme]);
 
   useEffect(() => {
-    try {
-      chart.current?.setOption(chartSpecToEChartsOptions(spec, theme), true);
-    } catch (error) {
-      setRenderError(toError(error));
-    }
-  }, [spec, theme]);
+    applyLatest();
+  }, [artifact, reducedMotion]);
 
-  if (renderError) {
-    return (
-      <div class="doc-chart-output__error">
-        <p class="error-state" data-testid="artifact-error" role="alert">
-          {labels.chartLoadError(renderError.message)}
-        </p>
-        <button
-          type="button"
-          onClick={() => {
-            setRenderError(undefined);
-            setRenderAttempt((attempt) => attempt + 1);
-          }}
-        >
-          {labels.chartRetry}
-        </button>
-      </div>
-    );
-  }
-
-  const titleId = `${idPrefix}-title`;
-  const captionId = artifact.caption ? `${idPrefix}-caption` : undefined;
-  const descriptionId = `${idPrefix}-description`;
-  const title = artifact.title ?? spec.title ?? labels.chartTitle(spec.kind);
-
+  const titleId = idPrefix + '-title';
+  const captionId = displayed.caption ? idPrefix + '-caption' : undefined;
+  const descriptionId = idPrefix + '-description';
+  const title = displayed.title ?? displayed.spec.title ?? labels.chartTitle(displayed.spec.kind);
   return (
     <figure
       class="doc-chart-output"
@@ -156,98 +175,185 @@ export default function ChartOutput({ artifact, idPrefix, labels }: ChartOutputP
     >
       <figcaption>
         <strong id={titleId}>{title}</strong>
-        {artifact.caption ? <span id={captionId}>{artifact.caption}</span> : null}
+        {displayed.caption ? <span id={captionId}>{displayed.caption}</span> : null}
       </figcaption>
-      <div ref={element} class="doc-plot" aria-hidden="true" data-chart-theme={theme} data-testid="doc-plot" />
+      <div
+        ref={element}
+        class="doc-plot"
+        aria-hidden="true"
+        data-chart-theme={theme}
+        data-chart-motion={reducedMotion ? 'reduced' : 'full'}
+        data-testid="doc-plot"
+      />
       <p id={descriptionId} class="doc-chart-output__summary">
         <span class="doc-visually-hidden">{labels.chartCaption}: </span>
-        {chartDataSummary(spec, labels)}
+        {chartDataSummary(displayed.spec, labels)}
       </p>
+      {renderError ? (
+        <div class="doc-chart-output__error">
+          <p class="error-state" data-testid="artifact-error" role="alert">
+            {renderError.initialization
+              ? labels.chartLoadError(renderError.message)
+              : labels.chartUpdateError(renderError.message)}
+          </p>
+          <button
+            type="button"
+            onClick={() => {
+              if (renderError.initialization) {
+                setRenderError(undefined);
+                setRenderAttempt((attempt) => attempt + 1);
+              } else applyLatest(true);
+            }}
+          >
+            {labels.chartRetry}
+          </button>
+        </div>
+      ) : null}
     </figure>
   );
 }
 
-function toError(value: unknown): Error {
-  return new Error(boundedErrorMessage(value));
+function useReducedMotion(): boolean {
+  const media = useMemo(() => globalThis.matchMedia?.('(prefers-reduced-motion: reduce)'), []);
+  const [reduced, setReduced] = useState(media?.matches ?? false);
+  useEffect(() => {
+    if (!media) return;
+    const update = () => setReduced(media.matches);
+    update();
+    media.addEventListener('change', update);
+    return () => media.removeEventListener('change', update);
+  }, [media]);
+  return reduced;
 }
 
 export function currentChartTheme(): ChartTheme {
   return globalThis.document?.documentElement.dataset.theme === 'dark' ? 'dark' : 'light';
 }
 
-export function chartSpecToEChartsOptions(spec: ChartSpec, theme: ChartTheme = 'light'): EChartsOptions {
+export type ChartChrome = {
+  axis: string;
+  border: string;
+  splitLine: string;
+  text: string;
+  tooltipBackground: string;
+  fontFamily: string;
+};
+
+export function resolveChartChrome(theme: ChartTheme, element?: Element): ChartChrome {
+  const fallback = chartColors[theme];
+  const computed = element ? getComputedStyle(element) : undefined;
+  const property = (name: string, defaultValue: string) => computed?.getPropertyValue(name).trim() || defaultValue;
+  return {
+    axis: property('--sl-color-gray-2', fallback.axis),
+    border: property('--sl-color-gray-5', fallback.border),
+    splitLine: property('--sl-color-gray-5', fallback.splitLine),
+    text: property('--sl-color-text', fallback.text),
+    tooltipBackground: property('--sl-color-bg', fallback.tooltipBackground),
+    fontFamily: computed?.fontFamily || 'system-ui, sans-serif'
+  };
+}
+
+export function chartStructuralSignature(spec: ChartSpec): string {
+  const categorical = spec.kind === 'bar' || spec.kind === 'histogram' || spec.kind === 'heatmap';
+  return JSON.stringify([
+    spec.kind,
+    categorical ? 'category' : (spec.xType ?? 'value'),
+    spec.kind === 'heatmap' ? 'category' : (spec.yType ?? 'value'),
+    Boolean(spec.title),
+    shouldShowLegend(spec, 'series' in spec ? spec.series : []),
+    spec.tooltip !== false,
+    spec.kind !== 'heatmap' && spec.dataZoom !== false,
+    spec.kind === 'heatmap'
+  ]);
+}
+
+export function chartSpecToEChartsOptions(
+  spec: ChartSpec,
+  theme: ChartTheme = 'light',
+  { reducedMotion = false, chrome = resolveChartChrome(theme) }: { reducedMotion?: boolean; chrome?: ChartChrome } = {}
+): EChartsOptions {
   const structure = chartStructure(spec);
   const { series } = structure;
-  const colors = chartColors[theme];
+  const style = spec.style;
+  const palette = style?.palette?.[theme];
+  const legend = shouldShowLegend(spec, series);
+  const animation = !reducedMotion && style?.animation !== false;
+  const duration = animation ? (style?.animationDurationMs ?? 180) : 0;
   const axisStyle = {
-    axisLabel: { color: colors.axis },
-    axisLine: { lineStyle: { color: colors.border } },
-    nameTextStyle: { color: colors.text },
-    splitLine: { lineStyle: { color: colors.splitLine } }
+    axisLabel: { color: chrome.axis },
+    axisLine: { show: false },
+    axisTick: { show: false },
+    nameTextStyle: { color: chrome.text },
+    splitLine: { show: style?.showGrid !== false, lineStyle: { color: chrome.splitLine, opacity: 0.45 } }
   };
   const base = {
-    animation: false,
+    animation,
+    animationDuration: duration,
+    animationDurationUpdate: duration,
+    animationEasing: 'cubicOut',
+    animationEasingUpdate: 'cubicOut',
     backgroundColor: 'transparent',
-    color: colors.palette,
-    grid: { left: 56, right: 24, top: spec.title || shouldShowLegend(spec, series) ? 48 : 24, bottom: 56 },
+    color: palette ?? chartColors[theme].palette,
+    grid: {
+      containLabel: true,
+      left: 16,
+      right: 20,
+      top: spec.title && legend ? 72 : spec.title || legend ? 48 : 20,
+      bottom: 36
+    },
     tooltip:
       spec.tooltip === false
         ? undefined
         : {
             trigger: tooltipTrigger(spec),
-            backgroundColor: colors.tooltipBackground,
-            borderColor: colors.border,
-            textStyle: { color: colors.text }
+            confine: true,
+            padding: [10, 12],
+            borderWidth: 1,
+            backgroundColor: chrome.tooltipBackground,
+            borderColor: chrome.border,
+            textStyle: { color: chrome.text, fontFamily: chrome.fontFamily },
+            extraCssText: 'border-radius:8px;box-shadow:0 4px 18px rgba(0,0,0,0.12);'
           },
-    legend: shouldShowLegend(spec, series) ? { top: 4, textStyle: { color: colors.text } } : undefined,
-    textStyle: { color: colors.text },
+    legend: legend ? { top: spec.title ? 32 : 8, textStyle: { color: chrome.text } } : undefined,
+    textStyle: { color: chrome.text, fontFamily: chrome.fontFamily },
     title: spec.title
-      ? { text: spec.title, left: 'center', textStyle: { color: colors.text, fontSize: 14, fontWeight: 600 } }
+      ? { text: spec.title, left: 'center', top: 8, textStyle: { color: chrome.text, fontSize: 14, fontWeight: 600 } }
       : undefined,
     xAxis: { ...structure.xAxis, ...axisStyle },
     yAxis: { ...structure.yAxis, ...axisStyle },
     dataZoom: spec.dataZoom === false ? undefined : [{ type: 'inside' }],
-    series
+    series: series.map((series, index) => ({
+      ...series,
+      id: spec.kind + ':' + index,
+      ...(spec.kind === 'scatter' ? { itemStyle: { borderColor: chrome.tooltipBackground, borderWidth: 1 } } : {})
+    }))
   };
-
   if (structure.heatmap) {
     const valueRange = numericBounds(structure.heatmap.data, (item) => item[2]);
     return {
       ...base,
+      grid: { ...base.grid, bottom: 64 },
       dataZoom: undefined,
       visualMap: {
         calculable: true,
         orient: 'horizontal',
         left: 'center',
-        bottom: 0,
+        bottom: 8,
         min: valueRange?.minimum ?? 0,
         max: valueRange?.maximum ?? 1,
-        textStyle: { color: colors.text }
+        textStyle: { color: chrome.text },
+        inRange: { color: palette ?? (theme === 'dark' ? ['#173c3b', '#5eead4'] : ['#e6f4f1', '#0f766e']) }
       }
     };
   }
-
   return base;
 }
 
-function chartThemeDefinition(theme: ChartTheme): Record<string, unknown> {
-  const colors = chartColors[theme];
+function chartThemeDefinition(theme: ChartTheme, chrome: ChartChrome): Record<string, unknown> {
   return {
-    color: colors.palette,
+    color: chartColors[theme].palette,
     backgroundColor: 'transparent',
-    textStyle: { color: colors.text },
-    title: { textStyle: { color: colors.text } },
-    legend: { textStyle: { color: colors.text } },
-    categoryAxis: {
-      axisLabel: { color: colors.axis },
-      axisLine: { lineStyle: { color: colors.border } },
-      splitLine: { lineStyle: { color: colors.splitLine } }
-    },
-    valueAxis: {
-      axisLabel: { color: colors.axis },
-      axisLine: { lineStyle: { color: colors.border } },
-      splitLine: { lineStyle: { color: colors.splitLine } }
-    }
+    textStyle: { color: chrome.text, fontFamily: chrome.fontFamily }
   };
 }
 
@@ -408,18 +514,21 @@ function chartSeries(spec: Exclude<ChartSpec, { kind: 'heatmap' }>): readonly Re
         type: 'line',
         name: series.name,
         showSymbol: false,
+        lineStyle: { width: spec.style?.lineWidth ?? 2.25, cap: 'round', join: 'round' },
         data: series.points
       }));
     case 'scatter':
       return spec.series.map((series) => ({
         type: 'scatter',
         name: series.name,
-        symbolSize: 6,
+        symbolSize: spec.style?.symbolSize ?? 7,
         data: series.points
       }));
     case 'bar':
       return spec.series.map((series) => ({
         type: 'bar',
+        barMaxWidth: 40,
+        itemStyle: { borderRadius: [3, 3, 0, 0] },
         name: series.name,
         data: series.values
       }));
@@ -427,6 +536,8 @@ function chartSeries(spec: Exclude<ChartSpec, { kind: 'heatmap' }>): readonly Re
       return [
         {
           type: 'bar',
+          barMaxWidth: 40,
+          itemStyle: { borderRadius: [3, 3, 0, 0] },
           barCategoryGap: '8%',
           data: spec.bins.map((bin) => bin[2])
         }
@@ -436,7 +547,8 @@ function chartSeries(spec: Exclude<ChartSpec, { kind: 'heatmap' }>): readonly Re
         type: 'line',
         name: series.name,
         showSymbol: false,
-        areaStyle: { opacity: 0.18 },
+        lineStyle: { width: spec.style?.lineWidth ?? 2.25, cap: 'round', join: 'round' },
+        areaStyle: { opacity: 0.14 },
         data: series.points
       }));
     default:
@@ -475,7 +587,7 @@ function tooltipTrigger(spec: ChartSpec): 'axis' | 'item' {
   return spec.kind === 'scatter' || spec.kind === 'heatmap' ? 'item' : 'axis';
 }
 
-function shouldShowLegend(spec: ChartSpec, series: readonly Record<string, unknown>[]): boolean {
+function shouldShowLegend(spec: ChartSpec, series: readonly { name?: unknown }[]): boolean {
   if (spec.legend != null) return spec.legend;
   return series.filter((item) => typeof item.name === 'string' && item.name.length > 0).length > 1;
 }

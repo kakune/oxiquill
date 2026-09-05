@@ -34,10 +34,11 @@ export default function OutputRenderer({
   outputs,
   resultIdentity
 }: OutputRendererProps) {
+  const keys = artifactKeys(outputs);
   return (
     <>
       {outputs.map((output, index) => (
-        <ArtifactErrorBoundary key={artifactKey(output, index)} index={output.index} labels={labels} resetKey={output}>
+        <ArtifactErrorBoundary key={keys[index]} index={output.index} labels={labels} resetKey={output}>
           <ArtifactOutput
             idPrefix={`${idPrefix}-artifact-${output.index}`}
             labels={labels}
@@ -250,8 +251,20 @@ export function imageArtifactSource(output: ValidatedImageArtifact): string {
   return output.source;
 }
 
-function artifactKey(output: ValidatedArtifactResult, index: number): string {
-  return output.status === 'valid' && output.artifact.id ? `${output.artifact.id}:${index}` : String(index);
+export function artifactKeys(outputs: readonly ValidatedArtifactResult[]): string[] {
+  const occurrences = new Map<string, number>();
+  return outputs.map((output) => {
+    const identity =
+      output.status === 'error'
+        ? ['error']
+        : output.artifact.id !== undefined
+          ? ['id', output.artifact.id]
+          : ['kind', output.artifact.kind];
+    const group = JSON.stringify(identity);
+    const occurrence = (occurrences.get(group) ?? 0) + 1;
+    occurrences.set(group, occurrence);
+    return JSON.stringify([...identity, occurrence]);
+  });
 }
 
 function loadChartOutput(): Promise<ChartOutputModule> {

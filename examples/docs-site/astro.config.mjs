@@ -5,6 +5,7 @@ const basePath = process.env.BASE_PATH;
 
 export default defineOxiquillConfig({
   desktopTableOfContentsToggle: true,
+  python: { preload: true },
   framework: { starlight },
   site: process.env.SITE ?? 'https://oxiquill.local',
   ...(basePath ? { base: basePath } : {}),

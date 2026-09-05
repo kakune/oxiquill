@@ -4,7 +4,7 @@ import { createLatestRequestScheduler, createRunOnceCache } from '../../lib/doc-
 import { boundedErrorMessage } from '../../lib/doc-runtime/output-limits.mjs';
 import { runInteractiveCell } from '../../lib/doc-runtime/runtime-client.js';
 import type { NormalizedCellExecutionResult } from '../../lib/doc-runtime/output-artifacts.js';
-import type { CellManifest, InputValues } from '../../lib/doc-runtime/types.js';
+import type { CellManifest, InputValues, RuntimeExecutionPhase } from '../../lib/doc-runtime/types.js';
 
 type InputValue = InputValues[string];
 
@@ -15,11 +15,12 @@ type CellRunRequest = {
   values: InputValues;
 };
 
-type ExecutionState =
-  | { status: 'idle' }
-  | { status: 'running' }
-  | { result: NormalizedCellExecutionResult; status: 'success' }
-  | { error: string; status: 'error' };
+type ExecutionState = {
+  phase?: RuntimeExecutionPhase;
+  status: 'idle' | 'running' | 'success' | 'error';
+  result?: NormalizedCellExecutionResult;
+  error?: string;
+};
 
 const autorunRequests = createRunOnceCache<string, NormalizedCellExecutionResult>();
 const reactiveDebounceMs = 150;
@@ -38,20 +39,29 @@ export function useInteractiveCellRun(cell: CellManifest, runtimeVersion: string
       { autorunKey, cell: requestedCell, runtimeVersion: requestedVersion, values: requestedValues },
       signal
     ) => {
-      const execute = () => runInteractiveCell(requestedCell, requestedValues, requestedVersion, signal);
+      const execute = () =>
+        requestedCell.language === 'python'
+          ? runInteractiveCell(requestedCell, requestedValues, requestedVersion, signal, (phase) => {
+              if (!signal.aborted) setExecution((previous) => ({ ...previous, phase }));
+            })
+          : runInteractiveCell(requestedCell, requestedValues, requestedVersion, signal);
       return autorunKey ? autorunRequests.getOrCreate(autorunKey, execute) : execute();
     },
     onCancelled: () => {
-      setExecution({ status: 'idle' });
+      setExecution((previous) => ({ ...previous, status: 'idle' }));
     },
     onError: (caught) => {
-      setExecution({ error: boundedErrorMessage(caught), status: 'error' });
+      setExecution((previous) => ({ ...previous, error: boundedErrorMessage(caught), status: 'error' }));
     },
     onResult: (result) => {
       setExecution({ result, status: 'success' });
     },
     onScheduled: () => {
-      setExecution({ status: 'running' });
+      setExecution((previous) => ({
+        ...previous,
+        phase: cell.language === 'python' ? 'preparing' : 'executing',
+        status: 'running'
+      }));
     }
   });
 
@@ -100,15 +110,17 @@ export function useInteractiveCellRun(cell: CellManifest, runtimeVersion: string
     setInputsValid(nextInvalidInputs.size === 0);
     if (!valid) {
       schedulerRef.current?.cancel();
-      setExecution({ status: 'idle' });
+      setExecution((previous) => ({ ...previous, status: 'idle' }));
     }
   }
 
   return {
-    error: execution.status === 'error' ? execution.error : undefined,
+    phase: execution.phase,
+    error: execution.error,
+    isComplete: execution.status === 'success',
     inputsValid,
     isRunning: execution.status === 'running',
-    result: execution.status === 'success' ? execution.result : undefined,
+    result: execution.result,
     run,
     setInputValue,
     setInputValidity,

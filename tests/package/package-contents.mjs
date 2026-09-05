@@ -4,6 +4,7 @@ import { mkdtemp, mkdir, readFile, readdir, rm, stat, writeFile } from 'node:fs/
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { assertMathDependencies } from './math-contract.mjs';
 
 const repositoryRoot = fileURLToPath(new URL('../../', import.meta.url));
 const packageRoot = path.join(repositoryRoot, 'packages/oxiquill');
@@ -13,6 +14,7 @@ const starterManifest = JSON.parse(await readFile(path.join(repositoryRoot, 'tem
 const temporaryRoot = await mkdtemp(path.join(tmpdir(), 'oxiquill-package-'));
 
 try {
+  await assertMathDependencies(packageRoot);
   assert.equal(packageManifest.scripts.prepack, 'pnpm run build');
   for (const lifecycleHook of ['prepare', 'install', 'postinstall']) {
     assert.ok(
