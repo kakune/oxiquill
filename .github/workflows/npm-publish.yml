@@ -56,7 +56,8 @@ jobs:
           path: .release-control
           persist-credentials: false
           ref: ${{ github.workflow_sha }}
-          sparse-checkout: .github/scripts
+          sparse-checkout: /.github/scripts/
+          sparse-checkout-cone-mode: false
 
       - name: Verify the release tag is on main
         env:
@@ -175,7 +176,8 @@ jobs:
           path: .release-control
           persist-credentials: false
           ref: ${{ github.workflow_sha }}
-          sparse-checkout: .github/scripts
+          sparse-checkout: /.github/scripts/
+          sparse-checkout-cone-mode: false
 
       - name: Set up Node.js
         uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6.5.0
@@ -223,7 +225,8 @@ jobs:
           path: .release-control
           persist-credentials: false
           ref: ${{ github.workflow_sha }}
-          sparse-checkout: .github/scripts
+          sparse-checkout: /.github/scripts/
+          sparse-checkout-cone-mode: false
 
       - name: Set up Node.js
         uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6.5.0

@@ -108,6 +108,15 @@ describe('release identity verification', () => {
     expect(workflow.match(/path: \.release-control/gu)).toHaveLength(3);
     expect(workflow).toContain('node .release-control/.github/scripts/verify-release.mjs');
     expect(workflow).toContain('Workflow commit $GITHUB_WORKFLOW_SHA is not contained in origin/main');
+
+    const { jobs } = parseYaml(workflow);
+    for (const job of [jobs.verify, jobs['release-assets'], jobs.publish]) {
+      const checkout = job.steps.find((step) => step.name === 'Check out the release control plane');
+      expect(checkout.with).toMatchObject({
+        'sparse-checkout': '/.github/scripts/',
+        'sparse-checkout-cone-mode': false
+      });
+    }
   });
 
   it('accepts an exact stable tag and matching package versions', () => {
