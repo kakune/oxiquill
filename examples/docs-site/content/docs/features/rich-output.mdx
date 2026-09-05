@@ -49,6 +49,61 @@ Empty charts and equal point domains are valid. Heatmaps report X- and Y-categor
 
 Charts use contrast-aware colors for the current Starlight light/dark theme, recreate their ECharts instance when `html[data-theme]` changes, and expose a retry action after a transient renderer load failure.
 
+## Persistent Output and Chart Styles
+
+The last successful output stays visible while a cell reruns, including the 150ms reactive debounce. A small updating indicator does not move the layout. Failed reruns keep that output alongside an error and a **Retry cell** action; cancellation and invalid inputs also retain it. Success replaces the result and clears the error. Use explicit artifact IDs when an output sequence changes dynamically: IDs retain identity across insertions, duplicate IDs receive occurrence numbers, and artifacts without IDs are matched by kind and occurrence.
+
+Compatible charts update the existing canvas and ECharts instance, preserving the reader's zoom window. Initial and data-update transitions use 180ms with cubicOut easing. Structural changes replace chart options on the same instance; Starlight light/dark theme changes recreate it. A chart update failure keeps the last successful visualization and summary with a local retry action. Reduced-motion preferences disable chart and updating-indicator animation, even when an author requests animation.
+
+Chart specs accept an optional nested `style` object:
+
+```ts
+interface ChartPalette {
+  light?: readonly string[];
+  dark?: readonly string[];
+}
+interface BaseChartStyle {
+  palette?: ChartPalette;
+  showGrid?: boolean;
+  animation?: boolean;
+  animationDurationMs?: number;
+}
+interface LineChartStyle extends BaseChartStyle {
+  lineWidth?: number;
+}
+interface ScatterChartStyle extends BaseChartStyle {
+  symbolSize?: number;
+}
+```
+
+Line and area charts use `LineChartStyle`, scatter charts use `ScatterChartStyle`, and bar, histogram, and heatmap charts use `BaseChartStyle`.
+
+| Field                 | Allowed values and default                                                                                                                                                                         |
+| --------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `palette`             | At least one of `light` or `dark`; each supplied theme has 1–12 unique `#RGB` or `#RRGGBB` colors. Heatmaps require at least two. Colors are compared after expanding shorthand and ignoring case. |
+| `showGrid`            | Boolean; default `true`.                                                                                                                                                                           |
+| `animation`           | Boolean; default `true`, subordinate to reduced motion.                                                                                                                                            |
+| `animationDurationMs` | Integer from 0 to 2,000; default 180 for both initial and update animation.                                                                                                                        |
+| `lineWidth`           | Finite number from 1 to 8; default 2.25. Line and area only.                                                                                                                                       |
+| `symbolSize`          | Finite number from 2 to 32; default 7. Scatter only.                                                                                                                                               |
+
+Palettes color series, or the visual-map gradient for heatmaps. A missing theme palette uses the Oxiquill default for that theme. Chart chrome and typography follow Starlight. Unknown nested fields, fields for another chart kind, raw ECharts options, callbacks, formatters, and HTML are rejected. Style contributes to the normal artifact byte budget; it does not bypass output limits.
+
+Every existing Rust chart macro signature remains valid. These overloads add a final JSON-serializable style argument, such as `&serde_json::json!({ "lineWidth": 3 })`:
+
+```text
+emit_line_chart!(series, style)
+emit_line_chart!(series, x_label, y_label, style)
+emit_scatter_chart!(series, style)
+emit_scatter_chart!(series, x_label, y_label, style)
+emit_bar_chart!(categories, values, style)
+emit_histogram!(bins, style)
+emit_heatmap!(data, style)
+emit_line_plot!(points, x_label, y_label, style)
+```
+
+The macro serializes the argument into `spec.style`; normal chart validation enforces the same contract.
+
 ## Resource Limits
 
 Producers enforce limits inside each language worker before `postMessage`; the main thread independently validates the bounded response again. Limits are UTF-8 byte limits and are cumulative for each run where noted:
@@ -137,7 +192,10 @@ let heatmap = [[0, 0, 1], [1, 0, 3], [0, 1, 2], [1, 1, 4]];
 emit_json!(&serde_json::json!({"status": "ok", "rows": rows.len()}));
 emit_records_table!(&rows);
 emit_table_with_columns!(&columns, &rows);
-emit_bar_chart!(&["alpha", "beta", "gamma"], &[3, 5, 4]);
+emit_bar_chart!(&["alpha", "beta", "gamma"], &[3, 5, 4], &serde_json::json!({
+    "palette": { "light": ["#7c3aed"], "dark": ["#c4b5fd"] },
+    "animationDurationMs": 180
+}));
 emit_heatmap!(&heatmap);
 emit_svg!(
     r##"<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 160 48"><rect width="160" height="48" fill="#ecfeff"/><circle cx="32" cy="24" r="14" fill="#0f766e"/><rect x="64" y="12" width="72" height="24" rx="4" fill="#2563eb"/></svg>"##,

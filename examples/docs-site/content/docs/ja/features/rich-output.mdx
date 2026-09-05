@@ -49,6 +49,61 @@ empty chart と equal point domain は valid です。heatmap は X/Y の catego
 
 chart は現在の Starlight light/dark theme に合わせた contrast-aware color を使い、`html[data-theme]` の変更時に ECharts instance を作り直します。一時的な renderer load failure の後には retry action を表示します。
 
+## 出力の保持とグラフのスタイル
+
+セルを再実行している間も、最後に成功した出力を表示し続けます。150ms の reactive debounce 中も同様です。更新中の表示はレイアウトを動かしません。再実行が失敗した場合は出力とエラーを併記し、**セルの実行を再試行**からやり直せます。キャンセルや入力不正でも出力を保持し、成功時に結果を置き換えてエラーを消します。出力の並びが動的に変わる場合は artifact に明示的な `id` を付けてください。重複 ID は出現番号で区別し、ID のない artifact は種類ごとの出現番号で対応付けます。
+
+互換性のあるグラフは既存の canvas と ECharts instance を更新し、読者のズーム範囲を保持します。初回とデータ更新のアニメーションは既定で180ms、easing は cubicOut です。構造変更時は同じ instance の設定を置き換え、Starlight の light/dark 変更時には instance を作り直します。グラフ更新が失敗しても最後の表示と概要を残し、局所的な再試行操作を表示します。OS の動作軽減設定は著者の animation 指定より優先され、グラフと更新表示のアニメーションを無効にします。
+
+chart spec は次の optional `style` object を受け取ります。
+
+```ts
+interface ChartPalette {
+  light?: readonly string[];
+  dark?: readonly string[];
+}
+interface BaseChartStyle {
+  palette?: ChartPalette;
+  showGrid?: boolean;
+  animation?: boolean;
+  animationDurationMs?: number;
+}
+interface LineChartStyle extends BaseChartStyle {
+  lineWidth?: number;
+}
+interface ScatterChartStyle extends BaseChartStyle {
+  symbolSize?: number;
+}
+```
+
+line と area は `LineChartStyle`、scatter は `ScatterChartStyle`、bar・histogram・heatmap は `BaseChartStyle` を使います。
+
+| Field                 | 許可される値と既定値                                                                                                                                                    |
+| --------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `palette`             | `light` / `dark` の少なくとも片方を指定。各テーマに重複しない `#RGB` / `#RRGGBB` を1〜12色。heatmap は2色以上。短縮表記を展開し、大文字小文字を区別せず重複判定します。 |
+| `showGrid`            | boolean。既定値は `true`。                                                                                                                                              |
+| `animation`           | boolean。既定値は `true`。動作軽減設定を優先します。                                                                                                                    |
+| `animationDurationMs` | 0〜2,000の整数。初回と更新の既定値は180。                                                                                                                               |
+| `lineWidth`           | 1〜8の有限値。既定値2.25。line / area のみ。                                                                                                                            |
+| `symbolSize`          | 2〜32の有限値。既定値7。scatter のみ。                                                                                                                                  |
+
+palette は系列色を選び、heatmap では visual-map のグラデーションになります。片方のテーマが未指定なら、そのテーマの Oxiquill 既定色を使います。文字やグラフ周辺の色は Starlight に従います。不明な nested field、別の種類専用の field、生の ECharts options、callback、formatter、HTML は拒否します。style も通常の artifact byte 制限に含まれます。
+
+既存の Rust macro signature はすべて利用できます。次の overload では末尾に JSON-serializable な style（例: `&serde_json::json!({ "lineWidth": 3 })`）を追加できます。
+
+```text
+emit_line_chart!(series, style)
+emit_line_chart!(series, x_label, y_label, style)
+emit_scatter_chart!(series, style)
+emit_scatter_chart!(series, x_label, y_label, style)
+emit_bar_chart!(categories, values, style)
+emit_histogram!(bins, style)
+emit_heatmap!(data, style)
+emit_line_plot!(points, x_label, y_label, style)
+```
+
+macro は `spec.style` にシリアライズし、通常のグラフ検証が同じ制限を適用します。
+
 ## Resource limit
 
 producer は各 language worker 内で `postMessage` より前に limit を適用し、main thread でも bounded response を独立して再検証します。limit は UTF-8 byte 単位で、記載のものは run ごとに累積します。
@@ -137,7 +192,10 @@ let heatmap = [[0, 0, 1], [1, 0, 3], [0, 1, 2], [1, 1, 4]];
 emit_json!(&serde_json::json!({"status": "ok", "rows": rows.len()}));
 emit_records_table!(&rows);
 emit_table_with_columns!(&columns, &rows);
-emit_bar_chart!(&["alpha", "beta", "gamma"], &[3, 5, 4]);
+emit_bar_chart!(&["alpha", "beta", "gamma"], &[3, 5, 4], &serde_json::json!({
+    "palette": { "light": ["#7c3aed"], "dark": ["#c4b5fd"] },
+    "animationDurationMs": 180
+}));
 emit_heatmap!(&heatmap);
 emit_svg!(
     r##"<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 160 48"><rect width="160" height="48" fill="#ecfeff"/><circle cx="32" cy="24" r="14" fill="#0f766e"/><rect x="64" y="12" width="72" height="24" rx="4" fill="#2563eb"/></svg>"##,

@@ -7,6 +7,8 @@ Interactive cells are ordinary MDX code blocks with metadata comments at the top
 
 Rust cells are compiled to WebAssembly at build time. Python cells run in a browser Pyodide worker. Haskell cells are compiled to a WASI WebAssembly module at build time. All three languages use the same input metadata and run-mode model.
 
+Reruns retain the last successful output, with an error and retry action if execution fails. Cancellation and invalid input also keep the output. Compatible charts update the same canvas with a default 180ms transition, respecting OS reduced-motion preferences. See [rich output](/features/rich-output/#persistent-output-and-chart-styles) for the exact style schema, limits, and Rust overloads. Explicit artifact IDs are recommended for dynamically changing output sequences.
+
 ## Fence and Metadata Grammar
 
 Interactive fences use `rust`, `python`, or `haskell` (including Markdown's `{.rust}` form) and may use legal backtick or tilde fences and indentation. Metadata is one contiguous block of language-appropriate option comments at the beginning of the fence: `//|` or `///|` for Rust, `#|` for Python, and `--|` for Haskell. An option-looking comment after the first source line remains source code.
@@ -203,3 +205,5 @@ let displayed = sort (if include_squares then map (\value -> value * value) scal
 putStrLn (label ++ ": " ++ intercalate ", " (map show displayed))
 putStrLn ("total = " ++ show (sum displayed))
 ```
+
+Python cells show **Preparing Python…** during initialization and package loading, then **Running** while authored code executes. See [Python Runtime Assets](/guides/python-runtime/#browser-preparation) for optional page preparation with `python.preload`.

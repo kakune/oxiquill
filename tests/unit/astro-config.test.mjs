@@ -74,12 +74,13 @@ function aliasReplacementFor(alias, id) {
   return undefined;
 }
 
-function runConfigSetup(config, root = tempRoot) {
+function runConfigSetup(config, root = tempRoot, injectScript = vi.fn()) {
   const integration = config.integrations.flat().find((entry) => entry.name === 'oxiquill');
   let update;
 
   integration.hooks['astro:config:setup']({
     addWatchFile: vi.fn(),
+    injectScript,
     config: { root },
     updateConfig: (value) => {
       update = value;
@@ -137,6 +138,14 @@ async function compileMdxWithAstro(update, source, filePath) {
 }
 
 describe('defineOxiquillConfig', () => {
+  it('injects DOM-ready preparation only when explicitly enabled', () => {
+    const injectScript = vi.fn();
+    runConfigSetup(defineOxiquillConfig({}), tempRoot, injectScript);
+    expect(injectScript).not.toHaveBeenCalled();
+    runConfigSetup(defineOxiquillConfig({ python: { preload: true } }), tempRoot, injectScript);
+    expect(injectScript).toHaveBeenCalledExactlyOnceWith('page', expect.stringContaining('python-preload.js'));
+    expect(() => defineOxiquillConfig({ python: { preload: 'yes' } })).toThrow('python.preload must be a boolean');
+  });
   it('requires consumers to load the Starlight integration directly', () => {
     expect(() => definePackageConfig({ sidebar: [], title: 'Docs' })).toThrow(
       'requires framework.starlight to be an Astro integration factory'

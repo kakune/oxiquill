@@ -5,6 +5,8 @@ import base64
 import builtins
 import io
 import json
+import os
+import sys
 
 __oxiquill_outputs = []
 __oxiquill_displayed_figures = set()
@@ -70,8 +72,8 @@ def __oxiquill_json_artifact(value, title=None, caption=None):
 
 def __oxiquill_scalar_value(value):
     try:
-        import pandas as pd
-        is_missing = pd.isna(value)
+        pd = sys.modules.get("pandas")
+        is_missing = pd.isna(value) if pd is not None else False
         try:
             if bool(is_missing):
                 return None
@@ -344,9 +346,9 @@ def __oxiquill_markdown_repr_artifact(value, *, title=None, caption=None):
 
 const pythonDisplayMatplotlibSupport = String.raw`
 def __oxiquill_configure_matplotlib():
-    try:
-        import matplotlib
-    except Exception:
+    os.environ["MPLBACKEND"] = "Agg"
+    matplotlib = sys.modules.get("matplotlib")
+    if matplotlib is None:
         return False
     try:
         matplotlib.use("Agg", force=True)
@@ -388,9 +390,8 @@ def __oxiquill_figure_to_image(fig, *, preferred="svg", title=None, caption=None
     )
 
 def __oxiquill_collect_matplotlib_outputs(preferred="svg", close_figures=True):
-    try:
-        import matplotlib.pyplot as plt
-    except Exception:
+    plt = sys.modules.get("matplotlib.pyplot")
+    if plt is None:
         return []
     outputs = []
     for number in list(plt.get_fignums()):

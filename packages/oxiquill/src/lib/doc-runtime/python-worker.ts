@@ -3,8 +3,9 @@ import { boundedErrorMessage, createBoundedTextAccumulator, outputArtifactLimits
 import { pythonDisplaySupportCode } from './python-display-support.js';
 import { createPythonCellResult, toOutputArtifacts } from './python-cell-result.js';
 import { createSerialRequestQueue } from './python-worker-queue.js';
-import type { RuntimeWorkerRequest, RuntimeWorkerResponse } from './types.js';
+import type { PythonWorkerRequest, PythonWorkerResponse } from './types.js';
 import { boundWorkerResult } from './worker-output.js';
+import { markRuntimeEvent, measureRuntimePhase } from './runtime-timing.js';
 
 export { pythonDisplaySupportCode } from './python-display-support.js';
 export { createPythonCellResult } from './python-cell-result.js';
@@ -14,14 +15,14 @@ type LoadPyodide = typeof import('pyodide').loadPyodide;
 type PyodideRuntime = Awaited<ReturnType<LoadPyodide>>;
 
 type WorkerScope = {
-  addEventListener(type: 'message', listener: (event: MessageEvent<RuntimeWorkerRequest>) => void): void;
-  postMessage(response: RuntimeWorkerResponse): void;
+  addEventListener(type: 'message', listener: (event: MessageEvent<PythonWorkerRequest>) => void): void;
+  postMessage(response: PythonWorkerResponse): void;
 };
 
 type PyodideModule = { loadPyodide: LoadPyodide };
 type PythonWorkerHandlerDependencies = {
-  ensurePyodide: () => Promise<PyodideRuntime>;
-  postMessage: (response: RuntimeWorkerResponse) => void;
+  ensurePyodide: (packages?: readonly string[]) => Promise<PyodideRuntime>;
+  postMessage: (response: PythonWorkerResponse) => void;
 };
 type PyodideModuleDependencies = {
   createObjectUrl?: (blob: Blob) => string;
@@ -31,6 +32,7 @@ type PyodideModuleDependencies = {
 };
 
 const worker = self as unknown as WorkerScope;
+markRuntimeEvent('worker-ready', 'python');
 const pyodideUrls = resolvePyodideUrls();
 const ensurePyodide = createPythonRuntimeLoader(pyodideUrls);
 const handleRequest = createPythonWorkerRequestHandler({
@@ -46,23 +48,36 @@ worker.addEventListener('message', (event) => {
 export function createPythonWorkerRequestHandler({
   ensurePyodide,
   postMessage
-}: PythonWorkerHandlerDependencies): (request: RuntimeWorkerRequest) => Promise<void> {
+}: PythonWorkerHandlerDependencies): (request: PythonWorkerRequest) => Promise<void> {
   return async (request) => {
     try {
-      const pyodide = await ensurePyodide();
+      postMessage({ type: 'progress', requestId: request.requestId, phase: 'preparing' });
+      const pyodide = await ensurePyodide(request.packages);
+      const packages = request.packages?.filter((name) => !Object.hasOwn(pyodide.loadedPackages ?? {}, name)) ?? [];
+      if (packages.length > 0) {
+        await measureRuntimePhase('packages', 'cellId' in request ? request.cellId : 'python', () =>
+          pyodide.loadPackage(packages)
+        );
+      }
+      if (!('cellId' in request)) {
+        postMessage({ type: 'ready', requestId: request.requestId, ok: true });
+        return;
+      }
       const stdout = createBoundedTextAccumulator(outputArtifactLimits.bytesPerStream, '\n');
       const stderr = createBoundedTextAccumulator(outputArtifactLimits.bytesPerStream, '\n');
 
       pyodide.setStdout({ batched: stdout.append });
       pyodide.setStderr({ batched: stderr.append });
 
-      if (request.packages && request.packages.length > 0) {
-        await pyodide.loadPackage(Array.from(request.packages));
-      }
       if (request.source) {
-        await pyodide.loadPackagesFromImports(request.source);
+        await measureRuntimePhase('imports', request.cellId, () =>
+          pyodide.loadPackagesFromImports(request.source ?? '')
+        );
       }
-      pyodide.runPython('__oxiquill_prepare_cell()');
+      await measureRuntimePhase('display-prepare', request.cellId, () =>
+        pyodide.runPython('__oxiquill_prepare_cell()')
+      );
+      postMessage({ type: 'progress', requestId: request.requestId, phase: 'executing' });
 
       const globals = pyodide.toPy(request.inputs);
       let value: unknown = null;
@@ -71,13 +86,21 @@ export function createPythonWorkerRequestHandler({
         for (const inputName of request.integerInputNames ?? []) {
           pyodide.runPython(pythonIntegerConversionCode(inputName), { globals });
         }
-        value = toSerializable(await pyodide.runPythonAsync(request.source ?? '', { globals }));
+        value = toSerializable(
+          await measureRuntimePhase('execution', request.cellId, () =>
+            pyodide.runPythonAsync(request.source ?? '', { globals })
+          )
+        );
       } finally {
         globals.destroy();
       }
       const displayOutputs = toOutputArtifacts(toSerializable(pyodide.runPython('__oxiquill_take_outputs()')));
       const matplotlibOutputs = toOutputArtifacts(
-        toSerializable(pyodide.runPython('__oxiquill_collect_matplotlib_outputs()'))
+        toSerializable(
+          await measureRuntimePhase('display-collect', request.cellId, () =>
+            pyodide.runPython('__oxiquill_collect_matplotlib_outputs()')
+          )
+        )
       );
 
       const stdoutResult = stdout.take();
@@ -113,11 +136,11 @@ export function createPythonRuntimeLoader({
   indexUrl: string;
   importModule?: (moduleUrl: string) => Promise<PyodideModule>;
   moduleUrl: string;
-}): () => Promise<PyodideRuntime> {
+}): (packages?: readonly string[]) => Promise<PyodideRuntime> {
   let pyodideReady: Promise<PyodideRuntime> | undefined;
   let loadPyodideReady: Promise<LoadPyodide> | undefined;
 
-  return () => {
+  return (packages = []) => {
     if (!loadPyodideReady) {
       const importedLoader = importModule(moduleUrl).then((module) => module.loadPyodide);
       loadPyodideReady = importedLoader;
@@ -128,8 +151,10 @@ export function createPythonRuntimeLoader({
 
     if (!pyodideReady) {
       const runtime = loadPyodideReady.then(async (loadPyodide) => {
-        const pyodide = await loadPyodide({ indexURL: indexUrl });
-        await pyodide.runPythonAsync(pythonDisplaySupportCode);
+        const pyodide = await measureRuntimePhase('initialization', 'python', () =>
+          loadPyodide({ indexURL: indexUrl, packages: Array.from(packages) })
+        );
+        await measureRuntimePhase('display-support', 'python', () => pyodide.runPythonAsync(pythonDisplaySupportCode));
         return pyodide;
       });
       pyodideReady = runtime;

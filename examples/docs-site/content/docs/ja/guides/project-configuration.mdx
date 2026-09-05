@@ -44,7 +44,7 @@ export const collections = createOxiquillCollections({ defineCollection, docsLoa
 | `markdown`                        | 対応する Astro Markdown setting/plugin。Oxiquill 必須 plugin が先に動きます。              |
 | `vite`                            | 追加の Vite setting。必須 alias、dedupe、worker plugin、filesystem access は保持されます。 |
 | `paths`                           | 下記の source/cache/generated/public path。                                                |
-| `python`                          | Pyodide download の `offline` と optional `packageMirror`。                                |
+| `python`                          | Pyodide download の `preload`、`offline` と optional `packageMirror`。                     |
 | その他の Astro field              | Astro に渡されます。Oxiquill の output は常に static です。                                |
 
 Astro config を手動で組み立てる場合だけ `oxiquillIntegration()` を使います。受け取る option は `base`、`markdown`、`paths`、`python`、`vite` で、Preact と Starlight は caller が追加します。
@@ -96,6 +96,7 @@ Astro の `root`、`publicDir`、`outDir`、`cacheDir` と Oxiquill の path set
 ```js
 export default defineOxiquillConfig({
   python: {
+    preload: false,
     offline: process.env.OXIQUILL_OFFLINE === '1',
     packageMirror: new URL('https://packages.example/pyodide/')
   },
@@ -136,3 +137,5 @@ subpath 配下へ公開するときは Astro の `base` を設定します。Oxi
 生成 runtime は `.oxiquill` と `public/oxiquill`、verified download cache は `.cache/oxiquill/downloads/v1`、最終 static site は Astro の `outDir`（通常 `dist`）に置かれます。生成 directory と ownership marker を直接編集しないでください。download cache は build や output 再生成をまたいで保持できますが、file は利用前に毎回検証されます。
 
 生成 directory を変更するときは、resolved cache、helper-crate target、output、public-asset path に合わせて `tsconfig.json` の exclusion も更新します。そうしないと `**/*` のような広い include により、Astro/TypeScript が Pyodide などの生成 JavaScript を output ではなく source として解析することがあります。
+
+`python.preload` の default は `false` です。有効にすると Python cell がある page の DOM ready 時に準備を始めます。詳細は [Python runtime asset](/ja/guides/python-runtime/#browser-の準備) を参照してください。

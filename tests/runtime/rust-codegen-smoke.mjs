@@ -25,6 +25,27 @@ try {
     return JSON.parse(runtime.run_rust_cell(cell.id, JSON.stringify(inputs)));
   };
   const output = run('spaced-macros');
+  const charts = run('chart-style-overloads').outputs;
+  assert.equal(charts.length, 16);
+  for (const [index, artifact] of charts.entries()) {
+    assert.equal(artifact.kind, 'chart');
+    assert.equal(
+      artifact.spec.kind,
+      index < 4
+        ? 'line'
+        : index < 8
+          ? 'scatter'
+          : index < 10
+            ? 'bar'
+            : index < 12
+              ? 'histogram'
+              : index < 14
+                ? 'heatmap'
+                : 'line'
+    );
+    if (index % 2 === 0) assert.equal(Object.hasOwn(artifact.spec, 'style'), false);
+    else assert.deepEqual(artifact.spec.style, { animation: false, palette: { light: ['#123', '#456'] } });
+  }
   assert.equal(output.stdout, 'spaced output\n');
   assert.deepEqual(output.outputs.find((artifact) => artifact.kind === 'json')?.value, { ok: true });
   assert.equal(

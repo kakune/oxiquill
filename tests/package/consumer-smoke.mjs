@@ -8,6 +8,7 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { chromium } from '@playwright/test';
 import { loadDocumentedConsumerConfig } from '../docs/documented-config.mjs';
+import { assertMathDependencies } from './math-contract.mjs';
 
 const supportedPythonPackages = [
   'contourpy',
@@ -29,6 +30,7 @@ const packageManagerArgument = process.argv.indexOf('--package-manager');
 const packageManager = process.argv[packageManagerArgument + 1];
 const browserSmoke = process.argv.includes('--browser');
 const consumerEnvironment = { ...process.env, ASTRO_TELEMETRY_DISABLED: '1' };
+delete consumerEnvironment.NODE_ENV;
 assert.ok(
   packageManagerArgument >= 0 && (packageManager === 'npm' || packageManager === 'pnpm'),
   '--package-manager must be either "npm" or "pnpm".'
@@ -60,7 +62,7 @@ import type { CellManifest } from 'oxiquill/runtime/types';
 
 const cell = {} as CellManifest;
 const paths = { downloadCacheDir: new URL('./verified downloads/', import.meta.url) } satisfies OxiquillPathOptions;
-const python = { offline: true, packageMirror: new URL('https://packages.example/pyodide/') } satisfies OxiquillPythonOptions;
+const python = { preload: true, offline: true, packageMirror: new URL('https://packages.example/pyodide/') } satisfies OxiquillPythonOptions;
 const publicTypes = {} as [
   OxiquillConfig,
   OxiquillFrameworkOptions,
@@ -194,6 +196,11 @@ try {
   }
 
   const nodeOnlyEnvironment = createNodeOnlyEnvironment();
+  await assertMathDependencies(path.join(consumerRoot, 'node_modules/oxiquill'));
+  await appendFile(
+    path.join(consumerRoot, 'content/docs/index.mdx'),
+    '\nInline scripts: $x_n + x^2$.\n\n$$\nx_n + x^2\n$$\n'
+  );
   run(process.execPath, [installedCliPath, 'check'], consumerRoot, false, nodeOnlyEnvironment);
   await Promise.all([
     writeFile(path.join(consumerRoot, 'astro.config.mjs'), starterConfig.astro),
@@ -201,6 +208,11 @@ try {
   ]);
   const initialBuild = run(process.execPath, [installedCliPath, 'build'], consumerRoot, true, nodeOnlyEnvironment);
   assertNo404Warning(initialBuild);
+  const productionHtml = await readFile(path.join(consumerRoot, 'dist/index.html'), 'utf8');
+  assert.match(productionHtml, /id="starlight__search"/u);
+  assert.match(productionHtml, /class="katex-html"/u);
+  assert.match(productionHtml, /sizing reset-size6 size3/u);
+  assert.doesNotMatch(productionHtml, /search\.devWarning|Search is only available in production builds/u);
   run(packageManager, ['run', 'preview', '--', '--background', '--host', '127.0.0.1', '--port', '4321'], consumerRoot);
   await assertFile(path.join(consumerRoot, '.astro/preview.json'));
   stopAstroPreview(packageManager, consumerRoot);

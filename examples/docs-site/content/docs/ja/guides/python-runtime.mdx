@@ -25,6 +25,16 @@ export default defineOxiquillConfig({
 
 `offline` の default は `false` です。`packageMirror` と `downloadCacheDir` は string または URL を受け取ります。TypeScript consumer は `OxiquillPythonOptions` と `OxiquillPathOptions` を `oxiquill/astro` から import できます。
 
+## Browser の準備
+
+`python: { preload: true }` を設定すると、page の DOM が準備できた時点で Python の準備を始めます。default は `false` で、この documentation site では有効にしています。Python cell がない page では Python worker を起動しません。準備対象は最初の Python cell の declared packages だけで、執筆した code は実行しません。button cell は引き続き「実行」を待ち、reactive / autorun cell の visible hydration も維持します。
+
+最初の request の declared packages を Pyodide initialization に渡し、download と runtime startup を重ねます。準備と実行は同じ worker、initialization promise、serial queue を使います。後続 cell の追加 package と source の import discovery は実行前に処理します。UI は「Python を準備中…」と「実行中…」を区別します。準備に失敗しても cell の実行で再試行でき、cancel、timeout、runtime reset は worker と準備状態を一緒に破棄します。
+
+Browser asset は同一 origin から読み込み、`/oxiquill/` を含む site base path に従います。CDN、service worker、custom Pyodide distribution、永続 browser cache は追加しません。通常の HTTP cache は利用します。表示 helper は執筆した import が読み込んだ pandas / Matplotlib だけを使います。Matplotlib の非対話 Agg backend と figure の自動回収は維持します。
+
+ローカルでの分析には `oxiquill:<phase>:<cell-id>` という browser User Timing entry を利用できます。hydration、worker startup、initialization、display support、package loading、import discovery、execution、output rendering を記録し、initialization の ID は `python` です。各 phase / cell の最新計測だけを保持し、server への送信は行いません。repository の `tests/performance/python-startup.mjs` は gzip 配信した production build で fresh context、reload、同じ page での再実行を計測します。
+
 ## 検証付き download
 
 各 wheel の filename、release location、expected SHA-256 は install 済み `pyodide-lock.json` から取得します。mirror setting が変えるのは download base だけで、lockfile hash を弱めたり置き換えたりしません。

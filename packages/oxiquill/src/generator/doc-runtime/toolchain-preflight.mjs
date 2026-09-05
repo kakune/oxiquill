@@ -141,16 +141,15 @@ function errorMessage(error) {
   return error instanceof Error && error.message ? error.message : String(error);
 }
 
-/* v8 ignore start -- external process adapter is covered through injected runCommand. */
-function runCommandWithCapturedOutput(command, args) {
+export function runCommandWithCapturedOutput(command, args, spawnProcess = spawn) {
   return new Promise((resolve, reject) => {
-    const child = spawn(command, args, { stdio: ['ignore', 'pipe', 'pipe'] });
+    const child = spawnProcess(command, args, { stdio: ['ignore', 'pipe', 'pipe'] });
     const stdout = [];
     const stderr = [];
     child.stdout.on('data', (chunk) => stdout.push(chunk));
     child.stderr.on('data', (chunk) => stderr.push(chunk));
     child.on('error', reject);
-    child.on('exit', (code, signal) => {
+    child.on('close', (code, signal) => {
       if (code === 0) {
         resolve(Buffer.concat(stdout).toString('utf8'));
       } else {
@@ -159,4 +158,3 @@ function runCommandWithCapturedOutput(command, args) {
     });
   });
 }
-/* v8 ignore stop */
