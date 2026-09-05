@@ -19,10 +19,11 @@ test('prepares first-cell dependencies before visible hydration without running 
   await page.goto('/features/rich-output/', { waitUntil: 'networkidle' });
   const cell = page.getByTestId('cell-features__rich-output__python-rich-outputs');
   await expect.poll(() => workerRequests.length).toBe(1);
-  expect(workerRequests[0]).toMatchObject({ type: 'prepare', packages: ['matplotlib', 'numpy', 'pandas'] });
+  expect(workerRequests[0]).toMatchObject({ type: 'prepare', packages: ['matplotlib', 'pandas'] });
   expect(workerRequests[0]).not.toHaveProperty('source');
   await expect(cell.locator('.doc-cell__outputs')).toHaveCount(0);
   await cell.scrollIntoViewIfNeeded();
+  await expect(cell.locator('xpath=ancestor::astro-island[1]')).not.toHaveAttribute('ssr', '');
   await expect(cell.locator('.run-button')).toBeVisible();
   await cell.locator('.run-button').click();
   await expect(cell.locator('.doc-cell__outputs')).toBeVisible({ timeout: 90_000 });
@@ -34,15 +35,18 @@ test('prepares first-cell dependencies before visible hydration without running 
     .find((worker) => worker.url().includes('python-worker'))
     ?.evaluate(() =>
       performance
-        .getEntriesByType('resource')
+        .getEntries()
+        .filter((entry) => entry.entryType === 'resource' || entry.name === 'oxiquill:initialization:python')
         .map((entry) => ({ name: entry.name, startTime: entry.startTime, end: entry.startTime + entry.duration }))
     );
   const core = timings?.find((entry) => entry.name.endsWith('/pyodide.asm.wasm'));
+  const initialization = timings?.find((entry) => entry.name === 'oxiquill:initialization:python');
   const wheels = timings?.filter((entry) => entry.name.endsWith('.whl')) ?? [];
   expect(core).toBeDefined();
   expect(wheels.length).toBeGreaterThan(0);
   expect(wheels.every((entry) => new URL(entry.name).origin === new URL(page.url()).origin)).toBe(true);
-  expect(wheels.some((entry) => entry.startTime < (core?.end ?? 0))).toBe(true);
+  expect(initialization).toBeDefined();
+  expect(wheels.some((entry) => entry.startTime < (initialization?.end ?? 0))).toBe(true);
 });
 
 test('a failed page preparation recovers when a reader runs the cell', async ({ page }) => {
@@ -58,6 +62,7 @@ test('a failed page preparation recovers when a reader runs the cell', async ({ 
   await expect.poll(() => failed).toBe(true);
   const cell = page.getByTestId('cell-features__rich-output__python-rich-outputs');
   await cell.scrollIntoViewIfNeeded();
+  await expect(cell.locator('xpath=ancestor::astro-island[1]')).not.toHaveAttribute('ssr', '');
   await cell.locator('.run-button').click();
   await expect(cell.locator('.doc-cell__outputs')).toBeVisible({ timeout: 90_000 });
   await expect(cell.getByRole('alert')).toHaveCount(0);
