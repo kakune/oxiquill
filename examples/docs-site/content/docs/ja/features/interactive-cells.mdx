@@ -34,7 +34,7 @@ Haskell cell は standard-library code のみで `packages`/`crates` を受け�
 
 - `button`: input と Run button を表示し、mount 時は実行しません。
 - `reactive`: input を表示して Run button を隠し、mount 時に一度実行します。その後は 150 ms trailing debounce を使い、active execution 一つと最新 replacement 一つだけを保持します。
-- `autorun`: input/Run button を表示せず、各 `cell.id + runtimeVersion` について正確に一度だけ実行します。
+- `autorun`: input/Run button を表示せず、各 `cell.id + runtimeVersion + source` について正確に一度だけ実行します。開発中は runtime-version の更新が先に届いた場合も、source の更新によって前回の実行結果を無効化します。
 
 次の button cell は、input を変更しても明示的に実行するまで待機します。
 
