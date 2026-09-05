@@ -29,6 +29,7 @@ const packageManagerArgument = process.argv.indexOf('--package-manager');
 const packageManager = process.argv[packageManagerArgument + 1];
 const browserSmoke = process.argv.includes('--browser');
 const consumerEnvironment = { ...process.env, ASTRO_TELEMETRY_DISABLED: '1' };
+delete consumerEnvironment.NODE_ENV;
 assert.ok(
   packageManagerArgument >= 0 && (packageManager === 'npm' || packageManager === 'pnpm'),
   '--package-manager must be either "npm" or "pnpm".'
@@ -201,6 +202,9 @@ try {
   ]);
   const initialBuild = run(process.execPath, [installedCliPath, 'build'], consumerRoot, true, nodeOnlyEnvironment);
   assertNo404Warning(initialBuild);
+  const productionHtml = await readFile(path.join(consumerRoot, 'dist/index.html'), 'utf8');
+  assert.match(productionHtml, /id="starlight__search"/u);
+  assert.doesNotMatch(productionHtml, /search\.devWarning|Search is only available in production builds/u);
   run(packageManager, ['run', 'preview', '--', '--background', '--host', '127.0.0.1', '--port', '4321'], consumerRoot);
   await assertFile(path.join(consumerRoot, '.astro/preview.json'));
   stopAstroPreview(packageManager, consumerRoot);

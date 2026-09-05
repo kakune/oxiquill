@@ -17,6 +17,8 @@ export async function loadOxiquillProjectConfig({ cwd = process.cwd(), configFil
   const invocationCwd = path.resolve(pathFromConfigValue(cwd, process.cwd(), 'cwd'));
   const resolvedConfigFile = resolveAstroConfigFile({ cwd: invocationCwd, configFile });
   let loaded;
+  const hadNodeEnv = Object.hasOwn(process.env, 'NODE_ENV');
+  const nodeEnv = process.env.NODE_ENV;
 
   try {
     loaded = await loadConfigFromFile(
@@ -29,6 +31,9 @@ export async function loadOxiquillProjectConfig({ cwd = process.cwd(), configFil
     );
   } catch (error) {
     throw new Error(`Unable to load Oxiquill project config from ${resolvedConfigFile}.`, { cause: error });
+  } finally {
+    if (hadNodeEnv) process.env.NODE_ENV = nodeEnv;
+    else delete process.env.NODE_ENV;
   }
 
   if (!loaded) {

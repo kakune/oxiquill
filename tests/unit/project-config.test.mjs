@@ -308,6 +308,38 @@ describe('Oxiquill project configuration', () => {
     expect(projectConfig.astroConfigArgs).toEqual(['--root', root, '--config', 'custom config.mts']);
   });
 
+  it.each([undefined, '', 'caller-value', 'development', 'production'])(
+    'restores NODE_ENV=%j after successful and failed discovery',
+    async (nodeEnv) => {
+      const original = process.env.NODE_ENV;
+      const hadOriginal = Object.hasOwn(process.env, 'NODE_ENV');
+      const root = await temporaryDirectory();
+      try {
+        for (const fails of [false, true]) {
+          if (nodeEnv === undefined) delete process.env.NODE_ENV;
+          else process.env.NODE_ENV = nodeEnv;
+          const configFile = `environment-${fails}.mjs`;
+          await writeFile(
+            path.join(root, configFile),
+            [
+              `import { oxiquillIntegration } from ${JSON.stringify(astroModuleUrl)};`,
+              'process.env.NODE_ENV = "config-mutation";',
+              fails ? 'throw new Error("config failed");' : 'export default { integrations: [oxiquillIntegration()] };'
+            ].join('\n')
+          );
+          const discovery = loadOxiquillProjectConfig({ cwd: root, configFile });
+          if (fails) await expect(discovery).rejects.toThrow('Unable to load Oxiquill project config');
+          else await discovery;
+          expect(Object.hasOwn(process.env, 'NODE_ENV')).toBe(nodeEnv !== undefined);
+          expect(process.env.NODE_ENV).toBe(nodeEnv);
+        }
+      } finally {
+        if (hadOriginal) process.env.NODE_ENV = original;
+        else delete process.env.NODE_ENV;
+      }
+    }
+  );
+
   it('fails clearly for missing, invalid, absent, and duplicate integrations', async () => {
     const root = await temporaryDirectory();
     await expect(loadOxiquillProjectConfig({ cwd: root })).rejects.toThrow('No Astro config was found');
