@@ -236,7 +236,7 @@ describe('InteractiveCell', () => {
           xAxis: expect.objectContaining({ type: 'value', name: 'x' }),
           yAxis: expect.objectContaining({ type: 'value', name: 'y' })
         }),
-        true
+        { notMerge: true }
       )
     );
     expect(mocks.runInteractiveCell).toHaveBeenCalledWith(
@@ -1143,7 +1143,7 @@ describe('ChartOutput options', () => {
         ]
       })
     ).toMatchObject({
-      legend: { top: 4 },
+      legend: { top: 8 },
       tooltip: { trigger: 'axis' },
       xAxis: { type: 'value', name: 'n' },
       yAxis: { type: 'value', name: 'x' },
@@ -1161,7 +1161,7 @@ describe('ChartOutput options', () => {
       })
     ).toMatchObject({
       tooltip: { trigger: 'item' },
-      series: [{ type: 'scatter', symbolSize: 6, data: [[0, 1]] }]
+      series: [{ type: 'scatter', symbolSize: 7, data: [[0, 1]] }]
     });
 
     expect(
@@ -1208,7 +1208,7 @@ describe('ChartOutput options', () => {
       })
     ).toMatchObject({
       dataZoom: undefined,
-      series: [{ type: 'line', areaStyle: { opacity: 0.18 }, data: [[0, 1]] }]
+      series: [{ type: 'line', areaStyle: { opacity: 0.14 }, data: [[0, 1]] }]
     });
 
     expect(
@@ -1244,7 +1244,7 @@ describe('ChartOutput options', () => {
         series: [{ points: [[0, 1]] }]
       })
     ).toMatchObject({
-      legend: { top: 4 }
+      legend: { top: 8 }
     });
 
     expect(

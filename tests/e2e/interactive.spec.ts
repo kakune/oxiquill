@@ -308,6 +308,18 @@ test('text-only Haskell cells do not load chart or unrelated runtimes', async ({
 });
 
 test('Rust cells run from MDX code fences and redraw plots', async ({ page }) => {
+  await page.addInitScript(`
+    globalThis.__heldChartResults = [];
+    const add = Worker.prototype.addEventListener;
+    Worker.prototype.addEventListener = function (type, listener, ...rest) {
+      const worker = this;
+      return Reflect.apply(add, this, [type, type === 'message' ? function (event) {
+        const deliver = () => listener.call(worker, event);
+        if (globalThis.__holdChartResults) globalThis.__heldChartResults.push(deliver);
+        else deliver();
+      } : listener, ...rest]);
+    };
+  `);
   await page.goto('/samples/logistic-map/');
 
   await expect(page.getByRole('heading', { name: 'Logistic Map', exact: true })).toBeVisible();
@@ -321,6 +333,9 @@ test('Rust cells run from MDX code fences and redraw plots', async ({ page }) =>
   await expect(chart).toBeVisible();
   await expect(chart.locator('canvas')).toHaveCount(1);
   const canvas = chart.locator('canvas');
+  const originalCanvas = await canvas.elementHandle();
+  // Let the initial 180ms animation finish before comparing the retained image.
+  await page.waitForTimeout(250);
 
   const initialStats = await canvasStats(canvas);
   expect(initialStats.width).toBeGreaterThan(100);
@@ -328,6 +343,7 @@ test('Rust cells run from MDX code fences and redraw plots', async ({ page }) =>
   expect(initialStats.inkPixels).toBeGreaterThan(1_000);
 
   const initialImage = await canvas.evaluate((element) => (element as HTMLCanvasElement).toDataURL());
+  await page.evaluate('globalThis.__holdChartResults = true');
 
   await page.getByRole('slider', { name: 'r' }).evaluate((input) => {
     const slider = input as HTMLInputElement;
@@ -336,6 +352,22 @@ test('Rust cells run from MDX code fences and redraw plots', async ({ page }) =>
   });
 
   await expect(page.getByTestId('r-value')).toHaveText('3.70');
+  await expect.poll(() => page.evaluate('globalThis.__heldChartResults.length')).toBe(1);
+  await expect(cell.locator('.doc-cell__output-region')).toHaveAttribute('aria-busy', 'true');
+  await expect(canvas).toBeVisible();
+  expect(await canvas.evaluate((node, previous) => node === previous, originalCanvas)).toBe(true);
+  expect(await canvas.evaluate((node) => (node as HTMLCanvasElement).toDataURL())).toBe(initialImage);
+  await expect(cell.locator('.doc-cell__updating')).toHaveAttribute('aria-hidden', 'true');
+  await page.emulateMedia({ reducedMotion: 'reduce' });
+  await expect(chart).toHaveAttribute('data-chart-motion', 'reduced');
+  expect(await cell.locator('.doc-cell__updating').evaluate((node) => getComputedStyle(node).animationName)).toBe(
+    'none'
+  );
+  await page.emulateMedia({ reducedMotion: 'no-preference' });
+  await expect(chart).toHaveAttribute('data-chart-motion', 'full');
+  await page.evaluate(
+    'globalThis.__holdChartResults = false; globalThis.__heldChartResults.splice(0).forEach(deliver => deliver())'
+  );
 
   await expect
     .poll(async () => canvas.evaluate((element) => (element as HTMLCanvasElement).toDataURL()))
@@ -343,6 +375,7 @@ test('Rust cells run from MDX code fences and redraw plots', async ({ page }) =>
 
   const updatedImage = await canvas.evaluate((element) => (element as HTMLCanvasElement).toDataURL());
   expect(updatedImage.length).toBeGreaterThan(1_000);
+  expect(await canvas.evaluate((node, previous) => node === previous, originalCanvas)).toBe(true);
 });
 
 test('interactive cells and math rendering are available', async ({ page }) => {

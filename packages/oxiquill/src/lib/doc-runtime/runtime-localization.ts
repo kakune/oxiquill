@@ -29,6 +29,7 @@ export type RuntimeLabels = {
   cellUpdating: string;
   chartCaption: string;
   chartLoadError: (detail: string) => string;
+  chartUpdateError: (detail: string) => string;
   chartLoading: string;
   chartRetry: string;
   chartSummary: (details: ChartSummaryDetails) => string;
@@ -131,6 +132,7 @@ const runtimeLabels = {
     cellUpdating: 'Updating…',
     chartCaption: 'Chart data summary',
     chartLoadError: (detail) => `Chart renderer could not be loaded: ${detail}`,
+    chartUpdateError: (detail) => `Chart could not be updated: ${detail}`,
     chartLoading: 'Loading chart renderer...',
     chartRetry: 'Retry chart rendering',
     chartSummary: ({
@@ -199,6 +201,7 @@ const runtimeLabels = {
     cellUpdating: '更新中…',
     chartCaption: 'グラフデータの概要',
     chartLoadError: (detail) => `グラフ表示を読み込めませんでした: ${detail}`,
+    chartUpdateError: (detail) => `グラフを更新できませんでした: ${detail}`,
     chartLoading: 'グラフ表示を読み込んでいます…',
     chartRetry: 'グラフ表示を再試行',
     chartSummary: ({

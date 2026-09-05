@@ -281,8 +281,9 @@
   width: 100%;
   height: 360px;
   border: 1px solid color-mix(in srgb, var(--sl-color-gray-5), transparent 35%);
-  border-radius: 6px;
-  background: var(--sl-color-bg);
+  border-radius: 10px;
+  background: color-mix(in srgb, var(--sl-color-bg), var(--sl-color-gray-6) 8%);
+  overflow: hidden;
 }
 
 .doc-html-output {
