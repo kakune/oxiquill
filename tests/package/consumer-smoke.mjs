@@ -8,6 +8,7 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { chromium } from '@playwright/test';
 import { loadDocumentedConsumerConfig } from '../docs/documented-config.mjs';
+import { assertMathDependencies } from './math-contract.mjs';
 
 const supportedPythonPackages = [
   'contourpy',
@@ -195,6 +196,11 @@ try {
   }
 
   const nodeOnlyEnvironment = createNodeOnlyEnvironment();
+  await assertMathDependencies(path.join(consumerRoot, 'node_modules/oxiquill'));
+  await appendFile(
+    path.join(consumerRoot, 'content/docs/index.mdx'),
+    '\nInline scripts: $x_n + x^2$.\n\n$$\nx_n + x^2\n$$\n'
+  );
   run(process.execPath, [installedCliPath, 'check'], consumerRoot, false, nodeOnlyEnvironment);
   await Promise.all([
     writeFile(path.join(consumerRoot, 'astro.config.mjs'), starterConfig.astro),
@@ -204,6 +210,8 @@ try {
   assertNo404Warning(initialBuild);
   const productionHtml = await readFile(path.join(consumerRoot, 'dist/index.html'), 'utf8');
   assert.match(productionHtml, /id="starlight__search"/u);
+  assert.match(productionHtml, /class="katex-html"/u);
+  assert.match(productionHtml, /sizing reset-size6 size3/u);
   assert.doesNotMatch(productionHtml, /search\.devWarning|Search is only available in production builds/u);
   run(packageManager, ['run', 'preview', '--', '--background', '--host', '127.0.0.1', '--port', '4321'], consumerRoot);
   await assertFile(path.join(consumerRoot, '.astro/preview.json'));
