@@ -24,7 +24,7 @@
     "lint:js": "eslint \"**/*.{js,mjs,cjs,ts,tsx,astro}\" --max-warnings=0",
     "format": "prettier \"**/*.{astro,css,js,mjs,cjs,ts,tsx,md,mdx,json,yaml,yml}\" --write",
     "format:check": "prettier \"**/*.{astro,css,js,mjs,cjs,ts,tsx,md,mdx,json,yaml,yml}\" --check",
-    "test": "pnpm verify:release-version && pnpm lint && pnpm test:coverage && pnpm doc:rust && pnpm test:cli && pnpm test:runtime && pnpm test:bundle && pnpm test:docs && pnpm test:package && pnpm test:consumer && pnpm test:packed-browser && pnpm test:e2e",
+    "test": "pnpm verify:release-version && pnpm lint && pnpm test:coverage && pnpm doc:rust && pnpm test:cli && pnpm test:runtime && pnpm test:bundle && pnpm test:docs && pnpm test:package && pnpm test:consumer && pnpm test:packed-browser && pnpm test:dev-hmr && pnpm test:e2e",
     "test:coverage": "pnpm test:rust:coverage && pnpm test:unit:coverage",
     "test:compatibility": "pnpm lint && pnpm check:types && pnpm test:unit && pnpm test:cli && pnpm test:rust && pnpm test:package",
     "test:cli": "pnpm build:package && node packages/oxiquill/dist/cli/index.mjs --help",
@@ -50,7 +50,8 @@
     "test:consumer:registry:pnpm": "node tests/package/consumer-smoke.mjs --package-manager pnpm --registry",
     "verify:release-version": "node .github/scripts/verify-release-version.mjs",
     "lint:rust": "pnpm build:package && pnpm --dir examples/docs-site lint:rust",
-    "clean": "pnpm build:package && pnpm --dir examples/docs-site clean && pnpm --dir packages/oxiquill clean"
+    "clean": "pnpm build:package && pnpm --dir examples/docs-site clean && pnpm --dir packages/oxiquill clean",
+    "test:dev-hmr": "node tests/e2e/dev-hmr-smoke.mjs"
   },
   "devDependencies": {
     "@arethetypeswrong/cli": "0.18.5",

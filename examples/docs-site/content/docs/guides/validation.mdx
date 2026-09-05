@@ -49,10 +49,13 @@ pnpm test:wasm
 pnpm test:haskell
 pnpm build
 pnpm test:bundle
+pnpm test:dev-hmr
 pnpm test:e2e
 ```
 
 `pnpm wasm:dev` regenerates the runtime for local development. It requires `wasm32-wasi-ghc` when Haskell cells are present, as do `pnpm build`, `pnpm check`, `pnpm wasm:build`, and `pnpm test:wasm`. `pnpm dev` and `pnpm dev:runtime` are intentionally more forgiving: they keep Astro serving and show a Haskell cell error in the browser if the Haskell compiler is missing or a Haskell compile fails. `pnpm test:wasm` verifies generated Rust cell behavior, and `pnpm test:haskell` executes the generated Haskell/WASI runtime. `pnpm test:e2e` runs the full browser suite in Chromium, Firefox, and WebKit.
+
+`pnpm test:dev-hmr` runs a standalone Chromium smoke against a temporary copy of the workspace. It installs dependencies offline from the pnpm store, builds the package, generates the initial runtime, edits an MDX cell, and verifies source and reactive output updates remain stable. Run `pnpm install --frozen-lockfile` first to populate the store; Rust/Wasm, `wasm32-wasi-ghc`, and Playwright Chromium are required. PR CI runs it once in the Linux packed-browser job, after the packed consumer smoke.
 
 Production builds write `dist/oxiquill/bundle-report.json` and fail when an emitted client or worker JavaScript chunk exceeds 650 KiB uncompressed. Run `pnpm test:bundle` after `pnpm build` to verify the budget and confirm that ECharts and Mermaid remain behind dynamic import boundaries.
 

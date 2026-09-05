@@ -1,6 +1,7 @@
 // @vitest-environment node
 
 import { createHash } from 'node:crypto';
+import { createRequire } from 'node:module';
 import { cp, mkdir, mkdtemp, readFile, readdir, rm, writeFile } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
@@ -26,6 +27,7 @@ import { uploadReleaseAssets } from '../../.github/scripts/release-assets.mjs';
 import { verifyReleaseVersions } from '../../.github/scripts/verify-release-version.mjs';
 
 const repositoryRoot = fileURLToPath(new URL('../..', import.meta.url));
+const { parse: parseYaml } = createRequire(path.join(repositoryRoot, 'packages/oxiquill/package.json'))('yaml');
 const releaseCommit = 'a'.repeat(40);
 const workflowCommit = 'c'.repeat(40);
 const temporaryDirectories = [];
@@ -436,6 +438,77 @@ describe('GitHub Release asset upload', () => {
       })
     ).rejects.toThrow('conflicts with the verified artifact');
   });
+});
+
+async function readCiContracts() {
+  return {
+    workflow: parseYaml(await readFile(path.join(repositoryRoot, '.github/workflows/ci.yml'), 'utf8')),
+    scripts: JSON.parse(await readFile(path.join(repositoryRoot, 'package.json'), 'utf8')).scripts
+  };
+}
+
+function shellCommands(source = '') {
+  return source
+    .split(/&&|\n/gu)
+    .map((command) => command.trim())
+    .filter(Boolean);
+}
+
+function assertCiCommand({ workflow, scripts }, { command, jobName, after, condition, immediatelyAfter = false }) {
+  expect(workflow.on.pull_request.branches).toContain('main');
+  expect(shellCommands(scripts.test)).toContain(`pnpm ${command}`);
+  const matches = Object.entries(workflow.jobs).flatMap(([name, job]) =>
+    job.steps.flatMap((step, index) =>
+      shellCommands(step.run)
+        .filter((run) => run === `pnpm ${command}`)
+        .map(() => ({ name, step, index }))
+    )
+  );
+  expect(matches, `${command} must run exactly once in PR CI`).toHaveLength(1);
+  const [match] = matches;
+  expect(match.name, `${command} job`).toBe(jobName);
+  expect(match.step.if, `${command} condition`).toBe(condition);
+  const before = workflow.jobs[jobName].steps.findIndex((step) => shellCommands(step.run).includes(`pnpm ${after}`));
+  expect(before, `${after} prerequisite`).toBeGreaterThanOrEqual(0);
+  if (immediatelyAfter) expect(match.index).toBe(before + 1);
+  else expect(match.index).toBeGreaterThan(before);
+}
+
+function assertDevHmrContract(fixture) {
+  assertCiCommand(fixture, { command: 'test:dev-hmr', jobName: 'packed-browser', after: 'test:packed-browser' });
+  expect(fixture.scripts['test:dev-hmr']).toBe('node tests/e2e/dev-hmr-smoke.mjs');
+  const commands = shellCommands(fixture.scripts.test);
+  expect(commands.indexOf('pnpm test:dev-hmr')).toBeGreaterThan(commands.indexOf('pnpm test:packed-browser'));
+  expect(commands.indexOf('pnpm test:e2e')).toBeGreaterThan(commands.indexOf('pnpm test:dev-hmr'));
+  const job = fixture.workflow.jobs['packed-browser'];
+  expect(job['runs-on']).toBe('ubuntu-latest');
+  expect(job.strategy?.matrix).toBeUndefined();
+  expect(job.steps.some((step) => step.run === 'pnpm exec playwright install --with-deps chromium')).toBe(true);
+}
+
+describe('PR CI test contracts', () => {
+  it('runs development HMR once on Linux after the packed browser smoke', async () => {
+    assertDevHmrContract(await readCiContracts());
+  });
+
+  it.each(['remove', 'relocate', 'duplicate', 'guard', 'matrix', 'aggregate', 'order', 'entrypoint'])(
+    'rejects dev HMR contract drift: %s',
+    async (change) => {
+      const fixture = await readCiContracts();
+      const job = fixture.workflow.jobs['packed-browser'];
+      const index = job.steps.findIndex((step) => step.run === 'pnpm test:dev-hmr');
+      const step = job.steps[index];
+      if (change === 'remove') job.steps.splice(index, 1);
+      if (change === 'relocate') fixture.workflow.jobs['unit-coverage'].steps.push(...job.steps.splice(index, 1));
+      if (change === 'duplicate') job.steps.push({ ...step });
+      if (change === 'guard') step.if = 'false';
+      if (change === 'matrix') job.strategy = { matrix: { browser: ['chromium', 'firefox'] } };
+      if (change === 'aggregate') fixture.scripts.test = fixture.scripts.test.replace('pnpm test:dev-hmr && ', '');
+      if (change === 'order') job.steps.unshift(...job.steps.splice(index, 1));
+      if (change === 'entrypoint') fixture.scripts['test:dev-hmr'] = 'echo skipped';
+      expect(() => assertDevHmrContract(fixture)).toThrow();
+    }
+  );
 });
 
 describe('workflow supply-chain policy', () => {

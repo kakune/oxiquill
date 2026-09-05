@@ -242,6 +242,8 @@ jobs:
         run: pnpm exec playwright install --with-deps chromium
       - name: Exercise packed interactive cells
         run: pnpm test:packed-browser
+      - name: Run development HMR smoke
+        run: pnpm test:dev-hmr
 
   runtime:
     name: Runtime (${{ matrix.label }})
