@@ -22,11 +22,11 @@ pnpm preview
 For an existing project, use either package manager:
 
 ```sh
-pnpm add oxiquill@0.3.0 astro@7.2.9 @astrojs/starlight@0.41.9
+pnpm add oxiquill@0.3.1 astro@7.2.9 @astrojs/starlight@0.41.9
 ```
 
 ```sh
-npm install oxiquill@0.3.0 astro@7.2.9 @astrojs/starlight@0.41.9
+npm install oxiquill@0.3.1 astro@7.2.9 @astrojs/starlight@0.41.9
 ```
 
 Route documentation scripts through the CLI:
