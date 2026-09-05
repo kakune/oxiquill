@@ -1,5 +1,7 @@
 import { generateRustReaders } from '../rust-readers.mjs';
 import { rustFunctionName } from '../rust-identifiers.mjs';
+import { scanRustMacroInvocations } from './macro-invocations.mjs';
+import { rustOutputCapabilities } from './capabilities.mjs';
 import { generatedBanner } from './banners.mjs';
 import { generateRustFunction, generateRustTests } from './functions.mjs';
 import { generateRustOutputTypes } from './output-types.mjs';
@@ -29,10 +31,11 @@ ${matchArms}
     serialize_cell_output(output).map_err(to_js_error)
 }`;
 
-  const functions = rustCells.map(generateRustFunction).join('\n\n');
+  const macroSets = rustCells.map((cell) => scanRustMacroInvocations(cell.source, cell));
+  const functions = rustCells.map((cell, index) => generateRustFunction(cell, macroSets[index])).join('\n\n');
   const tests = generateRustTests(rustCells);
   const readers = generateRustReaders(rustCells);
-  const outputTypes = generateRustOutputTypes(rustCells);
+  const outputTypes = generateRustOutputTypes(rustCells, rustOutputCapabilities(rustCells, macroSets));
   const serdeImport = rustCells.length === 0 ? '' : 'use serde::Serialize;\n';
   const jsErrorMessage =
     rustCells.length === 0

@@ -6,7 +6,11 @@ import {
   relativePagePath,
   scopedCellId
 } from '../../packages/oxiquill/src/lib/doc-runtime/authoring-ids.mjs';
-import { rustSourceCapabilities } from '../../packages/oxiquill/src/generator/doc-runtime/rust-codegen/capabilities.mjs';
+import { scanRustMacroInvocations } from '../../packages/oxiquill/src/generator/doc-runtime/rust-codegen/macro-invocations.mjs';
+import {
+  rustOutputCapabilities,
+  rustSourceCapabilities
+} from '../../packages/oxiquill/src/generator/doc-runtime/rust-codegen/capabilities.mjs';
 import { generateRustPreludeMacros } from '../../packages/oxiquill/src/generator/doc-runtime/rust-codegen/macros.mjs';
 import {
   assertUniqueCellIds,
@@ -46,6 +50,162 @@ const { parse: parseToml } = requireFromPackage('smol-toml');
 const highlighter = {
   codeToHtml: (source, options) => Promise.resolve(`<pre data-lang="${options.lang}">${source}</pre>`)
 };
+
+describe('Rust macro invocation scanning', () => {
+  const families = [
+    ['println', [], []],
+    ['emit_text', ['text'], []],
+    ['emit_json', ['json'], []],
+    ['emit_html', ['html'], []],
+    ['emit_image_svg', ['image'], []],
+    ['emit_image_png', ['image'], []],
+    ['emit_svg', ['image'], ['emit_image_svg']],
+    ['emit_png_base64', ['image'], ['emit_image_png']],
+    ['emit_table', ['table'], []],
+    ['emit_table_with_columns', ['table'], []],
+    ['emit_records_table', ['table'], []],
+    ['emit_line_plot', ['chart', 'legacyPlot'], []],
+    ['emit_line_chart', ['chart', 'lineChart'], []],
+    ['emit_scatter_chart', ['chart', 'scatterChart'], []],
+    ['emit_bar_chart', ['chart', 'barChart'], []],
+    ['emit_histogram', ['chart', 'histogramChart'], []],
+    ['emit_heatmap', ['chart', 'heatmapChart'], []]
+  ];
+  const empty = rustSourceCapabilities('');
+  const declarations = (source) =>
+    [...generateRustPreludeMacros(source).matchAll(/macro_rules! (\w+)/gu)].map((match) => match[1]).sort();
+
+  describe.each(families)('%s', (name, capabilities, dependencies) => {
+    it.each(['', ' ', '\n\t', '/**/', ' /* outer /* nested */ comment */\n// trivia\n'])(
+      'accepts trivia %j',
+      (trivia) => {
+        const source = `${name}${trivia}!(&value);`;
+        expect(rustSourceCapabilities(source)).toEqual({
+          ...empty,
+          ...Object.fromEntries(capabilities.map((key) => [key, true]))
+        });
+        expect(declarations(source)).toEqual([name, ...dependencies].sort());
+      }
+    );
+
+    it.each([
+      ['line comment', (call) => `// ${call}`],
+      ['nested block comment', (call) => `/* outside /* ${call} */ ${call} */`],
+      ['string', (call) => `let s = "${call}";`],
+      ['escaped string', (call) => `let s = "\\"${call}\\\\";`],
+      ['byte string', (call) => `let s = b"${call}";`],
+      ['raw string', (call) => `let s = r"${call}";`],
+      ['raw byte string', (call) => `let s = br###""# ${call} "##"###;`],
+      ['raw C string', (call) => `let s = cr##"${call}"##;`],
+      ['character and string', (call) => `let quote = '"'; let s = "${call}";`],
+      ['byte character and string', (call) => `let quote = b'"'; let s = b"${call}";`],
+      ['prefix identifier', (call) => `my_${call}`],
+      ['suffix identifier', () => `${name}_extra!(&value);`],
+      ['Unicode prefix', (call) => `変数${call}`],
+      ['Unicode suffix', () => `${name}変数!(&value);`],
+      ['numeric suffix', (call) => `1${call}`],
+      ['lifetime', () => `'${name} !`],
+      ['raw lifetime', () => `'r#${name} !`],
+      ['inequality', () => `${name} != value`],
+      ['intervening punctuation', () => `${name} + !value`]
+    ])('ignores %s', (_label, wrap) => {
+      const source = wrap(`${name}!(&value);`);
+      expect(rustSourceCapabilities(source)).toEqual(empty);
+      expect(declarations(source)).toEqual([]);
+    });
+  });
+
+  it.each([0, 1, 8, 255])('matches exactly %i raw string delimiters', (count) => {
+    const hashes = '#'.repeat(count);
+    const source = `r${hashes}"emit_json! ${count ? `"${hashes.slice(1)} emit_html!` : ''}"${hashes}; emit_text ! ("ok");`;
+    expect(scanRustMacroInvocations(source)).toEqual(new Set(['emit_text']));
+  });
+
+  it.each(["'a'", "b'!'", "'🦀'", String.raw`'\''`, String.raw`b'\x27'`, String.raw`'\u{1f980}'`, String.raw`'\\'`])(
+    'skips character %s without swallowing subsequent code',
+    (literal) => {
+      expect(scanRustMacroInvocations(`let c = ${literal}; emit_json /* trivia */ !(&value);`)).toEqual(
+        new Set(['emit_json'])
+      );
+    }
+  );
+
+  it('recognizes raw identifiers and Unicode macros without mistaking lifetimes or labels for calls', () => {
+    expect(
+      scanRustMacroInvocations("fn f<'a>(s: &'a str) { 'outer: loop { r#emit_json ! (s); 変数!(); break 'outer; } }")
+    ).toEqual(new Set(['emit_json', '変数']));
+  });
+
+  it('unions capabilities and declares wrappers and their dependencies once', () => {
+    const source = 'emit_svg!(); emit_svg !(); emit_image_svg!(); emit_json!(); emit_json !();';
+    expect(scanRustMacroInvocations(source)).toEqual(new Set(['emit_svg', 'emit_image_svg', 'emit_json']));
+    expect(declarations(source)).toEqual(['emit_image_svg', 'emit_json', 'emit_svg']);
+    expect(rustSourceCapabilities(source)).toEqual({ ...empty, image: true, json: true });
+    const cells = [
+      { id: 'first', inputs: [], source: '// emit_html!()' },
+      { id: 'second', inputs: [], source }
+    ];
+    expect(rustOutputCapabilities(cells)).toEqual({ ...empty, image: true, json: true });
+    const generated = generateRustLib(cells);
+    expect(generated).toContain('Json(JsonArtifact)');
+    expect(generated).toContain('Image(ImageArtifact)');
+    expect(generated).not.toContain('Html(HtmlArtifact)');
+    expect(generated.match(/macro_rules! emit_svg/gu)).toHaveLength(1);
+  });
+
+  it.each([
+    ['/* unfinished', 'block comment'],
+    ['/* outer /* nested */', 'block comment'],
+    ['"unfinished', 'string literal'],
+    ['b"unfinished\\', 'string literal'],
+    ['r"unfinished', 'raw string literal'],
+    ['br##"unfinished"#', 'raw string literal'],
+    [String.raw`'\x27`, 'character literal'],
+    ["b'x", 'byte character literal']
+  ])('reports unterminated %s with cell and source location', (source, kind) => {
+    const cell = { id: 'broken', pagePath: 'content/docs/broken.mdx', inputs: [], source: `\n${source}` };
+    expect(() => generateRustLib([cell])).toThrow(
+      `Rust cell "broken" in content/docs/broken.mdx has an unterminated ${kind} at line 2, column`
+    );
+    expect(() => generateRustFunction(cell)).toThrow('Rust cell "broken"');
+    expect(() => rustSourceCapabilities(source)).toThrow(`Rust source has an unterminated ${kind}`);
+  });
+
+  it('does not close lexical constructs using another cell source', () => {
+    expect(() =>
+      rustOutputCapabilities([
+        { id: 'one', source: '/*' },
+        { id: 'two', source: '*/ emit_json!();' }
+      ])
+    ).toThrow('Rust cell "one" has an unterminated block comment');
+  });
+});
+
+describe('Rust cell author scope', () => {
+  it('keeps inputs and author bindings inside a discarded block after macro definitions', () => {
+    const source =
+      'let __stdout = label;\nlet __outputs = 42;\nprintln!("{__stdout}:{__outputs}");\nemit_text!(__stdout);\n42';
+    const generated = generateRustFunction({
+      id: 'scope',
+      inputs: [{ name: 'label', type: 'text' }],
+      source
+    });
+    const block = generated.indexOf('    let _ = {');
+    expect(generated.indexOf('let __stdout = std::cell::RefCell')).toBeLessThan(block);
+    expect(generated.indexOf('let __outputs = std::cell::RefCell')).toBeLessThan(block);
+    expect(generated.indexOf('macro_rules! println')).toBeLessThan(block);
+    expect(generated.indexOf('macro_rules! emit_text')).toBeLessThan(block);
+    expect(generated.slice(block)).toContain('        let label = read_string(inputs, "label")?;');
+    expect(generated.slice(block)).toContain(
+      source
+        .split('\n')
+        .map((line) => `        ${line}`)
+        .join('\n')
+    );
+    expect(generated).toContain('        42\n    };\n\n    Ok(finish_cell_output(');
+    expect(generated.slice(generated.indexOf('    Ok(finish_cell_output('))).toContain('__stdout.into_inner()');
+  });
+});
 
 const helperCrates = new Map([
   ['doc-rust', { name: 'doc-rust', relativePath: '../../crates/doc-rust' }],

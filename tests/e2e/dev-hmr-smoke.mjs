@@ -5,6 +5,7 @@ import { cpSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:f
 import os from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { observeProcess } from './process-output.mjs';
 
 const repoRoot = path.resolve(fileURLToPath(new URL('../..', import.meta.url)));
 const tempRoot = mkdtempSync(path.join(os.tmpdir(), 'oxiquill-dev-hmr-'));
@@ -18,20 +19,25 @@ try {
   disableDevToolbar();
   await runCommand('install', 'pnpm', ['install', '--offline', '--frozen-lockfile', '--ignore-scripts'], tempRoot);
 
+  await runCommand('build', 'pnpm', ['build:package'], tempRoot);
+
   const port = await availablePort();
   const runtime = startProcess(
     'runtime',
     process.execPath,
-    [path.join(tempRoot, 'packages/oxiquill/src/generator/watch-doc-runtime.mjs'), '--skip-initial'],
+    [path.join(tempRoot, 'packages/oxiquill/dist/generator/watch-doc-runtime.mjs')],
     tempSiteRoot
   );
-  await waitForOutput(runtime, '[runtime] watching MDX and Rust sources', 60_000);
+  await Promise.all([
+    runtime.waitForOutput(/^\[runtime\] watching .+$/mu, 60_000),
+    runtime.waitForOutput('[runtime] ready:', 300_000)
+  ]);
 
-  startProcess(
+  const astro = startProcess(
     'astro',
     process.execPath,
     [
-      path.join(tempRoot, 'packages/oxiquill/src/cli/index.mjs'),
+      path.join(tempRoot, 'packages/oxiquill/dist/cli/index.mjs'),
       'dev:astro',
       '--host',
       '127.0.0.1',
@@ -40,27 +46,34 @@ try {
     ],
     tempSiteRoot
   );
-  await waitForHttp(`http://127.0.0.1:${port}/features/interactive-cells/`, 60_000);
+  await waitForHttp(`http://127.0.0.1:${port}/features/interactive-cells/`, 60_000, [runtime, astro]);
 
   browser = await chromium.launch({
     ...(chromiumExecutablePath ? { executablePath: chromiumExecutablePath } : {}),
     args: ['--disable-setuid-sandbox', '--no-sandbox']
   });
   const page = await browser.newPage();
+  const browserErrors = [];
   page.on('console', (message) => {
     if (['error', 'warning'].includes(message.type())) {
-      console.log(`[browser:${message.type()}] ${message.text()}`);
+      const diagnostic = `${message.text()} ${JSON.stringify(message.location())}`;
+      console.log(`[browser:${message.type()}] ${diagnostic}`);
+      if (message.type() === 'error') browserErrors.push(diagnostic);
     }
   });
   page.on('pageerror', (error) => {
-    console.log(`[browser:pageerror] ${error.message}`);
+    const diagnostic = error.stack ?? error.message;
+    console.log(`[browser:pageerror] ${diagnostic}`);
+    browserErrors.push(diagnostic);
   });
   await page.goto(`http://127.0.0.1:${port}/features/interactive-cells/`);
 
   const cell = page.getByTestId('cell-features__interactive-cells__python-controls');
+  await cell.scrollIntoViewIfNeeded();
   const source = cell.getByTestId('cell-source');
   const output = cell.getByTestId('run-output');
-  await expect(source).toContainText('values = [', { timeout: 45_000 });
+  await expect(source).toContainText('values = [1, 2, 3, 4]', { timeout: 45_000 });
+  await expect(output).toContainText('SAMPLE: mean = 7.5', { timeout: 60_000 });
 
   const mdxPath = path.join(tempSiteRoot, 'content/docs/features/interactive-cells.mdx');
   const before = readFileSync(mdxPath, 'utf8');
@@ -75,20 +88,45 @@ try {
 
   const stableUntil = Date.now() + 3_000;
   while (Date.now() < stableUntil) {
+    runtime.assertRunning();
+    astro.assertRunning();
+    expect(browserErrors, 'Browser console and page errors').toEqual([]);
     await expect(source).toContainText('values = [10, 20, 30, 40]');
     await expect(output).toContainText('SAMPLE: mean = 75.0');
     await page.waitForTimeout(250);
   }
 
+  expect(browserErrors, 'Browser console and page errors').toEqual([]);
   console.log(`Dev HMR source refresh verified at http://127.0.0.1:${port}/features/interactive-cells/`);
 } finally {
-  if (browser) await browser.close();
-  await stopChildren();
-  rmSync(tempRoot, { force: true, recursive: true });
+  try {
+    if (browser) await browser.close();
+  } finally {
+    try {
+      await stopChildren();
+    } finally {
+      rmSync(tempRoot, { force: true, recursive: true, maxRetries: 10, retryDelay: 250 });
+    }
+  }
 }
 
 function copyWorkspace(sourceRoot, targetRoot) {
-  const ignored = new Set(['.astro', '.git', 'coverage', 'dist', 'node_modules', 'target', 'test-results']);
+  const ignored = new Set([
+    '.astro',
+    '.git',
+    '.cache',
+    '.oxiquill',
+    '.codex',
+    '.direnv',
+    '.agents',
+    '.serena',
+    'coverage',
+    'dist',
+    'node_modules',
+    'target',
+    'test-results',
+    'playwright-report'
+  ]);
 
   cpSync(sourceRoot, targetRoot, {
     dereference: false,
@@ -96,7 +134,10 @@ function copyWorkspace(sourceRoot, targetRoot) {
       const relativePath = path.relative(sourceRoot, sourcePath);
       if (!relativePath) return true;
 
-      return relativePath.split(path.sep).every((segment) => !ignored.has(segment));
+      const segments = relativePath.split(path.sep);
+      return segments.every(
+        (segment, index) => !ignored.has(segment) && !(segment === 'oxiquill' && segments[index - 1] === 'public')
+      );
     },
     recursive: true
   });
@@ -121,33 +162,25 @@ function startProcess(label, command, args, cwd) {
   const child = spawn(command, args, {
     cwd,
     detached: true,
-    env: { ...process.env, NODE_PATH: path.join(tempRoot, 'packages/oxiquill/node_modules') },
+    env: {
+      ...process.env,
+      // Keep Astro in our process group even when it detects an agent environment.
+      ASTRO_DEV_BACKGROUND: '0',
+      ASTRO_TELEMETRY_DISABLED: '1',
+      NODE_PATH: path.join(tempRoot, 'packages/oxiquill/node_modules')
+    },
     stdio: ['ignore', 'pipe', 'pipe']
   });
   children.add(child);
 
-  child.stdout.setEncoding('utf8');
-  child.stderr.setEncoding('utf8');
+  const observed = observeProcess(child, label);
   child.stdout.on('data', (chunk) => process.stdout.write(prefixLines(label, chunk)));
   child.stderr.on('data', (chunk) => process.stderr.write(prefixLines(label, chunk)));
-  child.on('exit', () => children.delete(child));
-
-  return child;
+  return observed;
 }
 
 async function runCommand(label, command, args, cwd) {
-  const child = startProcess(label, command, args, cwd);
-
-  await new Promise((resolve, reject) => {
-    child.on('exit', (code, signal) => {
-      if (code === 0) {
-        resolve();
-      } else {
-        reject(new Error(`${label} exited with ${signal ?? code}`));
-      }
-    });
-    child.on('error', reject);
-  });
+  await startProcess(label, command, args, cwd).waitForExit();
 }
 
 function prefixLines(label, chunk) {
@@ -158,50 +191,21 @@ function prefixLines(label, chunk) {
 }
 
 function stopProcessGroup(child, signal) {
+  if (!child.pid) return false;
   try {
     process.kill(-child.pid, signal);
+    return true;
   } catch (error) {
     if (error?.code !== 'ESRCH') throw error;
+    return false;
   }
 }
 
-async function waitForOutput(child, expected, timeoutMs) {
-  let buffered = '';
-
-  await new Promise((resolve, reject) => {
-    const timeout = setTimeout(() => {
-      cleanup();
-      reject(new Error(`Timed out waiting for output: ${expected}`));
-    }, timeoutMs);
-
-    const onData = (chunk) => {
-      buffered += String(chunk);
-      if (buffered.includes(expected)) {
-        cleanup();
-        resolve();
-      }
-    };
-    const onExit = (code, signal) => {
-      cleanup();
-      reject(new Error(`Process exited before "${expected}": ${signal ?? code}`));
-    };
-    const cleanup = () => {
-      clearTimeout(timeout);
-      child.stdout.off('data', onData);
-      child.stderr.off('data', onData);
-      child.off('exit', onExit);
-    };
-
-    child.stdout.on('data', onData);
-    child.stderr.on('data', onData);
-    child.on('exit', onExit);
-  });
-}
-
-async function waitForHttp(url, timeoutMs) {
+async function waitForHttp(url, timeoutMs, processes) {
   const startedAt = Date.now();
 
   while (Date.now() - startedAt < timeoutMs) {
+    processes.forEach((process) => process.assertRunning());
     try {
       const response = await fetch(url);
       if (response.ok) return;
@@ -234,27 +238,16 @@ async function availablePort() {
 }
 
 async function stopChildren() {
-  await Promise.all(
-    Array.from(
-      children,
-      (child) =>
-        new Promise((resolve) => {
-          if (child.exitCode !== null || child.signalCode !== null) {
-            resolve();
-            return;
-          }
-
-          const timeout = setTimeout(() => {
-            if (child.exitCode === null && child.signalCode === null) stopProcessGroup(child, 'SIGKILL');
-          }, 5_000);
-          timeout.unref();
-
-          child.once('exit', () => {
-            clearTimeout(timeout);
-            resolve();
-          });
-          stopProcessGroup(child, 'SIGTERM');
-        })
-    )
+  const results = await Promise.allSettled(
+    Array.from(children, async (child) => {
+      if (!stopProcessGroup(child, 'SIGTERM')) return;
+      const deadline = Date.now() + 5_000;
+      while (stopProcessGroup(child, 0) && Date.now() < deadline) {
+        await new Promise((resolve) => setTimeout(resolve, 50));
+      }
+      stopProcessGroup(child, 'SIGKILL');
+    })
   );
+  const failures = results.filter((result) => result.status === 'rejected').map((result) => result.reason);
+  if (failures.length) throw new AggregateError(failures, 'Could not stop dev HMR process groups');
 }
