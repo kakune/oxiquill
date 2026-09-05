@@ -122,6 +122,9 @@ function InteractiveCellPanel({
         result={runtime.result}
         error={runtime.error}
         isRunning={runtime.isRunning}
+        isComplete={runtime.isComplete}
+        retry={runtime.run}
+        canRetry={runtime.inputsValid}
         labels={labels}
         outputId={ids.output}
         runMode={cell.run}

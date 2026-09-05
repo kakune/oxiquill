@@ -25,6 +25,8 @@ export type RuntimeLabels = {
   cellInputs: string;
   cellOutput: (title: string) => string;
   cellRunningAnnouncement: string;
+  cellRetry: string;
+  cellUpdating: string;
   chartCaption: string;
   chartLoadError: (detail: string) => string;
   chartLoading: string;
@@ -125,6 +127,8 @@ const runtimeLabels = {
     cellInputs: 'Cell inputs',
     cellOutput: (title) => `Output for ${title}`,
     cellRunningAnnouncement: 'Cell execution started.',
+    cellRetry: 'Retry cell',
+    cellUpdating: 'Updating…',
     chartCaption: 'Chart data summary',
     chartLoadError: (detail) => `Chart renderer could not be loaded: ${detail}`,
     chartLoading: 'Loading chart renderer...',
@@ -191,6 +195,8 @@ const runtimeLabels = {
     cellInputs: 'セルの入力',
     cellOutput: (title) => `${title} の出力`,
     cellRunningAnnouncement: 'セルの実行を開始しました。',
+    cellRetry: 'セルの実行を再試行',
+    cellUpdating: '更新中…',
     chartCaption: 'グラフデータの概要',
     chartLoadError: (detail) => `グラフ表示を読み込めませんでした: ${detail}`,
     chartLoading: 'グラフ表示を読み込んでいます…',

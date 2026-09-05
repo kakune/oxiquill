@@ -15,11 +15,11 @@ type CellRunRequest = {
   values: InputValues;
 };
 
-type ExecutionState =
-  | { status: 'idle' }
-  | { status: 'running' }
-  | { result: NormalizedCellExecutionResult; status: 'success' }
-  | { error: string; status: 'error' };
+type ExecutionState = {
+  status: 'idle' | 'running' | 'success' | 'error';
+  result?: NormalizedCellExecutionResult;
+  error?: string;
+};
 
 const autorunRequests = createRunOnceCache<string, NormalizedCellExecutionResult>();
 const reactiveDebounceMs = 150;
@@ -42,16 +42,16 @@ export function useInteractiveCellRun(cell: CellManifest, runtimeVersion: string
       return autorunKey ? autorunRequests.getOrCreate(autorunKey, execute) : execute();
     },
     onCancelled: () => {
-      setExecution({ status: 'idle' });
+      setExecution((previous) => ({ ...previous, status: 'idle' }));
     },
     onError: (caught) => {
-      setExecution({ error: boundedErrorMessage(caught), status: 'error' });
+      setExecution((previous) => ({ ...previous, error: boundedErrorMessage(caught), status: 'error' }));
     },
     onResult: (result) => {
       setExecution({ result, status: 'success' });
     },
     onScheduled: () => {
-      setExecution({ status: 'running' });
+      setExecution((previous) => ({ ...previous, status: 'running' }));
     }
   });
 
@@ -100,15 +100,16 @@ export function useInteractiveCellRun(cell: CellManifest, runtimeVersion: string
     setInputsValid(nextInvalidInputs.size === 0);
     if (!valid) {
       schedulerRef.current?.cancel();
-      setExecution({ status: 'idle' });
+      setExecution((previous) => ({ ...previous, status: 'idle' }));
     }
   }
 
   return {
-    error: execution.status === 'error' ? execution.error : undefined,
+    error: execution.error,
+    isComplete: execution.status === 'success',
     inputsValid,
     isRunning: execution.status === 'running',
-    result: execution.status === 'success' ? execution.result : undefined,
+    result: execution.result,
     run,
     setInputValue,
     setInputValidity,

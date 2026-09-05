@@ -60,6 +60,7 @@ const {
   htmlArtifactContentSecurityPolicy,
   htmlArtifactSrcdoc,
   imageArtifactSource,
+  artifactKeys,
   LazyChartOutput
 } = await import('../../packages/oxiquill/src/components/doc-runtime/OutputRenderer');
 const chartOutputModule = await import('../../packages/oxiquill/src/components/doc-runtime/ChartOutput');
@@ -487,6 +488,74 @@ describe('InteractiveCell', () => {
     await waitFor(() => expect(screen.getByText('string failure')).toBeVisible());
     fireEvent.click(screen.getByRole('button', { name: 'Run' }));
     await waitFor(() => expect(screen.getByRole('alert')).toHaveTextContent('Cell execution failed: Unknown error.'));
+  });
+
+  it.each(['error', 'cancel', 'invalid'])(
+    'keeps the last output mounted while running and after %s',
+    async (outcome) => {
+      setManifestCells([makeCell()]);
+      mocks.runInteractiveCell.mockResolvedValueOnce({ stdout: 'retained', plots: [] });
+      render(<InteractiveCell cellId="cell-one" />);
+      fireEvent.click(screen.getByRole('button', { name: 'Run' }));
+      const previous = await screen.findByTestId('run-output');
+      const next = createDeferredResult();
+      mocks.runInteractiveCell.mockReturnValueOnce(next.promise);
+      fireEvent.click(screen.getByRole('button', { name: 'Run' }));
+      await waitFor(() => expect(mocks.runInteractiveCell).toHaveBeenCalledTimes(2));
+      expect(screen.getByTestId('run-output')).toBe(previous);
+      expect(screen.getByText('Updating…')).toHaveAttribute('aria-hidden', 'true');
+      expect(screen.getByRole('region', { name: 'Output for Cell one' })).toHaveAttribute('aria-busy', 'true');
+      if (outcome === 'invalid') {
+        fireEvent.input(screen.getByRole('spinbutton', { name: 'count' }), { target: { value: '' } });
+      } else {
+        const failure = new Error('rerun failed');
+        if (outcome === 'cancel') failure.name = 'AbortError';
+        await act(async () => {
+          next.reject(failure);
+          await next.promise.catch(() => undefined);
+        });
+      }
+      await waitFor(() =>
+        expect(screen.getByRole('region', { name: 'Output for Cell one' })).toHaveAttribute('aria-busy', 'false')
+      );
+      expect(screen.getByTestId('run-output')).toBe(previous);
+      expect(screen.getByTestId('run-output')).toHaveTextContent('retained');
+      expect(screen.queryByText('Updating…')).not.toBeInTheDocument();
+      expect(within(screen.getByRole('region', { name: 'Output for Cell one' })).getByRole('status')).toHaveTextContent(
+        /^$/u
+      );
+      if (outcome === 'error') {
+        expect(screen.getByRole('alert')).toHaveTextContent('rerun failed');
+        mocks.runInteractiveCell.mockResolvedValueOnce({ stdout: 'recovered', plots: [] });
+        fireEvent.click(screen.getByRole('button', { name: 'Retry cell' }));
+        await waitFor(() => expect(previous).toHaveTextContent('recovered'));
+        expect(screen.queryByRole('alert')).not.toBeInTheDocument();
+      }
+    }
+  );
+
+  it('retains charts when unrelated artifacts are inserted and makes duplicate IDs unique', async () => {
+    const chartArtifact = { kind: 'chart', spec: { kind: 'line', series: [] } };
+    const { rerender } = render(<OutputRenderer outputs={validateOutputArtifacts([chartArtifact])} />);
+    const plot = await screen.findByTestId('doc-plot');
+    const outputs = validateOutputArtifacts([
+      { kind: 'text', stream: 'stdout', content: 'new diagnostic' },
+      null,
+      chartArtifact,
+      { kind: 'text', stream: 'stdout', content: 'one', id: 'duplicate' },
+      { kind: 'text', stream: 'stdout', content: 'two', id: 'duplicate' },
+      { kind: 'text', stream: 'stdout', content: 'three', id: 'duplicate:2' }
+    ]);
+    rerender(<OutputRenderer outputs={outputs} />);
+    expect(screen.getByTestId('doc-plot')).toBe(plot);
+    const keys = artifactKeys(outputs);
+    expect(new Set(keys).size).toBe(outputs.length);
+    expect(keys[2]).toBe(artifactKeys(validateOutputArtifacts([chartArtifact]))[0]);
+    expect(keys[3]).toBe(
+      artifactKeys(
+        validateOutputArtifacts([{ kind: 'text', stream: 'stdout', content: 'replacement', id: 'duplicate' }])
+      )[0]
+    );
   });
 
   it('announces localized timeout failures as an alert', async () => {
