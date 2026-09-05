@@ -97,6 +97,18 @@ describe('python input conversion', () => {
 });
 
 describe('python worker asset URLs', () => {
+  it('starts the first declared packages inside the shared initialization', async () => {
+    const loadPyodide = vi.fn(async () => ({ runPythonAsync: vi.fn() }));
+    const loader = createPythonRuntimeLoader({
+      indexUrl: '/local/',
+      moduleUrl: '/local/pyodide.mjs',
+      importModule: async () => ({ loadPyodide: loadPyodide as never })
+    });
+    const first = loader(['numpy', 'matplotlib']);
+    expect(loader(['pandas'])).toBe(first);
+    await first;
+    expect(loadPyodide).toHaveBeenCalledExactlyOnceWith({ indexURL: '/local/', packages: ['numpy', 'matplotlib'] });
+  });
   it('resolves Pyodide files under the configured site base', () => {
     expect(resolvePyodideUrls('/')).toEqual({
       indexUrl: '/oxiquill/pyodide/',
@@ -134,7 +146,7 @@ describe('python worker asset URLs', () => {
     expect(importModule).toHaveBeenCalledOnce();
     expect(importModule).toHaveBeenCalledWith('/runtime/pyodide.mjs');
     expect(loadPyodide).toHaveBeenCalledOnce();
-    expect(loadPyodide).toHaveBeenCalledWith({ indexURL: '/runtime/' });
+    expect(loadPyodide).toHaveBeenCalledWith({ indexURL: '/runtime/', packages: [] });
     expect(pyodide.runPythonAsync).toHaveBeenCalledOnce();
     expect(pyodide.runPythonAsync).toHaveBeenCalledWith(pythonDisplaySupportCode);
   });
@@ -242,6 +254,21 @@ describe('python worker asset URLs', () => {
 });
 
 describe('python worker request handling', () => {
+  it('prepares only dependencies, skips loaded packages, and reports readiness without evaluating a cell', async () => {
+    const loadPackage = vi.fn();
+    const ensurePyodide = vi.fn(async () => ({ loadedPackages: { numpy: 'default channel' }, loadPackage }) as never);
+    const postMessage = vi.fn();
+    const handle = createPythonWorkerRequestHandler({ ensurePyodide, postMessage });
+    await handle({ type: 'prepare', requestId: 1, packages: ['numpy', 'pandas'] });
+    expect(ensurePyodide).toHaveBeenCalledWith(['numpy', 'pandas']);
+    expect(loadPackage).toHaveBeenCalledExactlyOnceWith(['pandas']);
+    expect(postMessage.mock.calls).toEqual([
+      [{ type: 'progress', requestId: 1, phase: 'preparing' }],
+      [{ type: 'ready', requestId: 1, ok: true }]
+    ]);
+    await handle({ type: 'prepare', requestId: 2, packages: ['numpy'] });
+    expect(loadPackage).toHaveBeenCalledOnce();
+  });
   it('loads packages, evaluates source, destroys proxies, and posts normalized output', async () => {
     const globals = { destroy: vi.fn() };
     const valueProxy = pythonProxy({ answer: 42 });
@@ -263,7 +290,9 @@ describe('python worker request handling', () => {
     const responses: RuntimeWorkerResponse[] = [];
     const handleRequest = createPythonWorkerRequestHandler({
       ensurePyodide: async () => pyodide as never,
-      postMessage: (response) => responses.push(response)
+      postMessage: (response) => {
+        if (!('type' in response)) responses.push(response);
+      }
     });
     const request = pythonRequest();
 
@@ -303,7 +332,9 @@ describe('python worker request handling', () => {
       ensurePyodide: async () => {
         throw new Error('Pyodide startup failed');
       },
-      postMessage: (response) => startupResponses.push(response)
+      postMessage: (response) => {
+        if (!('type' in response)) startupResponses.push(response);
+      }
     });
     await startupHandler(pythonRequest());
     expect(startupResponses).toEqual([{ requestId: 7, ok: false, error: 'Pyodide startup failed' }]);
@@ -323,7 +354,9 @@ describe('python worker request handling', () => {
           setStdout: vi.fn(),
           toPy: () => globals
         }) as never,
-      postMessage: (response) => evaluationResponses.push(response)
+      postMessage: (response) => {
+        if (!('type' in response)) evaluationResponses.push(response);
+      }
     });
     await evaluationHandler(pythonRequest({ packages: [] }));
     expect(globals.destroy).toHaveBeenCalledOnce();
@@ -334,7 +367,9 @@ describe('python worker request handling', () => {
       ensurePyodide: async () => {
         throw Object.create(null);
       },
-      postMessage: (response) => unstringifiableResponses.push(response)
+      postMessage: (response) => {
+        if (!('type' in response)) unstringifiableResponses.push(response);
+      }
     });
     await unstringifiableHandler(pythonRequest());
     expect(unstringifiableResponses).toEqual([{ requestId: 7, ok: false, error: 'Unknown error.' }]);

@@ -213,6 +213,20 @@ export interface RuntimeWorkerRequest {
   packages?: readonly string[];
 }
 
+export type RuntimeExecutionPhase = 'preparing' | 'executing';
+
+export interface PythonPrepareRequest {
+  type: 'prepare';
+  requestId: number;
+  packages: readonly string[];
+}
+
+export type PythonWorkerRequest = RuntimeWorkerRequest | PythonPrepareRequest;
+export type PythonWorkerResponse =
+  | RuntimeWorkerResponse
+  | { type: 'ready'; requestId: number; ok: true }
+  | { type: 'progress'; requestId: number; phase: RuntimeExecutionPhase };
+
 export type RuntimeWorkerResponse =
   | {
       requestId: number;
