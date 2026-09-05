@@ -36,7 +36,7 @@
     "test:unit": "vitest run",
     "test:unit:coverage": "vitest run --coverage",
     "doc:rust": "pnpm build:package && pnpm --dir examples/docs-site doc:rust",
-    "test:wasm": "pnpm build:package && pnpm --dir examples/docs-site test:wasm",
+    "test:wasm": "pnpm build:package && pnpm --dir examples/docs-site test:wasm && node tests/runtime/rust-codegen-smoke.mjs",
     "test:e2e": "pnpm build:package && playwright test",
     "test:bundle": "node tests/bundle/client-bundle.mjs",
     "test:docs": "pnpm build:package && node tests/docs/check-documentation.mjs",

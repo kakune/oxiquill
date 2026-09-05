@@ -1,0 +1,10 @@
+---
+title: Rust code generation regressions
+---
+
+```rust
+//| id: spaced-macros
+println /* trivia */ ! ("spaced output");
+emit_json ! (&serde_json::json!({ "ok": true }));
+emit_svg /* wrapper dependency */ ! (r#"<svg xmlns="http://www.w3.org/2000/svg"/>"#);
+```
