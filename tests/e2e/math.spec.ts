@@ -8,7 +8,7 @@ test('KaTeX scripts use upstream sizing in inline and display formulas', async (
         text: script.textContent,
         ratio:
           Number.parseFloat(getComputedStyle(script).fontSize) /
-          Number.parseFloat(getComputedStyle(script.closest('.katex')!).fontSize)
+          Number.parseFloat(getComputedStyle(script.closest('.katex') ?? script).fontSize)
       }))
     );
     expect(ratios.some(({ text }) => text?.includes('n'))).toBe(true);

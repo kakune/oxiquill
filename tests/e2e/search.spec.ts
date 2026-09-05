@@ -6,7 +6,8 @@ test('production Pagefind search loads its index and returns documentation resul
     if (new URL(response.url()).pathname.includes('/pagefind/')) assets.push(response.status());
   });
   const response = await page.goto('/features/math/');
-  const html = await response!.text();
+  if (!response) throw new Error('Expected a production page response');
+  const html = await response.text();
   expect(html).not.toMatch(/search\.devWarning|Search is only available in production builds/u);
   expect(html).toContain('id="starlight__search"');
   await page.locator('site-search button[data-open-modal]').click();
