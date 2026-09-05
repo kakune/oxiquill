@@ -462,6 +462,7 @@ test('rich output examples render browser-visible artifacts', async ({ page }) =
   await expect(rustHeatmap.locator('canvas').first()).toBeVisible();
   await expect(rustBarChart).toHaveAttribute('data-chart-theme', 'light');
   await expect(rustHeatmap).toHaveAttribute('data-chart-theme', 'light');
+  await expect.poll(() => canvasColorPixels(rustBarChart.locator('canvas'), [124, 58, 237])).toBeGreaterThan(500);
   expect((await canvasStats(rustBarChart.locator('canvas'))).inkPixels).toBeGreaterThan(1_000);
   const heatmapCanvases = rustHeatmap.locator('canvas');
   const heatmapStats = await Promise.all(
@@ -473,6 +474,7 @@ test('rich output examples render browser-visible artifacts', async ({ page }) =
   });
   await expect(rustBarChart).toHaveAttribute('data-chart-theme', 'dark');
   await expect(rustHeatmap).toHaveAttribute('data-chart-theme', 'dark');
+  await expect.poll(() => canvasColorPixels(rustBarChart.locator('canvas'), [196, 181, 253])).toBeGreaterThan(500);
   await expect(rustBarChart.locator('canvas')).toHaveCount(1);
   await expect(rustHeatmap.locator('canvas').first()).toBeVisible();
   await page.evaluate(() => {
@@ -678,6 +680,19 @@ async function canvasStats(canvas: Locator): Promise<{
 
     return { height: canvasElement.height, inkPixels, width: canvasElement.width };
   });
+}
+
+async function canvasColorPixels(canvas: Locator, rgb: number[]): Promise<number> {
+  return canvas.evaluate((element, color) => {
+    const canvas = element as HTMLCanvasElement;
+    const data = canvas.getContext('2d')?.getImageData(0, 0, canvas.width, canvas.height).data ?? [];
+    let count = 0;
+    for (let index = 0; index < data.length; index += 4) {
+      if (data[index + 3] > 200 && color.every((channel, offset) => Math.abs(data[index + offset] - channel) < 3))
+        count += 1;
+    }
+    return count;
+  }, rgb);
 }
 
 function captureRequestPaths(page: Page): string[] {

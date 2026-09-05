@@ -7,6 +7,8 @@ description: 静的サイト上で動く Rust、Python、Haskell のセルを設
 
 Rust セルは build 時に WebAssembly に compile されます。Python セルは browser の Pyodide worker で動きます。Haskell セルは build 時に WASI WebAssembly module に compile されます。3つの言語は同じ input metadata と run mode model を使います。
 
+再実行中も最後に成功した出力を保持し、失敗時にはエラーと再試行操作を併記します。キャンセルや入力不正でも出力を消しません。互換性のあるグラフは同じ canvas を更新し、既定で180msの遷移を使います。OS の動作軽減設定を優先します。style の型・制限と Rust overload は [リッチ出力](/ja/features/rich-output/#出力の保持とグラフのスタイル) を参照してください。動的な出力の並びには明示的な artifact ID を推奨します。
+
 ## Fence と metadata grammar
 
 interactive fence は `rust`、`python`、`haskell`（Markdown の `{.rust}` form を含む）を使い、legal backtick/tilde fence と indentation に対応します。metadata は fence 先頭の一つの contiguous な language-specific option-comment block です。Rust は `//|`/`///|`、Python は `#|`、Haskell は `--|` を使います。最初の source line より後にある option 風 comment は source code のままです。

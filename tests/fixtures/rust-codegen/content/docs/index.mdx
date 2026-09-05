@@ -3,6 +3,30 @@ title: Rust code generation regressions
 ---
 
 ```rust
+//| id: chart-style-overloads
+let points = [[0.0, 1.0], [1.0, 2.0]];
+let style = serde_json::json!({ "animation": false, "palette": { "light": ["#123", "#456"] } });
+emit_line_chart!(&points);
+emit_line_chart!(&points, &style);
+emit_line_chart!(&points, "x", "y");
+emit_line_chart!(&points, "x", "y", &style);
+emit_scatter_chart!(&points);
+emit_scatter_chart!(&points, &style);
+emit_scatter_chart!(&points, "x", "y");
+emit_scatter_chart!(&points, "x", "y", &style);
+emit_bar_chart!(&["a", "b"], &[1, 2]);
+emit_bar_chart!(&["a", "b"], &[1, 2], &style);
+emit_histogram!(&[[0, 1, 2]]);
+emit_histogram!(&[[0, 1, 2]], &style);
+emit_heatmap!(&[[0, 0, 2]]);
+emit_heatmap!(&[[0, 0, 2]], &style);
+struct Point { n: u32, x: f64 }
+let legacy = [Point { n: 0, x: 1.0 }];
+emit_line_plot!(&legacy, "n", "x");
+emit_line_plot!(&legacy, "n", "x", &style);
+```
+
+```rust
 //| id: spaced-macros
 println /* trivia */ ! ("spaced output");
 emit_json ! (&serde_json::json!({ "ok": true }));
