@@ -487,6 +487,60 @@ function assertDevHmrContract(fixture) {
 }
 
 describe('PR CI test contracts', () => {
+  const contracts = [
+    { command: 'test:docs', jobName: 'unit-coverage', after: 'test:unit:coverage' },
+    {
+      command: 'test:bundle',
+      jobName: 'runtime',
+      after: 'test:runtime',
+      condition: "matrix.label == 'Linux'",
+      immediatelyAfter: true
+    }
+  ];
+
+  describe.each(contracts)('$command', (contract) => {
+    it('runs once in the required job after its prerequisites and remains in pnpm test', async () => {
+      assertCiCommand(await readCiContracts(), contract);
+    });
+
+    it.each(['remove', 'relocate', 'duplicate', 'aggregate', 'order', 'condition', 'prerequisite'])(
+      'rejects contract drift: %s',
+      async (change) => {
+        const fixture = await readCiContracts();
+        const job = fixture.workflow.jobs[contract.jobName];
+        const index = job.steps.findIndex((step) => step.run === `pnpm ${contract.command}`);
+        const step = job.steps[index];
+        if (change === 'remove') job.steps.splice(index, 1);
+        if (change === 'relocate') fixture.workflow.jobs['packed-browser'].steps.push(...job.steps.splice(index, 1));
+        if (change === 'duplicate') job.steps.push({ ...step });
+        if (change === 'aggregate')
+          fixture.scripts.test = fixture.scripts.test.replace(`pnpm ${contract.command} && `, '');
+        if (change === 'order') job.steps.unshift(...job.steps.splice(index, 1));
+        if (change === 'condition') step.if = contract.condition ? undefined : 'false';
+        if (change === 'prerequisite') job.steps = job.steps.filter((step) => step.run !== `pnpm ${contract.after}`);
+        expect(() => assertCiCommand(fixture, contract)).toThrow();
+      }
+    );
+  });
+
+  it('requires the Linux condition on the bundle step itself', async () => {
+    const fixture = await readCiContracts();
+    const contract = contracts[1];
+    const steps = fixture.workflow.jobs.runtime.steps;
+    const index = steps.findIndex((step) => step.run === 'pnpm test:bundle');
+    steps[index - 1].if = steps[index].if;
+    delete steps[index].if;
+    expect(() => assertCiCommand(fixture, contract)).toThrow();
+  });
+
+  it('keeps bundle inspection immediately after the runtime and site build', async () => {
+    const fixture = await readCiContracts();
+    const steps = fixture.workflow.jobs.runtime.steps;
+    const index = steps.findIndex((step) => step.run === 'pnpm test:bundle');
+    steps.splice(index, 0, { run: 'echo intervening step' });
+    expect(() => assertCiCommand(fixture, contracts[1])).toThrow();
+  });
+
   it('runs development HMR once on Linux after the packed browser smoke', async () => {
     assertDevHmrContract(await readCiContracts());
   });
