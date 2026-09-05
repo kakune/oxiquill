@@ -5,17 +5,19 @@ import { generateRustPreludeMacros } from './macros.mjs';
 import { outputArtifactLimits } from '../../../lib/doc-runtime/output-limits.mjs';
 
 export function generateRustFunction(cell, invokedMacros = scanRustMacroInvocations(cell.source, cell)) {
-  const inputBindings = cell.inputs.map((input) => `    ${generateRustInputBinding(input)}`).join('\n');
+  const inputBindings = cell.inputs.map((input) => `        ${generateRustInputBinding(input)}`).join('\n');
   const escapedSource = indentRustSource(cell.source);
   const macros = generateRustPreludeMacros(cell.source, invokedMacros);
   const inputsParameter = cell.inputs.length > 0 ? 'inputs' : '_inputs';
 
   return `fn ${rustFunctionName(cell.id)}(${inputsParameter}: &Value) -> Result<CellOutput, String> {
-${inputBindings ? `${inputBindings}\n` : ''}    let __stdout = std::cell::RefCell::new(BoundedText::new());
+    let __stdout = std::cell::RefCell::new(BoundedText::new());
     let __outputs = std::cell::RefCell::new(OutputCollector::new());
 ${macros ? `\n${macros}\n` : ''}
 
-${escapedSource}
+    let _ = {
+${inputBindings ? `${inputBindings}\n` : ''}${escapedSource}
+    };
 
     Ok(finish_cell_output(
         __stdout.into_inner(),
@@ -84,6 +86,6 @@ function generateRustTest(cell) {
 function indentRustSource(source) {
   return source
     .split('\n')
-    .map((line) => `    ${line}`)
+    .map((line) => `        ${line}`)
     .join('\n');
 }

@@ -181,6 +181,32 @@ describe('Rust macro invocation scanning', () => {
   });
 });
 
+describe('Rust cell author scope', () => {
+  it('keeps inputs and author bindings inside a discarded block after macro definitions', () => {
+    const source =
+      'let __stdout = label;\nlet __outputs = 42;\nprintln!("{__stdout}:{__outputs}");\nemit_text!(__stdout);\n42';
+    const generated = generateRustFunction({
+      id: 'scope',
+      inputs: [{ name: 'label', type: 'text' }],
+      source
+    });
+    const block = generated.indexOf('    let _ = {');
+    expect(generated.indexOf('let __stdout = std::cell::RefCell')).toBeLessThan(block);
+    expect(generated.indexOf('let __outputs = std::cell::RefCell')).toBeLessThan(block);
+    expect(generated.indexOf('macro_rules! println')).toBeLessThan(block);
+    expect(generated.indexOf('macro_rules! emit_text')).toBeLessThan(block);
+    expect(generated.slice(block)).toContain('        let label = read_string(inputs, "label")?;');
+    expect(generated.slice(block)).toContain(
+      source
+        .split('\n')
+        .map((line) => `        ${line}`)
+        .join('\n')
+    );
+    expect(generated).toContain('        42\n    };\n\n    Ok(finish_cell_output(');
+    expect(generated.slice(generated.indexOf('    Ok(finish_cell_output('))).toContain('__stdout.into_inner()');
+  });
+});
+
 const helperCrates = new Map([
   ['doc-rust', { name: 'doc-rust', relativePath: '../../crates/doc-rust' }],
   ['doc-rust-text', { name: 'doc-rust-text', relativePath: '../../crates/doc-rust-text' }]

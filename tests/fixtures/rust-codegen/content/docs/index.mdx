@@ -8,3 +8,46 @@ println /* trivia */ ! ("spaced output");
 emit_json ! (&serde_json::json!({ "ok": true }));
 emit_svg /* wrapper dependency */ ! (r#"<svg xmlns="http://www.w3.org/2000/svg"/>"#);
 ```
+
+```rust
+//| id: colliding-locals
+fn author_label() -> &'static str { "author value" }
+macro_rules! author_number { () => { 42 }; }
+let __stdout = author_label();
+let __outputs = author_number!();
+for value in [__outputs] {
+    println!("{__stdout}:{value}");
+}
+println!();
+emit_json!(&serde_json::json!({ "label": __stdout, "number": __outputs }));
+Ok::<_, String>(123)
+```
+
+```rust
+//| id: inputs-and-question-mark
+//| inputs:
+//|   label: { type: text, label: label, value: input }
+//|   fail: { type: checkbox, label: fail, value: false }
+fn author_number(fail: bool) -> Result<i32, String> {
+    if fail { Err("question mark failure".to_owned()) } else { Ok(42) }
+}
+let __stdout = label;
+let __outputs = author_number(fail)?;
+println!("{__stdout}:{__outputs}");
+emit_text!(format!("{__stdout}:{__outputs}"));
+```
+
+```rust
+//| id: early-return
+//| inputs:
+//|   early: { type: checkbox, label: early return, value: false }
+if early {
+    return Ok(CellOutput {
+        stdout: "early return".to_owned(),
+        plots: Vec::new(),
+        value: serde_json::Value::Null,
+        outputs: Vec::new(),
+    });
+}
+println!("normal return");
+```

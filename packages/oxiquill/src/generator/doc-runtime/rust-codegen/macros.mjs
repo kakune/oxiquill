@@ -30,9 +30,10 @@ export function generateRustPreludeMacros(source, macros = scanRustMacroInvocati
 
 function generatePrintlnMacro() {
   return `    macro_rules! println {
-        () => {
-            __stdout.borrow_mut().push('\\n');
-        };
+        () => {{
+            use std::fmt::Write as _;
+            writeln!(&mut *__stdout.borrow_mut()).map_err(|error| error.to_string())?;
+        }};
         ($($arg:tt)*) => {{
             use std::fmt::Write as _;
             let mut stdout = __stdout.borrow_mut();
