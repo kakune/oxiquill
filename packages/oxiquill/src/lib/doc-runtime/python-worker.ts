@@ -5,6 +5,7 @@ import { createPythonCellResult, toOutputArtifacts } from './python-cell-result.
 import { createSerialRequestQueue } from './python-worker-queue.js';
 import type { RuntimeWorkerRequest, RuntimeWorkerResponse } from './types.js';
 import { boundWorkerResult } from './worker-output.js';
+import { markRuntimeEvent, measureRuntimePhase } from './runtime-timing.js';
 
 export { pythonDisplaySupportCode } from './python-display-support.js';
 export { createPythonCellResult } from './python-cell-result.js';
@@ -31,6 +32,7 @@ type PyodideModuleDependencies = {
 };
 
 const worker = self as unknown as WorkerScope;
+markRuntimeEvent('worker-ready', 'python');
 const pyodideUrls = resolvePyodideUrls();
 const ensurePyodide = createPythonRuntimeLoader(pyodideUrls);
 const handleRequest = createPythonWorkerRequestHandler({
@@ -57,12 +59,18 @@ export function createPythonWorkerRequestHandler({
       pyodide.setStderr({ batched: stderr.append });
 
       if (request.packages && request.packages.length > 0) {
-        await pyodide.loadPackage(Array.from(request.packages));
+        await measureRuntimePhase('packages', request.cellId, () =>
+          pyodide.loadPackage(Array.from(request.packages ?? []))
+        );
       }
       if (request.source) {
-        await pyodide.loadPackagesFromImports(request.source);
+        await measureRuntimePhase('imports', request.cellId, () =>
+          pyodide.loadPackagesFromImports(request.source ?? '')
+        );
       }
-      pyodide.runPython('__oxiquill_prepare_cell()');
+      await measureRuntimePhase('display-prepare', request.cellId, () =>
+        pyodide.runPython('__oxiquill_prepare_cell()')
+      );
 
       const globals = pyodide.toPy(request.inputs);
       let value: unknown = null;
@@ -71,13 +79,21 @@ export function createPythonWorkerRequestHandler({
         for (const inputName of request.integerInputNames ?? []) {
           pyodide.runPython(pythonIntegerConversionCode(inputName), { globals });
         }
-        value = toSerializable(await pyodide.runPythonAsync(request.source ?? '', { globals }));
+        value = toSerializable(
+          await measureRuntimePhase('execution', request.cellId, () =>
+            pyodide.runPythonAsync(request.source ?? '', { globals })
+          )
+        );
       } finally {
         globals.destroy();
       }
       const displayOutputs = toOutputArtifacts(toSerializable(pyodide.runPython('__oxiquill_take_outputs()')));
       const matplotlibOutputs = toOutputArtifacts(
-        toSerializable(pyodide.runPython('__oxiquill_collect_matplotlib_outputs()'))
+        toSerializable(
+          await measureRuntimePhase('display-collect', request.cellId, () =>
+            pyodide.runPython('__oxiquill_collect_matplotlib_outputs()')
+          )
+        )
       );
 
       const stdoutResult = stdout.take();
@@ -128,8 +144,10 @@ export function createPythonRuntimeLoader({
 
     if (!pyodideReady) {
       const runtime = loadPyodideReady.then(async (loadPyodide) => {
-        const pyodide = await loadPyodide({ indexURL: indexUrl });
-        await pyodide.runPythonAsync(pythonDisplaySupportCode);
+        const pyodide = await measureRuntimePhase('initialization', 'python', () =>
+          loadPyodide({ indexURL: indexUrl })
+        );
+        await measureRuntimePhase('display-support', 'python', () => pyodide.runPythonAsync(pythonDisplaySupportCode));
         return pyodide;
       });
       pyodideReady = runtime;

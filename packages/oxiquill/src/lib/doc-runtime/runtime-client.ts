@@ -3,6 +3,7 @@ import { ExecutionCancellationError } from './execution-cancellation.js';
 import { assertValidInputValues, completeInputValues } from './interactive-input-validation.js';
 import { normalizeCellExecutionResult, type NormalizedCellExecutionResult } from './output-artifacts.js';
 import { boundedErrorMessage } from './output-limits.mjs';
+import { markRuntimeEvent } from './runtime-timing.js';
 
 type PendingRequest = {
   reject: (reason: Error) => void;
@@ -105,6 +106,7 @@ export function createInteractiveCellRunner(dependencies: RuntimeClientDependenc
     const current = workers.get(language);
     if (current) return current;
 
+    markRuntimeEvent('worker-start', language);
     const worker = dependencies.createWorker(language);
 
     try {

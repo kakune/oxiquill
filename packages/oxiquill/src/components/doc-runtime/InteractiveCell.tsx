@@ -1,4 +1,5 @@
-import { useState } from 'preact/hooks';
+import { useLayoutEffect, useState } from 'preact/hooks';
+import { markRuntimeEvent } from '../../lib/doc-runtime/runtime-timing.js';
 import { shouldShowInputControls, shouldShowRunButton } from '../../lib/doc-runtime/interactive-cell-model.js';
 import type { RuntimeLabels } from '../../lib/doc-runtime/runtime-localization.js';
 import type { CellManifest } from '../../lib/doc-runtime/types.js';
@@ -43,6 +44,12 @@ function InteractiveCellPanel({
   const [isSourceVisible, setIsSourceVisible] = useState(cell.showSource);
   const runtime = useInteractiveCellRun(cell, runtimeVersion);
   const ids = interactiveCellIds(cell.id);
+  useLayoutEffect(() => {
+    markRuntimeEvent('hydrated', cell.id);
+  }, [cell.id]);
+  useLayoutEffect(() => {
+    if (runtime.result) markRuntimeEvent('output-rendered', cell.id);
+  }, [cell.id, runtime.result]);
 
   return (
     <section
