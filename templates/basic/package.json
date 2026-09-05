@@ -1,6 +1,6 @@
 {
   "name": "oxiquill-docs",
-  "version": "0.3.0",
+  "version": "0.3.1",
   "private": true,
   "type": "module",
   "packageManager": "pnpm@11.2.2",
@@ -17,6 +17,6 @@
   "dependencies": {
     "@astrojs/starlight": "0.41.9",
     "astro": "7.2.9",
-    "oxiquill": "^0.3.0"
+    "oxiquill": "^0.3.1"
   }
 }
