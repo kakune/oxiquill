@@ -75,7 +75,22 @@ async function timingEntries(scope) {
     entries: performance
       .getEntries()
       .filter((entry) => entry.name.startsWith('oxiquill:') || entry.entryType === 'resource')
-      .map((entry) => entry.toJSON())
+      .map((entry) => {
+        if (entry.entryType !== 'resource') return entry.toJSON();
+        const resource = entry.toJSON();
+        return Object.fromEntries(
+          [
+            'name',
+            'entryType',
+            'startTime',
+            'duration',
+            'initiatorType',
+            'transferSize',
+            'encodedBodySize',
+            'decodedBodySize'
+          ].map((key) => [key, resource[key]])
+        );
+      })
   }));
 }
 
@@ -121,7 +136,7 @@ async function measure(page, example, condition, run) {
     triggerMs: trigger,
     outputMs: rendered.startTime,
     latencyMs: condition === 'repeat' ? rendered.startTime - trigger : rendered.startTime,
-    renderMs: main.timeOrigin + rendered.startTime - response.at,
+    renderObserverDeltaMs: main.timeOrigin + rendered.startTime - response.at,
     main,
     workers,
     observed
