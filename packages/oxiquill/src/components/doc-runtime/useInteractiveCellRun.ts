@@ -71,12 +71,12 @@ export function useInteractiveCellRun(cell: CellManifest, runtimeVersion: string
   }, []);
 
   useEffect(() => {
-    if (cell.run === 'reactive') {
+    if (cell.run === 'reactive' && invalidInputsRef.current.size === 0) {
       schedule(valuesRef.current);
     } else if (cell.run === 'autorun') {
-      schedule(valuesRef.current, 0, JSON.stringify([cell.id, runtimeVersion]));
+      schedule(valuesRef.current, 0, JSON.stringify([cell.id, runtimeVersion, cell.source]));
     }
-  }, [cell.id, cell.run, runtimeVersion]);
+  }, [cell.id, cell.run, cell.source, runtimeVersion]);
 
   function schedule(nextValues: InputValues, delayMs = 0, autorunKey?: string): void {
     schedulerRef.current?.schedule({ autorunKey, cell, runtimeVersion, values: nextValues }, delayMs);

@@ -577,7 +577,7 @@ describe('InteractiveCell', () => {
     expect(screen.getAllByRole('alert')).toHaveLength(1);
   });
 
-  it('runs autorun exactly once per cell and runtime version without rendering execution controls', async () => {
+  it('runs autorun exactly once per cell, source, and runtime version without rendering execution controls', async () => {
     mocks.runInteractiveCell.mockResolvedValue({ stdout: 'auto', plots: [] });
     setManifestCells([makeCell({ run: 'autorun' })], 'autorun-v1');
 
@@ -619,27 +619,35 @@ describe('InteractiveCell', () => {
     );
   });
 
-  it('blocks invalid reactive edits and schedules the latest values once validity returns', async () => {
+  it('blocks invalid reactive edits and source updates until validity returns', async () => {
     mocks.runInteractiveCell.mockResolvedValue({ stdout: 'auto', plots: [] });
-    setManifestCells([
-      makeCell({
-        run: 'reactive',
-        inputs: [{ name: 'count', type: 'number', label: 'count', value: 1, min: 0, max: 4, step: 0.5, options: [] }]
-      })
-    ]);
+    const cell = makeCell({
+      run: 'reactive',
+      inputs: [{ name: 'count', type: 'number', label: 'count', value: 1, min: 0, max: 4, step: 0.5, options: [] }]
+    });
+    setManifestCells([cell]);
 
     render(<InteractiveCell cellId="cell-one" />);
     await waitFor(() => expect(mocks.runInteractiveCell).toHaveBeenCalledOnce());
     const input = screen.getByRole('spinbutton', { name: 'count' });
 
     fireEvent.input(input, { target: { value: '' } });
+    act(() => {
+      setManifestCells([{ ...cell, source: 'println!("updated");' }]);
+      mocks.manifestListeners[0]();
+    });
     await new Promise((resolve) => globalThis.setTimeout(resolve, 200));
     expect(mocks.runInteractiveCell).toHaveBeenCalledOnce();
 
     fireEvent.input(input, { target: { value: '2' } });
     fireEvent.input(input, { target: { value: '3' } });
     await waitFor(() => expect(mocks.runInteractiveCell).toHaveBeenCalledTimes(2));
-    expect(mocks.runInteractiveCell).toHaveBeenLastCalledWith(expect.anything(), { count: 3 }, 'v1', expect.anything());
+    expect(mocks.runInteractiveCell).toHaveBeenLastCalledWith(
+      expect.objectContaining({ source: 'println!("updated");' }),
+      { count: 3 },
+      'v1',
+      expect.anything()
+    );
   });
 
   it('cancels an active reactive request and runs only the final replacement', async () => {
@@ -841,6 +849,33 @@ describe('InteractiveCell', () => {
 
     await waitFor(() => expect(screen.getByText('println!("new");')).toBeVisible());
   });
+
+  it.each(['reactive', 'autorun'] as const)(
+    'reruns %s cells when source arrives after the runtime version update',
+    async (run) => {
+      mocks.runInteractiveCell.mockImplementation((cell: CellManifest) =>
+        Promise.resolve({ stdout: cell.source, plots: [] })
+      );
+      const cell = makeCell({ language: 'python', run, source: 'print(7.5)', inputs: [] });
+      setManifestCells([cell], `source-refresh-${run}-v1`);
+      render(<InteractiveCell cellId="cell-one" />);
+      await waitFor(() => expect(screen.getByTestId('run-output')).toHaveTextContent('print(7.5)'));
+
+      act(() => {
+        setManifestCells([cell], `source-refresh-${run}-v2`);
+        mocks.manifestListeners[0]();
+      });
+      await waitFor(() => expect(mocks.runInteractiveCell).toHaveBeenCalledTimes(2));
+      await waitFor(() => expect(screen.getByTestId('run-output')).toHaveTextContent('print(7.5)'));
+
+      act(() => {
+        setManifestCells([{ ...cell, source: 'print(75.0)' }], `source-refresh-${run}-v2`);
+        mocks.manifestListeners[0]();
+      });
+      await waitFor(() => expect(screen.getByTestId('run-output')).toHaveTextContent('print(75.0)'));
+      expect(mocks.runInteractiveCell).toHaveBeenCalledTimes(3);
+    }
+  );
 
   it('requests shared manifest refreshes and unsubscribes each mounted consumer independently', () => {
     setManifestCells([makeCell()]);
