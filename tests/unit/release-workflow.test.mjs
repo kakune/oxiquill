@@ -38,51 +38,51 @@ afterEach(async () => {
 });
 
 describe('release-bound version verification', () => {
-  it('accepts every current v0.3.0 release reference', async () => {
-    await expect(verifyReleaseVersions({ repositoryRoot })).resolves.toMatchObject({ version: '0.3.0' });
+  it('accepts every current v0.3.1 release reference', async () => {
+    await expect(verifyReleaseVersions({ repositoryRoot })).resolves.toMatchObject({ version: '0.3.1' });
   });
 
   it.each([
     [
       'templates/basic/package.json',
-      '"oxiquill": "^0.3.0"',
+      '"oxiquill": "^0.3.1"',
       '"oxiquill": "^0.2.0"',
       'templates/basic/package.json oxiquill dependency'
     ],
-    ['README.md', '"oxiquill": "0.3.0"', '"oxiquill": "0.2.0"', 'README.md contains stale'],
+    ['README.md', '"oxiquill": "0.3.1"', '"oxiquill": "0.2.0"', 'README.md contains stale'],
     [
       'packages/oxiquill/README.md',
-      'npm install oxiquill@0.3.0',
+      'npm install oxiquill@0.3.1',
       'npm install oxiquill@0.2.0',
       'package README contains stale'
     ],
     [
       'examples/docs-site/content/docs/guides/getting-started.mdx',
-      'pnpm add oxiquill@0.3.0',
+      'pnpm add oxiquill@0.3.1',
       'pnpm add oxiquill@0.2.0',
       'English getting-started guide contains stale'
     ],
     [
       'examples/docs-site/content/docs/ja/guides/getting-started.mdx',
-      'pnpm add oxiquill@0.3.0',
+      'pnpm add oxiquill@0.3.1',
       'pnpm add oxiquill@0.2.0',
       'Japanese getting-started guide contains stale'
     ],
     [
       'examples/docs-site/crates/doc-rust/Cargo.toml',
-      'version = "0.3.0"',
+      'version = "0.3.1"',
       'version = "0.2.0"',
       'doc-rust Cargo.toml version'
     ],
     [
       'examples/docs-site/crates/Cargo.lock',
-      'name = "doc-rust"\nversion = "0.3.0"',
+      'name = "doc-rust"\nversion = "0.3.1"',
       'name = "doc-rust"\nversion = "0.2.0"',
       'helper Cargo.lock doc-rust version'
     ],
     [
       'packages/oxiquill/src/generator/license-data/rust/runtime-Cargo.lock',
-      'name = "doc-rust-cells"\nversion = "0.3.0"',
+      'name = "doc-rust-cells"\nversion = "0.3.1"',
       'name = "doc-rust-cells"\nversion = "0.2.0"',
       'generated runtime Cargo.lock doc-rust-cells version'
     ]
