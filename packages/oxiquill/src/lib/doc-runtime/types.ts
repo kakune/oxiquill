@@ -106,7 +106,28 @@ export interface HtmlArtifact extends BaseArtifact {
   sandboxed: true;
 }
 
+export interface ChartPalette {
+  light?: readonly string[];
+  dark?: readonly string[];
+}
+
+export interface BaseChartStyle {
+  palette?: ChartPalette;
+  showGrid?: boolean;
+  animation?: boolean;
+  animationDurationMs?: number;
+}
+
+export interface LineChartStyle extends BaseChartStyle {
+  lineWidth?: number;
+}
+
+export interface ScatterChartStyle extends BaseChartStyle {
+  symbolSize?: number;
+}
+
 export interface BaseChartSpec {
+  style?: BaseChartStyle;
   title?: string;
   xLabel?: string;
   yLabel?: string;
@@ -123,11 +144,13 @@ export interface XyChartSeries {
 }
 
 export interface LineChartSpec extends BaseChartSpec {
+  style?: LineChartStyle;
   kind: 'line';
   series: readonly XyChartSeries[];
 }
 
 export interface ScatterChartSpec extends BaseChartSpec {
+  style?: ScatterChartStyle;
   kind: 'scatter';
   series: readonly XyChartSeries[];
 }
@@ -149,6 +172,7 @@ export interface HistogramChartSpec extends BaseChartSpec {
 }
 
 export interface AreaChartSpec extends BaseChartSpec {
+  style?: LineChartStyle;
   kind: 'area';
   series: readonly XyChartSeries[];
 }
