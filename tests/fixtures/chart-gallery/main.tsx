@@ -1,6 +1,7 @@
 import { render } from 'preact';
 import { useState } from 'preact/hooks';
 import ChartOutput from '@chart-source/components/doc-runtime/ChartOutput';
+import TableOutput from '@chart-source/components/doc-runtime/TableOutput';
 import { labelsForLanguage } from '@chart-source/lib/doc-runtime/runtime-localization';
 import * as echarts from 'echarts/core';
 import { chartFixtures } from '../chart-specs';
@@ -21,6 +22,23 @@ function Gallery() {
   const [range, setRange] = useState<'fixed' | 'changed' | 'auto'>('fixed');
   return (
     <main style={{ width }}>
+      {query.get('fixture') === 'table-precision' ? (
+        <TableOutput
+          labels={labelsForLanguage(locale)}
+          table={{
+            kind: 'table',
+            title: 'Numeric precision',
+            columns: [
+              { key: 'year', label: 'Year', type: 'integer' },
+              { key: 'value', label: 'Value', type: 'number' }
+            ],
+            rows: [123456789, 2024, 9007199254740991, 0.30000000000000004, 1e21, 1e-7, -0].map((value, index) => [
+              2024 + index,
+              value
+            ])
+          }}
+        />
+      ) : null}
       <button onClick={() => setRange('changed')}>Change range</button>
       <button onClick={() => setRange('auto')}>Clear range</button>
       <button onClick={() => setReordered(true)}>Reorder and rename series</button>
