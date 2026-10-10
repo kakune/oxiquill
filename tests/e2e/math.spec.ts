@@ -3,7 +3,7 @@ import { expect, test } from '@playwright/test';
 test('KaTeX scripts use upstream sizing in inline and display formulas', async ({ page }) => {
   await page.goto('/features/math/');
   for (const selector of ['p > .katex', '.katex-display > .katex']) {
-    const ratios = await page.locator(`${selector} .katex-html .sizing.reset-size6.size3`).evaluateAll((scripts) =>
+    const ratios = await page.locator(`${selector} .katex-html .katex-sizing.reset-size6.size3`).evaluateAll((scripts) =>
       scripts.map((script) => ({
         text: script.textContent,
         ratio:

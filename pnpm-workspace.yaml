@@ -13,3 +13,5 @@ minimumReleaseAgeExclude:
 overrides:
   # expressive-code still requires postcss-nested 6, whose postcss-selector-parser 6 line has no fix for GHSA-rj75-hqrm-r3gf.
   '@expressive-code/core>postcss-nested': 7.0.2
+  # Mermaid and remark-math's micromark extension still declare KaTeX 0.16; keep one patched KaTeX that matches the package pin.
+  katex: 0.19.0

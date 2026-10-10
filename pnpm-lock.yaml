@@ -164,6 +164,7 @@ settings:
 
 overrides:
   '@expressive-code/core>postcss-nested': 7.0.2
+  katex: 0.19.0
 
 importers:
 
@@ -271,9 +272,12 @@ importers:
       echarts:
         specifier: 6.1.0
         version: 6.1.0
+      hast-util-from-html-isomorphic:
+        specifier: 2.0.0
+        version: 2.0.0
       katex:
-        specifier: 0.16.47
-        version: 0.16.47
+        specifier: 0.19.0
+        version: 0.19.0
       mermaid:
         specifier: 12.1.0
         version: 12.1.0
@@ -283,9 +287,6 @@ importers:
       pyodide:
         specifier: 314.0.7
         version: 314.0.7
-      rehype-katex:
-        specifier: 7.0.1
-        version: 7.0.1
       remark-math:
         specifier: 6.0.0
         version: 6.0.0(supports-color@7.2.0)
@@ -1975,13 +1976,13 @@ packages:
     resolution: {integrity: sha512-yPVavfyCcRhmorC7rWlkHn15b4wDVgVmBA7kV4QVBsF7kv/9TKJAbAXVTxvTnwP8HHKjRCJDClKbciiYS7p0DQ==}
     engines: {node: '>=16'}
 
+  commander@15.0.0:
+    resolution: {integrity: sha512-z67u4ZhzCL/Tydu1lJARtEZYWbWaN7oYLHbsuzocr6y4N6WZAagG3RQ4FW61V1/0+jImpj293XfrcYnd1qxtPg==}
+    engines: {node: '>=22.12.0'}
+
   commander@7.2.0:
     resolution: {integrity: sha512-QrWXB+ZQSVPmIWIhtEO9H+gwHaMGYiF5ChvoJ+K9ZGHG/sVsa6yiesAD1GC/x46sET00Xlwo1u49RVVVzvcSkw==}
     engines: {node: '>= 10'}
-
-  commander@8.3.0:
-    resolution: {integrity: sha512-OkTL9umf+He2DZkUq8f8J9of7yL6RJKI24dVITBmNfZBmri9zYZQrKkuXiKhyfPSu8tUhnVBB1iKXevvnlR4Ww==}
-    engines: {node: '>= 12'}
 
   common-ancestor-path@2.0.0:
     resolution: {integrity: sha512-dnN3ibLeoRf2HNC+OlCiNc5d2zxbLJXOtiZUudNFSXZrNSydxcCsSpRzXwfu7BBWCIfHPw+xTayeBvJCP/D8Ng==}
@@ -2915,8 +2916,8 @@ packages:
   jsonc-parser@3.3.1:
     resolution: {integrity: sha512-HUgH65KyejrUFPvHFPbqOY0rsFip3Bo5wb4ngvdi1EpCYWUQDC5V+Y7mZws+DLkr4M//zQJoanu1SP+87Dv1oQ==}
 
-  katex@0.16.47:
-    resolution: {integrity: sha512-Eeo8Ys1doU1z+x8AZsPpQu+p/QcZBI5PeOo7QGQdy2x2m0MU/hYagBbGOmXwr5KVbEfVuWv9LpnQWeehogurjg==}
+  katex@0.19.0:
+    resolution: {integrity: sha512-v6Tznz3zJ7u3niRCoDTsumM2+HA2XXcCu+WAacCeHD2z3p9A9Ks987o5FzfTGBN0e8A0vjEgIDvLbICrXpdw/Q==}
     hasBin: true
 
   keyv@5.6.0:
@@ -3583,9 +3584,6 @@ packages:
 
   rehype-expressive-code@0.44.2:
     resolution: {integrity: sha512-jvjQpsfWKBquDrEl5YQA3CJybRRIuDOYsui1BJTs5oKDUK8pPkJSSxY8FjxNlIFIdtgrTjC1zuahuY4Cc1j9SQ==}
-
-  rehype-katex@7.0.1:
-    resolution: {integrity: sha512-OiM2wrZ/wuhKkigASodFoo8wimG3H12LWQaH8qSPVJn9apWKFSH3YOCtbKpBorTVw/eI7cuT21XBbvwEswbIOA==}
 
   rehype-raw@7.0.0:
     resolution: {integrity: sha512-/aE8hCfKlQeA8LmyeyQvQF3eBiLRGNlfBJEvWH7ivp9sBqs7TNqBL5X3v157rM4IFETqDnIOO+z5M/biZbo9Ww==}
@@ -6295,9 +6293,9 @@ snapshots:
 
   commander@11.1.0: {}
 
-  commander@7.2.0: {}
+  commander@15.0.0: {}
 
-  commander@8.3.0: {}
+  commander@7.2.0: {}
 
   common-ancestor-path@2.0.0: {}
 
@@ -7400,9 +7398,9 @@ snapshots:
 
   jsonc-parser@3.3.1: {}
 
-  katex@0.16.47:
+  katex@0.19.0:
     dependencies:
-      commander: 8.3.0
+      commander: 15.0.0
 
   keyv@5.6.0:
     dependencies:
@@ -7745,7 +7743,7 @@ snapshots:
       dompurify: 3.4.16
       elkjs: 0.9.3
       es-toolkit: 1.52.0
-      katex: 0.16.47
+      katex: 0.19.0
       khroma: 2.1.0
       marked: 16.4.2
       roughjs: 4.6.6
@@ -7845,7 +7843,7 @@ snapshots:
     dependencies:
       '@types/katex': 0.16.8
       devlop: 1.1.0
-      katex: 0.16.47
+      katex: 0.19.0
       micromark-factory-space: 2.1.0
       micromark-util-character: 2.1.1
       micromark-util-symbol: 2.0.1
@@ -8378,16 +8376,6 @@ snapshots:
   rehype-expressive-code@0.44.2:
     dependencies:
       expressive-code: 0.44.2
-
-  rehype-katex@7.0.1:
-    dependencies:
-      '@types/hast': 3.0.5
-      '@types/katex': 0.16.8
-      hast-util-from-html-isomorphic: 2.0.0
-      hast-util-to-text: 4.0.2
-      katex: 0.16.47
-      unist-util-visit-parents: 6.0.2
-      vfile: 6.0.3
 
   rehype-raw@7.0.0:
     dependencies:
