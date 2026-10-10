@@ -16,8 +16,10 @@ const width = Number(query.get('width') ?? 720);
 
 function Gallery() {
   const [revision, setRevision] = useState(0);
+  const [formatted, setFormatted] = useState(true);
   return (
     <main style={{ width }}>
+      <button onClick={() => setFormatted(false)}>Clear formatting</button>
       <button onClick={() => setRevision((value) => value + 1)}>Update data</button>
       {Object.entries(chartFixtures)
         .filter(([name]) => !query.has('fixture') || query.get('fixture') === name)
@@ -29,6 +31,7 @@ function Gallery() {
                 kind: 'chart',
                 spec: {
                   ...spec,
+                  ...(!formatted ? { style: undefined } : {}),
                   ...(revision ? { title: `Updated ${name}` } : {}),
                   ...(query.has('longText')
                     ? { title: 'T'.repeat(16000), xLabel: 'X'.repeat(16000), yLabel: 'Y'.repeat(16000) }

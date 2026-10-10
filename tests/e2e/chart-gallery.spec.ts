@@ -14,7 +14,7 @@ for (const width of [360, 720]) {
       await page.emulateMedia({ reducedMotion: 'reduce' });
       await page.setViewportSize({ width: width + 40, height: 900 });
       await page.goto(`http://127.0.0.1:4323/?width=${width}&theme=${theme}`);
-      await expect(page.locator('.doc-plot')).toHaveCount(23);
+      await expect(page.locator('.doc-plot')).toHaveCount(24);
       await expect
         .poll(() =>
           page.locator('.doc-plot').evaluateAll((plots) => plots.every((plot) => plot.querySelector('canvas')))
@@ -203,3 +203,14 @@ for (const fixture of ['legend', 'heatmap']) {
     await expect(page.locator('[role="alert"]')).toHaveCount(0);
   });
 }
+
+test('authored number formats can be cleared without resetting zoom', async ({ page }) => {
+  await page.goto('http://127.0.0.1:4323/?fixture=formatted');
+  await expect(page.locator('canvas').first()).toBeVisible();
+  await expect(page.locator('.doc-chart-output__summary')).toContainText('1.50 kV');
+  await action(page, { type: 'dataZoom', start: 10, end: 90 });
+  const before = await state(page);
+  await page.getByRole('button', { name: 'Clear formatting' }).click();
+  await expect(page.locator('.doc-chart-output__summary')).not.toContainText('kV');
+  await expect.poll(async () => (await state(page)).zoom).toEqual(before.zoom);
+});

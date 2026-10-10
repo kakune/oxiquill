@@ -2,6 +2,7 @@ import type {
   ArtifactStream,
   BaseChartSpec,
   ChartAxisType,
+  ChartNumberFormat,
   ChartSpec,
   ChartPalette,
   LineChartStyle,
@@ -606,6 +607,9 @@ function validateChartStyle(value: unknown, kind: string): LineChartStyle & Scat
     record,
     [
       'palette',
+      'xFormat',
+      'yFormat',
+      ...(kind === 'heatmap' ? ['valueFormat'] : []),
       'showGrid',
       'animation',
       'animationDurationMs',
@@ -616,6 +620,10 @@ function validateChartStyle(value: unknown, kind: string): LineChartStyle & Scat
     context
   );
   const style: LineChartStyle & ScatterChartStyle = {};
+  for (const field of ['xFormat', 'yFormat', 'valueFormat'] as const) {
+    if (Object.hasOwn(record, field))
+      style[field] = validateNumberFormat(requiredOwnValue(record, field, context), context + ' ' + field);
+  }
   for (const field of ['showGrid', 'animation'] as const) {
     if (Object.hasOwn(record, field)) style[field] = optionalBoolean(record, field, context);
   }
@@ -671,6 +679,29 @@ function validateChartStyle(value: unknown, kind: string): LineChartStyle & Scat
   return style;
 }
 
+function validateNumberFormat(value: unknown, context: string): ChartNumberFormat {
+  const record = plainRecord(value, context);
+  rejectUnknownStyleFields(record, ['significantDigits', 'fractionDigits', 'unit', 'notation'], context);
+  const format: ChartNumberFormat = {};
+  for (const [field, min, max] of [
+    ['significantDigits', 1, 17],
+    ['fractionDigits', 0, 20]
+  ] as const) {
+    if (!Object.hasOwn(record, field)) continue;
+    const number = finiteNumber(requiredOwnValue(record, field, context), context + ' ' + field);
+    if (!Number.isInteger(number) || number < min || number > max)
+      throw new ArtifactValidationError(`${context} ${field} must be an integer within ${min}–${max}.`);
+    format[field] = number;
+  }
+  if (format.significantDigits !== undefined && format.fractionDigits !== undefined)
+    throw new ArtifactValidationError(`${context} cannot combine significantDigits and fractionDigits.`);
+  const unit = optionalString(record, 'unit', context);
+  const notation = optionalString(record, 'notation', context);
+  if (notation !== undefined && notation !== 'auto' && notation !== 'si')
+    throw new ArtifactValidationError(`${context} notation must be auto or si.`);
+  return { ...format, ...(unit === undefined ? {} : { unit }), ...(notation === undefined ? {} : { notation }) };
+}
+
 function rejectUnknownStyleFields(record: Record<string, unknown>, allowed: readonly string[], context: string): void {
   for (const field of Reflect.ownKeys(record)) {
     if (typeof field !== 'string' || !allowed.includes(field)) {
@@ -721,6 +752,8 @@ function validateChartRanges(spec: BaseChartSpec & { kind: string }): void {
     const min = spec[axis === 'x' ? 'xMin' : 'yMin'];
     const max = spec[axis === 'x' ? 'xMax' : 'yMax'];
     const zero = spec[axis === 'x' ? 'xIncludeZero' : 'yIncludeZero'];
+    if (spec.style?.[axis === 'x' ? 'xFormat' : 'yFormat'] !== undefined && type !== 'value' && type !== 'log')
+      throw new ArtifactValidationError(`Chart ${axis}Format requires a value or log axis.`);
     if (type === 'category' && (min !== undefined || max !== undefined))
       throw new ArtifactValidationError(`Chart ${axis} axis does not accept numeric bounds for categories.`);
     if (zero !== undefined && type !== 'value')

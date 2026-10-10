@@ -1,6 +1,6 @@
 import { histogramLabel, histogramSeries } from './chart-histogram.js';
 import { chartAxisType, chartIncludesZero } from './chart-axes.js';
-import type { ChartSpec } from './types.js';
+import type { ChartSpec, ChartNumberFormat } from './types.js';
 import { normalizeHeatmapSpec } from './heatmap-normalization.js';
 import { labelsForLanguage, type RuntimeLabels, type RuntimeLocale } from './runtime-localization.js';
 import { chartCoordinateFormatter, chartCoordinates, chartNumberFormatter, numericBounds } from './chart-format.js';
@@ -92,7 +92,8 @@ export function chartSpecToEChartsOptions(
   const axis = (horizontal: boolean) => {
     const coordinates = horizontal ? xData : values.y;
     const type = horizontal ? xType : yType;
-    const pointerFormat = chartCoordinateFormatter(coordinates, type, locale);
+    const format = horizontal ? style?.xFormat : style?.yFormat;
+    const pointerFormat = chartCoordinateFormatter(coordinates, type, locale, false, format);
     return {
       type,
       name: horizontal ? spec.xLabel : spec.kind === 'histogram' ? histogramLabel(spec) : spec.yLabel,
@@ -115,7 +116,7 @@ export function chartSpecToEChartsOptions(
               horizontal,
               width
             )
-          : { formatter: chartCoordinateFormatter(coordinates, type, locale, true) })
+          : { formatter: chartCoordinateFormatter(coordinates, type, locale, true, format) })
       },
       axisPointer: {
         label: {
@@ -217,7 +218,7 @@ export function chartSpecToEChartsOptions(
       ...layout.visualMap,
       min: range?.minimum ?? 0,
       max: range?.maximum ?? 1,
-      formatter: chartNumberFormatter(values.value, locale),
+      formatter: chartNumberFormatter(values.value, locale, false, style?.valueFormat),
       textStyle: { color: chrome.text },
       inRange: { color: style?.palette?.[theme] ?? heatmapPalette[theme] }
     };
@@ -305,11 +306,12 @@ function barData(values: readonly (number | null)[]) {
 
 function chartTooltipFormatter(spec: ChartSpec, locale: RuntimeLocale, names: readonly string[]) {
   const values = chartCoordinates(spec);
+  const style = spec.style;
   const xType = chartAxisType(spec, 'x');
   const yType = spec.kind === 'heatmap' ? 'category' : spec.yType;
-  const x = chartCoordinateFormatter(values.x, xType, locale);
-  const y = chartCoordinateFormatter(values.y, yType, locale);
-  const value = chartNumberFormatter(values.value, locale);
+  const x = chartCoordinateFormatter(values.x, xType, locale, false, style?.xFormat);
+  const y = chartCoordinateFormatter(values.y, yType, locale, false, style?.yFormat);
+  const value = chartNumberFormatter(values.value, locale, false, style?.valueFormat);
   const escape = (text: string) =>
     text.replace(
       /[&<>"']/gu,
@@ -358,7 +360,7 @@ function chartTooltipFormatter(spec: ChartSpec, locale: RuntimeLocale, names: re
 
 export function chartDataSummary(spec: ChartSpec, labels: RuntimeLabels): string {
   const values = chartCoordinates(spec);
-  const range = (coordinates: readonly unknown[], type: ChartSpec['xType']) => {
+  const range = (coordinates: readonly unknown[], type: ChartSpec['xType'], formatSpec?: ChartNumberFormat) => {
     if (type === 'category') return undefined;
     const bounds = numericBounds(
       type === 'time'
@@ -366,7 +368,7 @@ export function chartDataSummary(spec: ChartSpec, labels: RuntimeLabels): string
         : coordinates
     );
     if (!bounds) return undefined;
-    const format = chartCoordinateFormatter(coordinates, type, labels.locale);
+    const format = chartCoordinateFormatter(coordinates, type, labels.locale, false, formatSpec);
     return bounds.minimum === bounds.maximum
       ? format(bounds.minimum)
       : format(bounds.minimum) + '–' + format(bounds.maximum);
@@ -378,10 +380,14 @@ export function chartDataSummary(spec: ChartSpec, labels: RuntimeLabels): string
     dataCount,
     seriesCount: 'series' in spec ? spec.series.length : 1,
     seriesNames: seriesNames(spec, labels.locale).filter(Boolean).join(', ').slice(0, 1000),
-    xRange: range(values.x, chartAxisType(spec, 'x')),
-    yRange: range(values.y, spec.kind === 'heatmap' ? 'category' : spec.yType),
+    xRange: range(values.x, chartAxisType(spec, 'x'), spec.style?.xFormat),
+    yRange: range(values.y, spec.kind === 'heatmap' ? 'category' : spec.yType, spec.style?.yFormat),
     ...(spec.kind === 'heatmap'
-      ? { xCategoryCount: values.x.length, yCategoryCount: values.y.length, valueRange: range(values.value, 'value') }
+      ? {
+          xCategoryCount: values.x.length,
+          yCategoryCount: values.y.length,
+          valueRange: range(values.value, 'value', spec.style?.valueFormat)
+        }
       : {})
   });
   const text =

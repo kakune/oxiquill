@@ -111,7 +111,17 @@ export interface ChartPalette {
   dark?: readonly string[];
 }
 
+export interface ChartNumberFormat {
+  significantDigits?: number;
+  fractionDigits?: number;
+  unit?: string;
+  notation?: 'auto' | 'si';
+}
+
 export interface BaseChartStyle {
+  xFormat?: ChartNumberFormat;
+  yFormat?: ChartNumberFormat;
+  valueFormat?: ChartNumberFormat;
   height?: number;
   palette?: ChartPalette;
   showGrid?: boolean;

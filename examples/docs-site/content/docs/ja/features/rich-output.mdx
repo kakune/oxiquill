@@ -145,6 +145,24 @@ emit_line_plot!(points, x_label, y_label, style)
 
 macro は `spec.style` にシリアライズし、通常のグラフ検証が同じ制限を適用します。
 
+### 数値の表示書式
+
+value/log 軸には `style.xFormat` と `style.yFormat`、heatmap の色尺度には `style.valueFormat` を指定できます。目盛、ポインター、tooltip、要約に同じ設定を使います。category と time は専用の表示書式を保ちます。
+
+各書式は `significantDigits`（整数 1–17）、`fractionDigits`（整数 0–20）、`unit`（文字列）、`notation`（`auto` または `si`）を受け付けます。2 種類の桁指定は併用できません。固定小数では末尾のゼロを保持し、小さい値がゼロに丸まる場合があります。負のゼロはゼロと表示します。未指定の書式は従来の規則に従い、設定を削除すると既定値へ戻ります。
+
+単位は数値の後ろに表示し、軸名は `xLabel/yLabel` で指定します。SI はデータ範囲から共通の接頭辞（10⁻²⁴〜10²⁴）を選び、境界での丸めを考慮します。範囲外は指数表記に戻ります。元データを変更せず、callback、書式文字列、HTML、生の ECharts options は受け付けません。
+
+```rust
+//| id: formatted-voltage
+//| title: Voltage measurements
+let points = [[0.0, 1500.0], [1.0, 2400.0]];
+emit_line_chart!(&points, "Time", "Voltage", &serde_json::json!({
+    "xFormat": { "fractionDigits": 1, "unit": "s" },
+    "yFormat": { "significantDigits": 3, "notation": "si", "unit": "V" }
+}));
+```
+
 ## Resource limit
 
 producer は各 language worker 内で `postMessage` より前に limit を適用し、main thread でも bounded response を独立して再検証します。limit は UTF-8 byte 単位で、記載のものは run ごとに累積します。

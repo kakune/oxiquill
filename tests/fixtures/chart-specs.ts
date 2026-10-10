@@ -129,6 +129,7 @@ export const chartFixtures: Record<string, ChartSpec> = {
       }
     ]
   },
+  formatted: line([1500, 2400], { style: { yFormat: { fractionDigits: 2, notation: 'si', unit: 'V' } } }),
   histogramDensity: {
     kind: 'histogram',
     mode: 'density',

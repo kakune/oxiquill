@@ -145,6 +145,24 @@ emit_line_plot!(points, x_label, y_label, style)
 
 The macro serializes the argument into `spec.style`; normal chart validation enforces the same contract.
 
+### Numeric formats
+
+Set `style.xFormat` or `style.yFormat` on value/log axes; heatmaps use `style.valueFormat` for their color scale. The same settings format ticks, pointers, tooltips, and summaries. Category and time axes retain their own formatting.
+
+Each format accepts `significantDigits` (integer 1–17), `fractionDigits` (integer 0–20), `unit` (text), and `notation` (`auto` or `si`). The two precision fields are mutually exclusive. Fixed decimals keep trailing zeros and may round small values to zero; negative zero displays as zero. Without overrides the default formatting remains in effect. Removing a format restores it.
+
+Units follow numbers; axis names remain in `xLabel/yLabel`. SI chooses one prefix from the data range (10⁻²⁴ through 10²⁴), including rounding at prefix boundaries, and falls back to scientific notation outside that range. Formatting never changes stored values. No callbacks, format strings, HTML, or raw ECharts options are accepted.
+
+```rust
+//| id: formatted-voltage
+//| title: Voltage measurements
+let points = [[0.0, 1500.0], [1.0, 2400.0]];
+emit_line_chart!(&points, "Time", "Voltage", &serde_json::json!({
+    "xFormat": { "fractionDigits": 1, "unit": "s" },
+    "yFormat": { "significantDigits": 3, "notation": "si", "unit": "V" }
+}));
+```
+
 ## Resource Limits
 
 Producers enforce limits inside each language worker before `postMessage`; the main thread independently validates the bounded response again. Limits are UTF-8 byte limits and are cumulative for each run where noted:
