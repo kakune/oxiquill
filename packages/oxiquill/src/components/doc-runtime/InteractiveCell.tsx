@@ -88,6 +88,11 @@ function InteractiveCellPanel({
           >
             {isSourceVisible ? labels.hideCode : labels.showCode}
           </button>
+          {cell.inputs.length > 0 ? (
+            <button type="button" class="secondary-button" onClick={runtime.resetInputs}>
+              {labels.resetInputs}
+            </button>
+          ) : null}
           {shouldShowRunButton(cell.run) ? (
             <button
               type="button"
@@ -117,7 +122,7 @@ function InteractiveCellPanel({
           </legend>
           {cell.inputs.map((input) => (
             <InputControl
-              key={input.name}
+              key={`${input.name}:${runtime.inputRevision}`}
               cellId={cell.id}
               input={input}
               labels={labels}
