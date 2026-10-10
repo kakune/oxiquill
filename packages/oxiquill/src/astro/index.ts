@@ -5,7 +5,6 @@ import { fileURLToPath, pathToFileURL } from 'node:url';
 import { defineConfig } from 'astro/config';
 import { unified } from '@astrojs/markdown-remark';
 import preact from '@astrojs/preact';
-import rehypeKatex from 'rehype-katex';
 import remarkMath from 'remark-math';
 import { mergeAlias } from 'vite';
 import type { AstroConfig, AstroIntegration, AstroUserConfig, FontProvider, Locales, SessionDriverConfig } from 'astro';
@@ -34,6 +33,7 @@ import {
 } from '../generator/doc-runtime-service.mjs';
 import { createBrowserBundleCollector, syncBrowserBundleReport } from '../generator/browser-bundle-report.mjs';
 import { maintainCleanupOwnership, prepareCleanupOwnership } from '../generator/cleanup-ownership.mjs';
+import rehypeKatex from '../lib/doc-runtime/rehype-katex.mjs';
 import remarkInteractiveCells from '../lib/doc-runtime/remark-interactive-cells.mjs';
 import remarkMermaidDiagrams from '../lib/doc-runtime/remark-mermaid-diagrams.mjs';
 import remarkPublicAssetBase from '../lib/doc-runtime/remark-public-asset-base.mjs';

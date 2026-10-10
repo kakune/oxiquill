@@ -31,7 +31,7 @@ describe('oxiquill init', () => {
       expect.objectContaining({
         engines: { node: '>=24.0.0' },
         name: 'my-docs',
-        packageManager: 'pnpm@11.2.2',
+        packageManager: 'pnpm@12.10.1',
         scripts: {
           build: 'oxiquill build',
           check: 'oxiquill check',

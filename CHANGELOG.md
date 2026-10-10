@@ -16,6 +16,11 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 - **Display changes:** chart titles appear above the plot, legends scroll on one line, and responsive axis labels and heatmap color scales avoid overlap. Axis numbers share consistent formatting and chart palettes now have tested contrast and color-vision distances, with line patterns and scatter symbols on color reuse.
 - **Migration:** bar and histogram charts reject time-valued y axes. Use a value axis for amounts or line/scatter for timestamps. Time-axis ticks, tooltips, and summaries now display UTC instead of the reader's local timezone.
 - **Display migration:** matplotlib uses the chart palette, browser-rendered SVG text, light grids, and white paper by default. Override rcParams or call `matplotlib.rcdefaults()` inside the cell to restore upstream defaults. Oversized SVG figures fall back to 150 DPI PNG with a diagnostic.
+- Oxiquill now requires Astro 7.3.8 and Starlight 0.42.6; the starter, examples, and installation commands use these versions. Starlight 0.42 supports Chromium 116, Safari 17.0, and Firefox 125 or newer, and its mobile sidebar is now a popover.
+- Math renders with Oxiquill's pinned KaTeX 0.19.0 instead of rehype-katex. KaTeX 0.18 and later prefix internal class names such as `katex-sizing`, so custom CSS targeting KaTeX internals may need updates.
+- The generated starter pins pnpm 12.10.1. Contributor and CI tooling now uses Node.js 24.21.0, pnpm 12.10.1, npm 12.2.0 for publishing, and Rust 1.99.0; the published package and generated starter continue to support Node.js 24.0.0 or newer.
+- Generated Rust cells use wasm-bindgen 0.2.129, serde 1.0.229, and serde_json 1.0.151, and the Python runtime uses Pyodide 314.0.7.
+- Updated all other runtime and development dependencies, pinned GitHub Actions, and ghc-wasm to their latest releases. Mermaid stays on 11.17.2 because Mermaid 12 bundles a 1.46 MB ELK layout chunk that exceeds the browser chunk budget.
 
 ### Deprecated
 
@@ -23,7 +28,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ### Removed
 
-- Nothing yet.
+- Dependabot version and security update pull requests; dependency updates are made manually and Dependabot alerts still gate releases.
 
 ### Fixed
 
@@ -32,10 +37,12 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 - Long chart captions stay within narrow figures in WebKit. UTC ticks retain calendar context and zoom precision; tooltips retain color markers and display missing values as `-`.
 - Chart resizing updates layout without resending series data; isolated-point detection searches cached coordinate indexes. Zero lines survive legend selection.
 - Matplotlib styles reset between cells, and browser-rendered SVG text no longer emits missing-glyph warnings during export.
+- The saved desktop sidebar state now applies before the first paint.
+- The Nix development shell uses the Rust toolchain's LLVM tools so coverage profiles match rustc.
 
 ### Security
 
-- Nothing yet.
+- The production dependency audit reports no known vulnerabilities, including fixes for undici, devalue, fast-uri, KaTeX, postcss-selector-parser, smol-toml, and sharp advisories.
 
 ## [0.3.1] - 2026-09-05
 
