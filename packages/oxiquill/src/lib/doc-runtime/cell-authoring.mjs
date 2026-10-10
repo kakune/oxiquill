@@ -30,7 +30,18 @@ export const supportedPyodidePackages = [
 ];
 
 const cellFields = new Set(['id', 'title', 'run', 'inputs', 'packages', 'crates', 'timeoutMs', 'showSource']);
-const inputFields = new Set(['type', 'label', 'description', 'value', 'min', 'max', 'step', 'integer', 'options']);
+const inputFields = new Set([
+  'type',
+  'label',
+  'description',
+  'value',
+  'min',
+  'max',
+  'step',
+  'integer',
+  'options',
+  'share'
+]);
 const optionFields = new Set(['label', 'value']);
 const localIdPattern = /^[a-z][a-z0-9]*(?:-[a-z0-9]+)*$/u;
 const inputNamePattern = /^[a-z][a-z0-9_]*$/u;
@@ -341,6 +352,9 @@ function normalizeInput(name, value, context, diagnostics) {
   const max = normalizeInputNumber(value, 'max', type, inputPath, context, diagnostics);
   const step = normalizeInputNumber(value, 'step', type, inputPath, context, diagnostics);
   const options = normalizeOptions(value, type, inputPath, context, diagnostics);
+  if (hasOwn(value, 'share') && typeof value.share !== 'boolean') {
+    diagnostics.push(diagnostic(context, `${inputPath}.share`, 'Expected a boolean.'));
+  }
 
   validateNumericConstraints(
     { integer, max, min, step, type, value: inputValue },
@@ -354,6 +368,7 @@ function normalizeInput(name, value, context, diagnostics) {
   return {
     name,
     type,
+    ...(value.share === true ? { share: true } : {}),
     label,
     ...(description ? { description } : {}),
     value: inputValue,

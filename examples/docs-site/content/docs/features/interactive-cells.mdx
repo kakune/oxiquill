@@ -84,6 +84,8 @@ The visible `label` is the control's accessible name; the input key is only the 
 
 ## Rust and Plots
 
+To include an input in **Copy input link**, add `share: true` to that input's metadata. Sharing is disabled by default, including for text fields. The link stores only differences from defaults for opted-in inputs on this page. Existing query parameters and heading links remain intact. Invalid or outdated input values are ignored when opening a link. Links longer than 8,192 characters cannot be copied. Code, outputs, random state, and external data are not included; identical inputs do not guarantee identical results.
+
 Cells with inputs provide **Reset inputs**. It restores all defaults and clears incomplete edits and validation errors. Reactive cells recalculate once; button cells wait for Run. The previous successful output remains visible while the next result is pending.
 
 This Rust cell uses a helper crate and redraws a plot whenever the sliders change.
