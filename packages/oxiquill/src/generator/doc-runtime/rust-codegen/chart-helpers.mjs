@@ -117,7 +117,7 @@ function generateHistogramChartHelper() {
                 "bins": value,
                 "tooltip": true
             });
-                    Ok(spec)
+            Ok(spec)
         }
         _ => Err("histogram bins must serialize as an array".to_owned()),
     }
@@ -134,7 +134,7 @@ function generateHeatmapChartHelper() {
                 "data": value,
                 "tooltip": true
             });
-                    Ok(spec)
+            Ok(spec)
         }
         _ => Err("heatmap data must serialize as an array".to_owned()),
     }
