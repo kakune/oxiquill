@@ -30,6 +30,14 @@ export type RuntimeLabels = {
   cellRetry: string;
   cellUpdating: string;
   chartCaption: string;
+  chartData: string;
+  chartSeries: string;
+  chartValue: string;
+  chartBinLower: string;
+  chartBinUpper: string;
+  showChartData: string;
+  hideChartData: string;
+  resetZoom: string;
   savePng: string;
   saveSvg: string;
   chartExportError: (detail: string) => string;
@@ -152,6 +160,14 @@ const runtimeLabels = {
     cellRetry: 'Retry cell',
     cellUpdating: 'Updating…',
     chartCaption: 'Chart data summary',
+    chartData: 'Chart data',
+    chartSeries: 'Series',
+    chartValue: 'Value',
+    chartBinLower: 'Lower boundary',
+    chartBinUpper: 'Upper boundary',
+    showChartData: 'Show data as a table',
+    hideChartData: 'Hide data table',
+    resetZoom: 'Reset zoom',
     savePng: 'Save PNG',
     saveSvg: 'Save SVG',
     chartExportError: (detail) => `Unable to save chart: ${detail}`,
@@ -243,6 +259,14 @@ const runtimeLabels = {
     cellRetry: 'セルの実行を再試行',
     cellUpdating: '更新中…',
     chartCaption: 'グラフデータの概要',
+    chartData: 'グラフのデータ',
+    chartSeries: '系列',
+    chartValue: '値',
+    chartBinLower: '区間の下端',
+    chartBinUpper: '区間の上端',
+    showChartData: 'データを表で表示',
+    hideChartData: 'データの表を隠す',
+    resetZoom: 'ズームを戻す',
     savePng: 'PNGを保存',
     saveSvg: 'SVGを保存',
     chartExportError: (detail) => `グラフを保存できませんでした: ${translateDiagnostic(detail)}`,

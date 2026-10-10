@@ -7,18 +7,28 @@ export interface ChartViewState {
   dataZoom?: { start?: number; end?: number; startValue?: number | string; endValue?: number | string }[];
   legend?: { selected?: Record<string, boolean>; scrollDataIndex?: number }[];
   visualMap?: { range?: number[] }[];
+  symbols?: Record<string, boolean>;
 }
 
 export function chartViewState(instance: EChartsInstance): ChartViewState {
-  const options = instance.getOption() as ChartViewState;
+  const options = instance.getOption() as ChartViewState & { series?: { id: string; showSymbol?: boolean }[] };
   return {
     dataZoom: options.dataZoom?.map(({ start, end, startValue, endValue }) => ({ start, end, startValue, endValue })),
     legend: options.legend?.map(({ selected, scrollDataIndex }) => ({ selected: { ...selected }, scrollDataIndex })),
-    visualMap: options.visualMap?.map(({ range }) => ({ ...(range ? { range: [...range] } : {}) }))
+    visualMap: options.visualMap?.map(({ range }) => ({ ...(range ? { range: [...range] } : {}) })),
+    symbols: Object.fromEntries(
+      options.series?.flatMap(({ id, showSymbol }) => (typeof showSymbol === 'boolean' ? [[id, showSymbol]] : [])) ?? []
+    )
   };
 }
 
 export function applyChartViewState(options: EChartsOptions, state: ChartViewState): void {
+  if (state.symbols)
+    options.series = options.series.map((series) =>
+      typeof series.id === 'string' && Object.hasOwn(state.symbols ?? {}, series.id)
+        ? { ...series, showSymbol: state.symbols?.[series.id] }
+        : series
+    );
   if (options.dataZoom && state.dataZoom) {
     const zoom = options.dataZoom as Record<string, unknown>[];
     options.dataZoom = zoom.map((item, index) => ({ ...item, ...state.dataZoom?.[index] }));

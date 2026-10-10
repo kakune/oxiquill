@@ -84,7 +84,7 @@ For a numeric range spanning zero, data values whose absolute magnitude is at mo
 
 **Migration:** time-axis ticks, tooltips, and summaries now use UTC rather than the reader's local timezone. Inputs still require epoch milliseconds or ISO-8601 strings with an explicit timezone.
 
-Titles appear once above the plot. When artifact and spec titles differ, the spec title becomes a subtitle. Legends scroll on one line and give unnamed series default names. Long axis and category labels are shortened; summaries retain axis names and tooltips retain category and series names. Category labels rotate before thinning. Split charts with many long category names; a horizontal bar API is not yet available.
+Titles appear once above the plot. When artifact and spec titles differ, the spec title becomes a subtitle. HTML legends use keyboard-operable series buttons, with 25 series per page. Unnamed series receive default names. Long axis and category labels are shortened; summaries retain axis names and tooltips retain category and series names. Category labels rotate before thinning. Split charts with many long category names; a horizontal bar API is not yet available.
 
 The fixed eight-color palette is shared across light and dark themes. On default backgrounds, adjacent colors (including the wrap to the first color) meet OKLab distance 15 in normal vision and 8 in protanopia, deuteranopia, and tritanopia simulations; each color meets 3:1 background contrast. This does not guarantee every pair of series is distinguishable. Palette reuse changes line patterns or scatter symbols; split charts with more than eight series when possible. Authors should check custom palettes for background contrast and color-vision differences. Heatmaps use a sequential, single-hue gradient with monotone lightness.
 
@@ -202,13 +202,15 @@ Producers enforce limits inside each language worker before `postMessage`; the m
 
 `truncated: true` is valid only for text, JSON, and table artifacts. Chart, image, and HTML artifacts are never silently truncated. Invalid/cyclic/over-deep JSON, ragged tables, non-finite chart values, invalid base64/MIME pairs, or unsafe structural records cannot crash the cell component. Execution results contain only `outputs`; stream text and JSON values are artifacts rather than duplicate top-level fields.
 
-## CSV Copy Safety
-
 ## Chart images
+
+**Show data as a table** exposes the original values, including hidden series, histogram boundaries and counts, and heatmap coordinates. Conversion occurs only when opened and retains at most 10,000 rows; totals and truncation are shown. The table supports keyboard sorting, paging, and CSV download. Series buttons show their selection with `aria-pressed` and use color, line pattern, and symbols. **Reset zoom** restores the authored full range without resetting series selections. These controls are usable with the keyboard; chart summaries remain available to assistive technology.
 
 Use **Save PNG** or **Save SVG** to download the current chart with its theme, zoom, series selection, and heatmap color range. PNG uses twice the plot's width and height in pixels; SVG retains the plot's logical dimensions. Both include the plot background and legend, without animation, title, or caption. Saving uses a temporary renderer and does not replace the displayed chart.
 
 Authors may select `style: { renderer: "svg" }` in a chart spec, including through Rust chart style arguments and Python `display_chart`. The default remains `"canvas"`. SVG provides vector output for scaling and printing; it is not always faster for large datasets. Print output retains the chart and caption while hiding action buttons.
+
+## CSV Copy Safety
 
 **Save all retrieved rows as CSV** downloads every retained row in the current sort order, across all pages. **Copy visible rows as CSV** copies only the current page. When a result is truncated, the download contains only the retrieved portion, not the larger reported row count. Downloads work without clipboard access and preserve original numeric values.
 
