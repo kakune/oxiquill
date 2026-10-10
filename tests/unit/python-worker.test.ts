@@ -1,5 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
 import {
+  assertSupportedPythonImports,
   createPythonCellResult,
   createPythonRuntimeLoader,
   createPythonWorkerRequestHandler,
@@ -15,6 +16,20 @@ import {
   outputArtifactLimits
 } from '../../packages/oxiquill/src/lib/doc-runtime/output-limits.mjs';
 import type { RuntimeWorkerRequest, RuntimeWorkerResponse } from '../../packages/oxiquill/src/lib/doc-runtime/types';
+
+it('checks imports against bundled packages and releases the import proxy', () => {
+  const destroy = vi.fn();
+  const pyodide = {
+    runPython: vi.fn(() => ({ toJs: () => ['numpy', 'scipy'], destroy })),
+    lockfile: { packages: { numpy: { imports: ['numpy'] }, scipy: { imports: ['scipy'] } } }
+  };
+  expect(() => assertSupportedPythonImports(pyodide as never, 'import scipy')).toThrow('scipy is not shipped');
+  expect(destroy).toHaveBeenCalledOnce();
+  pyodide.runPython.mockReturnValue({ toJs: () => ['numpy', 'math'], destroy });
+  expect(() => assertSupportedPythonImports(pyodide as never, 'import numpy, math')).not.toThrow();
+  pyodide.runPython.mockReturnValue(null as never);
+  expect(() => assertSupportedPythonImports(pyodide as never, '')).toThrow('Unable to inspect');
+});
 
 function createDeferred() {
   let reject!: (reason: Error) => void;
@@ -279,11 +294,13 @@ describe('python worker request handling', () => {
       loadPackage: vi.fn(async () => undefined),
       loadPackagesFromImports: vi.fn(async () => undefined),
       runPython: vi.fn((source: string) => {
+        if (source.includes('find_imports')) return { toJs: () => [], destroy: vi.fn() };
         if (source === '__oxiquill_take_outputs()') return displayProxy;
         if (source === '__oxiquill_collect_matplotlib_outputs()') return matplotlibProxy;
         return undefined;
       }),
       runPythonAsync: vi.fn(async () => valueProxy),
+      lockfile: { packages: {} },
       setStderr: vi.fn(({ batched }: { batched: (output: string) => void }) => batched('warning')),
       setStdout: vi.fn(({ batched }: { batched: (output: string) => void }) => batched('printed')),
       toPy: vi.fn(() => globals)
@@ -344,7 +361,8 @@ describe('python worker request handling', () => {
         ({
           loadPackage: vi.fn(),
           loadPackagesFromImports: vi.fn(),
-          runPython: vi.fn(),
+          runPython: vi.fn(() => ({ toJs: () => [], destroy: vi.fn() })),
+          lockfile: { packages: {} },
           runPythonAsync: vi.fn(async () => {
             throw 'evaluation failed';
           }),

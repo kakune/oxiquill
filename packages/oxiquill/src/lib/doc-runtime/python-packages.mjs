@@ -1,0 +1,15 @@
+export const supportedPyodidePackages = [
+  'contourpy',
+  'cycler',
+  'fonttools',
+  'kiwisolver',
+  'matplotlib',
+  'numpy',
+  'packaging',
+  'pandas',
+  'pillow',
+  'pyparsing',
+  'python-dateutil',
+  'pytz',
+  'six'
+];
