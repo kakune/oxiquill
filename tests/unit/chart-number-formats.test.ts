@@ -17,6 +17,26 @@ const line: ChartSpec = {
 };
 
 describe('authored number formats', () => {
+  it.each(['en', 'ja'] as const)('scales decimal SI ticks without division artifacts in %s', (locale) => {
+    for (const [value, expected] of [
+      [0.7, '700 m'],
+      [0.35, '350 m'],
+      [5e-6, '5 µ'],
+      [0.0018, '1.8 m'],
+      [-0.7, '-700 m'],
+      [0, '0']
+    ] as const) {
+      for (const ticks of [true, false]) {
+        expect(chartNumberFormatter([value], locale, ticks, { notation: 'si' })(value)).toBe(expected);
+      }
+    }
+    const ticks = chartNumberFormatter([0.7, 0.7000000000000001], locale, true, { notation: 'si', unit: 'V' });
+    expect(ticks(0.7)).toBe('700 mV');
+    expect(ticks(0.7000000000000001)).toBe('700.0000000000001 mV');
+    expect(chartNumberFormatter([0.0018], locale, true, { notation: 'si', fractionDigits: 2 })(0.0018)).toBe('1.80 m');
+    expect(chartNumberFormatter([0.0018], locale, true, { notation: 'si', significantDigits: 1 })(0.0018)).toBe('2 m');
+    expect(chartNumberFormatter([0.9999996], locale, true, { notation: 'si' })(1)).toBe('1');
+  });
   it.each(['en', 'ja'] as const)('formats precision, SI, units, and zero in %s', (locale) => {
     const fixed = chartNumberFormatter([0, 1], locale, false, { fractionDigits: 2, unit: 'V' });
     expect(fixed(0.1 + 0.2)).toBe('0.30 V');

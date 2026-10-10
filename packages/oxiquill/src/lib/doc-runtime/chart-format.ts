@@ -55,6 +55,12 @@ const superscripts: Record<string, string> = {
 
 const siPrefixes = ['y', 'z', 'a', 'f', 'p', 'n', 'µ', 'm', '', 'k', 'M', 'G', 'T', 'P', 'E', 'Z', 'Y'];
 
+function scaleForSi(value: number, exponent: number): number {
+  // Shift the decimal exponent without introducing division rounding into ticks.
+  const [coefficient, power] = value.toExponential().split('e');
+  return Number(`${coefficient}e${Number(power) - exponent}`);
+}
+
 export function chartNumberFormatter(
   values: readonly unknown[],
   locale: RuntimeLocale,
@@ -74,8 +80,8 @@ export function chartNumberFormatter(
     exponent >= -24 &&
     exponent <= 24 &&
     (fixed === undefined
-      ? Number((magnitude / 10 ** exponent).toPrecision(format.significantDigits ?? 6))
-      : round(magnitude / 10 ** exponent)) >= 1000
+      ? Number(scaleForSi(magnitude, exponent).toPrecision(format.significantDigits ?? 6))
+      : round(scaleForSi(magnitude, exponent))) >= 1000
   )
     exponent += 3;
   const si = format.notation === 'si' && exponent >= -24 && exponent <= 24;
@@ -95,7 +101,7 @@ export function chartNumberFormatter(
   return (value) => {
     if (!Number.isFinite(value)) return appendUnit(String(value));
     const normalized = Math.abs(value) <= zeroTolerance ? 0 : value;
-    if (si) return appendUnit(formatter.format(round(normalized / 10 ** exponent) || 0));
+    if (si) return appendUnit(formatter.format(round(scaleForSi(normalized, exponent)) || 0));
     // ECharts rounds its generated ticks; preserve them unless precision is authored.
     const clean =
       ticks && format.significantDigits === undefined && fixed === undefined
