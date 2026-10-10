@@ -176,6 +176,8 @@ export interface BarChartSpec extends BaseChartSpec {
 
 export interface HistogramChartSpec extends BaseChartSpec {
   kind: 'histogram';
+  xType?: 'value' | 'category';
+  mode?: 'count' | 'density';
   yType?: 'value' | 'log';
   bins: readonly (readonly [number, number, number])[];
 }

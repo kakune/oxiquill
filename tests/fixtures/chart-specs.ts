@@ -129,6 +129,24 @@ export const chartFixtures: Record<string, ChartSpec> = {
       }
     ]
   },
+  histogramDensity: {
+    kind: 'histogram',
+    mode: 'density',
+    xLabel: 'Measurement',
+    bins: [
+      [-1, -0.5, 2],
+      [0.1 + 0.2, 0.7, 3],
+      [1, 3, 4]
+    ]
+  },
+  histogramLog: {
+    kind: 'histogram',
+    yType: 'log',
+    bins: [
+      [0, 1, 0.1],
+      [1, 2, 10]
+    ]
+  },
   histogram: {
     kind: 'histogram',
     xLabel: 'Bin',

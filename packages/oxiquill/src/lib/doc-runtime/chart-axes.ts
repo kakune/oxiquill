@@ -3,7 +3,8 @@ import type { BaseChartSpec, ChartAxisType, ChartSpec } from './types.js';
 type AxesSpec = BaseChartSpec & { kind: string };
 
 export function chartAxisType(spec: AxesSpec, axis: 'x' | 'y'): ChartAxisType {
-  if (spec.kind === 'heatmap' || (axis === 'x' && ['bar', 'histogram'].includes(spec.kind))) return 'category';
+  if (spec.kind === 'heatmap' || (axis === 'x' && spec.kind === 'bar')) return 'category';
+  if (axis === 'x' && spec.kind === 'histogram') return 'value';
   return spec[axis === 'x' ? 'xType' : 'yType'] ?? 'value';
 }
 

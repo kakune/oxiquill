@@ -14,7 +14,7 @@ for (const width of [360, 720]) {
       await page.emulateMedia({ reducedMotion: 'reduce' });
       await page.setViewportSize({ width: width + 40, height: 900 });
       await page.goto(`http://127.0.0.1:4323/?width=${width}&theme=${theme}`);
-      await expect(page.locator('.doc-plot')).toHaveCount(21);
+      await expect(page.locator('.doc-plot')).toHaveCount(23);
       await expect
         .poll(() =>
           page.locator('.doc-plot').evaluateAll((plots) => plots.every((plot) => plot.querySelector('canvas')))
@@ -150,5 +150,20 @@ test('heatmap scales change orientation when resizing across 600px', async ({ pa
   await expect.poll(orientation).toBe('vertical');
   await page.locator('main').evaluate((element) => (element.style.width = '599px'));
   await expect.poll(orientation).toBe('horizontal');
+  await expect(page.locator('[role="alert"]')).toHaveCount(0);
+});
+
+test('histogram density uses numeric intervals and survives a partial-bin zoom', async ({ page }) => {
+  await page.emulateMedia({ reducedMotion: 'reduce' });
+  await page.goto('http://127.0.0.1:4323/?fixture=histogramDensity');
+  await expect(page.locator('canvas')).toHaveCount(1);
+  await action(page, { type: 'showTip', seriesIndex: 0, dataIndex: 1 });
+  await expect(page.locator('.doc-plot')).toContainText('[0.3, 0.7): Density: 7.5');
+  await action(page, { type: 'dataZoom', startValue: -0.75, endValue: 2 });
+  const option = await page
+    .locator('.doc-plot')
+    .evaluate((element) => window.galleryECharts.getInstanceByDom(element as HTMLElement)?.getOption());
+  expect(option).toMatchObject({ xAxis: [{ type: 'value' }], series: [{ type: 'custom', encode: { x: [0, 1] } }] });
+  await expect(page.locator('.doc-chart-output__summary')).toContainText('Density');
   await expect(page.locator('[role="alert"]')).toHaveCount(0);
 });

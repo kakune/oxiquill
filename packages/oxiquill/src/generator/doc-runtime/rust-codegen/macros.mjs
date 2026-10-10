@@ -336,7 +336,8 @@ function generateChartOptions() {
             for (key, value) in options {
                 if !matches!(key.as_str(), "title" | "xLabel" | "yLabel" | "xType" | "yType" |
                     "legend" | "tooltip" | "dataZoom" | "style" | "xMin" | "xMax" | "yMin" |
-                    "yMax" | "xIncludeZero" | "yIncludeZero") {
+                    "yMax" | "xIncludeZero" | "yIncludeZero") &&
+                    !(key == "mode" && spec["kind"] == "histogram") {
                     return Err(format!("unsupported chart option: {key}"));
                 }
                 spec[key] = value;

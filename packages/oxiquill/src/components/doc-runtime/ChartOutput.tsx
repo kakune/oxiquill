@@ -38,6 +38,7 @@ function loadECharts(): Promise<EChartsCore> {
     .then(([echarts, charts, components, renderers]) => {
       echarts.use([
         charts.BarChart,
+        charts.CustomChart,
         charts.HeatmapChart,
         charts.LineChart,
         charts.ScatterChart,

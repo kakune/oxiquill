@@ -16,6 +16,7 @@ import type {
   TextArtifact
 } from './types.js';
 import { outputArtifactLimits, truncateUtf8, utf8ByteLength } from './output-limits.mjs';
+import { histogramHeight } from './chart-histogram.js';
 import { chartAxisType } from './chart-axes.js';
 
 export { outputArtifactLimits } from './output-limits.mjs';
@@ -511,12 +512,16 @@ function validateChartSpec(value: unknown): ChartSpec {
       return { ...barBase, kind, ...(declaredYType == null ? {} : { yType }), categories, series };
     }
     case 'histogram': {
-      requireEffectiveAxis(base.xType, 'category', 'Histogram chart x axis');
+      if (base.xType !== undefined && base.xType !== 'value' && base.xType !== 'category')
+        throw new ArtifactValidationError('Histogram chart x axis must be value.');
+      const mode = optionalString(record, 'mode', 'Histogram chart');
+      if (mode !== undefined && mode !== 'count' && mode !== 'density')
+        throw new ArtifactValidationError('Histogram chart mode must be count or density.');
       const yType = numericAxisType(base.yType, 'Histogram chart y axis');
       const rawBins = plainArray(requiredOwnValue(record, 'bins', 'Histogram chart'), 'Histogram chart bins');
       if (rawBins.length > outputArtifactLimits.chartDataItems) throw chartLimitError(rawBins.length);
-      const bins = rawBins.map((bin, binIndex) => {
-        const tuple = fixedTuple(bin, 3, `Histogram chart bin ${binIndex + 1}`);
+      const bins = rawBins.map((rawBin, binIndex) => {
+        const tuple = fixedTuple(rawBin, 3, `Histogram chart bin ${binIndex + 1}`);
         const lower = finiteNumber(tuple[0], `Histogram chart bin ${binIndex + 1} lower bound`);
         const upper = finiteNumber(tuple[1], `Histogram chart bin ${binIndex + 1} upper bound`);
         if (lower >= upper) {
@@ -528,10 +533,33 @@ function validateChartSpec(value: unknown): ChartSpec {
         if (count < 0) {
           throw new ArtifactValidationError(`Histogram chart bin ${binIndex + 1} count must not be negative.`);
         }
-        return [lower, upper, count] as const;
+        const bin = [lower, upper, count] as const;
+        if (mode === 'density') {
+          const width = upper - lower;
+          const height = histogramHeight(bin, mode);
+          if (!Number.isFinite(width) || !Number.isFinite(height) || (yType === 'log' && height <= 0))
+            throw new ArtifactValidationError(
+              `Histogram chart bin ${binIndex + 1} density must be finite and positive for log axes.`
+            );
+        }
+        return bin;
       });
-      const { yType: declaredYType, ...histogramBase } = base;
-      return { ...histogramBase, kind, ...(declaredYType == null ? {} : { yType }), bins };
+      const ordered = bins.map((bin, index) => ({ bin, index })).sort((a, b) => a.bin[0] - b.bin[0]);
+      for (let index = 1; index < ordered.length; index++) {
+        if (ordered[index].bin[0] < ordered[index - 1].bin[1])
+          throw new ArtifactValidationError(
+            `Histogram chart bins ${ordered[index - 1].index + 1} and ${ordered[index].index + 1} overlap.`
+          );
+      }
+      const { xType: declaredXType, yType: declaredYType, ...histogramBase } = base;
+      return {
+        ...histogramBase,
+        kind,
+        ...(declaredXType == null ? {} : { xType: 'value' as const }),
+        ...(declaredYType == null ? {} : { yType }),
+        ...(mode === undefined ? {} : { mode }),
+        bins
+      };
     }
     case 'heatmap': {
       const { xType: declaredXType, yType: declaredYType, ...heatmapBase } = base;

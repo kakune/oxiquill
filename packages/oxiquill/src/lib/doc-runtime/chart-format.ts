@@ -1,3 +1,4 @@
+import { histogramHeight } from './chart-histogram.js';
 import type { ChartSpec } from './types.js';
 import { normalizeHeatmapSpec } from './heatmap-normalization.js';
 import type { RuntimeLocale } from './runtime-localization.js';
@@ -22,7 +23,11 @@ export function chartCoordinates(spec: ChartSpec): {
     case 'bar':
       return { x: spec.categories, y: spec.series.flatMap((series) => series.values), value: [] };
     case 'histogram':
-      return { x: spec.bins.flatMap((bin) => [bin[0], bin[1]]), y: spec.bins.map((bin) => bin[2]), value: [] };
+      return {
+        x: spec.bins.flatMap((bin) => [bin[0], bin[1]]),
+        y: spec.bins.map((bin) => histogramHeight(bin, spec.mode)),
+        value: []
+      };
     case 'heatmap': {
       const heatmap = normalizeHeatmapSpec(spec);
       return { x: heatmap.xCategories, y: heatmap.yCategories, value: heatmap.data.map((cell) => cell[2]) };

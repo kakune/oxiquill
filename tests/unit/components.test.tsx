@@ -1262,8 +1262,17 @@ describe('ChartOutput options', () => {
         ]
       })
     ).toMatchObject({
-      xAxis: { type: 'category', data: ['0-1', '1-2'] },
-      series: [{ type: 'bar', barCategoryGap: '8%', data: [2, 3] }]
+      xAxis: { type: 'value' },
+      series: [
+        {
+          type: 'custom',
+          encode: { x: [0, 1], y: 2 },
+          data: [
+            [0, 1, 2, 2],
+            [1, 2, 3, 3]
+          ]
+        }
+      ]
     });
 
     expect(

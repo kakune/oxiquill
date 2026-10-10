@@ -100,3 +100,8 @@ emit_line_chart!(&[[0, 1]], options = &options);
 let options = if invalid { serde_json::json!([]) } else { serde_json::json!({}) };
 emit_histogram!(&[[0, 1, 1]], options = &options);
 ```
+
+```rust
+//| id: density-histogram
+emit_histogram!(&[[-1.0, -0.5, 2.0], [0.0, 2.0, 4.0]], options = &serde_json::json!({ "mode": "density", "xMin": -2, "xMax": 3 }));
+```

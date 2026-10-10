@@ -24,6 +24,7 @@ try {
     assert.ok(cell, `${name} fixture must be generated`);
     return JSON.parse(runtime.run_rust_cell(cell.id, JSON.stringify(inputs)));
   };
+  assert.equal(run('density-histogram').outputs[0].spec.mode, 'density');
   const optionsCharts = run('chart-options').outputs;
   assert.equal(optionsCharts.length, 4);
   for (const artifact of optionsCharts) {
