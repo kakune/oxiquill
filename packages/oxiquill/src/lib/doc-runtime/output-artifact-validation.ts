@@ -1,4 +1,3 @@
-export { publicOutputArtifact } from './output-validation-common.js';
 import type { ArtifactStream, TableColumn, TableColumnType } from './types.js';
 import { outputArtifactLimits, truncateUtf8, utf8ByteLength } from './output-limits.mjs';
 import type { ValidatedArtifactResult, ValidationSuccess } from './output-validation-common.js';
@@ -24,6 +23,7 @@ import { validateJsonArtifact, safeJsonFormat } from './output-validation-json.j
 import { validateImageArtifact } from './output-validation-image.js';
 
 export { outputArtifactLimits } from './output-limits.mjs';
+export { publicOutputArtifact } from './output-validation-common.js';
 export type {
   ValidatedJsonArtifact,
   ValidatedImageArtifact,
