@@ -292,6 +292,35 @@
   gap: 0.5rem;
 }
 
+.doc-chart-output__legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.35rem;
+}
+
+.doc-chart-output__legend button {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  max-width: 100%;
+  overflow-wrap: anywhere;
+  text-align: start;
+}
+
+.doc-chart-output__legend svg {
+  flex-shrink: 0;
+}
+
+.doc-chart-output__legend button[aria-pressed='false'] {
+  text-decoration: line-through;
+}
+
+.doc-chart-output button:focus-visible,
+.doc-source-editor textarea:focus-visible {
+  outline: 2px solid var(--sl-color-text-accent);
+  outline-offset: 3px;
+}
+
 @media print {
   .doc-chart-output__actions,
   .doc-table-output__controls {
@@ -301,6 +330,15 @@
   .doc-chart-output {
     break-inside: avoid;
     print-color-adjust: exact;
+  }
+
+  .doc-chart-output__legend button:not([aria-pressed]) {
+    display: none;
+  }
+
+  .doc-chart-output__legend button[aria-pressed] {
+    border: 0;
+    background: transparent;
   }
 }
 
@@ -446,6 +484,10 @@
   display: flex;
   align-items: center;
   gap: 0.35rem;
+}
+
+.doc-table-output__controls {
+  justify-content: flex-start;
 }
 
 .doc-table-output__controls button,

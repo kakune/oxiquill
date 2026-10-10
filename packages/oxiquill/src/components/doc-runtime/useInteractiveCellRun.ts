@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'preact/hooks';
 import { initialValues } from '../../lib/doc-runtime/interactive-cell-model.js';
-import { restoreSharedInputs } from '../../lib/doc-runtime/input-sharing.js';
+import { restoreSharedInputs, sharedInputsParameter } from '../../lib/doc-runtime/input-sharing.js';
 import { createLatestRequestScheduler, createRunOnceCache } from '../../lib/doc-runtime/interactive-cell-scheduler.js';
 import { boundedErrorMessage } from '../../lib/doc-runtime/output-limits.mjs';
 import { runInteractiveCell } from '../../lib/doc-runtime/runtime-client.js';
@@ -34,6 +34,9 @@ export function useInteractiveCellRun(cell: CellManifest, runtimeVersion: string
   const [inputRevision, setInputRevision] = useState(0);
   const [draft, setDraft] = useState<{ original: string; source: string }>();
   const isEditing = cell.language === 'python' && draft?.original === cell.source;
+  useEffect(() => {
+    if (draft && draft.original !== cell.source) setDraft(undefined);
+  }, [cell.source]);
   const invalidInputsRef = useRef(new Set<string>());
   const valuesRef = useRef(values);
   const schedulerRef =
@@ -93,7 +96,14 @@ export function useInteractiveCellRun(cell: CellManifest, runtimeVersion: string
   }, [cell.id, cell.run, cell.source, runtimeVersion, isEditing]);
 
   useEffect(() => {
+    if (!cell.inputs.some((input) => input.share)) return;
+    const sharedQuery = () =>
+      JSON.stringify(new URL(globalThis.location.href).searchParams.getAll(sharedInputsParameter));
+    let previousQuery = sharedQuery();
     const restore = () => {
+      const query = sharedQuery();
+      if (query === previousQuery) return;
+      previousQuery = query;
       const restored = restoreSharedInputs(cell);
       replaceInputs({
         ...valuesRef.current,

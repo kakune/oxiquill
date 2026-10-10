@@ -8,6 +8,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ### Added
 
+- Input resets, explicit opt-in input sharing links, and local Python source editing with manual execution.
+- CSV downloads for all retrieved table rows, PNG/SVG chart downloads, and authored Canvas/SVG renderer selection.
+- Keyboard chart series controls, zoom reset, and bounded, paginated tables of original chart data.
+
 - Python `display_chart` for declarative interactive charts and bounded `display_line` for pandas columns, with explicit missing-value and timezone diagnostics.
 
 - Generic Rust `emit_chart!` with artifact metadata and `emit_area_chart!`, sharing bounded chart output helpers.

@@ -65,6 +65,30 @@ describe('persistent chart updates', () => {
     );
   });
 
+  it('offers a lazy data table, keyboard legend actions, and an explicit zoom reset', async () => {
+    const spec: ChartSpec = {
+      kind: 'line',
+      series: [
+        { name: 'First', points: [[0, 1]] },
+        { name: 'Second', points: [[1, 2]] }
+      ]
+    };
+    render(output(spec));
+    await waitFor(() => expect(screen.getByRole('button', { name: 'Reset zoom' })).toBeEnabled());
+    expect(screen.queryByRole('table')).not.toBeInTheDocument();
+    const first = screen.getByRole('button', { name: 'First' });
+    expect(first).toHaveAttribute('aria-pressed', 'true');
+    fireEvent.click(first);
+    expect(chart.dispatchAction).toHaveBeenLastCalledWith({ type: 'legendToggleSelect', name: 'line:0' });
+    fireEvent.click(screen.getByRole('button', { name: 'Reset zoom' }));
+    expect(chart.dispatchAction).toHaveBeenLastCalledWith({ type: 'dataZoom', start: 0, end: 100 });
+    fireEvent.click(screen.getByRole('button', { name: 'Show data as a table' }));
+    expect(screen.getByRole('table')).toHaveTextContent('First');
+    fireEvent.click(screen.getByRole('button', { name: 'Hide data table' }));
+    expect(screen.queryByRole('table')).not.toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Show data as a table' })).toHaveFocus();
+  });
+
   it.each([false, true])('respects explicit showSymbol=%s through viewport updates', async (showSymbol) => {
     let extent = [0, 2];
     const instance = {

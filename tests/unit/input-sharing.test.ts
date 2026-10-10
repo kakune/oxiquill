@@ -7,6 +7,7 @@ import {
   sharedInputMetadata
 } from '../../packages/oxiquill/src/lib/doc-runtime/input-sharing';
 import type { CellManifest } from '../../packages/oxiquill/src/lib/doc-runtime/types';
+import { parseInteractiveCellNode } from '../../packages/oxiquill/src/lib/doc-runtime/cell-authoring.mjs';
 
 const cell: Pick<CellManifest, 'id' | 'inputs' | 'pagePath'> = {
   id: 'ja__page__example',
@@ -26,6 +27,20 @@ afterEach(() => {
 });
 
 describe('input sharing', () => {
+  it('accepts only boolean sharing metadata', () => {
+    const parse = (share: string) =>
+      parseInteractiveCellNode(
+        {
+          type: 'code',
+          lang: 'python',
+          value: `#| id: shared\n#| inputs:\n#|   count: { type: integer, value: 2, share: ${share} }\nprint(count)`
+        },
+        'page.mdx'
+      );
+    expect(parse('true')).toMatchObject({ kind: 'cell', cell: { inputs: [{ share: true }] } });
+    expect(parse('false')).toMatchObject({ kind: 'cell' });
+    expect(parse('"true"')).toMatchObject({ kind: 'invalid' });
+  });
   it('restores only opted-in valid inputs and preserves Unicode', () => {
     expect(
       restoreSharedInputs(cell, link({ count: 4, text: '日本語 🌸', private: 'secret', unknown: 1, choice: 'removed' }))

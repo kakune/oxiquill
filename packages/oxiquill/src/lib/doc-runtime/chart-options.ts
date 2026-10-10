@@ -41,8 +41,25 @@ export function defaultChartChrome(theme: ChartTheme): ChartChrome {
       };
 }
 
-function showLegend(spec: ChartSpec): boolean {
+export function showLegend(spec: ChartSpec): boolean {
   return spec.legend ?? ('series' in spec && spec.series.length > 1);
+}
+
+export function chartSeriesPresentation(spec: ChartSpec, index: number, theme: ChartTheme) {
+  const palette = spec.style?.palette?.[theme] ?? chartPalette;
+  const cycle = Math.floor(index / palette.length);
+  const authored = 'series' in spec ? spec.series[index].style : undefined;
+  const line = spec.kind === 'line' || spec.kind === 'area' ? spec.series[index].style : undefined;
+  return {
+    color:
+      (typeof authored?.color === 'string' ? authored.color : authored?.color?.[theme]) ??
+      palette[index % palette.length],
+    lineType: line?.lineType ?? (['solid', 'dashed', 'dotted'] as const)[cycle % 3],
+    symbol:
+      spec.kind === 'scatter'
+        ? (spec.series[index].style?.symbol ?? (['circle', 'rect', 'triangle', 'diamond'] as const)[cycle % 4])
+        : (line?.symbol ?? 'circle')
+  };
 }
 
 export function chartStructuralSignature(spec: ChartSpec): string {
@@ -96,13 +113,21 @@ export function chartSpecToEChartsOptions(
     chrome = defaultChartChrome(theme),
     width = 720,
     height = chartHeight(spec),
-    locale = 'en'
-  }: { reducedMotion?: boolean; chrome?: ChartChrome; width?: number; height?: number; locale?: RuntimeLocale } = {}
+    locale = 'en',
+    canvasLegend = true
+  }: {
+    reducedMotion?: boolean;
+    chrome?: ChartChrome;
+    width?: number;
+    height?: number;
+    locale?: RuntimeLocale;
+    canvasLegend?: boolean;
+  } = {}
 ): EChartsOptions {
   const style = spec.style;
   const labels = labelsForLanguage(locale);
   const palette = style?.palette?.[theme] ?? chartPalette;
-  const legend = showLegend(spec);
+  const legend = canvasLegend && showLegend(spec);
   const layout = chartLayout(spec, width, height, legend);
   const values = chartCoordinates(spec);
   const names = seriesNames(spec, locale);
@@ -214,12 +239,7 @@ export function chartSpecToEChartsOptions(
             }
           ],
     series: chartSeries(spec).map((item, index) => {
-      const cycle = Math.floor(index / palette.length);
-      const authored = 'series' in spec ? spec.series[index].style : undefined;
-      const color =
-        (typeof authored?.color === 'string' ? authored.color : authored?.color?.[theme]) ??
-        palette[index % palette.length];
-      const line = spec.kind === 'line' || spec.kind === 'area' ? spec.series[index].style : undefined;
+      const { color, lineType, symbol } = chartSeriesPresentation(spec, index, theme);
       return {
         ...item,
         id: chartSeriesId(spec, index),
@@ -230,13 +250,13 @@ export function chartSpecToEChartsOptions(
               lineStyle: {
                 ...(item.lineStyle as Record<string, unknown>),
                 color,
-                type: line?.lineType ?? ['solid', 'dashed', 'dotted'][cycle % 3]
+                type: lineType
               }
             }
           : {}),
         ...(spec.kind === 'scatter'
           ? {
-              symbol: spec.series[index].style?.symbol ?? ['circle', 'rect', 'triangle', 'diamond'][cycle % 4],
+              symbol,
               itemStyle: { color, borderColor: chrome.tooltipBackground, borderWidth: 1 }
             }
           : {}),
@@ -269,9 +289,10 @@ export function chartResizeOptions(
   counts: { x: number; y: number },
   width: number,
   height: number,
-  locale: RuntimeLocale = 'en'
+  locale: RuntimeLocale = 'en',
+  canvasLegend = true
 ) {
-  const legend = showLegend(spec);
+  const legend = canvasLegend && showLegend(spec);
   const layout = chartLayout(spec, width, height, legend);
   const axis = (horizontal: boolean) => {
     const category = horizontal
