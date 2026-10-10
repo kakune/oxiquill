@@ -33,8 +33,8 @@ export async function createReleaseArchive(
     throw new Error(result.stderr || result.stdout || 'npm pack failed.');
   }
 
-  const records = JSON.parse(result.stdout);
-  if (!Array.isArray(records) || records.length !== 1) {
+  const records = packRecords(result.stdout);
+  if (records.length !== 1) {
     throw new Error('npm pack must produce exactly one archive record.');
   }
 
@@ -144,6 +144,14 @@ export function assertPublishEnvironment(environment) {
   for (const name of ['NPM_TOKEN', 'NODE_AUTH_TOKEN']) {
     if (environment[name]) throw new Error(`Long-lived npm credential is forbidden: ${name}.`);
   }
+}
+
+// npm 11 prints an array of pack records; npm 12 prints an object keyed by package name.
+export function packRecords(output) {
+  const records = JSON.parse(output);
+  if (Array.isArray(records)) return records;
+  if (records && typeof records === 'object') return Object.values(records);
+  throw new Error('npm pack did not produce archive records.');
 }
 
 export function assertPackManifest(pack, expected) {

@@ -7,6 +7,7 @@ import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { chromium } from '@playwright/test';
+import { packRecords } from '../../.github/scripts/release-archive.mjs';
 import { loadDocumentedConsumerConfig } from '../docs/documented-config.mjs';
 import { assertMathDependencies } from './math-contract.mjs';
 
@@ -111,7 +112,7 @@ try {
       packageRoot,
       true
     );
-    const [packed] = JSON.parse(packResult.stdout);
+    const [packed] = packRecords(packResult.stdout);
     packageSource = path.join(temporaryRoot, packed.filename);
   }
 
