@@ -309,7 +309,7 @@ Rust cells use explicit `emit_*` macros. Supported macros include:
 - `emit_chart!`, `emit_area_chart!`, `emit_line_chart!`, `emit_scatter_chart!`, `emit_bar_chart!`, `emit_histogram!`, and `emit_heatmap!`
 - `emit_line_plot!` for compatibility with the original line-plot helper; new code should convert coordinates explicitly and use `emit_line_chart!`.
 
-`emit_chart!(spec)` accepts all six chart kinds. Optional `metadata = ...` supplies artifact `id/title/caption`, separately from spec `title/xLabel/yLabel`; the artifact title takes display precedence. `emit_area_chart!` accepts the same points/series, axis labels, trailing style, and `options = ...` forms as line charts. Existing macro argument forms remain supported. An invalid spec produces a local diagnostic while valid neighboring outputs remain visible.
+`emit_chart!(spec)` accepts all six chart kinds. Optional `metadata = ...` supplies artifact `id/title/caption`, separately from spec `title/xLabel/yLabel`; the artifact title takes display precedence. Null metadata fields are omitted, and other metadata fields produce a local diagnostic. `emit_area_chart!` accepts the same points/series, axis labels, trailing style, and `options = ...` forms as line charts. Existing macro argument forms remain supported. An invalid spec produces a local diagnostic while valid neighboring outputs remain visible.
 
 ```rust
 emit_chart!(serde_json::json!({

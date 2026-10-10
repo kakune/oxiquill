@@ -309,7 +309,7 @@ Rust セルでは明示的な `emit_*` macro を使います。対応 macro:
 - `emit_line_chart!`、`emit_scatter_chart!`、`emit_bar_chart!`、`emit_histogram!`、`emit_heatmap!`
 - 互換用の `emit_line_plot!`。新規利用では座標を明示的に変換し、`emit_line_chart!` を使ってください。
 
-`emit_chart!(spec)` は全 6 種類のチャートを受け付けます。`metadata = ...` の `id/title/caption` は artifact に属し、spec の `title/xLabel/yLabel` とは別です。表示タイトルは artifact の title を優先します。`emit_area_chart!` は line と同じ点列・系列、軸ラベル、末尾 style、`options = ...` 形式を使えます。既存マクロの引数形式は維持されます。不正な spec は有効な隣接出力を残して、その出力の診断として表示されます。
+`emit_chart!(spec)` は全 6 種類のチャートを受け付けます。`metadata = ...` の `id/title/caption` は artifact に属し、spec の `title/xLabel/yLabel` とは別です。表示タイトルは artifact の title を優先します。metadata の null は省略として扱い、それ以外のフィールドはその出力の診断になります。`emit_area_chart!` は line と同じ点列・系列、軸ラベル、末尾 style、`options = ...` 形式を使えます。既存マクロの引数形式は維持されます。不正な spec は有効な隣接出力を残して、その出力の診断として表示されます。
 
 ```rust
 emit_chart!(serde_json::json!({

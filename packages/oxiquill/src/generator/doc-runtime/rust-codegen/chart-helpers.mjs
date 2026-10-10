@@ -203,11 +203,18 @@ function generateChartArtifactHelper() {
         Value::Object(metadata) => metadata,
         _ => return producer_error("chart metadata must serialize as an object"),
     };
+    if let Some(key) = metadata
+        .keys()
+        .find(|key| !matches!(key.as_str(), "id" | "title" | "caption"))
+    {
+        return producer_error(&format!("unsupported chart metadata field: {key}"));
+    }
+    let field = |key: &str| metadata.get(key).filter(|value| !value.is_null()).cloned();
     OutputArtifact::Chart(ChartArtifact {
         spec,
-        id: metadata.get("id").cloned(),
-        title: metadata.get("title").cloned(),
-        caption: metadata.get("caption").cloned(),
+        id: field("id"),
+        title: field("title"),
+        caption: field("caption"),
     })
 }
 `;

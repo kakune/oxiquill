@@ -43,6 +43,24 @@ try {
       assert.deepEqual(actual, fixture.expected, fixture.name);
     }
   }
+  const runMetadata = (metadata) =>
+    validateOutputArtifacts([
+      run('generic-charts', {
+        fixture: JSON.stringify({ kind: 'line', series: [] }),
+        metadata: JSON.stringify(metadata)
+      }).outputs[1]
+    ])[0];
+  assert.deepEqual(runMetadata({ id: null, title: 'Title', caption: null }), {
+    status: 'valid',
+    artifact: { title: 'Title', kind: 'chart', spec: { kind: 'line', series: [] } },
+    byteLength: runMetadata({ title: 'Title' }).byteLength,
+    index: 0
+  });
+  assert.deepEqual(runMetadata({ titel: 'Title' }), {
+    status: 'error',
+    message: 'unsupported chart metadata field: titel',
+    index: 0
+  });
   const areas = run('area-overloads').outputs;
   assert.equal(areas.length, 5);
   assert.ok(areas.every((artifact) => artifact.spec.kind === 'area'));
