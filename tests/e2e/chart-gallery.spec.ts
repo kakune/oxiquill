@@ -153,20 +153,43 @@ test('heatmap scales change orientation when resizing across 600px', async ({ pa
   await expect(page.locator('[role="alert"]')).toHaveCount(0);
 });
 
-test('histogram density uses numeric intervals and survives a partial-bin zoom', async ({ page }) => {
-  await page.emulateMedia({ reducedMotion: 'reduce' });
-  await page.goto('http://127.0.0.1:4323/?fixture=histogramDensity');
-  await expect(page.locator('canvas')).toHaveCount(1);
-  await action(page, { type: 'showTip', seriesIndex: 0, dataIndex: 1 });
-  await expect(page.locator('.doc-plot')).toContainText('[0.3, 0.7): Density: 7.5');
-  await action(page, { type: 'dataZoom', startValue: -0.75, endValue: 2 });
-  const option = await page
-    .locator('.doc-plot')
-    .evaluate((element) => window.galleryECharts.getInstanceByDom(element as HTMLElement)?.getOption());
-  expect(option).toMatchObject({ xAxis: [{ type: 'value' }], series: [{ type: 'custom', encode: { x: [0, 1] } }] });
-  await expect(page.locator('.doc-chart-output__summary')).toContainText('Density');
-  await expect(page.locator('[role="alert"]')).toHaveCount(0);
-});
+for (const locale of ['en', 'ja']) {
+  test(`histogram density uses localized numeric intervals and survives a partial-bin zoom in ${locale}`, async ({
+    page
+  }) => {
+    const label = locale === 'ja' ? '密度' : 'Density';
+    await page.emulateMedia({ reducedMotion: 'reduce' });
+    await page.goto(`http://127.0.0.1:4323/?fixture=histogramDensity&locale=${locale}`);
+    await expect(page.locator('canvas')).toHaveCount(1);
+    await action(page, { type: 'showTip', seriesIndex: 0, dataIndex: 1 });
+    await expect(page.locator('.doc-plot')).toContainText(`[0.3, 0.7): ${label}: 7.5`);
+    await action(page, { type: 'dataZoom', startValue: -0.75, endValue: 2 });
+    const option = await page
+      .locator('.doc-plot')
+      .evaluate((element) => window.galleryECharts.getInstanceByDom(element as HTMLElement)?.getOption());
+    expect(option).toMatchObject({
+      xAxis: [{ type: 'value' }],
+      yAxis: [{ name: label }],
+      series: [{ type: 'custom', encode: { x: [0, 1] } }]
+    });
+    await expect(page.locator('.doc-chart-output__summary')).toContainText(label);
+    await expect(page.locator('[role="alert"]')).toHaveCount(0);
+  });
+
+  test(`histogram count localizes axes, tooltips, and summaries in ${locale}`, async ({ page }) => {
+    const label = locale === 'ja' ? '度数' : 'Count';
+    await page.goto(`http://127.0.0.1:4323/?fixture=histogramLog&locale=${locale}`);
+    await expect(page.locator('canvas')).toHaveCount(1);
+    await action(page, { type: 'showTip', seriesIndex: 0, dataIndex: 0 });
+    await expect(page.locator('.doc-plot')).toContainText(`[0, 1): ${label}: 0.1`);
+    const option = await page
+      .locator('.doc-plot')
+      .evaluate((element) => window.galleryECharts.getInstanceByDom(element as HTMLElement)?.getOption());
+    expect(option).toMatchObject({ yAxis: [{ name: label }] });
+    await expect(page.locator('.doc-chart-output__summary')).toContainText(label);
+    await expect(page.locator('[role="alert"]')).toHaveCount(0);
+  });
+}
 
 for (const fixture of ['legend', 'heatmap']) {
   test(`theme changes preserve the instance and reader selections for ${fixture}`, async ({ page }) => {

@@ -41,6 +41,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 ### Fixed
 
 - SI chart tick labels no longer expose floating-point division artifacts.
+- Histogram count and density labels now follow the page language in axes, tooltips, and summaries.
 
 - Theme changes preserve the chart instance, zoom, legend selection, and heatmap color-range selection.
 

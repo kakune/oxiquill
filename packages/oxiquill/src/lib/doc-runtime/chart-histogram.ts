@@ -1,5 +1,6 @@
 import type { CustomSeriesOption } from 'echarts/charts';
 import type { HistogramChartSpec } from './types.js';
+import type { RuntimeLabels } from './runtime-localization.js';
 
 type Bin = HistogramChartSpec['bins'][number];
 
@@ -7,8 +8,8 @@ export function histogramHeight(bin: Bin, mode: HistogramChartSpec['mode']): num
   return mode === 'density' ? bin[2] / (bin[1] - bin[0]) : bin[2];
 }
 
-export function histogramLabel(spec: HistogramChartSpec): string {
-  const mode = spec.mode === 'density' ? 'Density' : 'Count';
+export function histogramLabel(spec: HistogramChartSpec, labels: RuntimeLabels): string {
+  const mode = spec.mode === 'density' ? labels.chartHistogramDensity : labels.chartHistogramCount;
   return spec.yLabel ? `${spec.yLabel} (${mode})` : mode;
 }
 

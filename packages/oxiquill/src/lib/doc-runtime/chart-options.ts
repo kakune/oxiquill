@@ -100,6 +100,7 @@ export function chartSpecToEChartsOptions(
   }: { reducedMotion?: boolean; chrome?: ChartChrome; width?: number; height?: number; locale?: RuntimeLocale } = {}
 ): EChartsOptions {
   const style = spec.style;
+  const labels = labelsForLanguage(locale);
   const palette = style?.palette?.[theme] ?? chartPalette;
   const legend = showLegend(spec);
   const layout = chartLayout(spec, width, height, legend);
@@ -117,7 +118,7 @@ export function chartSpecToEChartsOptions(
     const pointerFormat = chartCoordinateFormatter(coordinates, type, locale, false, format);
     return {
       type,
-      name: horizontal ? spec.xLabel : spec.kind === 'histogram' ? histogramLabel(spec) : spec.yLabel,
+      name: horizontal ? spec.xLabel : spec.kind === 'histogram' ? histogramLabel(spec, labels) : spec.yLabel,
       nameLocation: 'middle',
       nameGap: horizontal ? 36 : 32,
       nameMoveOverlap: true,
@@ -344,6 +345,7 @@ function barData(values: readonly (number | null)[]) {
 }
 
 function chartTooltipFormatter(spec: ChartSpec, locale: RuntimeLocale, names: readonly string[]) {
+  const labels = labelsForLanguage(locale);
   const values = chartCoordinates(spec);
   const style = spec.style;
   const xType = chartAxisType(spec, 'x');
@@ -377,7 +379,7 @@ function chartTooltipFormatter(spec: ChartSpec, locale: RuntimeLocale, names: re
         rows.push(
           marker +
             escapeChartText(
-              `[${x(tuple[0])}, ${x(tuple[1])}): ${spec.mode === 'density' ? 'Density' : 'Count'}: ${y(tuple[2])}`
+              `[${x(tuple[0])}, ${x(tuple[1])}): ${spec.mode === 'density' ? labels.chartHistogramDensity : labels.chartHistogramCount}: ${y(tuple[2])}`
             )
         );
       } else if (axisTooltip) {
@@ -419,7 +421,7 @@ export function chartDataSummary(spec: ChartSpec, labels: RuntimeLabels): string
   const dataCount = spec.kind === 'heatmap' ? spec.data.length : values.y.length;
   const summary = labels.chartSummary({
     xLabel: spec.xLabel,
-    yLabel: spec.kind === 'histogram' ? histogramLabel(spec) : spec.yLabel,
+    yLabel: spec.kind === 'histogram' ? histogramLabel(spec, labels) : spec.yLabel,
     dataCount,
     seriesCount: 'series' in spec ? spec.series.length : 1,
     seriesNames: seriesNames(spec, labels.locale).filter(Boolean).join(', ').slice(0, 1000),

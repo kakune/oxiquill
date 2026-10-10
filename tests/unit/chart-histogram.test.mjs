@@ -20,6 +20,21 @@ const spec = {
 const validate = (patch) => validateOutputArtifacts([{ kind: 'chart', spec: { ...spec, ...patch } }])[0];
 
 describe('numeric histogram intervals', () => {
+  it.each(['en', 'ja'])('localizes histogram axes, tooltips, and summaries in %s', (locale) => {
+    for (const mode of [undefined, 'count', 'density']) {
+      const label = locale === 'ja' ? (mode === 'density' ? '密度' : '度数') : mode === 'density' ? 'Density' : 'Count';
+      for (const yLabel of [undefined, 'Measurements']) {
+        const histogram = { ...spec, mode, yLabel, bins: [[0, 2, 4]] };
+        const option = chartSpecToEChartsOptions(histogram, 'light', { locale });
+        const axisLabel = yLabel ? `${yLabel} (${label})` : label;
+        expect(option.yAxis.name).toBe(axisLabel);
+        expect(option.tooltip.formatter({ value: option.series[0].data[0] })).toBe(
+          `[0, 2): ${label}: ${mode === 'density' ? 2 : 4}`
+        );
+        expect(chartDataSummary(histogram, labelsForLanguage(locale))).toContain(`Y: ${axisLabel}`);
+      }
+    }
+  });
   it('normalizes legacy axes without changing bin order or values', () => {
     const bins = [
       [0.3, 0.7, 4],
