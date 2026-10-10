@@ -7,6 +7,7 @@ import ChartOutput, {
 } from '../../packages/oxiquill/src/components/doc-runtime/ChartOutput';
 import { labelsForLanguage } from '../../packages/oxiquill/src/lib/doc-runtime/runtime-localization';
 import type { ChartSpec } from '../../packages/oxiquill/src/lib/doc-runtime/types';
+import { chartPalette } from '../../packages/oxiquill/src/lib/doc-runtime/chart-palette';
 import { chart, echartsInit } from './mocks/external-runtime';
 
 const line: ChartSpec = { kind: 'line', series: [{ points: [[0, 1]] }] };
@@ -39,7 +40,7 @@ afterEach(() => {
 
 describe('persistent chart updates', () => {
   it('merges data on the same canvas and instance without resetting zoom', async () => {
-    const view = render(output(line));
+    const view = render(output({ ...line, legend: false }));
     await waitFor(() => expect(chart.setOption).toHaveBeenCalledTimes(1));
     const plot = screen.getByTestId('doc-plot');
     const canvas = plot.querySelector('canvas');
@@ -47,7 +48,7 @@ describe('persistent chart updates', () => {
       expect.objectContaining({ series: [expect.objectContaining({ id: 'line:0' })] }),
       { notMerge: true }
     );
-    view.rerender(output({ ...line, series: [{ points: [[0, 2]] }, { points: [[1, 3]] }] }));
+    view.rerender(output({ ...line, legend: false, series: [{ points: [[0, 2]] }, { points: [[1, 3]] }] }));
     await waitFor(() => expect(chart.setOption).toHaveBeenCalledTimes(2));
     expect(chart.setOption).toHaveBeenLastCalledWith(expect.not.objectContaining({ dataZoom: expect.anything() }), {
       notMerge: false,
@@ -81,6 +82,7 @@ describe('persistent chart updates', () => {
     const latest: ChartSpec = {
       ...line,
       title: 'Latest',
+      style: { height: 700 },
       series: [
         {
           points: [
@@ -92,16 +94,28 @@ describe('persistent chart updates', () => {
     };
     view.rerender(output(latest));
     await screen.findByRole('alert');
+    expect(screen.getByTestId('doc-plot').style.height).toBe('360px');
     expect(document.querySelector('.doc-chart-output__summary')?.textContent).toBe(summary);
     expect(screen.getByTestId('doc-plot').querySelector('canvas')).toBe(canvas);
     fireEvent.click(screen.getByRole('button', { name: 'Retry chart rendering' }));
     await waitFor(() => expect(screen.queryByRole('alert')).not.toBeInTheDocument());
     expect(chart.setOption).toHaveBeenLastCalledWith(
-      expect.objectContaining({ title: expect.objectContaining({ text: 'Latest' }) }),
+      expect.objectContaining({
+        series: [
+          expect.objectContaining({
+            data: [
+              [0, 7],
+              [1, 9]
+            ]
+          })
+        ]
+      }),
       { notMerge: true }
     );
     expect(echartsInit).toHaveBeenCalledOnce();
     expect(chart.dispose).not.toHaveBeenCalled();
+    expect(screen.getByText('Latest')).toBeInTheDocument();
+    expect(screen.getByTestId('doc-plot').style.height).toBe('700px');
   });
 
   it('cleans up failed initialization before retrying', async () => {
@@ -168,13 +182,15 @@ describe('persistent chart updates', () => {
     for (const patch of [
       { xType: 'time' },
       { yType: 'log' },
-      { title: 'Title' },
       { legend: true },
       { tooltip: false },
       { dataZoom: false }
     ]) {
       expect(chartStructuralSignature({ ...line, ...patch } as ChartSpec)).not.toBe(chartStructuralSignature(line));
     }
+    expect(chartStructuralSignature({ ...line, title: 'Title', style: { height: 240 } })).toBe(
+      chartStructuralSignature(line)
+    );
     expect(
       chartStructuralSignature({
         ...line,
@@ -193,6 +209,7 @@ describe('persistent chart updates', () => {
     document.body.append(element);
     const chrome = resolveChartChrome(theme, element);
     expect(chrome).toEqual({
+      background: theme === 'light' ? '#fefefe' : '#181a1e',
       text: '#123456',
       axis: '#234567',
       border: '#345678',
@@ -210,20 +227,15 @@ describe('persistent chart updates', () => {
       animation: true,
       animationDurationUpdate: 180,
       animationEasingUpdate: 'cubicOut',
-      grid: { containLabel: true },
+      grid: { outerBoundsContain: 'all', outerBoundsMode: 'auto' },
       xAxis: { splitLine: { show: false }, axisLine: { show: false }, axisTick: { show: false } },
-      series: [{ lineStyle: { width: 8, cap: 'round', join: 'round' }, showSymbol: false }],
+      series: [{ lineStyle: { width: 8, cap: 'round', join: 'round' }, showSymbol: true }],
       tooltip: { confine: true },
       textStyle: { color: '#123456', fontFamily: 'serif' }
     });
-    expect(chartSpecToEChartsOptions({ ...line, style: { palette: { light: ['#123'] } } }, 'dark').color).toEqual([
-      '#5eead4',
-      '#60a5fa',
-      '#c4b5fd',
-      '#f9a8d4',
-      '#fbbf24',
-      '#cbd5e1'
-    ]);
+    expect(chartSpecToEChartsOptions({ ...line, style: { palette: { light: ['#123'] } } }, 'dark').color).toEqual(
+      chartPalette
+    );
     expect(chartSpecToEChartsOptions({ kind: 'scatter', series: [], style: { symbolSize: 32 } }, theme).animation).toBe(
       true
     );

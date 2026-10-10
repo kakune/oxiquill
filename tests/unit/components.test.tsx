@@ -1214,8 +1214,8 @@ describe('ChartOutput options', () => {
       xAxis: { type: 'value', name: 'n' },
       yAxis: { type: 'value', name: 'x' },
       series: [
-        { type: 'line', showSymbol: false, data: [[0, 1]] },
-        { type: 'line', showSymbol: false, data: [[0, 2]] }
+        { type: 'line', showSymbol: true, data: [[0, 1]] },
+        { type: 'line', showSymbol: true, data: [[0, 2]] }
       ]
     });
 
@@ -1286,7 +1286,6 @@ describe('ChartOutput options', () => {
         data: [['x', 'y', 5]]
       })
     ).toMatchObject({
-      title: { text: 'Heat' },
       xAxis: { type: 'category', data: ['x'] },
       yAxis: { type: 'category', data: ['y'] },
       dataZoom: undefined,
