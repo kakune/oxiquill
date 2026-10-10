@@ -62,7 +62,7 @@ export default function ChartOutput({ artifact, idPrefix, labels }: ChartOutputP
   const [exporting, setExporting] = useState(false);
   const [isReady, setIsReady] = useState(false);
   const [exportError, setExportError] = useState<string>();
-  const savedView = useRef<{ signature: string; state: ChartViewState }>();
+  const savedView = useRef<{ signature: string; rangeSignature: string; state: ChartViewState }>();
 
   function applyLatest(force = false): void {
     const current = chart.current;
@@ -88,8 +88,11 @@ export default function ChartOutput({ artifact, idPrefix, labels }: ChartOutputP
           locale: nextLabels.locale,
           chrome: resolveChartChrome(nextTheme, element.current ?? undefined)
         });
-        if (!current.spec && savedView.current?.signature === signature)
-          applyChartViewState(options, savedView.current.state);
+        if (!current.spec && savedView.current?.signature === signature) {
+          const state = { ...savedView.current.state };
+          if (savedView.current.rangeSignature !== chartRangeSignature(next.spec)) delete state.dataZoom;
+          applyChartViewState(options, state);
+        }
         savedView.current = undefined;
         // Omit interactive state when merging a compatible chart.
         if (!notMerge && current.spec && chartRangeSignature(current.spec) === chartRangeSignature(next.spec))
@@ -236,8 +239,12 @@ export default function ChartOutput({ artifact, idPrefix, labels }: ChartOutputP
       cancelled = true;
       if (frame !== undefined) cancelAnimationFrame(frame);
       resizeObserver?.disconnect();
-      if (chart.current?.signature && instance)
-        savedView.current = { signature: chart.current.signature, state: chartViewState(instance) };
+      if (chart.current?.signature && chart.current.spec && instance)
+        savedView.current = {
+          signature: chart.current.signature,
+          rangeSignature: chartRangeSignature(chart.current.spec),
+          state: chartViewState(instance)
+        };
       instance?.dispose();
       chart.current = undefined;
     };
