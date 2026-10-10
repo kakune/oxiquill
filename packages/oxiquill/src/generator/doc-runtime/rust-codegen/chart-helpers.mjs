@@ -2,8 +2,9 @@ import { outputArtifactLimits } from '../../../lib/doc-runtime/output-limits.mjs
 
 export function generateRustChartHelpers(capabilities) {
   return [
+    generateChartArtifactHelper(),
     generateChartLimitHelper(),
-    capabilities.lineChart || capabilities.scatterChart ? generateXyChartHelpers() : '',
+    capabilities.lineChart || capabilities.scatterChart || capabilities.areaChart ? generateXyChartHelpers() : '',
     capabilities.barChart ? generateBarChartHelpers() : '',
     capabilities.histogramChart ? generateHistogramChartHelper() : '',
     capabilities.heatmapChart ? generateHeatmapChartHelper() : ''
@@ -34,7 +35,6 @@ function generateXyChartHelpers() {
         spec.insert("yLabel".to_owned(), Value::String(y_label));
     }
     let spec = Value::Object(spec);
-    ensure_chart_data_limit(&spec)?;
     Ok(spec)
 }
 
@@ -70,7 +70,6 @@ function generateBarChartHelpers() {
         "series": series,
         "tooltip": true
     });
-    ensure_chart_data_limit(&spec)?;
     Ok(spec)
 }
 
@@ -118,8 +117,7 @@ function generateHistogramChartHelper() {
                 "bins": value,
                 "tooltip": true
             });
-            ensure_chart_data_limit(&spec)?;
-            Ok(spec)
+                    Ok(spec)
         }
         _ => Err("histogram bins must serialize as an array".to_owned()),
     }
@@ -136,8 +134,7 @@ function generateHeatmapChartHelper() {
                 "data": value,
                 "tooltip": true
             });
-            ensure_chart_data_limit(&spec)?;
-            Ok(spec)
+                    Ok(spec)
         }
         _ => Err("heatmap data must serialize as an array".to_owned()),
     }
@@ -178,10 +175,11 @@ function generateChartLimitHelper() {
         "heatmap" => spec.get("data").and_then(Value::as_array).map(Vec::len).unwrap_or(0),
         _ => 0,
     };
-    let category_items = spec
-        .get("categories")
-        .and_then(Value::as_array)
+    let category_items = ["categories", "xCategories", "yCategories", "series"]
+        .iter()
+        .filter_map(|key| spec.get(*key).and_then(Value::as_array))
         .map(Vec::len)
+        .max()
         .unwrap_or(0);
     if data_items > ${outputArtifactLimits.chartDataItems} || category_items > ${outputArtifactLimits.chartDataItems} {
         return Err(format!(
@@ -190,6 +188,26 @@ function generateChartLimitHelper() {
         ));
     }
     Ok(())
+}
+`;
+}
+
+function generateChartArtifactHelper() {
+  return `fn chart_artifact(spec: Value, metadata: Value) -> OutputArtifact {
+    if let Err(error) = ensure_chart_data_limit(&spec) {
+        return producer_error(&error);
+    }
+    let metadata = match metadata {
+        Value::Null => serde_json::Map::new(),
+        Value::Object(metadata) => metadata,
+        _ => return producer_error("chart metadata must serialize as an object"),
+    };
+    OutputArtifact::Chart(ChartArtifact {
+        spec,
+        id: metadata.get("id").cloned(),
+        title: metadata.get("title").cloned(),
+        caption: metadata.get("caption").cloned(),
+    })
 }
 `;
 }

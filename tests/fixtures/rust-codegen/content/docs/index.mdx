@@ -3,6 +3,41 @@ title: Rust code generation regressions
 ---
 
 ```rust
+//| id: generic-charts
+//| inputs:
+//|   fixture: { type: text, label: Fixture, value: '{"kind":"line","series":[]}' }
+//|   metadata: { type: text, label: Metadata, value: '{"id":"chart-id","title":"Artifact title","caption":"Caption"}' }
+let spec: serde_json::Value = serde_json::from_str(&fixture).map_err(|error| error.to_string())?;
+let metadata: serde_json::Value = serde_json::from_str(&metadata).map_err(|error| error.to_string())?;
+emit_chart!(&spec);
+emit_chart!(&spec, metadata = metadata);
+```
+
+```rust
+//| id: area-overloads
+let points = [[0, 1], [1, 2]];
+let style = serde_json::json!({ "animation": false });
+emit_area_chart!(&points);
+emit_area_chart!(&points, &style);
+emit_area_chart!(&points, "Time", "Value");
+emit_area_chart!(&points, "Time", "Value", &style);
+emit_area_chart!(&points, options = serde_json::json!({ "yMax": 3, "style": style }));
+```
+
+```rust
+//| id: chart-errors
+//| inputs:
+//|   count: { type: integer, label: Count, min: 0, max: 100001, value: 0 }
+emit_chart!(serde_json::json!({ "kind": "line", "series": [] }));
+emit_chart!(serde_json::json!({ "kind": "line", "series": [{ "points": [[0, null]] }] }));
+emit_chart!(serde_json::json!({ "kind": "line", "series": [] }), metadata = 3);
+emit_chart!(serde_json::json!({ "kind": "line", "series": [{
+    "points": vec![[0, 1]; usize::try_from(count).map_err(|error| error.to_string())?]
+}] }));
+emit_chart!(serde_json::json!({ "kind": "area", "series": [] }));
+```
+
+```rust
 //| id: chart-style-overloads
 let points = [[0.0, 1.0], [1.0, 2.0]];
 let style = serde_json::json!({ "animation": false, "palette": { "light": ["#123", "#456"] } });

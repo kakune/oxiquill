@@ -284,6 +284,12 @@ ${
     ? `#[derive(Debug, Serialize)]
 struct ChartArtifact {
     spec: Value,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    id: Option<Value>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    title: Option<Value>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    caption: Option<Value>,
 }
 
 ${generateRustChartHelpers(capabilities)}

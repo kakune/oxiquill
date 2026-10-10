@@ -5,6 +5,7 @@ import path from 'node:path';
 import { pathToFileURL } from 'node:url';
 import { runCli } from '../../packages/oxiquill/dist/cli/commands.mjs';
 import { createOxiquillPaths } from '../../packages/oxiquill/dist/config/paths.mjs';
+import { validateOutputArtifacts } from '../../packages/oxiquill/dist/lib/doc-runtime/output-artifact-validation.js';
 
 const workspaceRoot = await mkdtemp(path.join(tmpdir(), 'oxiquill-rust-codegen-'));
 const paths = createOxiquillPaths({ workspaceRoot });
@@ -24,6 +25,35 @@ try {
     assert.ok(cell, `${name} fixture must be generated`);
     return JSON.parse(runtime.run_rust_cell(cell.id, JSON.stringify(inputs)));
   };
+  const contract = JSON.parse(await readFile(new URL('../fixtures/output-contract.json', import.meta.url), 'utf8'));
+  for (const fixture of contract.filter((fixture) => fixture.artifact.kind === 'chart')) {
+    const { spec, ...metadata } = structuredClone(fixture.artifact);
+    Reflect.deleteProperty(metadata, 'kind');
+    if (fixture.pointCount) spec.series[0].points = Array.from({ length: fixture.pointCount }, () => [0, 1]);
+    const outputs = run('generic-charts', {
+      fixture: JSON.stringify(spec),
+      metadata: JSON.stringify(metadata)
+    }).outputs;
+    const [actual] = validateOutputArtifacts([outputs[1]]);
+    assert.equal(actual.status, fixture.expected.status, fixture.name);
+    if (fixture.pointCount) {
+      if (actual.status === 'valid') assert.equal(actual.artifact.spec.series[0].points.length, fixture.pointCount);
+    } else {
+      assert.deepEqual(actual, fixture.expected, fixture.name);
+    }
+  }
+  const areas = run('area-overloads').outputs;
+  assert.equal(areas.length, 5);
+  assert.ok(areas.every((artifact) => artifact.spec.kind === 'area'));
+  assert.equal(areas[2].spec.xLabel, 'Time');
+  assert.equal(areas[3].spec.yLabel, 'Value');
+  assert.equal(areas[4].spec.yMax, 3);
+  for (const index of [1, 3, 4]) assert.deepEqual(areas[index].spec.style, { animation: false });
+  const errors = validateOutputArtifacts(run('chart-errors', { count: 100001 }).outputs);
+  assert.deepEqual(
+    errors.map((result) => result.status),
+    ['valid', 'error', 'error', 'error', 'valid']
+  );
   assert.equal(run('density-histogram').outputs[0].spec.mode, 'density');
   const presentations = run('series-presentation').outputs;
   assert.equal(presentations[0].spec.series[0].id, 'a');
@@ -98,6 +128,28 @@ try {
     value: null,
     outputs: []
   });
+  for (const [id, source, kind] of [
+    ['area-only', 'emit_area_chart!(&[[0, 1]]);', 'chart'],
+    ['generic-only', 'emit_chart!(serde_json::json!({ "kind": "line", "series": [] }));', 'chart'],
+    ['alias-only', 'emit_svg!(r#"<svg xmlns="http://www.w3.org/2000/svg"/>"#);', 'image']
+  ]) {
+    await writeFile(
+      path.join(workspaceRoot, 'content/docs/index.mdx'),
+      `---\ntitle: Isolated capability\n---\n\n\`\`\`rust\n//| id: ${id}\n${source}\n\`\`\`\n`
+    );
+    await runCli(['docgen', '--wasm', 'dev'], {
+      cwd: workspaceRoot,
+      loadProjectConfig: async () => ({ astroConfigArgs: [], cwd: workspaceRoot, paths })
+    });
+    const isolated = await import(
+      `${pathToFileURL(path.join(paths.rustWasmPublicDir, 'doc_rust_cells.js')).href}?${id}`
+    );
+    isolated.initSync({ module: await readFile(path.join(paths.rustWasmPublicDir, 'doc_rust_cells_bg.wasm')) });
+    const [cell] = JSON.parse(await readFile(paths.cellsJsonPath, 'utf8'));
+    const result = JSON.parse(isolated.run_rust_cell(cell.id, '{}'));
+    assert.equal(result.outputs[0].kind, kind, id);
+    assert.equal(validateOutputArtifacts(result.outputs)[0].status, 'valid', id);
+  }
   console.log('Generated Rust/Wasm code generation regressions passed.');
 } finally {
   await rm(workspaceRoot, { recursive: true, force: true });

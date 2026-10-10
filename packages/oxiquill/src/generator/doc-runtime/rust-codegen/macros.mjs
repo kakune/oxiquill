@@ -13,8 +13,10 @@ const macroDescriptors = [
   [['emit_table'], generateTableMacro],
   [['emit_table_with_columns'], generateTableWithColumnsMacro],
   [['emit_records_table'], generateRecordsTableMacro],
-  [['emit_line_chart'], generateLineChartMacro],
-  [['emit_scatter_chart'], generateScatterChartMacro],
+  [['emit_chart'], generateChartMacro],
+  [['emit_line_chart'], () => generateXyChartMacro('line')],
+  [['emit_scatter_chart'], () => generateXyChartMacro('scatter')],
+  [['emit_area_chart'], () => generateXyChartMacro('area')],
   [['emit_bar_chart'], generateBarChartMacro],
   [['emit_histogram'], generateHistogramMacro],
   [['emit_heatmap'], generateHeatmapMacro],
@@ -164,16 +166,16 @@ function generateRecordsTableMacro() {
     }`;
 }
 
-function generateLineChartMacro() {
-  return `    macro_rules! emit_line_chart {
+function generateXyChartMacro(kind) {
+  return `    macro_rules! emit_${kind}_chart {
         ($series:expr, options = $options:expr) => {{
-            let mut spec = xy_chart_spec("line", serde_json::to_value(&$series).map_err(|error| error.to_string())?, None, None)?;
+            let mut spec = xy_chart_spec("${kind}", serde_json::to_value(&$series).map_err(|error| error.to_string())?, None, None)?;
             ${generateChartOptions()}
-            __outputs.borrow_mut().push(OutputArtifact::Chart(ChartArtifact { spec }));
+            __outputs.borrow_mut().push(chart_artifact(spec, Value::Null));
         }};
         ($series:expr$(, $style:expr)?) => {{
             let spec = xy_chart_spec(
-                "line",
+                "${kind}",
                 serde_json::to_value(&$series).map_err(|error| error.to_string())?,
                 None,
                 None,
@@ -183,11 +185,11 @@ function generateLineChartMacro() {
                 spec["style"] = serde_json::to_value(&$style).map_err(|error| error.to_string())?;
                 spec
             };)?
-            __outputs.borrow_mut().push(OutputArtifact::Chart(ChartArtifact { spec }));
+            __outputs.borrow_mut().push(chart_artifact(spec, Value::Null));
         }};
         ($series:expr, $x_label:expr, $y_label:expr$(, $style:expr)?) => {{
             let spec = xy_chart_spec(
-                "line",
+                "${kind}",
                 serde_json::to_value(&$series).map_err(|error| error.to_string())?,
                 Some(($x_label).to_string()),
                 Some(($y_label).to_string()),
@@ -197,45 +199,7 @@ function generateLineChartMacro() {
                 spec["style"] = serde_json::to_value(&$style).map_err(|error| error.to_string())?;
                 spec
             };)?
-            __outputs.borrow_mut().push(OutputArtifact::Chart(ChartArtifact { spec }));
-        }};
-    }`;
-}
-
-function generateScatterChartMacro() {
-  return `    macro_rules! emit_scatter_chart {
-        ($series:expr, options = $options:expr) => {{
-            let mut spec = xy_chart_spec("scatter", serde_json::to_value(&$series).map_err(|error| error.to_string())?, None, None)?;
-            ${generateChartOptions()}
-            __outputs.borrow_mut().push(OutputArtifact::Chart(ChartArtifact { spec }));
-        }};
-        ($series:expr$(, $style:expr)?) => {{
-            let spec = xy_chart_spec(
-                "scatter",
-                serde_json::to_value(&$series).map_err(|error| error.to_string())?,
-                None,
-                None,
-            )?;
-            $(let spec = {
-                let mut spec = spec;
-                spec["style"] = serde_json::to_value(&$style).map_err(|error| error.to_string())?;
-                spec
-            };)?
-            __outputs.borrow_mut().push(OutputArtifact::Chart(ChartArtifact { spec }));
-        }};
-        ($series:expr, $x_label:expr, $y_label:expr$(, $style:expr)?) => {{
-            let spec = xy_chart_spec(
-                "scatter",
-                serde_json::to_value(&$series).map_err(|error| error.to_string())?,
-                Some(($x_label).to_string()),
-                Some(($y_label).to_string()),
-            )?;
-            $(let spec = {
-                let mut spec = spec;
-                spec["style"] = serde_json::to_value(&$style).map_err(|error| error.to_string())?;
-                spec
-            };)?
-            __outputs.borrow_mut().push(OutputArtifact::Chart(ChartArtifact { spec }));
+            __outputs.borrow_mut().push(chart_artifact(spec, Value::Null));
         }};
     }`;
 }
@@ -245,7 +209,7 @@ function generateBarChartMacro() {
         ($categories:expr, $values:expr, options = $options:expr) => {{
             let mut spec = bar_chart_spec(serde_json::to_value(&$categories).map_err(|error| error.to_string())?, serde_json::to_value(&$values).map_err(|error| error.to_string())?)?;
             ${generateChartOptions()}
-            __outputs.borrow_mut().push(OutputArtifact::Chart(ChartArtifact { spec }));
+            __outputs.borrow_mut().push(chart_artifact(spec, Value::Null));
         }};
         ($categories:expr, $values:expr$(, $style:expr)?) => {{
             let spec = bar_chart_spec(
@@ -257,7 +221,7 @@ function generateBarChartMacro() {
                 spec["style"] = serde_json::to_value(&$style).map_err(|error| error.to_string())?;
                 spec
             };)?
-            __outputs.borrow_mut().push(OutputArtifact::Chart(ChartArtifact { spec }));
+            __outputs.borrow_mut().push(chart_artifact(spec, Value::Null));
         }};
     }`;
 }
@@ -267,7 +231,7 @@ function generateHistogramMacro() {
         ($bins:expr, options = $options:expr) => {{
             let mut spec = histogram_chart_spec(serde_json::to_value(&$bins).map_err(|error| error.to_string())?)?;
             ${generateChartOptions()}
-            __outputs.borrow_mut().push(OutputArtifact::Chart(ChartArtifact { spec }));
+            __outputs.borrow_mut().push(chart_artifact(spec, Value::Null));
         }};
         ($bins:expr$(, $style:expr)?) => {{
             let spec = histogram_chart_spec(
@@ -278,7 +242,7 @@ function generateHistogramMacro() {
                 spec["style"] = serde_json::to_value(&$style).map_err(|error| error.to_string())?;
                 spec
             };)?
-            __outputs.borrow_mut().push(OutputArtifact::Chart(ChartArtifact { spec }));
+            __outputs.borrow_mut().push(chart_artifact(spec, Value::Null));
         }};
     }`;
 }
@@ -294,7 +258,7 @@ function generateHeatmapMacro() {
                 spec["style"] = serde_json::to_value(&$style).map_err(|error| error.to_string())?;
                 spec
             };)?
-            __outputs.borrow_mut().push(OutputArtifact::Chart(ChartArtifact { spec }));
+            __outputs.borrow_mut().push(chart_artifact(spec, Value::Null));
         }};
     }`;
 }
@@ -323,7 +287,7 @@ function generateLinePlotMacro() {
                 spec["style"] = serde_json::to_value(&$style).map_err(|error| error.to_string())?;
                 spec
             };)?
-            __outputs.borrow_mut().push(OutputArtifact::Chart(ChartArtifact { spec }));
+            __outputs.borrow_mut().push(chart_artifact(spec, Value::Null));
         }};
     }`;
 }
@@ -342,4 +306,21 @@ function generateChartOptions() {
                 }
                 spec[key] = value;
             }`;
+}
+
+function generateChartMacro() {
+  return `    macro_rules! emit_chart {
+        ($spec:expr) => {{
+            __outputs.borrow_mut().push(chart_artifact(
+                serde_json::to_value(&$spec).map_err(|error| error.to_string())?,
+                Value::Null,
+            ));
+        }};
+        ($spec:expr, metadata = $metadata:expr) => {{
+            __outputs.borrow_mut().push(chart_artifact(
+                serde_json::to_value(&$spec).map_err(|error| error.to_string())?,
+                serde_json::to_value(&$metadata).map_err(|error| error.to_string())?,
+            ));
+        }};
+    }`;
 }

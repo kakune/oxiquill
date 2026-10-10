@@ -65,6 +65,8 @@ describe('Rust macro invocation scanning', () => {
     ['emit_table_with_columns', ['table'], []],
     ['emit_records_table', ['table'], []],
     ['emit_line_plot', ['chart', 'legacyPlot'], []],
+    ['emit_chart', ['chart'], []],
+    ['emit_area_chart', ['chart', 'areaChart'], []],
     ['emit_line_chart', ['chart', 'lineChart'], []],
     ['emit_scatter_chart', ['chart', 'scatterChart'], []],
     ['emit_bar_chart', ['chart', 'barChart'], []],
