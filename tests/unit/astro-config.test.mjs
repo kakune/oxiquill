@@ -25,7 +25,8 @@ const { defineOxiquillConfig: definePackageConfig, oxiquillIntegration } =
 const { readOxiquillMetadata } = await import('../../packages/oxiquill/src/config/metadata.mjs');
 const { canonicalPath } = await import('../../packages/oxiquill/src/config/paths.mjs');
 const requireFromPackage = createRequire(path.resolve(process.cwd(), 'packages/oxiquill/package.json'));
-const requireFromStarlight = createRequire(requireFromPackage.resolve('@astrojs/starlight'));
+// Starlight 0.42 only exports its root entry for import, so resolve from a plain subpath export.
+const requireFromStarlight = createRequire(requireFromPackage.resolve('@astrojs/starlight/components'));
 const { default: astroMdx } = await import(pathToFileURL(requireFromStarlight.resolve('@astrojs/mdx')).href);
 const linkedConsumerRoot = new URL('../fixtures/linked-consumer/', import.meta.url);
 const tempRoot = pathToFileURL(canonicalPath(os.tmpdir()));

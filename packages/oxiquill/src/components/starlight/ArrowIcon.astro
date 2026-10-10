@@ -1,0 +1,28 @@
+---
+// Starlight's `Icon` export loads its whole components barrel, which bundles Sätteri's native
+// loader into prerendered pages on Windows. The toggles only need Starlight's two arrow icons.
+import type { ArrowIcon } from './toggle-localization.js';
+
+interface Props {
+  name: ArrowIcon;
+}
+
+const paths: Record<ArrowIcon, string> = {
+  'left-arrow':
+    'M17 11H9.41l3.3-3.29a1.004 1.004 0 1 0-1.42-1.42l-5 5a1 1 0 0 0-.21.33 1 1 0 0 0 0 .76 1 1 0 0 0 .21.33l5 5a1.002 1.002 0 0 0 1.639-.325 1 1 0 0 0-.219-1.095L9.41 13H17a1 1 0 0 0 0-2Z',
+  'right-arrow':
+    'M17.92 11.62a1.001 1.001 0 0 0-.21-.33l-5-5a1.003 1.003 0 1 0-1.42 1.42l3.3 3.29H7a1 1 0 0 0 0 2h7.59l-3.3 3.29a1.002 1.002 0 0 0 .325 1.639 1 1 0 0 0 1.095-.219l5-5a1 1 0 0 0 .21-.33 1 1 0 0 0 0-.76Z'
+};
+---
+
+<svg aria-hidden="true" width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
+  <path d={paths[Astro.props.name]}></path>
+</svg>
+
+<style>
+  svg {
+    width: 1rem;
+    height: 1rem;
+    overflow: visible;
+  }
+</style>

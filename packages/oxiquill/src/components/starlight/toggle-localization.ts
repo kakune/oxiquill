@@ -1,6 +1,6 @@
 type Direction = 'ltr' | 'rtl';
 type ToggleTarget = 'sidebar' | 'tableOfContents';
-type ArrowIcon = 'left-arrow' | 'right-arrow';
+export type ArrowIcon = 'left-arrow' | 'right-arrow';
 
 interface TogglePresentation {
   collapseIcon: ArrowIcon;

@@ -21,6 +21,7 @@ import {
   assertReleaseManifest,
   CHECKSUM_FILE,
   MANIFEST_FILE,
+  packRecords,
   verifyReleaseArchive
 } from '../../.github/scripts/release-archive.mjs';
 import { uploadReleaseAssets } from '../../.github/scripts/release-assets.mjs';
@@ -357,6 +358,13 @@ describe('release archive verification', () => {
         { name: 'oxiquill', version: '1.2.3' }
       )
     ).toThrow('invalid file entry');
+  });
+
+  it('reads npm pack records from npm 11 arrays and npm 12 objects', () => {
+    const pack = packManifest(Buffer.from('archive'));
+    expect(packRecords(JSON.stringify([pack]))).toEqual([pack]);
+    expect(packRecords(JSON.stringify({ oxiquill: pack }))).toEqual([pack]);
+    expect(() => packRecords('null')).toThrow('did not produce archive records');
   });
 
   it('requires OIDC and forbids long-lived npm credentials', () => {
