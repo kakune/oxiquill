@@ -47,7 +47,19 @@ All chart specs accept optional `title`, `xLabel`, `yLabel`, `xType`, `yType`, `
 
 Empty charts and equal point domains are valid. Heatmaps report X- and Y-category counts plus the heat-value range; their color scale uses the actual heat values, with a `0–1` fallback only for an empty dataset. Charts expose a textual title/caption and bounded accessible summary or equivalent table. The implementation canvas is hidden from accessibility APIs when that equivalent is present.
 
-Charts use contrast-aware colors for the current Starlight light/dark theme, recreate their ECharts instance when `html[data-theme]` changes, and expose a retry action after a transient renderer load failure.
+Charts recreate their ECharts instance when `html[data-theme]` changes and expose a retry action after a transient renderer load failure.
+
+### Display Defaults
+
+Bar, histogram, and area charts include zero on a value y axis; line and scatter charts fit the data. Negative amounts also use zero as their baseline. A logarithmic y axis uses the lower axis boundary, so bar lengths and filled areas cannot be compared as amounts. **Migration:** bar and histogram `yType: 'time'` is now rejected; use a value axis for amounts or a line/scatter chart for timestamps.
+
+Numeric notation is selected per axis from the data range and remains stable while zooming. Four-digit years have no grouping separators. Large and tiny ranges use scientific notation; a narrow range around a large offset retains ordinary notation. Ticks retain enough digits to distinguish values. Tooltips, color scales, and summaries use six significant digits; JSON and table CSV retain original values. Negative zero displays as `0`.
+
+**Migration:** time-axis ticks, tooltips, and summaries now use UTC rather than the reader's local timezone. Inputs still require epoch milliseconds or ISO-8601 strings with an explicit timezone.
+
+Titles appear once above the plot. When artifact and spec titles differ, the spec title becomes a subtitle. Legends scroll on one line and give unnamed series default names. Long axis and category labels are shortened; summaries retain axis names and tooltips retain category and series names. Category labels rotate before thinning. Split charts with many long category names; a horizontal bar API is not yet available.
+
+The fixed eight-color palette is shared across light and dark themes. On default backgrounds, adjacent colors (including the wrap to the first color) meet OKLab distance 15 in normal vision and 8 in protanopia, deuteranopia, and tritanopia simulations; each color meets 3:1 background contrast. This does not guarantee every pair of series is distinguishable. Palette reuse changes line patterns or scatter symbols; split charts with more than eight series when possible. Authors should check custom palettes for background contrast and color-vision differences. Heatmaps use a sequential, single-hue gradient with monotone lightness.
 
 ## Persistent Output and Chart Styles
 
@@ -63,6 +75,7 @@ interface ChartPalette {
   dark?: readonly string[];
 }
 interface BaseChartStyle {
+  height?: number;
   palette?: ChartPalette;
   showGrid?: boolean;
   animation?: boolean;
@@ -82,6 +95,7 @@ Line and area charts use `LineChartStyle`, scatter charts use `ScatterChartStyle
 | --------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `palette`             | At least one of `light` or `dark`; each supplied theme has 1–12 unique `#RGB` or `#RRGGBB` colors. Heatmaps require at least two. Colors are compared after expanding shorthand and ignoring case. |
 | `showGrid`            | Boolean; default `true`.                                                                                                                                                                           |
+| `height`              | Integer from 200 to 800 pixels. Default 360; heatmaps automatically use 240–720 pixels based on row count.                                                                                         |
 | `animation`           | Boolean; default `true`, subordinate to reduced motion.                                                                                                                                            |
 | `animationDurationMs` | Integer from 0 to 2,000; default 180 for both initial and update animation.                                                                                                                        |
 | `lineWidth`           | Finite number from 1 to 8; default 2.25. Line and area only.                                                                                                                                       |
@@ -138,6 +152,10 @@ Python cells include display helpers:
 - `display_image(data, mime)` emits SVG, PNG, or JPEG image data.
 
 The runtime also understands common rich representations such as pandas DataFrames and Series, matplotlib figures, `_repr_mimebundle_`, `_repr_json_`, `_repr_html_`, `_repr_svg_`, `_repr_png_`, and `_repr_jpeg_`.
+
+**Display migration:** matplotlib starts each cell with the chart palette, sans-serif text, light grid lines, fewer frame lines, and a white background. Figures remain white paper in dark mode. Override `matplotlib.rcParams` inside the cell, or call `matplotlib.rcdefaults()` before creating figures to restore upstream defaults.
+
+Figure titles and axis labels supply image alternative text. SVG text uses browser fonts (`svg.fonttype: 'none'`), including Japanese fallback fonts installed on the reader's device. SVG larger than 10 MiB falls back to PNG at 150 DPI with a stderr diagnostic. PNG rendering needs fonts in the Python environment to draw Japanese glyphs. Image and cumulative run budgets still apply; oversized PNG output produces an artifact error.
 
 ```python
 #| id: python-rich-outputs

@@ -8,11 +8,14 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ### Added
 
-- Nothing yet.
+- Chart height control through `spec.style.height` (200–800 pixels), with automatic heatmap sizing.
+- Real ECharts SVG layout checks and Chromium chart galleries for visual review in CI.
 
 ### Changed
 
-- Nothing yet.
+- **Display changes:** chart titles appear above the plot, legends scroll on one line, and responsive axis labels and heatmap color scales avoid overlap. Axis numbers share consistent formatting and chart palettes now have tested contrast and color-vision distances, with line patterns and scatter symbols on color reuse.
+- **Migration:** bar and histogram charts reject time-valued y axes. Use a value axis for amounts or line/scatter for timestamps. Time-axis ticks, tooltips, and summaries now display UTC instead of the reader's local timezone.
+- **Display migration:** matplotlib uses the chart palette, browser-rendered SVG text, light grids, and white paper by default. Override rcParams or call `matplotlib.rcdefaults()` inside the cell to restore upstream defaults. Oversized SVG figures fall back to 150 DPI PNG with a diagnostic.
 
 ### Deprecated
 
@@ -24,7 +27,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ### Fixed
 
-- Nothing yet.
+- Zero baselines for value-axis bars, histograms, and areas; isolated line/area points; negative bar rounding; and heatmap cell boundaries.
+- Matplotlib image alternatives now describe figure titles and axis labels.
 
 ### Security
 

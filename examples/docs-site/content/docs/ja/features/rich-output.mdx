@@ -47,7 +47,19 @@ table column は `key`、`label`、optional `type` を持ちます。type は `s
 
 empty chart と equal point domain は valid です。heatmap は X/Y の category 数と heat value の範囲を示し、color scale には実際の heat value を使います。empty dataset だけは `0–1` を fallback にします。chart は textual title/caption と bounded accessible summary または equivalent table を提供します。equivalent がある場合、implementation canvas は accessibility API から隠されます。
 
-chart は現在の Starlight light/dark theme に合わせた contrast-aware color を使い、`html[data-theme]` の変更時に ECharts instance を作り直します。一時的な renderer load failure の後には retry action を表示します。
+chart は `html[data-theme]` の変更時に ECharts instance を作り直します。一時的な renderer load failure の後には retry action を表示します。
+
+### 表示の既定値
+
+bar・histogram・area の value y 軸はゼロを含み、line・scatter はデータの範囲に合わせます。負の値もゼロを基準に描画します。log y 軸では軸の下端を基準にするため、棒の長さや塗りの面積を量として比較できません。**移行:** bar・histogram の `yType: 'time'` は拒否されます。量には value 軸、時刻には line・scatter を使ってください。
+
+数値の表記は軸ごとの元データの範囲で決まり、ズーム中も変わりません。4 桁の年には桁区切りを付けず、大きな値や微小値には指数表記を使います。大きな値の近傍の狭い範囲では通常表記を維持します。目盛は値を区別できる精度を保ち、tooltip・色凡例・概要は有効 6 桁です。JSON と表の CSV の値は変更しません。負のゼロは `0` と表示します。
+
+**移行:** 時刻の目盛・tooltip・概要は、読者のローカル時刻ではなく UTC に統一されます。入力は引き続き epoch milliseconds またはタイムゾーンを明示した ISO-8601 文字列です。
+
+題は図の上に一度だけ表示します。artifact と spec の題が異なる場合は spec の題を副題にします。凡例は 1 行でスクロールし、無名の複数系列には既定名を付けます。長い軸名・カテゴリ名は短縮し、軸名の全文は概要、カテゴリ名・系列名の全文は tooltip で確認できます。カテゴリ目盛は回転してから必要に応じて間引きます。長いカテゴリ名が多い図は分割してください。横棒の API はまだありません。
+
+既定の 8 色は明暗テーマで共通です。既定背景に対し、隣接色（末尾から先頭への循環を含む）は通常視で OKLab 色差 15 以上、1・2・3 型色覚の模擬で 8 以上、各色と背景のコントラスト比は 3:1 以上を満たします。すべての系列の組合せの識別を保証するものではありません。色を再使用すると線種や散布図の記号が変わりますが、8 系列を超える図は分割を推奨します。独自パレットは著者が背景コントラストと色覚による違いを確認してください。heatmap は明度が単調に変わる単色相の連続色を使います。
 
 ## 出力の保持とグラフのスタイル
 
@@ -63,6 +75,7 @@ interface ChartPalette {
   dark?: readonly string[];
 }
 interface BaseChartStyle {
+  height?: number;
   palette?: ChartPalette;
   showGrid?: boolean;
   animation?: boolean;
@@ -82,6 +95,7 @@ line と area は `LineChartStyle`、scatter は `ScatterChartStyle`、bar・his
 | --------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `palette`             | `light` / `dark` の少なくとも片方を指定。各テーマに重複しない `#RGB` / `#RRGGBB` を1〜12色。heatmap は2色以上。短縮表記を展開し、大文字小文字を区別せず重複判定します。 |
 | `showGrid`            | boolean。既定値は `true`。                                                                                                                                              |
+| `height`              | 200〜800px の整数。既定値は 360px。heatmap は行数に応じて 240〜720px に自動調整します。                                                                                 |
 | `animation`           | boolean。既定値は `true`。動作軽減設定を優先します。                                                                                                                    |
 | `animationDurationMs` | 0〜2,000の整数。初回と更新の既定値は180。                                                                                                                               |
 | `lineWidth`           | 1〜8の有限値。既定値2.25。line / area のみ。                                                                                                                            |
@@ -138,6 +152,10 @@ Python セルには display helper が含まれます。
 - `display_image(data, mime)` は SVG、PNG、JPEG image data を出力します。
 
 runtime は pandas DataFrame/Series、matplotlib figure、`_repr_mimebundle_`、`_repr_json_`、`_repr_html_`、`_repr_svg_`、`_repr_png_`、`_repr_jpeg_` などの rich representation も扱います。
+
+**表示の移行:** matplotlib はセルごとに、グラフと共通の配色、sans-serif、淡い格子、上・右枠線なし、白背景を既定にします。暗色テーマでも白い紙面として表示します。セル内で `matplotlib.rcParams` を上書きするか、図の作成前に `matplotlib.rcdefaults()` を呼ぶと元の既定値に戻せます。
+
+図の題と軸名から画像の代替テキストを生成します。SVG は `svg.fonttype: 'none'` を使い、読者のブラウザのフォントで日本語を描きます。SVG が 10 MiB を超えると 150 DPI の PNG に切り替え、stderr に診断を出します。PNG で日本語を描くには Python 環境内のフォントが必要です。画像と実行全体の上限は維持し、PNG も大きすぎる場合は artifact エラーになります。
 
 ```python
 #| id: python-rich-outputs
