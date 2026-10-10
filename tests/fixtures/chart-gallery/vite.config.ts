@@ -1,9 +1,12 @@
 import { defineConfig } from 'vite';
 import { fileURLToPath } from 'node:url';
-import { resolve } from 'node:path';
+import { dirname, resolve } from 'node:path';
 import { existsSync } from 'node:fs';
+import { createRequire } from 'node:module';
 
 const repository = fileURLToPath(new URL('../../../', import.meta.url));
+const requireFromSite = createRequire(resolve(repository, 'examples/docs-site/package.json'));
+const starlightStyles = dirname(requireFromSite.resolve('@astrojs/starlight/style/markdown.css'));
 
 export function chartGalleryConfig(baseDirectory = process.env.CHART_BASE_DIR) {
   const source = resolve(baseDirectory || repository, 'packages/oxiquill/src');
@@ -13,6 +16,7 @@ export function chartGalleryConfig(baseDirectory = process.env.CHART_BASE_DIR) {
     resolve: {
       alias: {
         '@chart-source': source,
+        '@starlight-props': resolve(starlightStyles, 'props.css'),
         echarts: resolve(repository, 'packages/oxiquill/node_modules/echarts'),
         'preact/jsx-dev-runtime': fileURLToPath(import.meta.resolve('preact/jsx-dev-runtime')),
         'preact/jsx-runtime': fileURLToPath(import.meta.resolve('preact/jsx-runtime')),

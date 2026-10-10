@@ -6,6 +6,21 @@ import { createServer, normalizePath } from 'vite';
 import { expect, it } from 'vitest';
 import { chartGalleryConfig } from '../fixtures/chart-gallery/vite.config';
 
+it('transforms the gallery entry with the installed Starlight styles', async () => {
+  const config = chartGalleryConfig();
+  const server = await createServer({
+    ...config,
+    configFile: false,
+    server: { ...config.server, middlewareMode: true, watch: null, hmr: false }
+  });
+  try {
+    const entry = await server.transformRequest('/main.tsx');
+    expect(entry?.code).toContain('Gallery');
+  } finally {
+    await server.close();
+  }
+});
+
 it('loads the baseline component, transitive helpers, and CSS from one source tree', async () => {
   const base = await mkdtemp(join(tmpdir(), 'oxiquill-chart-base-'));
   const source = join(base, 'packages/oxiquill/src');

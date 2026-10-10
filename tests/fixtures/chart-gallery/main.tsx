@@ -4,7 +4,7 @@ import ChartOutput from '@chart-source/components/doc-runtime/ChartOutput';
 import { labelsForLanguage } from '@chart-source/lib/doc-runtime/runtime-localization';
 import * as echarts from 'echarts/core';
 import { chartFixtures } from '../chart-specs';
-import '../../../examples/docs-site/node_modules/@astrojs/starlight/style/props.css';
+import '@starlight-props';
 import '@chart-source/styles/custom.css';
 
 const query = new URLSearchParams(location.search);
