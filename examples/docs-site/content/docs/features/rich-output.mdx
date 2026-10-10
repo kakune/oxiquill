@@ -55,6 +55,8 @@ Bar, histogram, and area charts include zero on a value y axis; line and scatter
 
 Numeric notation is selected per axis from the data range and remains stable while zooming. Four-digit years have no grouping separators. Large and tiny ranges use scientific notation; a narrow range around a large offset retains ordinary notation. Ticks retain enough digits to distinguish values. Tooltips, color scales, and summaries use six significant digits; JSON and table CSV retain original values. Negative zero displays as `0`.
 
+For a numeric range spanning zero, data values whose absolute magnitude is at most `Number.EPSILON` times the largest absolute value display as `0`. This removes roundoff such as `sin(π)` in a −1 to 1 range; axis ticks and logarithmic coordinates retain small values. Time ticks adapt to the zoomed interval, retain milliseconds where needed, and show dates even when overlap handling hides a calendar boundary.
+
 **Migration:** time-axis ticks, tooltips, and summaries now use UTC rather than the reader's local timezone. Inputs still require epoch milliseconds or ISO-8601 strings with an explicit timezone.
 
 Titles appear once above the plot. When artifact and spec titles differ, the spec title becomes a subtitle. Legends scroll on one line and give unnamed series default names. Long axis and category labels are shortened; summaries retain axis names and tooltips retain category and series names. Category labels rotate before thinning. Split charts with many long category names; a horizontal bar API is not yet available.
@@ -154,6 +156,8 @@ Python cells include display helpers:
 The runtime also understands common rich representations such as pandas DataFrames and Series, matplotlib figures, `_repr_mimebundle_`, `_repr_json_`, `_repr_html_`, `_repr_svg_`, `_repr_png_`, and `_repr_jpeg_`.
 
 **Display migration:** matplotlib starts each cell with the chart palette, sans-serif text, light grid lines, fewer frame lines, and a white background. Figures remain white paper in dark mode. Override `matplotlib.rcParams` inside the cell, or call `matplotlib.rcdefaults()` before creating figures to restore upstream defaults.
+
+Each cell resets style settings before applying these defaults, so a previous cell's `plt.style.use("dark_background")` does not affect it. Grid lines also appear over images from `imshow`; call `ax.grid(False)` for photographs and heatmaps when you do not want that overlay.
 
 Figure titles and axis labels supply image alternative text. SVG text uses browser fonts (`svg.fonttype: 'none'`), including Japanese fallback fonts installed on the reader's device. SVG larger than 10 MiB falls back to PNG at 150 DPI with a stderr diagnostic. PNG rendering needs fonts in the Python environment to draw Japanese glyphs. Image and cumulative run budgets still apply; oversized PNG output produces an artifact error.
 
