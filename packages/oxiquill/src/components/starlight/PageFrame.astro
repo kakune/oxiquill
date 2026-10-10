@@ -1,6 +1,6 @@
 ---
 import MobileMenuToggle from '@astrojs/starlight/components/MobileMenuToggle.astro';
-import { Icon } from '@astrojs/starlight/components';
+import ArrowIcon from './ArrowIcon.astro';
 import { togglePresentation } from './toggle-localization.js';
 
 const { hasSidebar, dir, lang } = Astro.locals.starlightRoute;
@@ -70,10 +70,10 @@ const presentation = togglePresentation(lang, dir, 'sidebar');
           title={presentation.collapseLabel}
         >
           <span class="collapse-sidebar" aria-hidden="true">
-            <Icon name={presentation.collapseIcon} size="1rem" />
+            <ArrowIcon name={presentation.collapseIcon} />
           </span>
           <span class="expand-sidebar" aria-hidden="true">
-            <Icon name={presentation.expandIcon} size="1rem" />
+            <ArrowIcon name={presentation.expandIcon} />
           </span>
         </button>
       </starlight-sidebar-toggle>

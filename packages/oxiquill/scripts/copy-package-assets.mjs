@@ -4,6 +4,7 @@ import { fileURLToPath } from 'node:url';
 
 const packageRoot = fileURLToPath(new URL('../', import.meta.url));
 const assetFiles = [
+  ['src/components/starlight/ArrowIcon.astro', 'dist/components/starlight/ArrowIcon.astro'],
   ['src/components/starlight/PageFrame.astro', 'dist/components/starlight/PageFrame.astro'],
   ['src/components/starlight/TwoColumnContent.astro', 'dist/components/starlight/TwoColumnContent.astro'],
   ['src/env.d.ts', 'dist/env.d.ts'],

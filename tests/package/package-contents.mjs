@@ -132,6 +132,7 @@ async function expectedPackageFiles() {
       `dist/cli/starter/v1/${normalizePath(path.relative(starterRoot, filePath)) === '.gitignore' ? 'gitignore' : normalizePath(path.relative(starterRoot, filePath))}`
   );
   const copiedFiles = [
+    'dist/components/starlight/ArrowIcon.astro',
     'dist/components/starlight/PageFrame.astro',
     'dist/components/starlight/TwoColumnContent.astro',
     'dist/env.d.ts',
