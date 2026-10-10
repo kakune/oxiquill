@@ -504,7 +504,8 @@ function validateChartSpec(value: unknown): ChartSpec {
         const name = optionalString(seriesRecord, 'name', `Bar chart series ${seriesIndex + 1}`);
         return { ...(name == null ? {} : { name }), values: validatedValues };
       });
-      return { ...base, kind, categories, series };
+      const { yType: declaredYType, ...barBase } = base;
+      return { ...barBase, kind, ...(declaredYType == null ? {} : { yType }), categories, series };
     }
     case 'histogram': {
       requireEffectiveAxis(base.xType, 'category', 'Histogram chart x axis');
@@ -526,7 +527,8 @@ function validateChartSpec(value: unknown): ChartSpec {
         }
         return [lower, upper, count] as const;
       });
-      return { ...base, kind, bins };
+      const { yType: declaredYType, ...histogramBase } = base;
+      return { ...histogramBase, kind, ...(declaredYType == null ? {} : { yType }), bins };
     }
     case 'heatmap': {
       const { xType: declaredXType, yType: declaredYType, ...heatmapBase } = base;
@@ -576,6 +578,7 @@ function validateChartStyle(value: unknown, kind: string): LineChartStyle & Scat
       'showGrid',
       'animation',
       'animationDurationMs',
+      'height',
       ...(line ? ['lineWidth'] : []),
       ...(kind === 'scatter' ? ['symbolSize'] : [])
     ],
@@ -587,6 +590,7 @@ function validateChartStyle(value: unknown, kind: string): LineChartStyle & Scat
   }
   for (const [field, minimum, maximum] of [
     ['animationDurationMs', 0, 2000],
+    ['height', 200, 800],
     ['lineWidth', 1, 8],
     ['symbolSize', 2, 32]
   ] as const) {
@@ -597,10 +601,10 @@ function validateChartStyle(value: unknown, kind: string): LineChartStyle & Scat
       !Number.isFinite(number) ||
       number < minimum ||
       number > maximum ||
-      (field === 'animationDurationMs' && !Number.isInteger(number))
+      ((field === 'animationDurationMs' || field === 'height') && !Number.isInteger(number))
     ) {
       throw new ArtifactValidationError(
-        `${context} ${field} must be ${field === 'animationDurationMs' ? 'an integer' : 'finite'} within ${minimum}–${maximum}.`
+        `${context} ${field} must be ${field === 'animationDurationMs' || field === 'height' ? 'an integer' : 'finite'} within ${minimum}–${maximum}.`
       );
     }
     style[field] = number;
@@ -1168,9 +1172,9 @@ function requireEffectiveAxis(
   }
 }
 
-function numericAxisType(declaredType: ChartAxisType | undefined, context: string): 'value' | 'log' | 'time' {
-  if (declaredType === 'category') {
-    throw new ArtifactValidationError(`${context} cannot be category because its data is numeric.`);
+function numericAxisType(declaredType: ChartAxisType | undefined, context: string): 'value' | 'log' {
+  if (declaredType === 'category' || declaredType === 'time') {
+    throw new ArtifactValidationError(`${context} must be value or log; received ${declaredType}.`);
   }
   return declaredType ?? 'value';
 }

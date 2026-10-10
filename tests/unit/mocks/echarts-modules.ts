@@ -7,5 +7,6 @@ export const LegendComponent = {};
 export const LineChart = {};
 export const ScatterChart = {};
 export const TitleComponent = {};
+export const MarkLineComponent = {};
 export const TooltipComponent = {};
 export const VisualMapComponent = {};

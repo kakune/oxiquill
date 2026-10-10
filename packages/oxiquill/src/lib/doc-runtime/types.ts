@@ -112,6 +112,7 @@ export interface ChartPalette {
 }
 
 export interface BaseChartStyle {
+  height?: number;
   palette?: ChartPalette;
   showGrid?: boolean;
   animation?: boolean;
@@ -162,12 +163,14 @@ export interface BarChartSeries {
 
 export interface BarChartSpec extends BaseChartSpec {
   kind: 'bar';
+  yType?: 'value' | 'log';
   categories: readonly string[];
   series: readonly BarChartSeries[];
 }
 
 export interface HistogramChartSpec extends BaseChartSpec {
   kind: 'histogram';
+  yType?: 'value' | 'log';
   bins: readonly (readonly [number, number, number])[];
 }
 

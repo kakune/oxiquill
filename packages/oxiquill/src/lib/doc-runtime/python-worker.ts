@@ -75,7 +75,9 @@ export function createPythonWorkerRequestHandler({
         );
       }
       await measureRuntimePhase('display-prepare', request.cellId, () =>
-        pyodide.runPython('__oxiquill_prepare_cell()')
+        pyodide.runPython(
+          `__oxiquill_prepare_cell(${Object.hasOwn(pyodide.loadedPackages ?? {}, 'matplotlib') ? 'True' : 'False'})`
+        )
       );
       postMessage({ type: 'progress', requestId: request.requestId, phase: 'executing' });
 
