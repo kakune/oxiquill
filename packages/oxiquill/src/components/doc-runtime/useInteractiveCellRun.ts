@@ -29,6 +29,7 @@ export function useInteractiveCellRun(cell: CellManifest, runtimeVersion: string
   const [values, setValues] = useState<InputValues>(() => initialValues(cell.inputs));
   const [execution, setExecution] = useState<ExecutionState>({ status: 'idle' });
   const [inputsValid, setInputsValid] = useState(true);
+  const [inputRevision, setInputRevision] = useState(0);
   const invalidInputsRef = useRef(new Set<string>());
   const valuesRef = useRef(values);
   const schedulerRef =
@@ -97,6 +98,18 @@ export function useInteractiveCellRun(cell: CellManifest, runtimeVersion: string
     }
   }
 
+  function resetInputs(): void {
+    schedulerRef.current?.cancel();
+    const nextValues = initialValues(cell.inputs);
+    invalidInputsRef.current.clear();
+    valuesRef.current = nextValues;
+    setValues(nextValues);
+    setInputsValid(true);
+    setInputRevision((revision) => revision + 1);
+    setExecution((previous) => ({ ...previous, error: undefined, status: 'idle' }));
+    if (cell.run === 'reactive') schedule(nextValues, reactiveDebounceMs);
+  }
+
   function setInputValidity(inputName: string, valid: boolean): void {
     const nextInvalidInputs = new Set(invalidInputsRef.current);
     if (valid) {
@@ -119,9 +132,11 @@ export function useInteractiveCellRun(cell: CellManifest, runtimeVersion: string
     error: execution.error,
     isComplete: execution.status === 'success',
     inputsValid,
+    inputRevision,
     isRunning: execution.status === 'running',
     result: execution.result,
     run,
+    resetInputs,
     setInputValue,
     setInputValidity,
     values

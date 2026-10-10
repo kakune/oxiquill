@@ -84,6 +84,8 @@ The visible `label` is the control's accessible name; the input key is only the 
 
 ## Rust and Plots
 
+Cells with inputs provide **Reset inputs**. It restores all defaults and clears incomplete edits and validation errors. Reactive cells recalculate once; button cells wait for Run. The previous successful output remains visible while the next result is pending.
+
 This Rust cell uses a helper crate and redraws a plot whenever the sliders change.
 
 ```rust
