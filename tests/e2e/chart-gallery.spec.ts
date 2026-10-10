@@ -22,6 +22,11 @@ for (const width of [360, 720]) {
         .toBe(true);
       await expect(page.locator('[role="alert"]')).toHaveCount(0);
       await page.screenshot({ path: testInfo.outputPath(`gallery-${width}-${theme}.png`), fullPage: true });
+      await page.goto(`http://127.0.0.1:4323/?fixture=table-precision&width=${width}&theme=${theme}`);
+      await expect(page.getByRole('table')).toBeVisible();
+      await page
+        .locator('.doc-table-output')
+        .screenshot({ path: testInfo.outputPath(`gallery-table-${width}-${theme}.png`) });
     });
   }
 }
