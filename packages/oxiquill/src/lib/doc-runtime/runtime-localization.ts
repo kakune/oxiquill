@@ -67,6 +67,7 @@ export type RuntimeLabels = {
   rowsPerPage: string;
   rowsRange: (first: number, last: number, total: number, truncated: boolean) => string;
   run: string;
+  resetInputs: string;
   runtimeLanguage: (language: 'haskell' | 'python' | 'rust') => string;
   pythonPreparing: string;
   running: string;
@@ -186,6 +187,7 @@ const runtimeLabels = {
     rowsPerPage: 'Rows per page',
     rowsRange: (first, last, total, truncated) => `Rows ${first}-${last} of ${total}${truncated ? ' (truncated)' : ''}`,
     run: 'Run',
+    resetInputs: 'Reset inputs',
     runtimeLanguage: runtimeLanguageLabel,
     pythonPreparing: 'Preparing Python…',
     running: 'Running',
@@ -261,6 +263,7 @@ const runtimeLabels = {
     rowsPerPage: '1ページあたりの行数',
     rowsRange: (first, last, total, truncated) => `${total} 行中 ${first}–${last} 行${truncated ? '（省略あり）' : ''}`,
     run: '実行',
+    resetInputs: '入力を初期値に戻す',
     runtimeLanguage: runtimeLanguageLabel,
     pythonPreparing: 'Python を準備中…',
     running: '実行中…',

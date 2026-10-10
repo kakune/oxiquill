@@ -182,6 +182,29 @@ afterEach(() => {
 });
 
 describe('InteractiveCell', () => {
+  it.each(['button', 'reactive'] as const)('resets every input and invalid edit in %s cells', async (run) => {
+    mocks.runInteractiveCell.mockResolvedValue({ outputs: [] });
+    setManifestCells([makeCell({ run })]);
+    render(<InteractiveCell cellId="cell-one" />);
+    if (run === 'reactive') await waitFor(() => expect(mocks.runInteractiveCell).toHaveBeenCalledOnce());
+    fireEvent.input(screen.getByRole('spinbutton', { name: 'count' }), { target: { value: '-' } });
+    fireEvent.input(screen.getByLabelText('enabled'), { target: { checked: false } });
+    fireEvent.input(screen.getByLabelText('operation'), { target: { value: 'triple' } });
+    fireEvent.input(screen.getByLabelText('verbose'), { target: { checked: true } });
+    fireEvent.input(screen.getByLabelText('notes'), { target: { value: 'changed' } });
+    const reset = screen.getByRole('button', { name: 'Reset inputs' });
+    fireEvent.click(reset);
+    fireEvent.click(reset);
+    expect(screen.getByRole('spinbutton', { name: 'count' })).toHaveValue('2');
+    expect(screen.queryByRole('alert')).not.toBeInTheDocument();
+    expect(screen.getByLabelText('enabled')).toBeChecked();
+    expect(screen.getByLabelText('operation')).toHaveValue('double');
+    expect(screen.getByLabelText('compact')).toBeChecked();
+    expect(screen.getByLabelText('notes')).toHaveValue('hello');
+    if (run === 'reactive') await waitFor(() => expect(mocks.runInteractiveCell).toHaveBeenCalledTimes(2));
+    else expect(mocks.runInteractiveCell).not.toHaveBeenCalled();
+  });
+
   it('renders an error for unknown cells', () => {
     setManifestCells([]);
 
