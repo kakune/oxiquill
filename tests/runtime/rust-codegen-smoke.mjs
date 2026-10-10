@@ -24,6 +24,26 @@ try {
     assert.ok(cell, `${name} fixture must be generated`);
     return JSON.parse(runtime.run_rust_cell(cell.id, JSON.stringify(inputs)));
   };
+  assert.equal(run('density-histogram').outputs[0].spec.mode, 'density');
+  const presentations = run('series-presentation').outputs;
+  assert.equal(presentations[0].spec.series[0].id, 'a');
+  assert.equal(presentations[0].spec.series[0].style.lineType, 'dashed');
+  assert.deepEqual(presentations[1].spec.series[0].style.color, { dark: '#123' });
+  const optionsCharts = run('chart-options').outputs;
+  assert.equal(optionsCharts.length, 4);
+  for (const artifact of optionsCharts) {
+    assert.equal(artifact.spec.yMin, 0);
+    assert.equal(artifact.spec.yMax, 5);
+    assert.deepEqual(artifact.spec.style, { animation: false });
+  }
+  assert.throws(
+    () => run('invalid-chart-options', { invalid: true }),
+    (error) => error === 'unsupported chart option: series'
+  );
+  assert.throws(
+    () => run('nonobject-chart-options', { invalid: true }),
+    (error) => error === 'chart options must serialize as an object'
+  );
   const output = run('spaced-macros');
   const charts = run('chart-style-overloads').outputs;
   assert.equal(charts.length, 16);

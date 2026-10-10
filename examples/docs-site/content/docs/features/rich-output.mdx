@@ -33,7 +33,7 @@ Table columns contain `key`, `label`, and optional `type`: `string`, `number`, `
 
 ## Chart Schema
 
-All chart specs accept optional `title`, `xLabel`, `yLabel`, `xType`, `yType`, `legend`, `tooltip`, and `dataZoom`. Axis types are `value`, `category`, `time`, and `log`. Unspecified axes default to `value`, except the category axes intrinsic to bar/histogram charts. A heatmap always has category axes on both dimensions: its `xType` and `yType` may be omitted or set to `category`, while `value`, `time`, and `log` are rejected.
+All chart specs accept optional `title`, `xLabel`, `yLabel`, `xType`, `yType`, `legend`, `tooltip`, and `dataZoom`. Axis types are `value`, `category`, `time`, and `log`. Unspecified axes default to `value`, except the category x axis intrinsic to bar charts. A heatmap always has category axes on both dimensions: its `xType` and `yType` may be omitted or set to `category`, while `value`, `time`, and `log` are rejected.
 
 - `value` coordinates are finite numbers, and `log` coordinates are finite numbers greater than zero.
 - `time` coordinates are finite epoch milliseconds or ISO-8601 strings in `YYYY-MM-DDTHH:mm:ss[.sss]Z` or `YYYY-MM-DDTHH:mm:ss[.sss]±HH:mm` form. Calendar fields and the explicit time zone must be valid.
@@ -47,7 +47,32 @@ All chart specs accept optional `title`, `xLabel`, `yLabel`, `xType`, `yType`, `
 
 Empty charts and equal point domains are valid. Heatmaps report X- and Y-category counts plus the heat-value range; their color scale uses the actual heat values, with a `0–1` fallback only for an empty dataset. Charts expose a textual title/caption and bounded accessible summary or equivalent table. The implementation canvas is hidden from accessibility APIs when that equivalent is present.
 
-Charts recreate their ECharts instance when `html[data-theme]` changes and expose a retry action after a transient renderer load failure.
+Charts update their existing ECharts instance when `html[data-theme]` changes, preserving zoom, legend selections, and heatmap color-range selections and expose a retry action after a transient renderer load failure.
+
+### Axis ranges
+
+Use finite `xMin/xMax/yMin/yMax` bounds, with min smaller than max. Time bounds are epoch milliseconds; log bounds must be positive. Category axes do not accept numeric bounds. `xIncludeZero/yIncludeZero` are available only for value axes. Fixed bounds take precedence, but value-axis bars, histograms, and areas must include zero and cannot disable that baseline.
+
+Data updates preserve zoom. Changing or removing authored bounds or zero inclusion resets zoom to the full domain, while retaining legend selection. Omitted bounds return to automatic scaling.
+
+Rust line, scatter, bar, and histogram macros accept `options = &serde_json::json!({...})` after their data arguments. Options accept the public chart settings, including labels and nested style; they cannot replace the kind or data. Existing positional style arguments remain supported. See the [logistic map](../../samples/logistic-map/) for a fixed 0–1 range.
+
+### Histogram intervals
+
+Histograms use a numeric x axis: each rectangle spans its exact `[lower, upper)` interval, including negative boundaries, unequal widths, and gaps. Overlapping bins are rejected; non-overlapping bins need not be sorted.
+
+The default `mode: 'count'` uses count as height. With `mode: 'density'`, height is `count / (upper - lower)` so area represents count, not normalized probability. The y label, tooltip, and summary identify the mode. A value y axis starts at zero; a log y axis uses its positive visible lower boundary and requires positive heights, so its rectangle areas are not counts.
+
+**Migration:** explicit histogram `xType: 'category'` remains accepted but is normalized to `value`. Prefer omitting it or specifying `value`. Bin counts and boundaries are never rounded in the data.
+
+```rust
+//| id: interval-histogram
+//| title: Unequal-width histogram
+let bins = [[-1.0, -0.5, 2.0], [0.0, 2.0, 4.0]];
+emit_histogram!(&bins, options = &serde_json::json!({
+    "mode": "density", "xLabel": "Measurement", "yLabel": "Frequency"
+}));
+```
 
 ### Display Defaults
 
@@ -67,7 +92,7 @@ The fixed eight-color palette is shared across light and dark themes. On default
 
 The last successful output stays visible while a cell reruns, including the 150ms reactive debounce. A small updating indicator does not move the layout. Failed reruns keep that output alongside an error and a **Retry cell** action; cancellation and invalid inputs also retain it. Success replaces the result and clears the error. Use explicit artifact IDs when an output sequence changes dynamically: IDs retain identity across insertions, duplicate IDs receive occurrence numbers, and artifacts without IDs are matched by kind and occurrence.
 
-Compatible charts update the existing canvas and ECharts instance, preserving the reader's zoom window. Initial and data-update transitions use 180ms with cubicOut easing. Structural changes replace chart options on the same instance; Starlight light/dark theme changes recreate it. A chart update failure keeps the last successful visualization and summary with a local retry action. Reduced-motion preferences disable chart and updating-indicator animation, even when an author requests animation.
+Compatible charts update the existing canvas and ECharts instance, preserving the reader's zoom window. Initial and data-update transitions use 180ms with cubicOut easing. Structural changes replace chart options on the same instance; Starlight light/dark theme changes merge colors and typography without resetting reader interactions. A chart update failure keeps the last successful visualization and summary with a local retry action. Reduced-motion preferences disable chart and updating-indicator animation, even when an author requests animation.
 
 Chart specs accept an optional nested `style` object:
 
@@ -119,6 +144,44 @@ emit_line_plot!(points, x_label, y_label, style)
 ```
 
 The macro serializes the argument into `spec.style`; normal chart validation enforces the same contract.
+
+### Numeric formats
+
+Set `style.xFormat` or `style.yFormat` on value/log axes; heatmaps use `style.valueFormat` for their color scale. The same settings format ticks, pointers, tooltips, and summaries. Category and time axes retain their own formatting.
+
+Each format accepts `significantDigits` (integer 1–17), `fractionDigits` (integer 0–20), `unit` (text), and `notation` (`auto` or `si`). The two precision fields are mutually exclusive. Fixed decimals keep trailing zeros and may round small values to zero; negative zero displays as zero. Without overrides the default formatting remains in effect. Removing a format restores it.
+
+Units follow numbers; axis names remain in `xLabel/yLabel`. SI chooses one prefix from the data range (10⁻²⁴ through 10²⁴), including rounding at prefix boundaries, and falls back to scientific notation outside that range. Formatting never changes stored values. No callbacks, format strings, HTML, or raw ECharts options are accepted.
+
+```rust
+//| id: formatted-voltage
+//| title: Voltage measurements
+let points = [[0.0, 1500.0], [1.0, 2400.0]];
+emit_line_chart!(&points, "Time", "Voltage", &serde_json::json!({
+    "xFormat": { "fractionDigits": 1, "unit": "s" },
+    "yFormat": { "significantDigits": 3, "notation": "si", "unit": "V" }
+}));
+```
+
+### Series identity and style
+
+XY and bar series accept an optional non-empty, unique `id`. Give a series the same ID on each execution to preserve its identity and legend selection when reordering or renaming it. Names are display labels; even same-named series can be selected independently. Without IDs, identity follows the series index. Adding or removing series does not reset zoom. Default palette colors still follow authored order; use explicit colors when a series needs a fixed color.
+
+Set `series.style.color` to a `#RGB/#RRGGBB` string or `{ light, dark }` with at least one theme. An omitted theme uses the chart palette. Line/area series also accept `lineType` (solid/dashed/dotted), `step` (false/start/middle/end), `smooth` (boolean), `symbol`, and `showSymbol`. Scatter supports color and symbol; bar supports color. Symbols are circle/emptyCircle/rect/triangle/diamond/none.
+
+Smooth and step cannot both be enabled. Lines remain unsmoothed by default. Explicit patterns and symbols override palette cycling, and explicit showSymbol overrides isolated-point detection. Removing settings restores defaults. Existing chart-level lineWidth and symbolSize continue to control sizes.
+
+```rust
+//| id: styled-series
+//| title: Measured and reference series
+let series = serde_json::json!([
+    { "id": "measured", "name": "Measurement", "points": [[0, 1], [1, 2]],
+      "style": { "color": { "light": "#3987e5", "dark": "#9085e9" }, "symbol": "diamond", "showSymbol": true } },
+    { "id": "reference", "name": "Reference", "points": [[0, 1.5], [1, 1.5]],
+      "style": { "lineType": "dashed", "step": "end" } }
+]);
+emit_line_chart!(&series, "Observation", "Value");
+```
 
 ## Resource Limits
 

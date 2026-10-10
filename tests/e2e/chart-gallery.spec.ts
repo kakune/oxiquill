@@ -14,7 +14,7 @@ for (const width of [360, 720]) {
       await page.emulateMedia({ reducedMotion: 'reduce' });
       await page.setViewportSize({ width: width + 40, height: 900 });
       await page.goto(`http://127.0.0.1:4323/?width=${width}&theme=${theme}`);
-      await expect(page.locator('.doc-plot')).toHaveCount(21);
+      await expect(page.locator('.doc-plot')).toHaveCount(25);
       await expect
         .poll(() =>
           page.locator('.doc-plot').evaluateAll((plots) => plots.every((plot) => plot.querySelector('canvas')))
@@ -72,7 +72,7 @@ test('legend scrolling and selection survive data and title updates', async ({ p
   await page.goto('http://127.0.0.1:4323/?fixture=legend&width=360');
   await expect(page.locator('canvas')).toHaveCount(1);
   await action(page, { type: 'legendScroll', scrollDataIndex: 3 });
-  await action(page, { type: 'legendUnSelect', name: 'A long descriptive name for measurement series 1' });
+  await action(page, { type: 'legendUnSelect', name: 'line:0' });
   const before = await state(page);
   await page.getByRole('button', { name: 'Update data' }).click();
   await expect(page.locator('figcaption')).toContainText('Updated legend');
@@ -151,4 +151,141 @@ test('heatmap scales change orientation when resizing across 600px', async ({ pa
   await page.locator('main').evaluate((element) => (element.style.width = '599px'));
   await expect.poll(orientation).toBe('horizontal');
   await expect(page.locator('[role="alert"]')).toHaveCount(0);
+});
+
+for (const locale of ['en', 'ja']) {
+  test(`histogram density uses localized numeric intervals and survives a partial-bin zoom in ${locale}`, async ({
+    page
+  }) => {
+    const label = locale === 'ja' ? '密度' : 'Density';
+    await page.emulateMedia({ reducedMotion: 'reduce' });
+    await page.goto(`http://127.0.0.1:4323/?fixture=histogramDensity&locale=${locale}`);
+    await expect(page.locator('canvas')).toHaveCount(1);
+    await action(page, { type: 'showTip', seriesIndex: 0, dataIndex: 1 });
+    await expect(page.locator('.doc-plot')).toContainText(`[0.3, 0.7): ${label}: 7.5`);
+    await action(page, { type: 'dataZoom', startValue: -0.75, endValue: 2 });
+    const option = await page
+      .locator('.doc-plot')
+      .evaluate((element) => window.galleryECharts.getInstanceByDom(element as HTMLElement)?.getOption());
+    expect(option).toMatchObject({
+      xAxis: [{ type: 'value' }],
+      yAxis: [{ name: label }],
+      series: [{ type: 'custom', encode: { x: [0, 1] } }]
+    });
+    await expect(page.locator('.doc-chart-output__summary')).toContainText(label);
+    await expect(page.locator('[role="alert"]')).toHaveCount(0);
+  });
+
+  test(`histogram count localizes axes, tooltips, and summaries in ${locale}`, async ({ page }) => {
+    const label = locale === 'ja' ? '度数' : 'Count';
+    await page.goto(`http://127.0.0.1:4323/?fixture=histogramLog&locale=${locale}`);
+    await expect(page.locator('canvas')).toHaveCount(1);
+    await action(page, { type: 'showTip', seriesIndex: 0, dataIndex: 0 });
+    await expect(page.locator('.doc-plot')).toContainText(`[0, 1): ${label}: 0.1`);
+    const option = await page
+      .locator('.doc-plot')
+      .evaluate((element) => window.galleryECharts.getInstanceByDom(element as HTMLElement)?.getOption());
+    expect(option).toMatchObject({ yAxis: [{ name: label }] });
+    await expect(page.locator('.doc-chart-output__summary')).toContainText(label);
+    await expect(page.locator('[role="alert"]')).toHaveCount(0);
+  });
+}
+
+for (const fixture of ['legend', 'heatmap']) {
+  test(`theme changes preserve the instance and reader selections for ${fixture}`, async ({ page }) => {
+    await page.goto(`http://127.0.0.1:4323/?fixture=${fixture}`);
+    await expect(page.locator('canvas').first()).toBeVisible();
+    if (fixture === 'legend') {
+      await action(page, { type: 'dataZoom', start: 20, end: 70 });
+      await action(page, { type: 'legendUnSelect', name: 'line:0' });
+      await action(page, { type: 'legendScroll', scrollDataIndex: 3 });
+    } else await action(page, { type: 'selectDataRange', selected: [0.2, 0.6] });
+    const read = () =>
+      page.locator('.doc-plot').evaluate((element) => {
+        const chart = window.galleryECharts.getInstanceByDom(element as HTMLElement);
+        const options = chart?.getOption() as {
+          dataZoom?: unknown;
+          legend?: { selected?: unknown; scrollDataIndex?: number }[];
+          visualMap?: { range?: unknown }[];
+        };
+        return {
+          id: chart?.id,
+          zoom: options.dataZoom,
+          legend: options.legend?.map(({ selected, scrollDataIndex }) => ({ selected, scrollDataIndex })),
+          range: options.visualMap?.[0]?.range
+        };
+      });
+    const before = await read();
+    for (const theme of ['dark', 'light']) {
+      await page.evaluate((value) => {
+        document.documentElement.dataset.theme = value;
+      }, theme);
+      await expect(page.locator('.doc-plot')).toHaveAttribute('data-chart-theme', theme);
+      await expect.poll(read).toEqual(before);
+    }
+    await expect(page.locator('[role="alert"]')).toHaveCount(0);
+  });
+}
+
+test('authored number formats can be cleared without resetting zoom', async ({ page }) => {
+  await page.goto('http://127.0.0.1:4323/?fixture=formatted');
+  await expect(page.locator('canvas').first()).toBeVisible();
+  await expect(page.locator('.doc-chart-output__summary')).toContainText('1.50 kV');
+  await action(page, { type: 'dataZoom', start: 10, end: 90 });
+  const before = await state(page);
+  await page.getByRole('button', { name: 'Clear formatting' }).click();
+  await expect(page.locator('.doc-chart-output__summary')).not.toContainText('kV');
+  await expect.poll(async () => (await state(page)).zoom).toEqual(before.zoom);
+});
+
+test('same-named series retain independent selection after reorder and rename', async ({ page }) => {
+  await page.goto('http://127.0.0.1:4323/?fixture=seriesIdentity');
+  await expect(page.locator('canvas').first()).toBeVisible();
+  await action(page, { type: 'legendUnSelect', name: 'line:id:a' });
+  await action(page, { type: 'dataZoom', start: 10, end: 90 });
+  const before = await state(page);
+  await page.getByRole('button', { name: 'Reorder and rename series' }).click();
+  await expect(page.locator('.doc-chart-output__summary')).toContainText('Renamed');
+  await expect.poll(async () => (await state(page)).legend?.[0].selected).toEqual(before.legend?.[0].selected);
+  await expect.poll(async () => (await state(page)).zoom).toEqual(before.zoom);
+  const series = await page.locator('.doc-plot').evaluate((element) => {
+    const option = window.galleryECharts.getInstanceByDom(element as HTMLElement)?.getOption() as {
+      series: { id: string; smooth: boolean; step: boolean; symbol: string }[];
+    };
+    return option.series.map(({ id, smooth, step, symbol }) => ({ id, smooth, step, symbol }));
+  });
+  expect(series.find((item) => item.id === 'line:id:a')).toMatchObject({
+    smooth: false,
+    step: false,
+    symbol: 'emptyCircle'
+  });
+  await expect(page.locator('[role="alert"]')).toHaveCount(0);
+});
+
+test('fixed ranges survive data updates and only reset zoom when changed or cleared', async ({ page }) => {
+  await page.goto('http://127.0.0.1:4323/?fixture=legend&fixedRange=1');
+  await expect(page.locator('canvas').first()).toBeVisible();
+  await action(page, { type: 'legendUnSelect', name: 'line:0' });
+  await action(page, { type: 'dataZoom', start: 20, end: 80 });
+  const before = await state(page);
+  const bounds = () =>
+    page.locator('.doc-plot').evaluate((element) => {
+      const option = window.galleryECharts.getInstanceByDom(element as HTMLElement)?.getOption() as {
+        yAxis: { min: number | null; max: number | null }[];
+      };
+      return [option.yAxis[0].min, option.yAxis[0].max];
+    });
+  await page.getByRole('button', { name: 'Update data' }).click();
+  await expect(page.locator('figcaption')).toContainText('Updated legend');
+  expect(await bounds()).toEqual([0, 120]);
+  expect((await state(page)).zoom).toEqual(before.zoom);
+  await page.getByRole('button', { name: 'Change range' }).click();
+  await expect.poll(bounds).toEqual([0, 200]);
+  await expect.poll(async () => (await state(page)).zoom).toEqual([{ start: 0, end: 100 }]);
+  expect((await state(page)).legend?.[0].selected).toEqual(before.legend?.[0].selected);
+  await action(page, { type: 'dataZoom', start: 20, end: 80 });
+  await page.getByRole('button', { name: 'Clear range' }).click();
+  await expect.poll(bounds).toEqual([null, null]);
+  await expect.poll(async () => (await state(page)).zoom).toEqual([{ start: 0, end: 100 }]);
+  expect((await state(page)).legend?.[0].selected).toEqual(before.legend?.[0].selected);
 });

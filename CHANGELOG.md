@@ -8,10 +8,18 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ### Added
 
+- Stable chart series IDs and per-series colors, line patterns, steps, smoothing, and symbols; same-named legend entries remain independently selectable.
+
+- Numeric chart formats for significant digits, fixed decimals, units, and SI prefixes, shared by axes, tooltips, summaries, and heatmap scales.
+
+- Authored chart axis bounds and zero inclusion, with Rust chart options and a fixed-range logistic map example.
+
 - Chart height control through `spec.style.height` (200–800 pixels), with automatic heatmap sizing.
 - Real ECharts SVG layout checks and Chromium chart galleries for visual review in CI.
 
 ### Changed
+
+- **Display migration:** histograms render numeric intervals with their actual widths and gaps; legacy category x axes normalize to value. Density mode makes area represent count. Overlapping bins are rejected.
 
 - **Display changes:** chart titles appear above the plot, legends scroll on one line, and responsive axis labels and heatmap color scales avoid overlap. Axis numbers share consistent formatting and chart palettes now have tested contrast and color-vision distances, with line patterns and scatter symbols on color reuse.
 - **Migration:** bar and histogram charts reject time-valued y axes. Use a value axis for amounts or line/scatter for timestamps. Time-axis ticks, tooltips, and summaries now display UTC instead of the reader's local timezone.
@@ -31,6 +39,11 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 - Dependabot version and security update pull requests; dependency updates are made manually and Dependabot alerts still gate releases.
 
 ### Fixed
+
+- SI chart tick labels no longer expose floating-point division artifacts.
+- Histogram count and density labels now follow the page language in axes, tooltips, and summaries.
+
+- Theme changes preserve the chart instance, zoom, legend selection, and heatmap color-range selection.
 
 - Zero baselines for value-axis bars, histograms, and areas; isolated line/area points; negative bar rounding; and heatmap cell boundaries.
 - Matplotlib image alternatives now describe figure titles and axis labels.

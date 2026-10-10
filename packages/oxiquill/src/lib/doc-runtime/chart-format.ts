@@ -1,4 +1,5 @@
-import type { ChartSpec } from './types.js';
+import { histogramHeight } from './chart-histogram.js';
+import type { ChartSpec, ChartNumberFormat } from './types.js';
 import { normalizeHeatmapSpec } from './heatmap-normalization.js';
 import type { RuntimeLocale } from './runtime-localization.js';
 
@@ -22,7 +23,11 @@ export function chartCoordinates(spec: ChartSpec): {
     case 'bar':
       return { x: spec.categories, y: spec.series.flatMap((series) => series.values), value: [] };
     case 'histogram':
-      return { x: spec.bins.flatMap((bin) => [bin[0], bin[1]]), y: spec.bins.map((bin) => bin[2]), value: [] };
+      return {
+        x: spec.bins.flatMap((bin) => [bin[0], bin[1]]),
+        y: spec.bins.map((bin) => histogramHeight(bin, spec.mode)),
+        value: []
+      };
     case 'heatmap': {
       const heatmap = normalizeHeatmapSpec(spec);
       return { x: heatmap.xCategories, y: heatmap.yCategories, value: heatmap.data.map((cell) => cell[2]) };
@@ -48,33 +53,66 @@ const superscripts: Record<string, string> = {
   '9': '⁹'
 };
 
+const siPrefixes = ['y', 'z', 'a', 'f', 'p', 'n', 'µ', 'm', '', 'k', 'M', 'G', 'T', 'P', 'E', 'Z', 'Y'];
+
+function scaleForSi(value: number, exponent: number): number {
+  // Shift the decimal exponent without introducing division rounding into ticks.
+  const [coefficient, power] = value.toExponential().split('e');
+  return Number(`${coefficient}e${Number(power) - exponent}`);
+}
+
 export function chartNumberFormatter(
   values: readonly unknown[],
   locale: RuntimeLocale,
-  ticks = false
+  ticks = false,
+  format: ChartNumberFormat = {}
 ): (value: number) => string {
   const bounds = numericBounds(values);
   const magnitude = bounds ? Math.max(Math.abs(bounds.minimum), Math.abs(bounds.maximum)) : 0;
   const span = bounds ? bounds.maximum - bounds.minimum : 0;
   const narrow = span > 0 && span / magnitude <= 0.001;
-  const scientific = !narrow && (magnitude >= 1e6 || (magnitude > 0 && magnitude < 1e-4));
-  // ECharts already rounds its generated ticks. Preserve their full precision,
-  // including when zoom reveals a small interval within a wide original domain.
-  const precision = ticks ? 17 : 6;
+  const precision = format.significantDigits ?? (ticks ? 17 : 6);
+  const fixed = format.fractionDigits;
+  const round = (value: number) =>
+    fixed === undefined ? Number(value.toPrecision(precision)) : Number(value.toFixed(fixed));
+  let exponent = magnitude > 0 ? Math.floor(Math.log10(magnitude) / 3) * 3 : 0;
+  if (
+    exponent >= -24 &&
+    exponent <= 24 &&
+    (fixed === undefined
+      ? Number(scaleForSi(magnitude, exponent).toPrecision(format.significantDigits ?? 6))
+      : round(scaleForSi(magnitude, exponent))) >= 1000
+  )
+    exponent += 3;
+  const si = format.notation === 'si' && exponent >= -24 && exponent <= 24;
+  const scientific =
+    format.notation === 'si'
+      ? !si
+      : fixed === undefined && !narrow && (magnitude >= 1e6 || (magnitude > 0 && magnitude < 1e-4));
   const zeroTolerance = !ticks && bounds && bounds.minimum < 0 && bounds.maximum > 0 ? magnitude * Number.EPSILON : 0;
   const formatter = new Intl.NumberFormat(locale === 'ja' ? 'ja-JP' : 'en-US', {
-    useGrouping: !scientific && magnitude >= 10_000,
-    maximumSignificantDigits: precision
+    useGrouping: !scientific && !si && magnitude >= 10_000,
+    ...(fixed === undefined
+      ? { maximumSignificantDigits: precision }
+      : { minimumFractionDigits: fixed, maximumFractionDigits: fixed })
   });
+  const suffix = (si ? siPrefixes[exponent / 3 + 8] : '') + (format.unit ?? '');
+  const appendUnit = (text: string) => (suffix ? text + ' ' + suffix : text);
   return (value) => {
-    if (!Number.isFinite(value)) return String(value);
-    if (Math.abs(value) <= zeroTolerance) return '0';
-    const clean = ticks ? value : Number(value.toPrecision(precision));
-    if (clean === 0) return '0';
-    if (!scientific) return formatter.format(clean);
-    const [coefficient, exponent] = clean.toExponential().split('e');
-    const power = String(Number(exponent)).replace(/./gu, (digit) => superscripts[digit]);
-    return `${formatter.format(Number(coefficient))}×10${power}`;
+    if (!Number.isFinite(value)) return appendUnit(String(value));
+    const normalized = Math.abs(value) <= zeroTolerance ? 0 : value;
+    if (si) return appendUnit(formatter.format(round(scaleForSi(normalized, exponent)) || 0));
+    // ECharts rounds its generated ticks; preserve them unless precision is authored.
+    const clean =
+      ticks && format.significantDigits === undefined && fixed === undefined
+        ? normalized
+        : scientific
+          ? Number(normalized.toPrecision(precision))
+          : round(normalized);
+    if (!scientific || clean === 0) return appendUnit(formatter.format(clean || 0));
+    const [coefficient, powerText] = clean.toExponential().split('e');
+    const power = String(Number(powerText)).replace(/./gu, (digit) => superscripts[digit]);
+    return appendUnit(formatter.format(Number(coefficient)) + '×10' + power);
   };
 }
 
@@ -82,11 +120,12 @@ export function chartCoordinateFormatter(
   values: readonly unknown[],
   type: ChartSpec['xType'],
   locale: RuntimeLocale,
-  ticks = false
+  ticks = false,
+  formatSpec?: ChartNumberFormat
 ): (value: unknown, index?: number, extra?: TimeTickDetails) => string {
   if (type === 'category') return (value) => String(value);
   if (type !== 'time') {
-    const format = chartNumberFormatter(values, locale, ticks);
+    const format = chartNumberFormatter(values, locale, ticks, formatSpec);
     return (value) => (typeof value === 'number' ? format(value) : String(value));
   }
   if (ticks) return timeTickFormatter(locale);

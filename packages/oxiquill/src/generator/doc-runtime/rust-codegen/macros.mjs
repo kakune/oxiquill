@@ -166,6 +166,11 @@ function generateRecordsTableMacro() {
 
 function generateLineChartMacro() {
   return `    macro_rules! emit_line_chart {
+        ($series:expr, options = $options:expr) => {{
+            let mut spec = xy_chart_spec("line", serde_json::to_value(&$series).map_err(|error| error.to_string())?, None, None)?;
+            ${generateChartOptions()}
+            __outputs.borrow_mut().push(OutputArtifact::Chart(ChartArtifact { spec }));
+        }};
         ($series:expr$(, $style:expr)?) => {{
             let spec = xy_chart_spec(
                 "line",
@@ -199,6 +204,11 @@ function generateLineChartMacro() {
 
 function generateScatterChartMacro() {
   return `    macro_rules! emit_scatter_chart {
+        ($series:expr, options = $options:expr) => {{
+            let mut spec = xy_chart_spec("scatter", serde_json::to_value(&$series).map_err(|error| error.to_string())?, None, None)?;
+            ${generateChartOptions()}
+            __outputs.borrow_mut().push(OutputArtifact::Chart(ChartArtifact { spec }));
+        }};
         ($series:expr$(, $style:expr)?) => {{
             let spec = xy_chart_spec(
                 "scatter",
@@ -232,6 +242,11 @@ function generateScatterChartMacro() {
 
 function generateBarChartMacro() {
   return `    macro_rules! emit_bar_chart {
+        ($categories:expr, $values:expr, options = $options:expr) => {{
+            let mut spec = bar_chart_spec(serde_json::to_value(&$categories).map_err(|error| error.to_string())?, serde_json::to_value(&$values).map_err(|error| error.to_string())?)?;
+            ${generateChartOptions()}
+            __outputs.borrow_mut().push(OutputArtifact::Chart(ChartArtifact { spec }));
+        }};
         ($categories:expr, $values:expr$(, $style:expr)?) => {{
             let spec = bar_chart_spec(
                 serde_json::to_value(&$categories).map_err(|error| error.to_string())?,
@@ -249,6 +264,11 @@ function generateBarChartMacro() {
 
 function generateHistogramMacro() {
   return `    macro_rules! emit_histogram {
+        ($bins:expr, options = $options:expr) => {{
+            let mut spec = histogram_chart_spec(serde_json::to_value(&$bins).map_err(|error| error.to_string())?)?;
+            ${generateChartOptions()}
+            __outputs.borrow_mut().push(OutputArtifact::Chart(ChartArtifact { spec }));
+        }};
         ($bins:expr$(, $style:expr)?) => {{
             let spec = histogram_chart_spec(
                 serde_json::to_value(&$bins).map_err(|error| error.to_string())?,
@@ -306,4 +326,20 @@ function generateLinePlotMacro() {
             __outputs.borrow_mut().push(OutputArtifact::Chart(ChartArtifact { spec }));
         }};
     }`;
+}
+
+function generateChartOptions() {
+  return `let options = serde_json::to_value(&$options).map_err(|error| error.to_string())?;
+            let Value::Object(options) = options else {
+                return Err("chart options must serialize as an object".to_owned());
+            };
+            for (key, value) in options {
+                if !matches!(key.as_str(), "title" | "xLabel" | "yLabel" | "xType" | "yType" |
+                    "legend" | "tooltip" | "dataZoom" | "style" | "xMin" | "xMax" | "yMin" |
+                    "yMax" | "xIncludeZero" | "yIncludeZero") &&
+                    !(key == "mode" && spec["kind"] == "histogram") {
+                    return Err(format!("unsupported chart option: {key}"));
+                }
+                spec[key] = value;
+            }`;
 }

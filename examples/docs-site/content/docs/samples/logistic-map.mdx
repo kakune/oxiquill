@@ -36,7 +36,10 @@ let points = doc_rust::logistic_series(r, x0, steps).map_err(|error| error.to_st
 let final_point = points.last().ok_or_else(|| "series is empty".to_owned())?;
 
 println!("x_{} = {:.6}", final_point.n, final_point.x);
-emit_line_plot!(&points, "n", "x");
+let coordinates: Vec<[f64; 2]> = points.iter().map(|point| [f64::from(point.n), point.x]).collect();
+emit_line_chart!(&coordinates, options = &serde_json::json!({
+    "xLabel": "n", "yLabel": "x", "yMin": 0, "yMax": 1
+}));
 ```
 
 ## How to Read It
