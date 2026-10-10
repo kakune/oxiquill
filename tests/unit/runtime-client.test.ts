@@ -104,6 +104,27 @@ afterEach(() => {
 });
 
 describe('runtime client', () => {
+  it('sends draft source without mutating the manifest and retains timeout recovery', async () => {
+    vi.useFakeTimers();
+    const { runner, workers } = makeRunner();
+    const cell = makeCell('python');
+    const execution = runner.runInteractiveCell(cell, {}, undefined, undefined, undefined, {
+      source: 'while True: pass'
+    });
+    const failure = expect(execution).rejects.toThrow('timed out');
+    expect(workers[0].messages[0].source).toBe('while True: pass');
+    expect(cell.source).toBe('print("ok")');
+    await vi.advanceTimersByTimeAsync(cell.timeoutMs);
+    await failure;
+    expect(workers[0].terminated).toBe(true);
+    const recovery = runner.runInteractiveCell(cell, {}, undefined, undefined, undefined, { source: 'print("fixed")' });
+    workers[1].emitMessage({ requestId: 2, ok: true, result });
+    await expect(recovery).resolves.toEqual(normalizedResult);
+    await expect(
+      runner.runInteractiveCell(makeCell('rust'), {}, undefined, undefined, undefined, { source: '' })
+    ).rejects.toThrow('only available for Python');
+  });
+
   it('shares preparation with execution, deduplicates dependencies, and keeps progress pending', async () => {
     const { runner, workers } = makeRunner();
     const listener = vi.fn();

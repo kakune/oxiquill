@@ -182,6 +182,58 @@ afterEach(() => {
 });
 
 describe('InteractiveCell', () => {
+  it('restores shared inputs before the first reactive execution and handles history changes', async () => {
+    const previousUrl = location.href;
+    const cell = makeCell({
+      run: 'reactive',
+      inputs: inputs.map((input) => ({ ...input, share: input.name === 'count' }))
+    });
+    const sharedUrl = (count: number) => {
+      const url = new URL(previousUrl);
+      url.searchParams.set('oxiquill-inputs', JSON.stringify({ v: 1, cells: { [cell.id]: { count } } }));
+      return url;
+    };
+    try {
+      history.replaceState(null, '', sharedUrl(4));
+      mocks.runInteractiveCell.mockResolvedValue({ outputs: [] });
+      setManifestCells([cell]);
+      render(<InteractiveCell cellId={cell.id} />);
+      await waitFor(() => expect(mocks.runInteractiveCell).toHaveBeenCalledOnce());
+      expect(mocks.runInteractiveCell.mock.calls[0][1].count).toBe(4);
+      fireEvent.input(screen.getByLabelText('label'), { target: { value: 'keep this' } });
+      history.replaceState(null, '', sharedUrl(6));
+      fireEvent(window, new PopStateEvent('popstate'));
+      await waitFor(() => expect(screen.getByLabelText('count')).toHaveValue('6'));
+      expect(screen.getByLabelText('label')).toHaveValue('keep this');
+      await waitFor(() => expect(mocks.runInteractiveCell).toHaveBeenCalledTimes(2));
+      history.replaceState(null, '', sharedUrl(6).href + '#heading');
+      fireEvent(window, new PopStateEvent('popstate'));
+      await new Promise((resolve) => setTimeout(resolve, 200));
+      expect(mocks.runInteractiveCell).toHaveBeenCalledTimes(2);
+    } finally {
+      history.replaceState(null, '', previousUrl);
+    }
+  });
+
+  it('discards Python drafts after a source refresh, including a later source rollback', async () => {
+    mocks.runInteractiveCell.mockResolvedValue({ outputs: [] });
+    const cell = makeCell({ language: 'python', source: 'print(1)' });
+    setManifestCells([cell]);
+    render(<InteractiveCell cellId={cell.id} />);
+    fireEvent.click(screen.getByRole('button', { name: 'Edit Python' }));
+    fireEvent.input(screen.getByLabelText('Python draft'), { target: { value: 'print("draft")' } });
+    await act(async () => {
+      setManifestCells([{ ...cell, source: 'print(2)' }]);
+      mocks.manifestListeners.forEach((listener) => listener());
+    });
+    await waitFor(() => expect(screen.queryByLabelText('Python draft')).not.toBeInTheDocument());
+    await act(async () => {
+      setManifestCells([cell]);
+      mocks.manifestListeners.forEach((listener) => listener());
+    });
+    expect(screen.queryByLabelText('Python draft')).not.toBeInTheDocument();
+  });
+
   it('runs Python drafts explicitly and restores the original reactive behavior', async () => {
     mocks.runInteractiveCell.mockResolvedValue({ outputs: [] });
     const cell = makeCell({ language: 'python', run: 'reactive', source: 'print(count)' });
