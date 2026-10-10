@@ -68,6 +68,11 @@ export type RuntimeLabels = {
   rowsRange: (first: number, last: number, total: number, truncated: boolean) => string;
   run: string;
   resetInputs: string;
+  editCode: string;
+  finishEditing: string;
+  restoreCode: string;
+  pythonDraft: string;
+  pythonEditorHelp: string;
   copyLink: string;
   copyLinkSuccess: string;
   copyLinkError: (detail: string) => string;
@@ -191,6 +196,12 @@ const runtimeLabels = {
     rowsRange: (first, last, total, truncated) => `Rows ${first}-${last} of ${total}${truncated ? ' (truncated)' : ''}`,
     run: 'Run',
     resetInputs: 'Reset inputs',
+    editCode: 'Edit Python',
+    finishEditing: 'Finish editing',
+    restoreCode: 'Restore original code',
+    pythonDraft: 'Python draft',
+    pythonEditorHelp:
+      'Edits stay on this page. Run explicitly while editing. Only Python packages shipped with this site are available.',
     copyLink: 'Copy input link',
     copyLinkSuccess: 'Copied input link.',
     copyLinkError: (detail) => `Unable to copy input link: ${detail}`,
@@ -270,6 +281,12 @@ const runtimeLabels = {
     rowsRange: (first, last, total, truncated) => `${total} 行中 ${first}–${last} 行${truncated ? '（省略あり）' : ''}`,
     run: '実行',
     resetInputs: '入力を初期値に戻す',
+    editCode: 'Pythonを編集',
+    finishEditing: '編集を終了',
+    restoreCode: '元のコードに戻す',
+    pythonDraft: 'Pythonの編集用コード',
+    pythonEditorHelp:
+      '編集内容はこのページ内だけで保持します。編集中は実行ボタンを使ってください。このサイトに配布済みのPythonパッケージだけを利用できます。',
     copyLink: '入力のリンクをコピー',
     copyLinkSuccess: '入力のリンクをコピーしました。',
     copyLinkError: (detail) => `入力のリンクをコピーできませんでした: ${translateDiagnostic(detail)}`,

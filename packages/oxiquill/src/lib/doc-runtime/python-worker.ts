@@ -1,6 +1,7 @@
 import { pyodidePath } from 'virtual:oxiquill/runtime-paths';
 import { boundedErrorMessage, createBoundedTextAccumulator, outputArtifactLimits } from './output-limits.mjs';
 import { pythonDisplaySupportCode } from './python-display-support.js';
+import { supportedPyodidePackages } from './python-packages.mjs';
 import { createPythonCellResult, toOutputArtifacts } from './python-cell-result.js';
 import { createSerialRequestQueue } from './python-worker-queue.js';
 import type { PythonWorkerRequest, PythonWorkerResponse } from './types.js';
@@ -70,6 +71,7 @@ export function createPythonWorkerRequestHandler({
       pyodide.setStderr({ batched: stderr.append });
 
       if (request.source) {
+        assertSupportedPythonImports(pyodide, request.source);
         await measureRuntimePhase('imports', request.cellId, () =>
           pyodide.loadPackagesFromImports(request.source ?? '')
         );
@@ -127,6 +129,25 @@ export function createPythonWorkerRequestHandler({
       });
     }
   };
+}
+
+export function assertSupportedPythonImports(
+  pyodide: Pick<PyodideRuntime, 'runPython' | 'lockfile'>,
+  source: string
+): void {
+  const proxy = pyodide.runPython(
+    `__import__('pyodide.code', fromlist=['find_imports']).find_imports(${JSON.stringify(source)})`
+  );
+  const imports = toSerializable(proxy);
+  if (!Array.isArray(imports)) throw new Error('Unable to inspect Python imports.');
+  const unsupported = Object.entries(pyodide.lockfile.packages).find(
+    ([name, info]) =>
+      !supportedPyodidePackages.includes(name) && info.imports.some((module) => imports.includes(module.split('.')[0]))
+  );
+  if (unsupported)
+    throw new Error(
+      `Python package ${unsupported[0]} is not shipped with this site. Only bundled packages are available while editing.`
+    );
 }
 
 export function createPythonRuntimeLoader({

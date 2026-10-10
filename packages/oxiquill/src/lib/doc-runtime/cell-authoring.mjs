@@ -13,21 +13,8 @@ export const supportedLanguages = new Map([
   ['haskell', 'haskell'],
   ['hs', 'haskell']
 ]);
-export const supportedPyodidePackages = [
-  'contourpy',
-  'cycler',
-  'fonttools',
-  'kiwisolver',
-  'matplotlib',
-  'numpy',
-  'packaging',
-  'pandas',
-  'pillow',
-  'pyparsing',
-  'python-dateutil',
-  'pytz',
-  'six'
-];
+import { supportedPyodidePackages } from './python-packages.mjs';
+export { supportedPyodidePackages };
 
 const cellFields = new Set(['id', 'title', 'run', 'inputs', 'packages', 'crates', 'timeoutMs', 'showSource']);
 const inputFields = new Set([
