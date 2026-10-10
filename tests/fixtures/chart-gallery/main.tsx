@@ -54,6 +54,7 @@ function Gallery() {
                 kind: 'chart',
                 spec: {
                   ...spec,
+                  ...(query.get('renderer') === 'svg' ? { style: { ...spec.style, renderer: 'svg' as const } } : {}),
                   ...(query.has('fixedRange')
                     ? range === 'auto'
                       ? { yMin: undefined, yMax: undefined }

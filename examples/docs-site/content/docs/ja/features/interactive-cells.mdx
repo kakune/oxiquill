@@ -82,13 +82,15 @@ number/integer control は raw edit text と committed runtime value を分離�
 
 visible `label` が control の accessible name で、input key は generated language binding にだけ使います。normalization で二つの Rust/Haskell binding が衝突してはなりません。label、description、current value、validation message、grouped control は stable ID で関連付けられ、keyboard focus を表示し、run/error status は focus を奪わず announce されます。
 
-## Rust とグラフ
+## 読者の操作
 
 Pythonセルでは「Pythonを編集」でtextareaを開けます。編集中はreactiveセルでもコードと入力の変更を自動実行せず、「実行」を待ちます。「元のコードに戻す」は実行せずdraftを戻し、「編集を終了」はdraftを破棄して著者の実行モードに戻します。ページ遷移とソース更新でもdraftを破棄します。公開ページや共有リンクは変更しません。importは配布済みパッケージに限られ、未配布のものはエラーを表示します。通常のセルのタイムアウトが適用されます。
 
 「入力のリンクをコピー」の対象にするには、各入力のメタデータに `share: true` を追加します。自由記述を含め、既定では共有しません。リンクには、このページで共有を有効にした入力の既定値との差分だけを保存します。既存の検索パラメータと見出しへのリンクは保持します。不正な値や古い選択肢は復元しません。8,192文字を超えるリンクはコピーできません。コード、出力、乱数の状態、外部データは含まれず、同じ結果の再現を保証する機能ではありません。
 
 入力のあるセルには「入力を初期値に戻す」があります。すべての既定値を復元し、入力途中の文字列と検証エラーを消去します。reactive セルは一度だけ再計算し、button セルは実行操作を待ちます。次の結果を待つ間は前の成功結果を表示します。
+
+## Rust とグラフ
 
 この Rust セルは helper crate を使い、slider が変わるたびに plot を再描画します。
 
@@ -168,7 +170,7 @@ Python セルも同じ input metadata を使います。input value は Python �
 #| title: Python input UI
 #| run: reactive
 #| inputs:
-#|   scale: { type: number, label: scale, min: 1, max: 10, step: 1, value: 3 }
+#|   scale: { type: number, label: scale, min: 1, max: 10, step: 1, value: 3, share: true }
 #|   label: { type: text, label: label, value: "sample" }
 #|   enabled: { type: checkbox, label: include uppercase, value: true }
 #|   method: { type: select, label: method, value: mean, options: [mean, sum, max] }
