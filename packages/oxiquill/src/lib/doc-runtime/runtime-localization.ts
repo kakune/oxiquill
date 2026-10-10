@@ -41,6 +41,9 @@ export type RuntimeLabels = {
   chartTitle: (kind: ChartKind) => string;
   clipboardUnavailable: string;
   copyCsv: string;
+  saveCsv: string;
+  saveCsvError: (detail: string) => string;
+  saveCsvPartial: (rows: number) => string;
   copyCsvError: (detail: string) => string;
   copyCsvSuccess: string;
   copyingCsv: string;
@@ -169,6 +172,9 @@ const runtimeLabels = {
     chartTitle: (kind) => chartTitles.en[kind],
     clipboardUnavailable: 'Clipboard access is unavailable.',
     copyCsv: 'Copy visible rows as CSV',
+    saveCsv: 'Save all retrieved rows as CSV',
+    saveCsvError: (detail) => `Unable to save CSV: ${detail}`,
+    saveCsvPartial: (rows) => `CSV includes only the ${rows} retrieved rows.`,
     copyCsvError: (detail) => `Unable to copy CSV: ${detail}`,
     copyCsvSuccess: 'Copied visible rows as CSV.',
     copyingCsv: 'Copying CSV…',
@@ -254,6 +260,9 @@ const runtimeLabels = {
     chartTitle: (kind) => chartTitles.ja[kind],
     clipboardUnavailable: 'クリップボードを利用できません。',
     copyCsv: '表示中の行を CSV としてコピー',
+    saveCsv: '全取得行をCSV保存',
+    saveCsvError: (detail) => `CSVを保存できませんでした: ${translateDiagnostic(detail)}`,
+    saveCsvPartial: (rows) => `CSVには取得済みの${rows}行だけを含みます。`,
     copyCsvError: (detail) => `CSV をコピーできませんでした: ${translateDiagnostic(detail)}`,
     copyCsvSuccess: '表示中の行を CSV としてコピーしました。',
     copyingCsv: 'CSV をコピーしています…',
