@@ -123,6 +123,19 @@
   line-height: 1.6;
 }
 
+.doc-source-editor {
+  display: grid;
+  gap: 0.5rem;
+}
+
+.doc-source-editor textarea {
+  width: 100%;
+  min-height: 14rem;
+  resize: vertical;
+  font-family: var(--sl-font-mono);
+  tab-size: 4;
+}
+
 :root[data-theme='dark'] .doc-source .shiki,
 :root[data-theme='dark'] .doc-source .shiki span {
   color: var(--shiki-dark) !important;

@@ -14,6 +14,7 @@ type CellRunRequest = {
   cell: CellManifest;
   runtimeVersion: string;
   values: InputValues;
+  source?: string;
 };
 
 type ExecutionState = {
@@ -31,6 +32,8 @@ export function useInteractiveCellRun(cell: CellManifest, runtimeVersion: string
   const [execution, setExecution] = useState<ExecutionState>({ status: 'idle' });
   const [inputsValid, setInputsValid] = useState(true);
   const [inputRevision, setInputRevision] = useState(0);
+  const [draft, setDraft] = useState<{ original: string; source: string }>();
+  const isEditing = cell.language === 'python' && draft?.original === cell.source;
   const invalidInputsRef = useRef(new Set<string>());
   const valuesRef = useRef(values);
   const schedulerRef =
@@ -38,14 +41,22 @@ export function useInteractiveCellRun(cell: CellManifest, runtimeVersion: string
 
   schedulerRef.current ??= createLatestRequestScheduler({
     execute: (
-      { autorunKey, cell: requestedCell, runtimeVersion: requestedVersion, values: requestedValues },
+      { autorunKey, cell: requestedCell, runtimeVersion: requestedVersion, values: requestedValues, source },
       signal
     ) => {
+      const overrides: [] | [{ source: string }] = source === undefined ? [] : [{ source }];
       const execute = () =>
         requestedCell.language === 'python'
-          ? runInteractiveCell(requestedCell, requestedValues, requestedVersion, signal, (phase) => {
-              if (!signal.aborted) setExecution((previous) => ({ ...previous, phase }));
-            })
+          ? runInteractiveCell(
+              requestedCell,
+              requestedValues,
+              requestedVersion,
+              signal,
+              (phase) => {
+                if (!signal.aborted) setExecution((previous) => ({ ...previous, phase }));
+              },
+              ...overrides
+            )
           : runInteractiveCell(requestedCell, requestedValues, requestedVersion, signal);
       return autorunKey ? autorunRequests.getOrCreate(autorunKey, execute) : execute();
     },
@@ -73,12 +84,13 @@ export function useInteractiveCellRun(cell: CellManifest, runtimeVersion: string
   }, []);
 
   useEffect(() => {
+    if (isEditing) return;
     if (cell.run === 'reactive' && invalidInputsRef.current.size === 0) {
       schedule(valuesRef.current);
     } else if (cell.run === 'autorun') {
       schedule(valuesRef.current, 0, JSON.stringify([cell.id, runtimeVersion, cell.source, valuesRef.current]));
     }
-  }, [cell.id, cell.run, cell.source, runtimeVersion]);
+  }, [cell.id, cell.run, cell.source, runtimeVersion, isEditing]);
 
   useEffect(() => {
     const restore = () => {
@@ -92,10 +104,13 @@ export function useInteractiveCellRun(cell: CellManifest, runtimeVersion: string
     };
     globalThis.addEventListener('popstate', restore);
     return () => globalThis.removeEventListener('popstate', restore);
-  }, [cell]);
+  }, [cell, isEditing]);
 
   function schedule(nextValues: InputValues, delayMs = 0, autorunKey?: string): void {
-    schedulerRef.current?.schedule({ autorunKey, cell, runtimeVersion, values: nextValues }, delayMs);
+    schedulerRef.current?.schedule(
+      { autorunKey, cell, runtimeVersion, values: nextValues, source: isEditing ? draft?.source : undefined },
+      delayMs
+    );
   }
 
   function run(): void {
@@ -108,7 +123,8 @@ export function useInteractiveCellRun(cell: CellManifest, runtimeVersion: string
     valuesRef.current = nextValues;
     setValues(nextValues);
 
-    if (cell.run === 'reactive' && invalidInputsRef.current.size === 0) {
+    if (isEditing) stopExecution();
+    else if (cell.run === 'reactive' && invalidInputsRef.current.size === 0) {
       schedule(nextValues, reactiveDebounceMs);
     }
   }
@@ -125,7 +141,23 @@ export function useInteractiveCellRun(cell: CellManifest, runtimeVersion: string
     setInputsValid(true);
     setInputRevision((revision) => revision + 1);
     setExecution((previous) => ({ ...previous, error: undefined, status: 'idle' }));
-    if (cell.run === 'reactive') schedule(nextValues, reactiveDebounceMs);
+    if (cell.run === 'reactive' && !isEditing) schedule(nextValues, reactiveDebounceMs);
+  }
+
+  function stopExecution(): void {
+    schedulerRef.current?.cancel();
+    setExecution((previous) => ({ ...previous, error: undefined, status: 'idle' }));
+  }
+
+  function editSource(source: string): void {
+    if (cell.language !== 'python') return;
+    stopExecution();
+    setDraft({ original: cell.source, source });
+  }
+
+  function finishEditing(): void {
+    stopExecution();
+    setDraft(undefined);
   }
 
   function setInputValidity(inputName: string, valid: boolean): void {
@@ -151,6 +183,10 @@ export function useInteractiveCellRun(cell: CellManifest, runtimeVersion: string
     isComplete: execution.status === 'success',
     inputsValid,
     inputRevision,
+    isEditing,
+    draftSource: isEditing ? (draft?.source ?? cell.source) : cell.source,
+    editSource,
+    finishEditing,
     isRunning: execution.status === 'running',
     result: execution.result,
     run,

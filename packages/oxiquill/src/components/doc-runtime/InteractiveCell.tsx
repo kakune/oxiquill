@@ -126,7 +126,17 @@ function InteractiveCellPanel({
               {labels.copyLink}
             </button>
           ) : null}
-          {shouldShowRunButton(cell.run) ? (
+          {cell.language === 'python' ? (
+            <button
+              type="button"
+              class="secondary-button"
+              aria-expanded={runtime.isEditing}
+              onClick={() => (runtime.isEditing ? runtime.finishEditing() : runtime.editSource(cell.source))}
+            >
+              {runtime.isEditing ? labels.finishEditing : labels.editCode}
+            </button>
+          ) : null}
+          {shouldShowRunButton(cell.run) || runtime.isEditing ? (
             <button
               type="button"
               class="run-button"
@@ -169,7 +179,21 @@ function InteractiveCellPanel({
         </fieldset>
       ) : null}
 
-      {isSourceVisible ? (
+      {runtime.isEditing ? (
+        <div class="doc-source-editor" id={ids.source}>
+          <label for={`${ids.source}-editor`}>{labels.pythonDraft}</label>
+          <textarea
+            id={`${ids.source}-editor`}
+            value={runtime.draftSource}
+            spellcheck={false}
+            onInput={(event) => runtime.editSource(event.currentTarget.value)}
+          />
+          <button type="button" class="secondary-button" onClick={() => runtime.editSource(cell.source)}>
+            {labels.restoreCode}
+          </button>
+          <p>{labels.pythonEditorHelp}</p>
+        </div>
+      ) : isSourceVisible ? (
         <div
           key={`${cell.id}:${cell.source}`}
           id={ids.source}

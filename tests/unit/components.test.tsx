@@ -182,6 +182,35 @@ afterEach(() => {
 });
 
 describe('InteractiveCell', () => {
+  it('runs Python drafts explicitly and restores the original reactive behavior', async () => {
+    mocks.runInteractiveCell.mockResolvedValue({ outputs: [] });
+    const cell = makeCell({ language: 'python', run: 'reactive', source: 'print(count)' });
+    setManifestCells([cell]);
+    render(<InteractiveCell cellId="cell-one" />);
+    await waitFor(() => expect(mocks.runInteractiveCell).toHaveBeenCalledOnce());
+    fireEvent.click(screen.getByRole('button', { name: 'Edit Python' }));
+    fireEvent.input(screen.getByLabelText('Python draft'), { target: { value: 'print(count * 2)' } });
+    fireEvent.input(screen.getByLabelText('count'), { target: { value: '4' } });
+    await new Promise((resolve) => setTimeout(resolve, 200));
+    expect(mocks.runInteractiveCell).toHaveBeenCalledOnce();
+    fireEvent.click(screen.getByRole('button', { name: 'Run' }));
+    await waitFor(() => expect(mocks.runInteractiveCell).toHaveBeenCalledTimes(2));
+    expect(mocks.runInteractiveCell).toHaveBeenLastCalledWith(
+      cell,
+      expect.objectContaining({ count: 4 }),
+      'v1',
+      expect.anything(),
+      expect.any(Function),
+      { source: 'print(count * 2)' }
+    );
+    expect(cell.source).toBe('print(count)');
+    fireEvent.click(screen.getByRole('button', { name: 'Restore original code' }));
+    expect(screen.getByLabelText('Python draft')).toHaveValue(cell.source);
+    fireEvent.click(screen.getByRole('button', { name: 'Finish editing' }));
+    await waitFor(() => expect(mocks.runInteractiveCell).toHaveBeenCalledTimes(3));
+    expect(screen.queryByLabelText('Python draft')).not.toBeInTheDocument();
+  });
+
   it.each(['button', 'reactive'] as const)('resets every input and invalid edit in %s cells', async (run) => {
     mocks.runInteractiveCell.mockResolvedValue({ outputs: [] });
     setManifestCells([makeCell({ run })]);

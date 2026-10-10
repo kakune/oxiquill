@@ -39,10 +39,11 @@ export function runInteractiveCell(
   inputs: InputValues,
   runtimeVersion?: string,
   signal?: AbortSignal,
-  onPhase?: (phase: RuntimeExecutionPhase) => void
+  onPhase?: (phase: RuntimeExecutionPhase) => void,
+  overrides?: { source: string }
 ): Promise<NormalizedCellExecutionResult> {
   /* v8 ignore next -- the factory is unit-tested; this delegates to browser Worker adapters. */
-  return defaultRuntimeClient.runInteractiveCell(cell, inputs, runtimeVersion, signal, onPhase);
+  return defaultRuntimeClient.runInteractiveCell(cell, inputs, runtimeVersion, signal, onPhase, overrides);
 }
 
 export function preparePythonRuntime(packages: readonly string[], timeoutMs?: number): Promise<void> {
@@ -133,10 +134,13 @@ export function createInteractiveCellRunner(dependencies: RuntimeClientDependenc
     inputs: InputValues,
     runtimeVersion?: string,
     signal?: AbortSignal,
-    onPhase?: (phase: RuntimeExecutionPhase) => void
+    onPhase?: (phase: RuntimeExecutionPhase) => void,
+    overrides?: { source: string }
   ): Promise<NormalizedCellExecutionResult> {
     const completeValues = completeInputValues(cell, inputs);
     try {
+      if (overrides && cell.language !== 'python')
+        throw new Error('Source editing is only available for Python cells.');
       assertValidInputValues(cell, completeValues);
     } catch (error) {
       return Promise.reject(toError(error));
@@ -145,6 +149,7 @@ export function createInteractiveCellRunner(dependencies: RuntimeClientDependenc
 
     const requestId = nextRequestId++;
     const request = createWorkerRequest(requestId, cell, completeValues, runtimeVersion);
+    if (overrides) request.source = overrides.source;
 
     return new Promise((resolve, reject) => {
       let worker: Worker | undefined;
