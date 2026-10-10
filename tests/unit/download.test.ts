@@ -25,7 +25,7 @@ it.each([false, true])('releases the URL and anchor after a download (failure: %
       static revokeObjectURL = revoke;
     }
   );
-  const click = vi.spyOn(HTMLAnchorElement.prototype, 'click').mockImplementation(function () {
+  const click = vi.spyOn(HTMLAnchorElement.prototype, 'click').mockImplementation(function (this: HTMLAnchorElement) {
     expect(this.download).toBe('table.csv');
     expect(this.href).toBe('blob:download');
     if (fail) throw new Error('download failed');
