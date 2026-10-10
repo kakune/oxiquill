@@ -32,11 +32,35 @@ const presentation = togglePresentation(lang, dir, 'sidebar');
     hasSidebar && (
       <nav class="sidebar print:hidden" aria-label={Astro.locals.t('sidebarNav.accessibleLabel')}>
         <MobileMenuToggle />
-        <div id="starlight__sidebar" class="sidebar-pane">
+        <script>
+          // Starlight's mobile menu opens the sidebar as a popover; trap focus while it is open.
+          class StarlightSidebarPane extends HTMLElement {
+            constructor() {
+              super();
+
+              const desktopMediaQuery = matchMedia('(min-width: 50em)');
+              const resetPopoverAttribute = () => {
+                this.popover = desktopMediaQuery.matches ? null : 'auto';
+              };
+              resetPopoverAttribute();
+              desktopMediaQuery.addEventListener('change', () => resetPopoverAttribute());
+
+              this.addEventListener('toggle', ({ newState }) => this.trapFocus(newState === 'open'));
+            }
+
+            trapFocus(shouldTrap: boolean) {
+              document.querySelectorAll<HTMLElement>('.main-frame, .sl-skip-link').forEach((element) => {
+                element.toggleAttribute('inert', shouldTrap);
+              });
+            }
+          }
+          customElements.define('sl-sidebar-pane', StarlightSidebarPane);
+        </script>
+        <sl-sidebar-pane popover="" id="starlight__sidebar" class="sidebar-pane">
           <div class="sidebar-content sl-flex">
             <slot name="sidebar" />
           </div>
-        </div>
+        </sl-sidebar-pane>
         <starlight-sidebar-toggle
           class="print:hidden"
           data-collapse-label={presentation.collapseLabel}
@@ -108,7 +132,12 @@ const presentation = togglePresentation(lang, dir, 'sidebar');
     }
 
     .sidebar-pane {
-      visibility: var(--sl-sidebar-visibility, hidden);
+      /* Popovers get user agent styles that the sidebar does not use. */
+      border: unset;
+      padding: unset;
+      height: unset;
+      color: unset;
+
       position: fixed;
       z-index: var(--sl-z-index-menu);
       inset-block: var(--sl-nav-height) 0;
@@ -117,10 +146,6 @@ const presentation = togglePresentation(lang, dir, 'sidebar');
       background-color: var(--sl-color-black);
       overflow-y: auto;
       scrollbar-gutter: stable;
-    }
-
-    :global([aria-expanded='true']) ~ .sidebar-pane {
-      --sl-sidebar-visibility: visible;
     }
 
     .sidebar-content {
@@ -182,7 +207,8 @@ const presentation = togglePresentation(lang, dir, 'sidebar');
       }
 
       .sidebar-pane {
-        --sl-sidebar-visibility: visible;
+        /* Desktop keeps the sidebar visible instead of following the mobile popover state. */
+        display: block;
         width: var(--sl-sidebar-width);
         background-color: var(--sl-color-bg-sidebar);
         border-inline-end: 1px solid var(--sl-color-hairline-shade);

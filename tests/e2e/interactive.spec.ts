@@ -75,11 +75,13 @@ test('desktop sidebar preference does not affect the mobile menu', async ({ page
 
   await mobileMenu.click();
   await expect(sidebar).toBeVisible();
-  await expect(page.locator('body')).toHaveAttribute('data-mobile-menu-expanded', '');
+  await expect.poll(() => isPopoverOpen(sidebar)).toBe(true);
+  await expect(page.locator('.main-frame')).toHaveAttribute('inert', '');
 
   await mobileMenu.click();
   await expect(sidebar).not.toBeVisible();
-  await expect(page.locator('body')).not.toHaveAttribute('data-mobile-menu-expanded', '');
+  await expect.poll(() => isPopoverOpen(sidebar)).toBe(false);
+  await expect(page.locator('.main-frame')).not.toHaveAttribute('inert', '');
   expect(await page.evaluate(() => sessionStorage.getItem('oxiquill-sidebar-collapsed'))).toBe('true');
 });
 
@@ -639,6 +641,10 @@ test('the production site serves the custom 404 page', async ({ page }) => {
 
 async function sidebarPadding(mainFrame: Locator): Promise<number> {
   return mainFrame.evaluate((element) => parseFloat(getComputedStyle(element).paddingInlineStart));
+}
+
+async function isPopoverOpen(locator: Locator): Promise<boolean> {
+  return locator.evaluate((element) => element.matches(':popover-open'));
 }
 
 async function elementWidth(locator: Locator): Promise<number> {
