@@ -116,9 +116,9 @@ No normal release uses a long-lived npm write token.
 
 ## Dependency Update Freeze
 
-Routine Dependabot version updates may be queued while a release candidate is frozen, but an open Dependabot security alert always blocks release. Do not merge unrelated dependency churn into a protected release branch.
+Maintainers update dependencies, toolchains, and pinned GitHub Actions by hand on a topic branch; the repository does not use Dependabot version or security update pull requests. Dependabot alerts stay enabled, and an open alert always blocks release. Do not merge unrelated dependency churn into a protected release branch.
 
-After the release, reopen queued updates one at a time so Dependabot rebases each branch onto the latest `main`. Process grouped minor/patch updates first, then GitHub Actions major updates, then JavaScript tooling major updates. Review breaking changes and pass all required checks before each squash merge; do not auto-merge major updates.
+Hold dependency updates while a release candidate is frozen. After the release, update from the latest `main`, review breaking changes, and pass all required checks before the squash merge.
 
 ## Rollback and Deprecation
 

@@ -7,7 +7,7 @@
 ## Branch Strategy
 
 - Do development work on topic branches such as `feat/...`, `fix/...`, `chore/...`, or `docs/...`.
-- Submit every topic branch, Dependabot update, and release preparation branch to `main` by pull request. Do not push directly to `main`.
+- Submit every topic branch, dependency update, and release preparation branch to `main` by pull request. Do not push directly to `main`.
 - Keep commits small and separated by logical meaning.
 - Keep pull requests up to date with `main`, pass every required check, and resolve review conversations before merging.
 - Use squash merge for every pull request into `main`; branch rules prohibit other merge methods.
