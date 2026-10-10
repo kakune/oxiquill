@@ -11,9 +11,9 @@
     },
     {
       "name": "cfg-if",
-      "version": "1.0.4",
+      "version": "1.0.5",
       "license": "MIT",
-      "licenseFiles": ["rust/cfg-if-1.0.4-LICENSE-MIT.txt"],
+      "licenseFiles": ["rust/cfg-if-1.0.5-LICENSE-MIT.txt"],
       "files": ["rust-wasm/doc_rust_cells_bg.wasm"],
       "source": "generated Rust/Wasm runtime"
     },
@@ -43,9 +43,9 @@
     },
     {
       "name": "memchr",
-      "version": "2.8.1",
+      "version": "2.8.3",
       "license": "MIT",
-      "licenseFiles": ["rust/memchr-2.8.1-LICENSE-MIT.txt"],
+      "licenseFiles": ["rust/memchr-2.8.3-LICENSE-MIT.txt"],
       "files": ["rust-wasm/doc_rust_cells_bg.wasm"],
       "source": "generated Rust/Wasm runtime"
     },
@@ -59,7 +59,7 @@
     },
     {
       "name": "proc-macro2",
-      "version": "1.0.106",
+      "version": "1.0.107",
       "license": "MIT",
       "licenseFiles": ["rust/itoa-1.0.18-LICENSE-MIT.txt"],
       "files": ["rust-wasm/doc_rust_cells_bg.wasm"],
@@ -67,7 +67,7 @@
     },
     {
       "name": "Pyodide",
-      "version": "314.0.6",
+      "version": "314.0.7",
       "license": "MPL-2.0",
       "licenseFiles": ["MPL-2.0.json"],
       "files": ["pyodide/pyodide.asm.wasm"],
@@ -83,7 +83,7 @@
     },
     {
       "name": "quote",
-      "version": "1.0.45",
+      "version": "1.0.47",
       "license": "MIT",
       "licenseFiles": ["rust/itoa-1.0.18-LICENSE-MIT.txt"],
       "files": ["rust-wasm/doc_rust_cells_bg.wasm"],
@@ -91,7 +91,7 @@
     },
     {
       "name": "rustversion",
-      "version": "1.0.22",
+      "version": "1.0.23",
       "license": "MIT",
       "licenseFiles": ["rust/itoa-1.0.18-LICENSE-MIT.txt"],
       "files": ["rust-wasm/doc_rust_cells_bg.wasm"],
@@ -99,7 +99,7 @@
     },
     {
       "name": "serde",
-      "version": "1.0.228",
+      "version": "1.0.229",
       "license": "MIT",
       "licenseFiles": ["rust/itoa-1.0.18-LICENSE-MIT.txt"],
       "files": ["rust-wasm/doc_rust_cells_bg.wasm"],
@@ -107,7 +107,7 @@
     },
     {
       "name": "serde_core",
-      "version": "1.0.228",
+      "version": "1.0.229",
       "license": "MIT",
       "licenseFiles": ["rust/itoa-1.0.18-LICENSE-MIT.txt"],
       "files": ["rust-wasm/doc_rust_cells_bg.wasm"],
@@ -115,7 +115,7 @@
     },
     {
       "name": "serde_derive",
-      "version": "1.0.228",
+      "version": "1.0.229",
       "license": "MIT",
       "licenseFiles": ["rust/itoa-1.0.18-LICENSE-MIT.txt"],
       "files": ["rust-wasm/doc_rust_cells_bg.wasm"],
@@ -123,7 +123,7 @@
     },
     {
       "name": "serde_json",
-      "version": "1.0.150",
+      "version": "1.0.151",
       "license": "MIT",
       "licenseFiles": ["rust/itoa-1.0.18-LICENSE-MIT.txt"],
       "files": ["rust-wasm/doc_rust_cells_bg.wasm"],
@@ -131,7 +131,7 @@
     },
     {
       "name": "syn",
-      "version": "2.0.117",
+      "version": "3.0.7",
       "license": "MIT",
       "licenseFiles": ["rust/itoa-1.0.18-LICENSE-MIT.txt"],
       "files": ["rust-wasm/doc_rust_cells_bg.wasm"],
@@ -139,47 +139,47 @@
     },
     {
       "name": "unicode-ident",
-      "version": "1.0.24",
+      "version": "1.0.26",
       "license": "MIT AND Unicode-3.0",
-      "licenseFiles": ["rust/itoa-1.0.18-LICENSE-MIT.txt", "rust/unicode-ident-1.0.24-LICENSE-UNICODE.txt"],
+      "licenseFiles": ["rust/itoa-1.0.18-LICENSE-MIT.txt", "rust/unicode-ident-1.0.26-LICENSE-UNICODE.txt"],
       "files": ["rust-wasm/doc_rust_cells_bg.wasm"],
       "source": "generated Rust/Wasm runtime"
     },
     {
       "name": "wasm-bindgen",
-      "version": "0.2.122",
+      "version": "0.2.129",
       "license": "MIT",
-      "licenseFiles": ["rust/cfg-if-1.0.4-LICENSE-MIT.txt"],
+      "licenseFiles": ["rust/cfg-if-1.0.5-LICENSE-MIT.txt"],
       "files": ["rust-wasm/doc_rust_cells_bg.wasm"],
       "source": "generated Rust/Wasm runtime"
     },
     {
       "name": "wasm-bindgen-macro",
-      "version": "0.2.122",
+      "version": "0.2.129",
       "license": "MIT",
-      "licenseFiles": ["rust/cfg-if-1.0.4-LICENSE-MIT.txt"],
+      "licenseFiles": ["rust/cfg-if-1.0.5-LICENSE-MIT.txt"],
       "files": ["rust-wasm/doc_rust_cells_bg.wasm"],
       "source": "generated Rust/Wasm runtime"
     },
     {
       "name": "wasm-bindgen-macro-support",
-      "version": "0.2.122",
+      "version": "0.2.129",
       "license": "MIT",
-      "licenseFiles": ["rust/cfg-if-1.0.4-LICENSE-MIT.txt"],
+      "licenseFiles": ["rust/cfg-if-1.0.5-LICENSE-MIT.txt"],
       "files": ["rust-wasm/doc_rust_cells_bg.wasm"],
       "source": "generated Rust/Wasm runtime"
     },
     {
       "name": "wasm-bindgen-shared",
-      "version": "0.2.122",
+      "version": "0.2.129",
       "license": "MIT",
-      "licenseFiles": ["rust/cfg-if-1.0.4-LICENSE-MIT.txt"],
+      "licenseFiles": ["rust/cfg-if-1.0.5-LICENSE-MIT.txt"],
       "files": ["rust-wasm/doc_rust_cells_bg.wasm"],
       "source": "generated Rust/Wasm runtime"
     },
     {
       "name": "zmij",
-      "version": "1.0.21",
+      "version": "1.0.23",
       "license": "MIT",
       "licenseFiles": ["rust/itoa-1.0.18-LICENSE-MIT.txt"],
       "files": ["rust-wasm/doc_rust_cells_bg.wasm"],
