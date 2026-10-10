@@ -238,3 +238,31 @@ test('same-named series retain independent selection after reorder and rename', 
   });
   await expect(page.locator('[role="alert"]')).toHaveCount(0);
 });
+
+test('fixed ranges survive data updates and only reset zoom when changed or cleared', async ({ page }) => {
+  await page.goto('http://127.0.0.1:4323/?fixture=legend&fixedRange=1');
+  await expect(page.locator('canvas').first()).toBeVisible();
+  await action(page, { type: 'legendUnSelect', name: 'line:0' });
+  await action(page, { type: 'dataZoom', start: 20, end: 80 });
+  const before = await state(page);
+  const bounds = () =>
+    page.locator('.doc-plot').evaluate((element) => {
+      const option = window.galleryECharts.getInstanceByDom(element as HTMLElement)?.getOption() as {
+        yAxis: { min: number | null; max: number | null }[];
+      };
+      return [option.yAxis[0].min, option.yAxis[0].max];
+    });
+  await page.getByRole('button', { name: 'Update data' }).click();
+  await expect(page.locator('figcaption')).toContainText('Updated legend');
+  expect(await bounds()).toEqual([0, 120]);
+  expect((await state(page)).zoom).toEqual(before.zoom);
+  await page.getByRole('button', { name: 'Change range' }).click();
+  await expect.poll(bounds).toEqual([0, 200]);
+  await expect.poll(async () => (await state(page)).zoom).toEqual([{ start: 0, end: 100 }]);
+  expect((await state(page)).legend?.[0].selected).toEqual(before.legend?.[0].selected);
+  await action(page, { type: 'dataZoom', start: 20, end: 80 });
+  await page.getByRole('button', { name: 'Clear range' }).click();
+  await expect.poll(bounds).toEqual([null, null]);
+  await expect.poll(async () => (await state(page)).zoom).toEqual([{ start: 0, end: 100 }]);
+  expect((await state(page)).legend?.[0].selected).toEqual(before.legend?.[0].selected);
+});

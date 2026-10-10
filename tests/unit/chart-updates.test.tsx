@@ -44,6 +44,38 @@ afterEach(() => {
 });
 
 describe('persistent chart updates', () => {
+  it.each([false, true])('respects explicit showSymbol=%s through viewport updates', async (showSymbol) => {
+    let extent = [0, 2];
+    const instance = {
+      ...chart,
+      getModel: () => ({ getComponent: () => ({ axis: { scale: { parse: Number, getExtent: () => extent } } }) })
+    };
+    echartsInit.mockReturnValue(instance);
+    const spec: ChartSpec = {
+      kind: 'line',
+      series: [
+        {
+          id: 'stable',
+          points: [
+            [0, 0],
+            [1, 1],
+            [2, 2]
+          ],
+          style: { showSymbol }
+        }
+      ]
+    };
+    render(output(spec));
+    await waitFor(() => expect(chart.setOption).toHaveBeenCalledOnce());
+    expect(chart.setOption.mock.calls[0][0].series).toMatchObject([{ id: 'line:id:stable', showSymbol }]);
+    const zoom = chart.on.mock.calls.find(([event]) => event === 'datazoom')?.[1] as () => void;
+    act(() => {
+      extent = [0.5, 1.5];
+      zoom();
+    });
+    await new Promise((resolve) => requestAnimationFrame(() => resolve(undefined)));
+    expect(chart.setOption).toHaveBeenCalledOnce();
+  });
   it('resets only zoom when authored bounds change or are removed', async () => {
     const view = render(output({ ...line, yMin: 0, yMax: 1 }));
     await waitFor(() => expect(chart.setOption).toHaveBeenCalledOnce());

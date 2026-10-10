@@ -18,8 +18,11 @@ function Gallery() {
   const [revision, setRevision] = useState(0);
   const [formatted, setFormatted] = useState(true);
   const [reordered, setReordered] = useState(false);
+  const [range, setRange] = useState<'fixed' | 'changed' | 'auto'>('fixed');
   return (
     <main style={{ width }}>
+      <button onClick={() => setRange('changed')}>Change range</button>
+      <button onClick={() => setRange('auto')}>Clear range</button>
       <button onClick={() => setReordered(true)}>Reorder and rename series</button>
       <button onClick={() => setFormatted(false)}>Clear formatting</button>
       <button onClick={() => setRevision((value) => value + 1)}>Update data</button>
@@ -33,6 +36,11 @@ function Gallery() {
                 kind: 'chart',
                 spec: {
                   ...spec,
+                  ...(query.has('fixedRange')
+                    ? range === 'auto'
+                      ? { yMin: undefined, yMax: undefined }
+                      : { yMin: 0, yMax: range === 'changed' ? 200 : 120 }
+                    : {}),
                   ...(!formatted ? { style: undefined } : {}),
                   ...(revision ? { title: `Updated ${name}` } : {}),
                   ...(query.has('longText')
