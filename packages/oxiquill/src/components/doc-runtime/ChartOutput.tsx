@@ -14,6 +14,13 @@ import {
 } from '../../lib/doc-runtime/chart-options.js';
 import { chartRangeSignature } from '../../lib/doc-runtime/chart-axes.js';
 import { chartHeight } from '../../lib/doc-runtime/chart-layout.js';
+import {
+  applyChartViewState,
+  chartViewState,
+  exportChartImage,
+  type ChartViewState
+} from '../../lib/doc-runtime/chart-export.js';
+import { artifactDownloadName, downloadBlob } from '../../lib/doc-runtime/download.js';
 import { chartAxes, chartPointIndexes, hasIsolatedPoint } from '../../lib/doc-runtime/chart-viewport.js';
 
 export { chartDataSummary, chartSpecToEChartsOptions, chartStructuralSignature };
@@ -24,39 +31,7 @@ interface ChartOutputProps {
   idPrefix: string;
   labels: RuntimeLabels;
 }
-type EChartsCore = typeof import('echarts/core');
-type EChartsInstance = ReturnType<EChartsCore['init']>;
-let echartsModule: Promise<EChartsCore> | undefined;
-
-function loadECharts(): Promise<EChartsCore> {
-  echartsModule ??= Promise.all([
-    import('echarts/core'),
-    import('echarts/charts'),
-    import('echarts/components'),
-    import('echarts/renderers')
-  ])
-    .then(([echarts, charts, components, renderers]) => {
-      echarts.use([
-        charts.BarChart,
-        charts.CustomChart,
-        charts.HeatmapChart,
-        charts.LineChart,
-        charts.ScatterChart,
-        components.GridComponent,
-        components.LegendComponent,
-        components.TooltipComponent,
-        components.VisualMapComponent,
-        components.DataZoomComponent,
-        renderers.CanvasRenderer
-      ]);
-      return echarts;
-    })
-    .catch((error: unknown) => {
-      echartsModule = undefined;
-      throw error;
-    });
-  return echartsModule;
-}
+import { loadECharts, type EChartsInstance } from '../../lib/doc-runtime/echarts-runtime.js';
 
 export default function ChartOutput({ artifact, idPrefix, labels }: ChartOutputProps) {
   const element = useRef<HTMLDivElement>(null);
@@ -84,6 +59,10 @@ export default function ChartOutput({ artifact, idPrefix, labels }: ChartOutputP
   latest.current = { artifact, reducedMotion, labels, theme };
   const [renderError, setRenderError] = useState<{ message: string; initialization: boolean }>();
   const [renderAttempt, setRenderAttempt] = useState(0);
+  const [exporting, setExporting] = useState(false);
+  const [isReady, setIsReady] = useState(false);
+  const [exportError, setExportError] = useState<string>();
+  const savedView = useRef<{ signature: string; state: ChartViewState }>();
 
   function applyLatest(force = false): void {
     const current = chart.current;
@@ -109,6 +88,9 @@ export default function ChartOutput({ artifact, idPrefix, labels }: ChartOutputP
           locale: nextLabels.locale,
           chrome: resolveChartChrome(nextTheme, element.current ?? undefined)
         });
+        if (!current.spec && savedView.current?.signature === signature)
+          applyChartViewState(options, savedView.current.state);
+        savedView.current = undefined;
         // Omit interactive state when merging a compatible chart.
         if (!notMerge && current.spec && chartRangeSignature(current.spec) === chartRangeSignature(next.spec))
           delete options.dataZoom;
@@ -133,6 +115,7 @@ export default function ChartOutput({ artifact, idPrefix, labels }: ChartOutputP
         current.updateViewport?.();
       }
       setDisplayed(next);
+      setIsReady(true);
       setRenderError(undefined);
     } catch (error) {
       current.replace = true;
@@ -151,6 +134,7 @@ export default function ChartOutput({ artifact, idPrefix, labels }: ChartOutputP
   useEffect(() => {
     const chartElement = element.current;
     if (!chartElement) return;
+    setIsReady(false);
     let cancelled = false;
     let instance: EChartsInstance | undefined;
     let resizeObserver: ResizeObserver | undefined;
@@ -159,7 +143,9 @@ export default function ChartOutput({ artifact, idPrefix, labels }: ChartOutputP
     void loadECharts()
       .then((echarts) => {
         if (cancelled) return;
-        instance = echarts.init(chartElement, undefined, { renderer: 'canvas' });
+        instance = echarts.init(chartElement, undefined, {
+          renderer: latest.current.artifact.spec.style?.renderer ?? 'canvas'
+        });
         chart.current = { instance };
         const updateViewport = () => {
           if (frame !== undefined) return;
@@ -250,10 +236,12 @@ export default function ChartOutput({ artifact, idPrefix, labels }: ChartOutputP
       cancelled = true;
       if (frame !== undefined) cancelAnimationFrame(frame);
       resizeObserver?.disconnect();
+      if (chart.current?.signature && instance)
+        savedView.current = { signature: chart.current.signature, state: chartViewState(instance) };
       instance?.dispose();
       chart.current = undefined;
     };
-  }, [renderAttempt]);
+  }, [renderAttempt, artifact.spec.style?.renderer]);
 
   useEffect(() => {
     applyLatest();
@@ -266,6 +254,30 @@ export default function ChartOutput({ artifact, idPrefix, labels }: ChartOutputP
     displayed.title && displayed.spec.title && displayed.title !== displayed.spec.title
       ? displayed.spec.title
       : undefined;
+  async function saveImage(format: 'png' | 'svg'): Promise<void> {
+    const current = chart.current;
+    if (!current?.spec || exporting) return;
+    const snapshot = displayed;
+    setExporting(true);
+    setExportError(undefined);
+    try {
+      const blob = await exportChartImage({
+        spec: current.spec,
+        theme,
+        chrome: resolveChartChrome(theme, element.current ?? undefined),
+        locale: labels.locale,
+        width: current.instance.getWidth(),
+        height: current.instance.getHeight(),
+        state: chartViewState(current.instance),
+        format
+      });
+      downloadBlob(blob, artifactDownloadName(snapshot, format, 'chart'));
+    } catch (error) {
+      setExportError(labels.chartExportError(boundedErrorMessage(error)));
+    } finally {
+      setExporting(false);
+    }
+  }
   return (
     <figure
       class="doc-chart-output"
@@ -277,6 +289,19 @@ export default function ChartOutput({ artifact, idPrefix, labels }: ChartOutputP
         {subtitle ? <span>{subtitle}</span> : null}
         {displayed.caption ? <span id={captionId}>{displayed.caption}</span> : null}
       </figcaption>
+      <div class="doc-chart-output__actions">
+        <button type="button" disabled={exporting || !isReady} onClick={() => saveImage('png')}>
+          {labels.savePng}
+        </button>
+        <button type="button" disabled={exporting || !isReady} onClick={() => saveImage('svg')}>
+          {labels.saveSvg}
+        </button>
+      </div>
+      {exportError ? (
+        <p class="error-state" role="alert">
+          {exportError}
+        </p>
+      ) : null}
       <div
         ref={element}
         class="doc-plot"

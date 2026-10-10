@@ -1,6 +1,8 @@
 import { vi } from 'vitest';
 
 export const chart = {
+  getOption: vi.fn(() => ({})),
+  dispatchAction: vi.fn(),
   getWidth: vi.fn(() => 720),
   getHeight: vi.fn(() => 360),
   on: vi.fn(),

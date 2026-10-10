@@ -111,6 +111,7 @@ export interface ChartNumberFormat {
 }
 
 export interface BaseChartStyle {
+  renderer?: 'canvas' | 'svg';
   xFormat?: ChartNumberFormat;
   yFormat?: ChartNumberFormat;
   valueFormat?: ChartNumberFormat;
