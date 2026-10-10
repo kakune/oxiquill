@@ -75,3 +75,28 @@ if early {
 }
 println!("normal return");
 ```
+
+```rust
+//| id: chart-options
+let options = serde_json::json!({ "yMin": 0, "yMax": 5, "style": { "animation": false } });
+emit_line_chart!(&[[0, 1]], options = &options);
+emit_scatter_chart!(&[[0, 2]], options = &options);
+emit_bar_chart!(&["a"], &[3], options = &options);
+emit_histogram!(&[[0, 1, 4]], options = &options);
+```
+
+```rust
+//| id: invalid-chart-options
+//| inputs:
+//|   invalid: { type: checkbox, label: Invalid options, value: false }
+let options = if invalid { serde_json::json!({ "series": [] }) } else { serde_json::json!({}) };
+emit_line_chart!(&[[0, 1]], options = &options);
+```
+
+```rust
+//| id: nonobject-chart-options
+//| inputs:
+//|   invalid: { type: checkbox, label: Invalid options, value: false }
+let options = if invalid { serde_json::json!([]) } else { serde_json::json!({}) };
+emit_histogram!(&[[0, 1, 1]], options = &options);
+```

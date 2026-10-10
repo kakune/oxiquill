@@ -18,6 +18,14 @@ Oxiquill は次の出力を表示します。
 
 各 artifact は optional string の `id`、`title`、`caption` を持てます。worker から受け取る value は untrusted です。Oxiquill は renderer に渡す前に discriminator、field、plain-record structure、array shape、finite number、row width、MIME/base64 data、nested value を検証します。reject/render failure になった一つの artifact は local diagnostic を表示し、valid sibling を消しません。
 
+### 軸範囲
+
+`xMin/xMax/yMin/yMax` は有限数で指定し、min を max より小さくします。time の境界は epoch milliseconds、log は正数に限定します。category 軸に数値境界は指定できません。`xIncludeZero/yIncludeZero` は value 軸だけに指定できます。固定境界を優先しますが、bar・histogram・area の value y 軸はゼロを含む必要があり、この基準を無効にできません。
+
+データ更新ではズームを保持します。境界やゼロ包含の変更・解除では全範囲へ戻し、凡例の選択は保持します。境界を省略すると自動範囲に戻ります。
+
+Rust の line・scatter・bar・histogram マクロでは、データ引数の後ろに `options = &serde_json::json!({...})` を指定できます。ラベルと nested style を含む公開設定を指定でき、kind やデータは上書きできません。従来の位置引数 style も利用できます。[ロジスティック写像](../../samples/logistic-map/)は 0–1 の固定範囲を使います。
+
 ## Artifact schema
 
 | Kind    | Required field                                                 | Optional behavior                                                                                  |

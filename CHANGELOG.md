@@ -8,6 +8,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ### Added
 
+- Authored chart axis bounds and zero inclusion, with Rust chart options and a fixed-range logistic map example.
+
 - Chart height control through `spec.style.height` (200–800 pixels), with automatic heatmap sizing.
 - Real ECharts SVG layout checks and Chromium chart galleries for visual review in CI.
 

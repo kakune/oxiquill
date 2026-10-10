@@ -16,6 +16,7 @@ import type {
   TextArtifact
 } from './types.js';
 import { outputArtifactLimits, truncateUtf8, utf8ByteLength } from './output-limits.mjs';
+import { chartAxisType } from './chart-axes.js';
 
 export { outputArtifactLimits } from './output-limits.mjs';
 
@@ -444,6 +445,8 @@ function validateChartSpec(value: unknown): ChartSpec {
       : {})
   };
 
+  validateChartRanges({ ...base, kind });
+
   switch (kind) {
     case 'line': {
       const xType = base.xType ?? 'value';
@@ -663,7 +666,16 @@ function validateBaseChartSpec(record: Record<string, unknown>): BaseChartSpec {
   const legend = optionalBoolean(record, 'legend', 'Chart spec');
   const tooltip = optionalBoolean(record, 'tooltip', 'Chart spec');
   const dataZoom = optionalBoolean(record, 'dataZoom', 'Chart spec');
+  const ranges: BaseChartSpec = {};
+  for (const field of ['xMin', 'xMax', 'yMin', 'yMax'] as const) {
+    if (Object.hasOwn(record, field))
+      ranges[field] = finiteNumber(requiredOwnValue(record, field, 'Chart spec'), `Chart ${field}`);
+  }
+  for (const field of ['xIncludeZero', 'yIncludeZero'] as const) {
+    if (Object.hasOwn(record, field)) ranges[field] = optionalBoolean(record, field, 'Chart spec');
+  }
   return {
+    ...ranges,
     ...(title == null ? {} : { title }),
     ...(xLabel == null ? {} : { xLabel }),
     ...(yLabel == null ? {} : { yLabel }),
@@ -673,6 +685,35 @@ function validateBaseChartSpec(record: Record<string, unknown>): BaseChartSpec {
     ...(tooltip == null ? {} : { tooltip }),
     ...(dataZoom == null ? {} : { dataZoom })
   } as Omit<ChartSpec, 'kind'>;
+}
+
+function validateChartRanges(spec: BaseChartSpec & { kind: string }): void {
+  for (const axis of ['x', 'y'] as const) {
+    const type = chartAxisType(spec, axis);
+    const min = spec[axis === 'x' ? 'xMin' : 'yMin'];
+    const max = spec[axis === 'x' ? 'xMax' : 'yMax'];
+    const zero = spec[axis === 'x' ? 'xIncludeZero' : 'yIncludeZero'];
+    if (type === 'category' && (min !== undefined || max !== undefined))
+      throw new ArtifactValidationError(`Chart ${axis} axis does not accept numeric bounds for categories.`);
+    if (zero !== undefined && type !== 'value')
+      throw new ArtifactValidationError(`Chart ${axis}IncludeZero requires a value axis.`);
+    if (min !== undefined && max !== undefined && min >= max)
+      throw new ArtifactValidationError(`Chart ${axis}Min must be smaller than ${axis}Max.`);
+    if (type === 'log' && ((min !== undefined && min <= 0) || (max !== undefined && max <= 0)))
+      throw new ArtifactValidationError(`Chart ${axis} bounds must be strictly positive for a log axis.`);
+    if (
+      type === 'time' &&
+      [min, max].some((value) => value !== undefined && !Number.isFinite(new Date(value).getTime()))
+    )
+      throw new ArtifactValidationError(`Chart ${axis} bounds must be valid epoch milliseconds.`);
+    if (
+      axis === 'y' &&
+      type === 'value' &&
+      ['bar', 'histogram', 'area'].includes(spec.kind) &&
+      (zero === false || (min !== undefined && min > 0) || (max !== undefined && max < 0))
+    )
+      throw new ArtifactValidationError(`Chart ${spec.kind} value y range must include zero.`);
+  }
 }
 
 function validateXySeries(

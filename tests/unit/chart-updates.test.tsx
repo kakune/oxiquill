@@ -44,6 +44,25 @@ afterEach(() => {
 });
 
 describe('persistent chart updates', () => {
+  it('resets only zoom when authored bounds change or are removed', async () => {
+    const view = render(output({ ...line, yMin: 0, yMax: 1 }));
+    await waitFor(() => expect(chart.setOption).toHaveBeenCalledOnce());
+    view.rerender(output({ ...line, yMin: 0, yMax: 2 }));
+    await waitFor(() => expect(chart.setOption).toHaveBeenCalledTimes(2));
+    expect(chart.setOption).toHaveBeenLastCalledWith(
+      expect.objectContaining({ dataZoom: [expect.objectContaining({ start: 0, end: 100 })] }),
+      expect.objectContaining({ notMerge: false })
+    );
+    view.rerender(output(line));
+    await waitFor(() => expect(chart.setOption).toHaveBeenCalledTimes(3));
+    expect(chart.setOption).toHaveBeenLastCalledWith(
+      expect.objectContaining({
+        yAxis: expect.objectContaining({ min: null, max: null }),
+        dataZoom: expect.any(Array)
+      }),
+      expect.objectContaining({ notMerge: false })
+    );
+  });
   it('resizes the canvas after an authored height update has already changed layout options', async () => {
     const height = vi.spyOn(HTMLElement.prototype, 'clientHeight', 'get').mockReturnValue(360);
     const view = render(output(line));

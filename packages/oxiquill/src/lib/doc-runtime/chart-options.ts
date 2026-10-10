@@ -1,3 +1,4 @@
+import { chartAxisType, chartIncludesZero } from './chart-axes.js';
 import type { ChartSpec } from './types.js';
 import { normalizeHeatmapSpec } from './heatmap-normalization.js';
 import { labelsForLanguage, type RuntimeLabels, type RuntimeLocale } from './runtime-localization.js';
@@ -44,11 +45,10 @@ function showLegend(spec: ChartSpec): boolean {
 }
 
 export function chartStructuralSignature(spec: ChartSpec): string {
-  const categorical = ['bar', 'histogram', 'heatmap'].includes(spec.kind);
   return JSON.stringify([
     spec.kind,
-    categorical ? 'category' : (spec.xType ?? 'value'),
-    spec.kind === 'heatmap' ? 'category' : (spec.yType ?? 'value'),
+    chartAxisType(spec, 'x'),
+    chartAxisType(spec, 'y'),
     showLegend(spec),
     spec.tooltip !== false,
     spec.kind !== 'heatmap' && spec.dataZoom !== false
@@ -85,8 +85,8 @@ export function chartSpecToEChartsOptions(
   const values = chartCoordinates(spec);
   const names = seriesNames(spec, locale);
   const heatmap = spec.kind === 'heatmap' ? normalizeHeatmapSpec(spec) : undefined;
-  const xType = ['bar', 'histogram', 'heatmap'].includes(spec.kind) ? 'category' : (spec.xType ?? 'value');
-  const yType = spec.kind === 'heatmap' ? 'category' : (spec.yType ?? 'value');
+  const xType = chartAxisType(spec, 'x');
+  const yType = chartAxisType(spec, 'y');
   const xData = spec.kind === 'histogram' ? spec.bins.map((bin) => `${bin[0]}-${bin[1]}`) : values.x;
   const axis = (horizontal: boolean) => {
     const coordinates = horizontal ? xData : values.y;
@@ -101,7 +101,9 @@ export function chartSpecToEChartsOptions(
       nameTruncate: { maxWidth: horizontal ? layout.plotWidth : layout.plotHeight, ellipsis: '…' },
       nameTextStyle: { color: chrome.text },
       ...(type === 'category' ? { data: coordinates } : {}),
-      scale: horizontal || !['bar', 'histogram', 'area'].includes(spec.kind) || type !== 'value',
+      min: (horizontal ? spec.xMin : spec.yMin) ?? null,
+      max: (horizontal ? spec.xMax : spec.yMax) ?? null,
+      scale: !chartIncludesZero(spec, horizontal ? 'x' : 'y'),
       axisLabel: {
         color: chrome.axis,
         hideOverlap: true,
@@ -170,7 +172,10 @@ export function chartSpecToEChartsOptions(
           formatter: (name: string) => truncateChartLabel(name, Math.max(36, Math.min(220, width - 180)))
         }
       : undefined,
-    dataZoom: spec.dataZoom === false || heatmap ? undefined : [{ type: 'inside' }],
+    dataZoom:
+      spec.dataZoom === false || heatmap
+        ? undefined
+        : [{ type: 'inside', start: 0, end: 100, startValue: null, endValue: null }],
     series: chartSeries(spec).map((item, index) => {
       const cycle = Math.floor(index / palette.length);
       return {

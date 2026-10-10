@@ -11,6 +11,7 @@ import {
   type ChartChrome,
   type ChartTheme
 } from '../../lib/doc-runtime/chart-options.js';
+import { chartRangeSignature } from '../../lib/doc-runtime/chart-axes.js';
 import { chartHeight } from '../../lib/doc-runtime/chart-layout.js';
 import { chartPalette } from '../../lib/doc-runtime/chart-palette.js';
 import { chartAxes, chartPointIndexes, hasIsolatedPoint } from '../../lib/doc-runtime/chart-viewport.js';
@@ -106,7 +107,8 @@ export default function ChartOutput({ artifact, idPrefix, labels }: ChartOutputP
           chrome: resolveChartChrome(theme, element.current ?? undefined)
         });
         // Omit interactive state when merging a compatible chart.
-        if (!notMerge) delete options.dataZoom;
+        if (!notMerge && current.spec && chartRangeSignature(current.spec) === chartRangeSignature(next.spec))
+          delete options.dataZoom;
         current.instance.setOption(
           options,
           notMerge ? { notMerge: true } : { notMerge: false, lazyUpdate: true, replaceMerge: ['series'] }

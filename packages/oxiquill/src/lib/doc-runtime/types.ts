@@ -134,6 +134,12 @@ export interface BaseChartSpec {
   yLabel?: string;
   xType?: ChartAxisType;
   yType?: ChartAxisType;
+  xMin?: number;
+  xMax?: number;
+  yMin?: number;
+  yMax?: number;
+  xIncludeZero?: boolean;
+  yIncludeZero?: boolean;
   legend?: boolean;
   tooltip?: boolean;
   dataZoom?: boolean;
