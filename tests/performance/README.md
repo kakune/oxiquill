@@ -52,3 +52,26 @@ pnpm exec node tests/performance/python-startup.mjs --runs 5 --label local --out
 ```
 
 Set `PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH` when using a system/Nix Chromium. The script defaults to `examples/docs-site/dist`, `/oxiquill/`, and localhost gzip. Override `--site` or `--base` only if the build uses matching paths. User Timing entries are bounded to the latest phase per cell and stay local to the browser.
+
+## Output contract migration
+
+P21 was measured on 2026-10-10 with Node v24.21.0, 12th Gen Intel(R) Core(TM) i7-12700F, linux x64. The baseline runtime modules were compiled from commit 19d1f2d before changes; the second run uses the outputs-only implementation. Both runs use the same deterministic inputs, five warmups, and 25 normalization samples per case. Raw reports are in [output-contract-before.json](output-contract-before.json) and [output-contract-after.json](output-contract-after.json). The after report identifies the parent commit and labels the modified working tree explicitly.
+
+Bytes are UTF-8 serialized worker result sizes after worker bounding. Timings measure main-thread normalization of those same bounded results, without Wasm/Pyodide startup, browser transport, or rendering. Text contains 256 KiB, JSON contains 5,000 records, line contains 100,000 points, and mixed contains text, stderr, JSON, and a two-point line.
+
+| Case  | Before bytes | After bytes | Before median | After median |
+| ----- | -----------: | ----------: | ------------: | -----------: |
+| text  |      524,371 |     262,204 |      0.160 ms |     0.162 ms |
+| json  |      283,652 |     141,829 |     20.111 ms |    22.473 ms |
+| line  |    5,505,134 |   2,752,568 |     46.376 ms |    39.478 ms |
+| mixed |          400 |         250 |      0.016 ms |     0.012 ms |
+
+All cases retain the same output count and have zero artifact errors. Removing duplicate fields approximately halves the larger responses. Timing differences include normal measurement noise and are not a cross-device performance guarantee.
+
+After building the package, reproduce a measurement with:
+
+```sh
+pnpm exec node tests/performance/output-contract.mjs --output test-results/output-contract.json
+```
+
+Use `--runtime` to select a separately compiled baseline module directory and `--revision` to identify its source commit. The benchmark reports measurements without a timing-based CI threshold.

@@ -200,11 +200,46 @@ producer は各 language worker 内で `postMessage` より前に limit を適�
 | worker error                | 16 KiB                     | UTF-8 message を truncate。                                 |
 | artifact diagnostic         | 1件 8 KiB、1 run 64 KiB    | 各 limit 内で diagnostic を truncate。                      |
 
-`truncated: true` を使えるのは text、JSON、table だけです。chart、image、HTML は黙って truncate しません。invalid/cyclic/over-deep JSON、ragged table、non-finite chart value、invalid base64/MIME pair、unsafe structural record が cell component を crash させることはありません。legacy の `stdout`、`stderr`、`value`、`plots` alias は validated/bounded `outputs` から再生成され、raw alias が別の unbounded payload を保持することはありません。
+`truncated: true` を使えるのは text、JSON、table だけです。chart、image、HTML は黙って truncate しません。invalid/cyclic/over-deep JSON、ragged table、non-finite chart value、invalid base64/MIME pair、unsafe structural record が cell component を crash させることはありません。実行結果は `outputs` に統一され、ストリームのテキストと JSON 値を結果直下に重複して保持しません。
 
 ## CSV copy の安全性
 
 default table action は表示中の row を spreadsheet-safe CSV として copy します。最初の meaningful character が `=`、`+`、`-`、`@`、tab、carriage return の string header/cell には、RFC-style の comma/quote/line-break escape より前に apostrophe を付けます。この決定的な規則により、一般的な spreadsheet application が string data を formula として評価することを防ぎます。数値は変更しないため、実際の number `-42` は `-42` のままです。
+
+## 実行結果の移行
+
+**破壊的変更:** 実行結果は必須の `outputs` 配列だけを持ちます。結果直下の `stdout/stderr/value/plots` と公開型 `PlotSpec/LinePlotSpec` は削除されました。`JsonArtifact.value` と入力の `value` は引き続き利用できます。
+
+以前は `outputs` が存在すると空配列でも旧フィールドより優先され、存在しない場合だけ stdout・stderr・value・plots の順で変換されていました。現在は旧形式だけの結果や配列以外の outputs を受け付けず、再生成を案内する診断を表示します。既存の outputs と併存する旧フィールドは無視します。
+
+```typescript
+const result = {
+  outputs: [
+    { kind: 'text', stream: 'stdout', content: 'Printed output' },
+    { kind: 'text', stream: 'stderr', content: 'Diagnostic output' },
+    { kind: 'json', value: { answer: 42 } },
+    { kind: 'chart', spec: { kind: 'line', series: [{ points: [[0, 1]] }] } }
+  ]
+};
+```
+
+Rust の早期 return も artifact を明示してください。通常の出力には引き続き `println!` と `emit_*` を使えます。
+
+```rust
+return Ok(CellOutput {
+    outputs: vec![OutputArtifact::Text(TextArtifact {
+        stream: "stdout",
+        content: "Early return".to_owned(),
+        truncated: false,
+    })],
+});
+```
+
+任意 helper crate `doc-rust` の `PlotSpec/LinePlot/line_plot` も削除されました。`SeriesPoint` を `[f64::from(point.n), point.x]` に明示変換し、`emit_line_chart!` に渡してください。互換マクロ `emit_line_plot!` は残っています。
+
+出力順は Rust が stdout の後に emit 順、Python が stdout・stderr・display・自動 matplotlib 図・最終値、Haskell が stdout・stderr です。Python の最終値が None または空文字列なら暗黙の JSON 出力はありません。明示した JSON artifact の null・空文字列・false・0 は保持します。これはストリーム捕捉順の変更ではありません。
+
+更新後は `pnpm exec oxiquill docgen --wasm dev` または本番の `pnpm build` で runtime を再生成してください。生成物の直接編集は不要です。
 
 ## Python display helper
 
@@ -223,6 +258,22 @@ runtime は pandas DataFrame/Series、matplotlib figure、`_repr_mimebundle_`、
 各セルはスタイル設定をリセットしてから既定値を適用するため、前のセルの `plt.style.use("dark_background")` は影響しません。格子線は `imshow` の画像にも重なります。写真やヒートマップで重ねたくない場合は `ax.grid(False)` を呼んでください。
 
 図の題と軸名から画像の代替テキストを生成します。SVG は `svg.fonttype: 'none'` を使い、読者のブラウザのフォントで日本語を描きます。SVG が 10 MiB を超えると 150 DPI の PNG に切り替え、stderr に診断を出します。PNG で日本語を描くには Python 環境内のフォントが必要です。画像と実行全体の上限は維持し、PNG も大きすぎる場合は artifact エラーになります。
+
+`display_chart(spec, *, id=None, title=None, caption=None)` は dict/list だけで全 6 種類の対話的チャートを出力します。pandas は不要です。spec の style と artifact の metadata を別々に指定できます。
+
+`display_line(df, *, x, y, id=None, title=None, caption=None, style=None)` は DataFrame の列から line チャートを作ります。`y` は列名または重複のない列名リストです。行順・列順を保ち、総点数は 10 万点までです。x は数値・文字列カテゴリ・タイムゾーン付き日時、y は有限数値を扱います。日時は UTC の epoch milliseconds に変換します。欠損値、NaN、無限大、NaT、タイムゾーンなし日時は行位置と列名付きの出力エラーになり、有効な隣接出力は残ります。欠損の前後を線で接続しません。
+
+```python
+display_chart({
+    "kind": "area",
+    "series": [{"points": [[0, 1], [1, 2]]}],
+    "style": {"animation": False},
+}, id="area", title="Measurements", caption="Two samples")
+
+import pandas as pd
+values = pd.DataFrame({"time": [0, 1], "a": [1, 2], "b": [3, 4]})
+display_line(values, x="time", y=["a", "b"], title="Two series")
+```
 
 ```python
 #| id: python-rich-outputs
@@ -256,7 +307,23 @@ Rust セルでは明示的な `emit_*` macro を使います。対応 macro:
 - `emit_png_base64!` と `emit_image_png!`
 - `emit_table!`、`emit_table_with_columns!`、`emit_records_table!`
 - `emit_line_chart!`、`emit_scatter_chart!`、`emit_bar_chart!`、`emit_histogram!`、`emit_heatmap!`
-- 互換用の `emit_line_plot!`
+- 互換用の `emit_line_plot!`。新規利用では座標を明示的に変換し、`emit_line_chart!` を使ってください。
+
+`emit_chart!(spec)` は全 6 種類のチャートを受け付けます。`metadata = ...` の `id/title/caption` は artifact に属し、spec の `title/xLabel/yLabel` とは別です。表示タイトルは artifact の title を優先します。`emit_area_chart!` は line と同じ点列・系列、軸ラベル、末尾 style、`options = ...` 形式を使えます。既存マクロの引数形式は維持されます。不正な spec は有効な隣接出力を残して、その出力の診断として表示されます。
+
+```rust
+emit_chart!(serde_json::json!({
+    "kind": "area",
+    "title": "Spec title",
+    "xLabel": "Time",
+    "yLabel": "Value",
+    "series": [{ "points": [[0, 1], [1, 2]] }],
+    "style": { "animation": false }
+}), metadata = serde_json::json!({
+    "id": "measurements", "title": "Measurement report", "caption": "Two samples"
+}));
+emit_area_chart!(&[[0, 1], [1, 2]], "Time", "Value");
+```
 
 ```rust
 //| id: rust-rich-outputs

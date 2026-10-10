@@ -200,11 +200,46 @@ Producers enforce limits inside each language worker before `postMessage`; the m
 | Worker error                | 16 KiB                          | The UTF-8 message is truncated.                                   |
 | Artifact diagnostic         | 8 KiB each; 64 KiB per run      | Diagnostics are truncated within both limits.                     |
 
-`truncated: true` is valid only for text, JSON, and table artifacts. Chart, image, and HTML artifacts are never silently truncated. Invalid/cyclic/over-deep JSON, ragged tables, non-finite chart values, invalid base64/MIME pairs, or unsafe structural records cannot crash the cell component. Legacy `stdout`, `stderr`, `value`, and `plots` aliases are regenerated from validated, bounded `outputs`; raw aliases cannot retain a second unbounded payload.
+`truncated: true` is valid only for text, JSON, and table artifacts. Chart, image, and HTML artifacts are never silently truncated. Invalid/cyclic/over-deep JSON, ragged tables, non-finite chart values, invalid base64/MIME pairs, or unsafe structural records cannot crash the cell component. Execution results contain only `outputs`; stream text and JSON values are artifacts rather than duplicate top-level fields.
 
 ## CSV Copy Safety
 
 The default table action copies visible rows as spreadsheet-safe CSV. String headers or cells whose first meaningful character is `=`, `+`, `-`, `@`, tab, or carriage return receive a leading apostrophe before RFC-style comma/quote/line-break escaping. This deterministic convention prevents common spreadsheet applications from evaluating string data as a formula. Numeric values remain numeric, so a genuine number such as `-42` is copied as `-42`.
+
+## Execution result migration
+
+**Breaking change:** execution results now require an `outputs` array. Top-level `stdout/stderr/value/plots` and the public `PlotSpec/LinePlotSpec` types have been removed. `JsonArtifact.value` and input `value` fields remain supported.
+
+Previously, an explicit `outputs` field took precedence even when empty; only its absence triggered conversion in stdout, stderr, value, plots order. Legacy-only results and non-array outputs now produce a regeneration diagnostic. Obsolete fields alongside an outputs array are ignored.
+
+```typescript
+const result = {
+  outputs: [
+    { kind: 'text', stream: 'stdout', content: 'Printed output' },
+    { kind: 'text', stream: 'stderr', content: 'Diagnostic output' },
+    { kind: 'json', value: { answer: 42 } },
+    { kind: 'chart', spec: { kind: 'line', series: [{ points: [[0, 1]] }] } }
+  ]
+};
+```
+
+Rust early returns must also supply explicit artifacts. Normal output still uses `println!` and `emit_*`.
+
+```rust
+return Ok(CellOutput {
+    outputs: vec![OutputArtifact::Text(TextArtifact {
+        stream: "stdout",
+        content: "Early return".to_owned(),
+        truncated: false,
+    })],
+});
+```
+
+The optional `doc-rust` helper crate also removes `PlotSpec/LinePlot/line_plot`. Convert `SeriesPoint` explicitly to `[f64::from(point.n), point.x]` and pass the coordinates to `emit_line_chart!`. The compatibility macro `emit_line_plot!` remains available.
+
+Ordering is unchanged: Rust emits captured stdout followed by artifacts in emit order; Python emits stdout, stderr, display artifacts, automatically collected matplotlib figures, then the final value; Haskell emits stdout then stderr. Python omits an implicit final JSON value for None or an empty string. Explicit JSON artifacts retain null, empty strings, false, and zero. Stream capture does not interleave with display calls.
+
+After upgrading, regenerate the runtime with `pnpm exec oxiquill docgen --wasm dev` or the production `pnpm build`. Do not edit generated files directly.
 
 ## Python Display Helpers
 
@@ -223,6 +258,22 @@ The runtime also understands common rich representations such as pandas DataFram
 Each cell resets style settings before applying these defaults, so a previous cell's `plt.style.use("dark_background")` does not affect it. Grid lines also appear over images from `imshow`; call `ax.grid(False)` for photographs and heatmaps when you do not want that overlay.
 
 Figure titles and axis labels supply image alternative text. SVG text uses browser fonts (`svg.fonttype: 'none'`), including Japanese fallback fonts installed on the reader's device. SVG larger than 10 MiB falls back to PNG at 150 DPI with a stderr diagnostic. PNG rendering needs fonts in the Python environment to draw Japanese glyphs. Image and cumulative run budgets still apply; oversized PNG output produces an artifact error.
+
+`display_chart(spec, *, id=None, title=None, caption=None)` emits any of the six interactive chart kinds using only dict/list data, without pandas. Pass style inside the spec and artifact metadata separately.
+
+`display_line(df, *, x, y, id=None, title=None, caption=None, style=None)` builds a line chart from DataFrame columns. `y` is a column name or a nonempty list of distinct column names. Row and column order are preserved, with at most 100,000 points across all series. X values may be numbers, string categories, or timezone-aware datetimes; Y values must be finite numbers. Datetimes become UTC epoch milliseconds. Missing values, NaN, infinity, NaT, and naive datetimes produce a local error identifying the row position and column. Valid neighboring outputs remain visible; missing values are never silently connected.
+
+```python
+display_chart({
+    "kind": "area",
+    "series": [{"points": [[0, 1], [1, 2]]}],
+    "style": {"animation": False},
+}, id="area", title="Measurements", caption="Two samples")
+
+import pandas as pd
+values = pd.DataFrame({"time": [0, 1], "a": [1, 2], "b": [3, 4]})
+display_line(values, x="time", y=["a", "b"], title="Two series")
+```
 
 ```python
 #| id: python-rich-outputs
@@ -255,8 +306,24 @@ Rust cells use explicit `emit_*` macros. Supported macros include:
 - `emit_svg!` and `emit_image_svg!`
 - `emit_png_base64!` and `emit_image_png!`
 - `emit_table!`, `emit_table_with_columns!`, and `emit_records_table!`
-- `emit_line_chart!`, `emit_scatter_chart!`, `emit_bar_chart!`, `emit_histogram!`, and `emit_heatmap!`
-- `emit_line_plot!` for compatibility with the original line-plot helper
+- `emit_chart!`, `emit_area_chart!`, `emit_line_chart!`, `emit_scatter_chart!`, `emit_bar_chart!`, `emit_histogram!`, and `emit_heatmap!`
+- `emit_line_plot!` for compatibility with the original line-plot helper; new code should convert coordinates explicitly and use `emit_line_chart!`.
+
+`emit_chart!(spec)` accepts all six chart kinds. Optional `metadata = ...` supplies artifact `id/title/caption`, separately from spec `title/xLabel/yLabel`; the artifact title takes display precedence. `emit_area_chart!` accepts the same points/series, axis labels, trailing style, and `options = ...` forms as line charts. Existing macro argument forms remain supported. An invalid spec produces a local diagnostic while valid neighboring outputs remain visible.
+
+```rust
+emit_chart!(serde_json::json!({
+    "kind": "area",
+    "title": "Spec title",
+    "xLabel": "Time",
+    "yLabel": "Value",
+    "series": [{ "points": [[0, 1], [1, 2]] }],
+    "style": { "animation": false }
+}), metadata = serde_json::json!({
+    "id": "measurements", "title": "Measurement report", "caption": "Two samples"
+}));
+emit_area_chart!(&[[0, 1], [1, 2]], "Time", "Value");
+```
 
 ```rust
 //| id: rust-rich-outputs
