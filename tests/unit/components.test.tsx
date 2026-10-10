@@ -2037,7 +2037,7 @@ describe('TableOutput', () => {
       [undefined, 'y']
     ]);
     expect(rows[0]).toEqual([2, 'b']);
-    expect(formatTableCell(1234.5678)).toBe('1,234.57');
+    expect(formatTableCell(1234.5678)).toBe('1234.57');
     expect(formatTableCell(Number.POSITIVE_INFINITY)).toBe('Infinity');
     expect(formatTableCell(null)).toBe('null');
     expect(formatTableCell(undefined)).toBe('missing');

@@ -2,6 +2,7 @@ import { useLayoutEffect, useMemo, useRef, useState } from 'preact/hooks';
 import { boundedErrorMessage } from '../../lib/doc-runtime/output-limits.mjs';
 import { labelsForLanguage, type RuntimeLabels } from '../../lib/doc-runtime/runtime-localization.js';
 import type { TableArtifact, TableColumn } from '../../lib/doc-runtime/types.js';
+import { formatTableNumber, tableColumnGrouping } from '../../lib/doc-runtime/table-format.js';
 
 interface TableOutputProps {
   idPrefix?: string;
@@ -46,6 +47,10 @@ export default function TableOutput({
   }
   const reconciledSort = resultChanged || !isSortValid(sort, table.columns) ? undefined : sort;
   const sortedRows = useMemo(() => sortRows(table.rows, reconciledSort), [table.rows, reconciledSort]);
+  const grouping = useMemo(
+    () => tableColumnGrouping(table.rows, table.columns.length),
+    [table.rows, table.columns.length]
+  );
   const pageCount = Math.max(1, Math.ceil(sortedRows.length / pageSize));
   const safePage = resultChanged ? 0 : Math.min(page, pageCount - 1);
   const currentRows = visibleRows(sortedRows, safePage, pageSize);
@@ -130,8 +135,12 @@ export default function TableOutput({
             {currentRows.map((row, rowIndex) => (
               <tr key={`${safePage}:${rowIndex}`}>
                 {table.columns.map((column, columnIndex) => (
-                  <td key={column.key} data-type={column.type ?? 'unknown'}>
-                    {formatTableCell(row[columnIndex], labels)}
+                  <td
+                    key={column.key}
+                    data-type={column.type ?? 'unknown'}
+                    title={typeof row[columnIndex] === 'number' ? String(row[columnIndex]) : undefined}
+                  >
+                    {formatTableCell(row[columnIndex], labels, grouping[columnIndex])}
                   </td>
                 ))}
               </tr>
@@ -246,13 +255,15 @@ export function tableToCsv(
   }
 }
 
-export function formatTableCell(value: unknown, labels: RuntimeLabels = labelsForLanguage('en')): string {
+export function formatTableCell(
+  value: unknown,
+  labels: RuntimeLabels = labelsForLanguage('en'),
+  useGrouping = false
+): string {
   if (value === null) return 'null';
   if (value === undefined) return labels.tableMissingValue;
   if (typeof value === 'number') {
-    return Number.isFinite(value)
-      ? new Intl.NumberFormat(labels.locale === 'ja' ? 'ja-JP' : 'en-US', { maximumSignificantDigits: 6 }).format(value)
-      : String(value);
+    return formatTableNumber(value, labels.locale, useGrouping);
   }
   if (typeof value === 'boolean') return value ? 'true' : 'false';
   if (typeof value === 'string') return value;
