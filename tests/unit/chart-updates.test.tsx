@@ -20,6 +20,7 @@ function output(spec: ChartSpec) {
 
 beforeEach(() => {
   vi.clearAllMocks();
+  chart.getOption.mockReturnValue({});
   chart.setOption.mockReset();
   document.documentElement.removeAttribute('data-theme');
   vi.stubGlobal(
@@ -44,6 +45,26 @@ afterEach(() => {
 });
 
 describe('persistent chart updates', () => {
+  it.each([false, true])('switches renderers while respecting a changed range (%s)', async (changedRange) => {
+    const view = render(output(line));
+    await waitFor(() => expect(chart.setOption).toHaveBeenCalledOnce());
+    chart.getOption.mockReturnValue({
+      dataZoom: [{ start: 20, end: 80 }],
+      legend: [{ selected: { 'line:0': false } }]
+    });
+    view.rerender(output({ ...line, style: { renderer: 'svg' }, ...(changedRange ? { xMin: 0, xMax: 10 } : {}) }));
+    await waitFor(() => expect(echartsInit).toHaveBeenCalledTimes(2));
+    await waitFor(() =>
+      expect(chart.setOption).toHaveBeenLastCalledWith(
+        expect.objectContaining({
+          dataZoom: [expect.objectContaining({ start: changedRange ? 0 : 20, end: changedRange ? 100 : 80 })],
+          legend: expect.objectContaining({ selected: { 'line:0': false } })
+        }),
+        { notMerge: true }
+      )
+    );
+  });
+
   it.each([false, true])('respects explicit showSymbol=%s through viewport updates', async (showSymbol) => {
     let extent = [0, 2];
     const instance = {

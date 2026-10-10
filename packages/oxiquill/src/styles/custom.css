@@ -286,6 +286,24 @@
   overflow-wrap: anywhere;
 }
 
+.doc-chart-output__actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+}
+
+@media print {
+  .doc-chart-output__actions,
+  .doc-table-output__controls {
+    display: none;
+  }
+
+  .doc-chart-output {
+    break-inside: avoid;
+    print-color-adjust: exact;
+  }
+}
+
 .doc-chart-output > *,
 .doc-chart-output figcaption > * {
   min-width: 0;
