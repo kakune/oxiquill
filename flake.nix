@@ -31,11 +31,37 @@
             sha256 = "sha256-zm3dyIY2T414ZRR3EhLOvptzG6gta4WZUcawzMUWtqI=";
           };
           nodejs = pkgs.nodejs_24;
-          pnpm = pkgs.pnpm_12.overrideAttrs (_oldAttrs: {
+          # pnpm 12's npm package is a launcher; use the official static Linux binary.
+          pnpm = pkgs.stdenvNoCC.mkDerivation (finalAttrs: {
+            pname = "pnpm";
             version = "12.10.1";
             src = pkgs.fetchurl {
-              url = "https://registry.npmjs.org/pnpm/-/pnpm-12.10.1.tgz";
-              hash = "sha256-mSBw5CLa4z6sciaP+95GXhTa6B7SUBSSmdH+49hC1g4=";
+              url = "https://registry.npmjs.org/@pnpm/exe.linux-x64-musl/-/exe.linux-x64-musl-${finalAttrs.version}.tgz";
+              hash = "sha256-cxO+57FOjizP/sKMEdwTAmQKXo3p91Yl2rB+urJEw+o=";
+            };
+            nativeBuildInputs = [
+              pkgs.installShellFiles
+              pkgs.makeWrapper
+            ];
+            dontConfigure = true;
+            dontBuild = true;
+            dontStrip = true;
+            installPhase = ''
+              runHook preInstall
+              install -Dm755 pnpm "$out/bin/pnpm"
+              makeWrapper "$out/bin/pnpm" "$out/bin/pnpx" --add-flags "dlx"
+              ln -s "$out/bin/pnpm" "$out/bin/pn"
+              ln -s "$out/bin/pnpx" "$out/bin/pnx"
+              "$out/bin/pnpm" completion bash > pnpm.bash
+              "$out/bin/pnpm" completion fish > pnpm.fish
+              "$out/bin/pnpm" completion zsh > pnpm.zsh
+              installShellCompletion pnpm.{bash,fish,zsh}
+              runHook postInstall
+            '';
+            meta = {
+              mainProgram = "pnpm";
+              platforms = [ "x86_64-linux" ];
+              license = pkgs.lib.licenses.mit;
             };
           });
           haskellGhc = ghc-wasm-meta.packages.${system}."wasm32-wasi-ghc-9_14";
