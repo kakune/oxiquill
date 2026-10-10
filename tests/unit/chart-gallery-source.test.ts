@@ -1,8 +1,8 @@
 // @vitest-environment node
-import { mkdtemp, mkdir, writeFile, rm, readFile } from 'node:fs/promises';
+import { mkdtemp, mkdir, writeFile, rm, readFile, realpath } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { createServer } from 'vite';
+import { createServer, normalizePath } from 'vite';
 import { expect, it } from 'vitest';
 import { chartGalleryConfig } from '../fixtures/chart-gallery/vite.config';
 
@@ -30,11 +30,11 @@ it('loads the baseline component, transitive helpers, and CSS from one source tr
     expect(component.baseline).toBe('base helper');
     expect(component.element.type).toBe('span');
     const css = await server.environments.client.pluginContainer.resolveId('@chart-source/styles/custom.css');
-    expect(css?.id).toBe(join(source, 'styles/custom.css'));
     if (!css) throw new Error('Baseline CSS did not resolve');
+    expect(await realpath(css.id)).toBe(await realpath(join(source, 'styles/custom.css')));
     expect(await readFile(css.id, 'utf8')).toContain('rgb(1, 2, 3)');
     const preact = await server.environments.client.pluginContainer.resolveId('preact');
-    expect(preact?.id).not.toContain(base);
+    expect(preact?.id).not.toContain(normalizePath(await realpath(base)));
     expect(() => chartGalleryConfig(join(base, 'missing'))).toThrow('Chart gallery source does not exist');
   } finally {
     await server?.close();
