@@ -11,6 +11,21 @@ const echarts = createRequire(resolve('packages/oxiquill/package.json'))('echart
 echarts.setPlatformAPI({ measureText });
 
 describe('chart layout inspection', () => {
+  it('rejects a real ECharts option that places axis text outside the canvas', () => {
+    const chart = echarts.init(null, null, { renderer: 'svg', ssr: true, width: 360, height: 360 });
+    try {
+      const options = chartSpecToEChartsOptions(chartFixtures.large, 'light', { reducedMotion: true, width: 360 });
+      options.grid = { left: 4, right: 4, top: 4, bottom: 4, outerBoundsMode: 'none' };
+      options.yAxis.nameGap = 80;
+      options.yAxis.nameMoveOverlap = false;
+      chart.setOption(options);
+      expect(svgLayoutIssues(chart.renderToSVGString(), 360, 360)).toEqual(
+        expect.arrayContaining([expect.stringMatching(/^Outside:/u)])
+      );
+    } finally {
+      chart.dispose();
+    }
+  });
   it('detects deliberate overlap and overflow in SVG output', () => {
     expect(
       svgLayoutIssues(
