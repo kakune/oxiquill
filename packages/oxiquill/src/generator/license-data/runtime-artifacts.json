@@ -27,7 +27,7 @@
     },
     {
       "name": "GHC WASI runtime libraries",
-      "version": "9.14.1.20260330",
+      "version": "9.14.1.20260731",
       "license": "BSD-3-Clause",
       "licenseFiles": ["haskell/GHC-9.14.1-LICENSE.txt"],
       "files": ["haskell-wasm/doc_haskell_cells.wasm"],
