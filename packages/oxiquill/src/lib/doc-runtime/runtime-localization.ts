@@ -30,6 +30,9 @@ export type RuntimeLabels = {
   cellRetry: string;
   cellUpdating: string;
   chartCaption: string;
+  savePng: string;
+  saveSvg: string;
+  chartExportError: (detail: string) => string;
   chartHistogramCount: string;
   chartHistogramDensity: string;
   chartSeriesName: (index: number) => string;
@@ -149,6 +152,9 @@ const runtimeLabels = {
     cellRetry: 'Retry cell',
     cellUpdating: 'Updating…',
     chartCaption: 'Chart data summary',
+    savePng: 'Save PNG',
+    saveSvg: 'Save SVG',
+    chartExportError: (detail) => `Unable to save chart: ${detail}`,
     chartHistogramCount: 'Count',
     chartHistogramDensity: 'Density',
     chartSeriesName: (index) => `Series ${index}`,
@@ -237,6 +243,9 @@ const runtimeLabels = {
     cellRetry: 'セルの実行を再試行',
     cellUpdating: '更新中…',
     chartCaption: 'グラフデータの概要',
+    savePng: 'PNGを保存',
+    saveSvg: 'SVGを保存',
+    chartExportError: (detail) => `グラフを保存できませんでした: ${translateDiagnostic(detail)}`,
     chartHistogramCount: '度数',
     chartHistogramDensity: '密度',
     chartSeriesName: (index) => `系列 ${index}`,

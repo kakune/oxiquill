@@ -214,6 +214,7 @@ function validateChartStyle(value: unknown, kind: string): LineChartStyle & Scat
     record,
     [
       'palette',
+      'renderer',
       'xFormat',
       'yFormat',
       ...(kind === 'heatmap' ? ['valueFormat'] : []),
@@ -227,6 +228,11 @@ function validateChartStyle(value: unknown, kind: string): LineChartStyle & Scat
     context
   );
   const style: LineChartStyle & ScatterChartStyle = {};
+  if (Object.hasOwn(record, 'renderer')) {
+    if (record.renderer !== 'canvas' && record.renderer !== 'svg')
+      throw new ArtifactValidationError(`${context} renderer must be canvas or svg.`);
+    style.renderer = record.renderer;
+  }
   for (const field of ['xFormat', 'yFormat', 'valueFormat'] as const) {
     if (Object.hasOwn(record, field))
       style[field] = validateNumberFormat(requiredOwnValue(record, field, context), context + ' ' + field);

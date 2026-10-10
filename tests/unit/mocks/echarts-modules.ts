@@ -1,5 +1,6 @@
 export const BarChart = {};
 export const CanvasRenderer = {};
+export const SVGRenderer = {};
 export const DataZoomComponent = {};
 export const GridComponent = {};
 export const HeatmapChart = {};
