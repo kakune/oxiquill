@@ -7,24 +7,18 @@ const { hasSidebar, dir, lang } = Astro.locals.starlightRoute;
 const presentation = togglePresentation(lang, dir, 'sidebar');
 ---
 
-{
-  hasSidebar && (
-    <script is:inline>
-      {`
-				(() => {
-					try {
-						if (
-							matchMedia('(min-width: 50rem)').matches &&
-							sessionStorage.getItem('oxiquill-sidebar-collapsed') === 'true'
-						) {
-							document.documentElement.setAttribute('data-sidebar-collapsed', '');
-						}
-					} catch {}
-				})();
-			`}
-    </script>
-  )
-}
+<script is:inline define:vars={{ hasSidebar }}>
+  (() => {
+    let collapsed = false;
+    try {
+      collapsed =
+        hasSidebar &&
+        matchMedia('(min-width: 50rem)').matches &&
+        sessionStorage.getItem('oxiquill-sidebar-collapsed') === 'true';
+    } catch {}
+    document.documentElement.toggleAttribute('data-sidebar-collapsed', collapsed);
+  })();
+</script>
 
 <div class="page sl-flex">
   <header class="header"><slot name="header" /></header>
