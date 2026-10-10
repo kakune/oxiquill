@@ -4,8 +4,10 @@ import { chartPalette } from './chart-palette.js';
 const pythonDisplayJsonAndScalarSupport = String.raw`
 import base64
 import builtins
+import datetime
 import io
 import json
+import math
 import os
 import sys
 import warnings
@@ -19,6 +21,7 @@ __oxiquill_output_byte_limit = ${outputArtifactLimits.validatedBytesPerRun}
 __oxiquill_diagnostic_byte_limit = ${outputArtifactLimits.bytesPerDiagnostic}
 __oxiquill_image_byte_limit = ${outputArtifactLimits.decodedBytesPerImage}
 __oxiquill_metadata_byte_limit = ${outputArtifactLimits.bytesPerMetadataField}
+__oxiquill_chart_limit = ${outputArtifactLimits.chartDataItems}
 __oxiquill_output_bytes = 0
 __oxiquill_output_omission = None
 
@@ -37,19 +40,24 @@ def __oxiquill_error_artifact(message):
         "message": __oxiquill_bound_text(message, __oxiquill_diagnostic_byte_limit),
     }
 
-def __oxiquill_append_output(artifact):
+def __oxiquill_append_output(artifact, *, json_snapshot=False):
     global __oxiquill_output_bytes, __oxiquill_output_omission
     if len(__oxiquill_outputs) >= __oxiquill_artifact_limit:
         __oxiquill_output_omission = "Python output exceeded the artifact count limit."
         return
     try:
-        artifact_bytes = len(json.dumps(artifact, ensure_ascii=False, separators=(",", ":")).encode("utf-8"))
+        serialized = json.dumps(artifact, ensure_ascii=False, separators=(",", ":"))
     except Exception as error:
         artifact = __oxiquill_error_artifact(f"Python output could not be serialized: {error}")
-        artifact_bytes = len(json.dumps(artifact, ensure_ascii=False, separators=(",", ":")).encode("utf-8"))
+        serialized = json.dumps(artifact, ensure_ascii=False, separators=(",", ":"))
+    artifact_bytes = len(serialized.encode("utf-8"))
     if artifact_bytes > __oxiquill_output_byte_limit - __oxiquill_output_bytes:
         __oxiquill_output_omission = "Python output exceeded the cumulative artifact byte limit."
         return
+    if json_snapshot:
+        from js import JSON
+        # Pyodide maps Python None to undefined; JSON preserves nullable bar values.
+        artifact = JSON.parse(serialized)
     __oxiquill_outputs.append(artifact)
     __oxiquill_output_bytes += artifact_bytes
 
@@ -537,6 +545,108 @@ def display_table(value, *, title=None, caption=None):
     }, title, caption))
 `;
 
+const pythonDisplayChartSupport = String.raw`
+def __oxiquill_check_chart_size(spec):
+    if not isinstance(spec, dict):
+        raise ValueError("Chart spec must be a dict.")
+    for key in ("categories", "xCategories", "yCategories", "series", "bins", "data"):
+        items = spec.get(key)
+        if isinstance(items, list) and len(items) > __oxiquill_chart_limit:
+            raise ValueError(f"Chart contains {len(items)} data items; maximum is {__oxiquill_chart_limit}.")
+    series = spec.get("series")
+    if not isinstance(series, list):
+        return
+    count = 0
+    for item in series:
+        if not isinstance(item, dict):
+            continue
+        field = "values" if spec.get("kind") == "bar" else "points"
+        values = item.get(field)
+        if isinstance(values, list):
+            count += len(values) if field == "values" else max(1, len(values))
+        if count > __oxiquill_chart_limit:
+            raise ValueError(f"Chart contains {count} data items; maximum is {__oxiquill_chart_limit}.")
+
+def display_chart(spec, *, id=None, title=None, caption=None):
+    try:
+        if len(__oxiquill_outputs) >= __oxiquill_artifact_limit:
+            __oxiquill_append_output({})
+            return
+        __oxiquill_check_chart_size(spec)
+        artifact = {"kind": "chart", "spec": spec}
+        for key, value in (("id", id), ("title", title), ("caption", caption)):
+            if value is not None:
+                artifact[key] = value
+        # Bound serialization before crossing into JavaScript, and snapshot mutable inputs.
+        encoder = json.JSONEncoder(ensure_ascii=False, allow_nan=False, separators=(",", ":"))
+        chunks = []
+        byte_count = 0
+        for chunk in encoder.iterencode(artifact):
+            byte_count += len(chunk.encode("utf-8"))
+            if byte_count > __oxiquill_output_byte_limit - __oxiquill_output_bytes:
+                raise ValueError("Python chart exceeded the cumulative artifact byte limit.")
+            chunks.append(chunk)
+        __oxiquill_append_output(json.loads("".join(chunks)), json_snapshot=True)
+    except Exception as error:
+        __oxiquill_append_output(__oxiquill_error_artifact(str(error)))
+
+def __oxiquill_line_coordinate(value, row, column, *, allow_category=False):
+    pd = sys.modules.get("pandas")
+    context = f"Line chart row {row}, column {column!r}"
+    if not pd.api.types.is_scalar(value):
+        raise ValueError(f"{context} must be a scalar.")
+    if pd.isna(value):
+        raise ValueError(f"{context} is missing.")
+    if isinstance(value, datetime.datetime):
+        if not allow_category:
+            raise ValueError(f"{context} must be a finite number.")
+        if value.tzinfo is None or value.utcoffset() is None:
+            raise ValueError(f"{context} requires an explicit time zone.")
+        return value.timestamp() * 1000, "time"
+    item = getattr(value, "item", None)
+    if callable(item):
+        value = item()
+    if isinstance(value, (int, float)) and not isinstance(value, bool) and math.isfinite(value):
+        return value, "value"
+    if allow_category and isinstance(value, str):
+        return value, "category"
+    raise ValueError(f"{context} must be a finite number" + (", string, or timezone-aware datetime." if allow_category else "."))
+
+def display_line(df, *, x, y, id=None, title=None, caption=None, style=None):
+    try:
+        if not __oxiquill_is_pandas_dataframe(df):
+            raise ValueError("display_line expects a pandas DataFrame.")
+        columns = [y] if isinstance(y, str) else y
+        if not isinstance(x, str) or not isinstance(columns, list) or not columns or not all(isinstance(name, str) for name in columns):
+            raise ValueError("display_line requires an x column name and a y column name or nonempty list of names.")
+        if len(columns) > __oxiquill_chart_limit or max(1, len(df)) * len(columns) > __oxiquill_chart_limit:
+            raise ValueError(f"Line chart exceeds {__oxiquill_chart_limit} data items.")
+        if not df.columns.is_unique or len(set(columns)) != len(columns):
+            raise ValueError("display_line requires unique column names.")
+        for name in [x, *columns]:
+            if name not in df.columns:
+                raise ValueError(f"Line chart column {name!r} does not exist.")
+        series = [{"name": name, "points": []} for name in columns]
+        x_type = None
+        # Select only the requested columns; do not materialize an entire DataFrame.
+        for row, values in enumerate(df.loc[:, [x, *columns]].itertuples(index=False, name=None), 1):
+            x_value, coordinate_type = __oxiquill_line_coordinate(values[0], row, x, allow_category=True)
+            if x_type is not None and coordinate_type != x_type:
+                raise ValueError(f"Line chart row {row}, column {x!r} mixes coordinate types.")
+            x_type = coordinate_type
+            for output, name, value in zip(series, columns, values[1:]):
+                y_value, _ = __oxiquill_line_coordinate(value, row, name)
+                output["points"].append([x_value, y_value])
+        spec = {"kind": "line", "series": series, "xLabel": x, "xType": x_type or "value", "yType": "value", "tooltip": True, "dataZoom": True}
+        if len(columns) == 1:
+            spec["yLabel"] = columns[0]
+        if style is not None:
+            spec["style"] = style
+        display_chart(spec, id=id, title=title, caption=caption)
+    except Exception as error:
+        __oxiquill_append_output(__oxiquill_error_artifact(str(error)))
+`;
+
 const pythonDisplayBootstrapSupport = String.raw`
 def __oxiquill_reset_outputs():
     global __oxiquill_output_bytes, __oxiquill_output_omission
@@ -562,6 +672,8 @@ builtins.display_json = display_json
 builtins.display_html = display_html
 builtins.display_table = display_table
 builtins.display_image = display_image
+builtins.display_chart = display_chart
+builtins.display_line = display_line
 `;
 
 export const pythonDisplaySupportCode = [
@@ -571,5 +683,6 @@ export const pythonDisplaySupportCode = [
   pythonDisplayMatplotlibSupport,
   pythonDisplayDispatchSupport,
   pythonDisplayPublicFunctions,
+  pythonDisplayChartSupport,
   pythonDisplayBootstrapSupport
 ].join('\n');
