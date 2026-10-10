@@ -1238,7 +1238,7 @@ describe('ChartOutput options', () => {
         series: [{ name: 'hidden', points: [[0, 1]] }]
       })
     ).toMatchObject({
-      legend: undefined,
+      legend: { show: false },
       tooltip: undefined
     });
 

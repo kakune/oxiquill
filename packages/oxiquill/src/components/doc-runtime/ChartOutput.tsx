@@ -7,6 +7,7 @@ import {
   chartResizeOptions,
   chartSpecToEChartsOptions,
   chartStructuralSignature,
+  chartSeriesId,
   defaultChartChrome,
   type ChartChrome,
   type ChartTheme
@@ -176,7 +177,15 @@ export default function ChartOutput({ artifact, idPrefix, labels }: ChartOutputP
                   current.instance.resize();
                 }
                 if (current.width !== width || current.height !== height) {
-                  current.instance.setOption(chartResizeOptions(spec, current.counts ?? { x: 0, y: 0 }, width, height));
+                  current.instance.setOption(
+                    chartResizeOptions(
+                      spec,
+                      current.counts ?? { x: 0, y: 0 },
+                      width,
+                      height,
+                      latest.current.labels.locale
+                    )
+                  );
                   current.width = width;
                   current.height = height;
                 }
@@ -193,15 +202,20 @@ export default function ChartOutput({ artifact, idPrefix, labels }: ChartOutputP
               }
               if (spec.kind === 'line' || spec.kind === 'area') {
                 current.indexes ??= chartPointIndexes(spec, axes);
-                const visible = current.indexes.map((index) => hasIsolatedPoint(index, x, y));
+                const visible = current.indexes.map(
+                  (index, seriesIndex) => spec.series[seriesIndex].style?.showSymbol ?? hasIsolatedPoint(index, x, y)
+                );
                 const signature = JSON.stringify(visible);
                 if (current.symbols !== signature) {
                   const initial =
                     current.symbols === undefined &&
-                    visible.every((show, index) => show === (spec.series[index].points.length === 1));
+                    visible.every(
+                      (show, index) =>
+                        show === (spec.series[index].style?.showSymbol ?? spec.series[index].points.length === 1)
+                    );
                   current.symbols = signature;
                   if (!initial)
-                    patch.series = visible.map((showSymbol, index) => ({ id: spec.kind + ':' + index, showSymbol }));
+                    patch.series = visible.map((showSymbol, index) => ({ id: chartSeriesId(spec, index), showSymbol }));
                 }
               }
               if (Object.keys(patch).length) current.instance.setOption(patch);

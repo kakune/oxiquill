@@ -279,13 +279,7 @@ describe('persistent chart updates', () => {
         style: { lineWidth: 8 }
       })
     );
-    for (const patch of [
-      { xType: 'time' },
-      { yType: 'log' },
-      { legend: true },
-      { tooltip: false },
-      { dataZoom: false }
-    ]) {
+    for (const patch of [{ xType: 'time' }, { yType: 'log' }, { tooltip: false }, { dataZoom: false }]) {
       expect(chartStructuralSignature({ ...line, ...patch } as ChartSpec)).not.toBe(chartStructuralSignature(line));
     }
     expect(chartStructuralSignature({ ...line, title: 'Title', style: { height: 240 } })).toBe(
@@ -299,7 +293,7 @@ describe('persistent chart updates', () => {
           { name: 'B', points: [] }
         ]
       })
-    ).not.toBe(chartStructuralSignature(line));
+    ).toBe(chartStructuralSignature(line));
   });
 
   it.each(['light', 'dark'] as const)('resolves Starlight chrome and curated options in %s', (theme) => {

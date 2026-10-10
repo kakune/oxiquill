@@ -163,6 +163,26 @@ emit_line_chart!(&points, "Time", "Voltage", &serde_json::json!({
 }));
 ```
 
+### 系列の ID とスタイル
+
+XY・bar 系列には空でない一意の `id` を付けられます。実行ごとに同じ ID を使うと、並べ替えや改名後も系列の識別と凡例の選択を保持します。name は表示名であり、同名の系列も個別に選択できます。ID がなければ系列の位置で対応付けます。系列の追加・削除ではズームをリセットしません。既定の配色は記述順に従うため、系列の色を固定するには明示的に指定してください。
+
+`series.style.color` は `#RGB/#RRGGBB` または `{ light, dark }` で指定し、少なくとも一方のテーマを含めます。未指定のテーマは chart palette を使います。line・area はさらに `lineType`（solid/dashed/dotted）、`step`（false/start/middle/end）、`smooth`（boolean）、`symbol`、`showSymbol` を使えます。scatter は色と記号、bar は色に対応します。記号は circle/emptyCircle/rect/triangle/diamond/none です。
+
+smooth と step は同時に有効化できません。既定では平滑化せず、明示した線種・記号は配色循環の自動設定より優先します。showSymbol の指定は孤立点の自動検出より優先します。設定を削除すると既定値へ戻り、従来の chart 全体の lineWidth・symbolSize は引き続きサイズを指定します。
+
+```rust
+//| id: styled-series
+//| title: Measured and reference series
+let series = serde_json::json!([
+    { "id": "measured", "name": "Measurement", "points": [[0, 1], [1, 2]],
+      "style": { "color": { "light": "#3987e5", "dark": "#9085e9" }, "symbol": "diamond", "showSymbol": true } },
+    { "id": "reference", "name": "Reference", "points": [[0, 1.5], [1, 1.5]],
+      "style": { "lineType": "dashed", "step": "end" } }
+]);
+emit_line_chart!(&series, "Observation", "Value");
+```
+
 ## Resource limit
 
 producer は各 language worker 内で `postMessage` より前に limit を適用し、main thread でも bounded response を独立して再検証します。limit は UTF-8 byte 単位で、記載のものは run ごとに累積します。

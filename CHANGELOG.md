@@ -8,6 +8,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ### Added
 
+- Stable chart series IDs and per-series colors, line patterns, steps, smoothing, and symbols; same-named legend entries remain independently selectable.
+
 - Numeric chart formats for significant digits, fixed decimals, units, and SI prefixes, shared by axes, tooltips, summaries, and heatmap scales.
 
 - Authored chart axis bounds and zero inclusion, with Rust chart options and a fixed-range logistic map example.

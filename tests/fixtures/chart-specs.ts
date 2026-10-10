@@ -129,6 +129,29 @@ export const chartFixtures: Record<string, ChartSpec> = {
       }
     ]
   },
+  seriesIdentity: {
+    kind: 'line',
+    series: [
+      {
+        id: 'a',
+        name: 'Same',
+        points: [
+          [0, 1],
+          [1, 2]
+        ],
+        style: { smooth: true, symbol: 'diamond', showSymbol: true, color: { light: '#3987e5', dark: '#9085e9' } }
+      },
+      {
+        id: 'b',
+        name: 'Same',
+        points: [
+          [0, 2],
+          [1, 1]
+        ],
+        style: { step: 'end', lineType: 'dashed' }
+      }
+    ]
+  },
   formatted: line([1500, 2400], { style: { yFormat: { fractionDigits: 2, notation: 'si', unit: 'V' } } }),
   histogramDensity: {
     kind: 'histogram',

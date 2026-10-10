@@ -185,7 +185,7 @@ describe('real ECharts viewport regressions', () => {
     };
     withChart(spec, (chart) => {
       expect(chart.renderToSVGString()).toContain('stroke-width="1.5"');
-      chart.dispatchAction({ type: 'legendUnSelect', name: 'A' });
+      chart.dispatchAction({ type: 'legendUnSelect', name: 'line:0' });
       expect(chart.renderToSVGString()).toContain('stroke-width="1.5"');
     });
   });
@@ -213,7 +213,7 @@ describe('real ECharts viewport regressions', () => {
     };
     withChart(spec, (chart) => {
       chart.dispatchAction({ type: 'dataZoom', start: 25, end: 75 });
-      chart.dispatchAction({ type: 'legendUnSelect', name: 'B' });
+      chart.dispatchAction({ type: 'legendUnSelect', name: 'line:1' });
       const before = chart.getOption();
       const patch = chartResizeOptions(spec, { x: 0, y: 0 }, 360, 360);
       expect(patch).not.toHaveProperty('series');

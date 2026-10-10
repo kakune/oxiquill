@@ -25,6 +25,10 @@ try {
     return JSON.parse(runtime.run_rust_cell(cell.id, JSON.stringify(inputs)));
   };
   assert.equal(run('density-histogram').outputs[0].spec.mode, 'density');
+  const presentations = run('series-presentation').outputs;
+  assert.equal(presentations[0].spec.series[0].id, 'a');
+  assert.equal(presentations[0].spec.series[0].style.lineType, 'dashed');
+  assert.deepEqual(presentations[1].spec.series[0].style.color, { dark: '#123' });
   const optionsCharts = run('chart-options').outputs;
   assert.equal(optionsCharts.length, 4);
   for (const artifact of optionsCharts) {

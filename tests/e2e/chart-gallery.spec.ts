@@ -14,7 +14,7 @@ for (const width of [360, 720]) {
       await page.emulateMedia({ reducedMotion: 'reduce' });
       await page.setViewportSize({ width: width + 40, height: 900 });
       await page.goto(`http://127.0.0.1:4323/?width=${width}&theme=${theme}`);
-      await expect(page.locator('.doc-plot')).toHaveCount(24);
+      await expect(page.locator('.doc-plot')).toHaveCount(25);
       await expect
         .poll(() =>
           page.locator('.doc-plot').evaluateAll((plots) => plots.every((plot) => plot.querySelector('canvas')))
@@ -72,7 +72,7 @@ test('legend scrolling and selection survive data and title updates', async ({ p
   await page.goto('http://127.0.0.1:4323/?fixture=legend&width=360');
   await expect(page.locator('canvas')).toHaveCount(1);
   await action(page, { type: 'legendScroll', scrollDataIndex: 3 });
-  await action(page, { type: 'legendUnSelect', name: 'A long descriptive name for measurement series 1' });
+  await action(page, { type: 'legendUnSelect', name: 'line:0' });
   const before = await state(page);
   await page.getByRole('button', { name: 'Update data' }).click();
   await expect(page.locator('figcaption')).toContainText('Updated legend');
@@ -174,7 +174,7 @@ for (const fixture of ['legend', 'heatmap']) {
     await expect(page.locator('canvas').first()).toBeVisible();
     if (fixture === 'legend') {
       await action(page, { type: 'dataZoom', start: 20, end: 70 });
-      await action(page, { type: 'legendUnSelect', name: 'A long descriptive name for measurement series 1' });
+      await action(page, { type: 'legendUnSelect', name: 'line:0' });
       await action(page, { type: 'legendScroll', scrollDataIndex: 3 });
     } else await action(page, { type: 'selectDataRange', selected: [0.2, 0.6] });
     const read = () =>
@@ -213,4 +213,28 @@ test('authored number formats can be cleared without resetting zoom', async ({ p
   await page.getByRole('button', { name: 'Clear formatting' }).click();
   await expect(page.locator('.doc-chart-output__summary')).not.toContainText('kV');
   await expect.poll(async () => (await state(page)).zoom).toEqual(before.zoom);
+});
+
+test('same-named series retain independent selection after reorder and rename', async ({ page }) => {
+  await page.goto('http://127.0.0.1:4323/?fixture=seriesIdentity');
+  await expect(page.locator('canvas').first()).toBeVisible();
+  await action(page, { type: 'legendUnSelect', name: 'line:id:a' });
+  await action(page, { type: 'dataZoom', start: 10, end: 90 });
+  const before = await state(page);
+  await page.getByRole('button', { name: 'Reorder and rename series' }).click();
+  await expect(page.locator('.doc-chart-output__summary')).toContainText('Renamed');
+  await expect.poll(async () => (await state(page)).legend?.[0].selected).toEqual(before.legend?.[0].selected);
+  await expect.poll(async () => (await state(page)).zoom).toEqual(before.zoom);
+  const series = await page.locator('.doc-plot').evaluate((element) => {
+    const option = window.galleryECharts.getInstanceByDom(element as HTMLElement)?.getOption() as {
+      series: { id: string; smooth: boolean; step: boolean; symbol: string }[];
+    };
+    return option.series.map(({ id, smooth, step, symbol }) => ({ id, smooth, step, symbol }));
+  });
+  expect(series.find((item) => item.id === 'line:id:a')).toMatchObject({
+    smooth: false,
+    step: false,
+    symbol: 'emptyCircle'
+  });
+  await expect(page.locator('[role="alert"]')).toHaveCount(0);
 });

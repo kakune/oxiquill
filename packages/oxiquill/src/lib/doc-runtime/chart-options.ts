@@ -50,7 +50,6 @@ export function chartStructuralSignature(spec: ChartSpec): string {
     spec.kind,
     chartAxisType(spec, 'x'),
     chartAxisType(spec, 'y'),
-    showLegend(spec),
     spec.tooltip !== false,
     spec.kind !== 'heatmap' && spec.dataZoom !== false
   ]);
@@ -61,11 +60,32 @@ function seriesNames(spec: ChartSpec, locale: RuntimeLocale): string[] {
     ? spec.series.map((series, index) =>
         series.name?.trim()
           ? series.name
-          : spec.series.length > 1
+          : spec.series.length > 1 || showLegend(spec)
             ? labelsForLanguage(locale).chartSeriesName(index + 1)
             : ''
       )
     : [''];
+}
+
+export function chartSeriesId(spec: ChartSpec, index: number): string {
+  const id = 'series' in spec ? spec.series[index].id : undefined;
+  return id === undefined ? spec.kind + ':' + index : spec.kind + ':id:' + id;
+}
+
+function seriesLabels(spec: ChartSpec, names: readonly string[]): Map<string, string> {
+  return new Map(names.map((name, index) => [chartSeriesId(spec, index), name]));
+}
+
+function legendFormatter(spec: ChartSpec, locale: RuntimeLocale, width: number) {
+  const names = seriesLabels(spec, seriesNames(spec, locale));
+  return (id: string) => truncateChartLabel(names.get(id) ?? '', Math.max(36, Math.min(220, width - 180)));
+}
+
+function escapeChartText(text: string): string {
+  return text.replace(
+    /[&<>"']/gu,
+    (character) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[character] ?? character
+  );
 }
 
 export function chartSpecToEChartsOptions(
@@ -85,6 +105,7 @@ export function chartSpecToEChartsOptions(
   const layout = chartLayout(spec, width, height, legend);
   const values = chartCoordinates(spec);
   const names = seriesNames(spec, locale);
+  const nameById = seriesLabels(spec, names);
   const heatmap = spec.kind === 'heatmap' ? normalizeHeatmapSpec(spec) : undefined;
   const xType = chartAxisType(spec, 'x');
   const yType = chartAxisType(spec, 'y');
@@ -159,21 +180,25 @@ export function chartSpecToEChartsOptions(
             extraCssText: tooltipCss(width),
             formatter: chartTooltipFormatter(spec, locale, names)
           },
-    legend: legend
-      ? {
-          type: 'scroll',
-          top: 8,
-          left: 16,
-          right: 16,
-          height: 24,
-          textStyle: { color: chrome.text },
-          pageTextStyle: { color: chrome.text },
-          pageIconColor: chrome.text,
-          pageIconInactiveColor: chrome.border,
-          tooltip: { show: true, confine: true },
-          formatter: (name: string) => truncateChartLabel(name, Math.max(36, Math.min(220, width - 180)))
-        }
-      : undefined,
+    legend: {
+      show: legend,
+      data: [...nameById.keys()],
+      type: 'scroll',
+      top: 8,
+      left: 16,
+      right: 16,
+      height: 24,
+      textStyle: { color: chrome.text },
+      pageTextStyle: { color: chrome.text },
+      pageIconColor: chrome.text,
+      pageIconInactiveColor: chrome.border,
+      tooltip: {
+        show: true,
+        confine: true,
+        formatter: ({ name }: { name: string }) => escapeChartText(nameById.get(name) ?? '')
+      },
+      formatter: legendFormatter(spec, locale, width)
+    },
     dataZoom:
       spec.dataZoom === false || heatmap
         ? undefined
@@ -189,22 +214,29 @@ export function chartSpecToEChartsOptions(
           ],
     series: chartSeries(spec).map((item, index) => {
       const cycle = Math.floor(index / palette.length);
+      const authored = 'series' in spec ? spec.series[index].style : undefined;
+      const color =
+        (typeof authored?.color === 'string' ? authored.color : authored?.color?.[theme]) ??
+        palette[index % palette.length];
+      const line = spec.kind === 'line' || spec.kind === 'area' ? spec.series[index].style : undefined;
       return {
         ...item,
-        id: spec.kind + ':' + index,
-        name: names[index],
+        id: chartSeriesId(spec, index),
+        name: chartSeriesId(spec, index),
+        itemStyle: { ...(item.itemStyle as Record<string, unknown>), color },
         ...(spec.kind === 'line' || spec.kind === 'area'
           ? {
               lineStyle: {
                 ...(item.lineStyle as Record<string, unknown>),
-                type: ['solid', 'dashed', 'dotted'][cycle % 3]
+                color,
+                type: line?.lineType ?? ['solid', 'dashed', 'dotted'][cycle % 3]
               }
             }
           : {}),
         ...(spec.kind === 'scatter'
           ? {
-              symbol: ['circle', 'rect', 'triangle', 'diamond'][cycle % 4],
-              itemStyle: { borderColor: chrome.tooltipBackground, borderWidth: 1 }
+              symbol: spec.series[index].style?.symbol ?? ['circle', 'rect', 'triangle', 'diamond'][cycle % 4],
+              itemStyle: { color, borderColor: chrome.tooltipBackground, borderWidth: 1 }
             }
           : {}),
         ...(heatmap ? { itemStyle: { borderColor: chrome.background, borderWidth: 1 } } : {})
@@ -231,7 +263,13 @@ function tooltipCss(width: number): string {
 }
 
 /** Resize patches contain neither data nor interactive state. */
-export function chartResizeOptions(spec: ChartSpec, counts: { x: number; y: number }, width: number, height: number) {
+export function chartResizeOptions(
+  spec: ChartSpec,
+  counts: { x: number; y: number },
+  width: number,
+  height: number,
+  locale: RuntimeLocale = 'en'
+) {
   const legend = showLegend(spec);
   const layout = chartLayout(spec, width, height, legend);
   const axis = (horizontal: boolean) => {
@@ -256,9 +294,7 @@ export function chartResizeOptions(spec: ChartSpec, counts: { x: number; y: numb
     grid: layout.grid,
     xAxis: axis(true),
     yAxis: axis(false),
-    ...(legend
-      ? { legend: { formatter: (name: string) => truncateChartLabel(name, Math.max(36, Math.min(220, width - 180))) } }
-      : {}),
+    ...(legend ? { legend: { formatter: legendFormatter(spec, locale, width) } } : {}),
     ...(spec.tooltip !== false ? { tooltip: { extraCssText: tooltipCss(width) } } : {}),
     ...(spec.kind === 'heatmap' ? { visualMap: layout.visualMap } : {})
   };
@@ -270,7 +306,10 @@ function chartSeries(spec: ChartSpec): readonly Record<string, unknown>[] {
     case 'area':
       return spec.series.map((series) => ({
         type: 'line',
-        showSymbol: series.points.length === 1,
+        showSymbol: series.style?.showSymbol ?? series.points.length === 1,
+        symbol: series.style?.symbol ?? 'emptyCircle',
+        smooth: series.style?.smooth ?? false,
+        step: series.style?.step ?? false,
         lineStyle: { width: spec.style?.lineWidth ?? 2.25, cap: 'round', join: 'round' },
         data: series.points,
         ...(spec.kind === 'area' ? { areaStyle: { opacity: 0.14, origin: spec.yType === 'log' ? 'start' : 0 } } : {})
@@ -312,11 +351,7 @@ function chartTooltipFormatter(spec: ChartSpec, locale: RuntimeLocale, names: re
   const x = chartCoordinateFormatter(values.x, xType, locale, false, style?.xFormat);
   const y = chartCoordinateFormatter(values.y, yType, locale, false, style?.yFormat);
   const value = chartNumberFormatter(values.value, locale, false, style?.valueFormat);
-  const escape = (text: string) =>
-    text.replace(
-      /[&<>"']/gu,
-      (character) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[character] ?? character
-    );
+  const nameById = seriesLabels(spec, names);
   return (input: unknown): string => {
     const axisTooltip = Array.isArray(input);
     const parameters = axisTooltip ? input : [input];
@@ -324,9 +359,15 @@ function chartTooltipFormatter(spec: ChartSpec, locale: RuntimeLocale, names: re
     let heading: string | undefined;
     for (const parameter of parameters) {
       if (!parameter || typeof parameter !== 'object') continue;
-      const item = parameter as { value?: unknown; name?: string; seriesIndex?: number; marker?: unknown };
+      const item = parameter as {
+        value?: unknown;
+        name?: string;
+        seriesIndex?: number;
+        seriesId?: string;
+        marker?: unknown;
+      };
       const tuple = Array.isArray(item.value) ? item.value : undefined;
-      const name = names[item.seriesIndex ?? 0];
+      const name = item.seriesId === undefined ? names[item.seriesIndex ?? 0] : nameById.get(item.seriesId);
       const coordinate = tuple ? x(tuple[0]) : (item.name ?? '');
       const amount = tuple ? tuple[1] : item.value;
       const formatted = amount == null || amount === '-' ? '-' : y(amount);
@@ -335,15 +376,17 @@ function chartTooltipFormatter(spec: ChartSpec, locale: RuntimeLocale, names: re
       if (spec.kind === 'histogram' && tuple) {
         rows.push(
           marker +
-            escape(`[${x(tuple[0])}, ${x(tuple[1])}): ${spec.mode === 'density' ? 'Density' : 'Count'}: ${y(tuple[2])}`)
+            escapeChartText(
+              `[${x(tuple[0])}, ${x(tuple[1])}): ${spec.mode === 'density' ? 'Density' : 'Count'}: ${y(tuple[2])}`
+            )
         );
       } else if (axisTooltip) {
-        heading ??= escape(coordinate);
+        heading ??= escapeChartText(coordinate);
         rows.push(
           marker +
             [name, formatted]
               .filter((part) => part != null && part !== '')
-              .map((part) => escape(String(part)))
+              .map((part) => escapeChartText(String(part)))
               .join(': ')
         );
       } else {
@@ -351,7 +394,7 @@ function chartTooltipFormatter(spec: ChartSpec, locale: RuntimeLocale, names: re
           spec.kind === 'heatmap' && tuple
             ? [coordinate + ' / ' + y(tuple[1]), tuple[2] == null ? '-' : value(Number(tuple[2]))]
             : [coordinate, formatted];
-        rows.push(marker + [...(name ? [name] : []), ...details].map(escape).join(': '));
+        rows.push(marker + [...(name ? [name] : []), ...details].map(escapeChartText).join(': '));
       }
     }
     return [...(heading ? [heading] : []), ...rows].join('<br/>');

@@ -105,3 +105,10 @@ emit_histogram!(&[[0, 1, 1]], options = &options);
 //| id: density-histogram
 emit_histogram!(&[[-1.0, -0.5, 2.0], [0.0, 2.0, 4.0]], options = &serde_json::json!({ "mode": "density", "xMin": -2, "xMax": 3 }));
 ```
+
+```rust
+//| id: series-presentation
+let series = serde_json::json!([{ "id": "a", "name": "Same", "points": [[0, 1]], "style": { "lineType": "dashed", "symbol": "diamond", "showSymbol": true } }]);
+emit_line_chart!(&series);
+emit_bar_chart!(&["x"], &serde_json::json!([{ "id": "b", "values": [2], "style": { "color": { "dark": "#123" } } }]));
+```

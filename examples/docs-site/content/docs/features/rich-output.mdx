@@ -163,6 +163,26 @@ emit_line_chart!(&points, "Time", "Voltage", &serde_json::json!({
 }));
 ```
 
+### Series identity and style
+
+XY and bar series accept an optional non-empty, unique `id`. Give a series the same ID on each execution to preserve its identity and legend selection when reordering or renaming it. Names are display labels; even same-named series can be selected independently. Without IDs, identity follows the series index. Adding or removing series does not reset zoom. Default palette colors still follow authored order; use explicit colors when a series needs a fixed color.
+
+Set `series.style.color` to a `#RGB/#RRGGBB` string or `{ light, dark }` with at least one theme. An omitted theme uses the chart palette. Line/area series also accept `lineType` (solid/dashed/dotted), `step` (false/start/middle/end), `smooth` (boolean), `symbol`, and `showSymbol`. Scatter supports color and symbol; bar supports color. Symbols are circle/emptyCircle/rect/triangle/diamond/none.
+
+Smooth and step cannot both be enabled. Lines remain unsmoothed by default. Explicit patterns and symbols override palette cycling, and explicit showSymbol overrides isolated-point detection. Removing settings restores defaults. Existing chart-level lineWidth and symbolSize continue to control sizes.
+
+```rust
+//| id: styled-series
+//| title: Measured and reference series
+let series = serde_json::json!([
+    { "id": "measured", "name": "Measurement", "points": [[0, 1], [1, 2]],
+      "style": { "color": { "light": "#3987e5", "dark": "#9085e9" }, "symbol": "diamond", "showSymbol": true } },
+    { "id": "reference", "name": "Reference", "points": [[0, 1.5], [1, 1.5]],
+      "style": { "lineType": "dashed", "step": "end" } }
+]);
+emit_line_chart!(&series, "Observation", "Value");
+```
+
 ## Resource Limits
 
 Producers enforce limits inside each language worker before `postMessage`; the main thread independently validates the bounded response again. Limits are UTF-8 byte limits and are cumulative for each run where noted:

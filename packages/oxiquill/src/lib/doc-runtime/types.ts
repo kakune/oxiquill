@@ -155,7 +155,27 @@ export interface BaseChartSpec {
   dataZoom?: boolean;
 }
 
+export type ChartSymbol = 'circle' | 'emptyCircle' | 'rect' | 'triangle' | 'diamond' | 'none';
+export type ChartSeriesColor = string | { light?: string; dark?: string };
+
+export interface ChartSeriesStyle {
+  color?: ChartSeriesColor;
+}
+
+export interface ScatterSeriesStyle extends ChartSeriesStyle {
+  symbol?: ChartSymbol;
+}
+
+export interface LineSeriesStyle extends ScatterSeriesStyle {
+  lineType?: 'solid' | 'dashed' | 'dotted';
+  step?: false | 'start' | 'middle' | 'end';
+  smooth?: boolean;
+  showSymbol?: boolean;
+}
+
 export interface XyChartSeries {
+  id?: string;
+  style?: LineSeriesStyle;
   name?: string;
   points: readonly (readonly [number | string, number | string])[];
 }
@@ -166,13 +186,19 @@ export interface LineChartSpec extends BaseChartSpec {
   series: readonly XyChartSeries[];
 }
 
+export interface ScatterChartSeries extends Omit<XyChartSeries, 'style'> {
+  style?: ScatterSeriesStyle;
+}
+
 export interface ScatterChartSpec extends BaseChartSpec {
   style?: ScatterChartStyle;
   kind: 'scatter';
-  series: readonly XyChartSeries[];
+  series: readonly ScatterChartSeries[];
 }
 
 export interface BarChartSeries {
+  id?: string;
+  style?: ChartSeriesStyle;
   name?: string;
   values: readonly (number | null)[];
 }

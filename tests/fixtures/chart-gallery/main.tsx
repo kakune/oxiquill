@@ -17,8 +17,10 @@ const width = Number(query.get('width') ?? 720);
 function Gallery() {
   const [revision, setRevision] = useState(0);
   const [formatted, setFormatted] = useState(true);
+  const [reordered, setReordered] = useState(false);
   return (
     <main style={{ width }}>
+      <button onClick={() => setReordered(true)}>Reorder and rename series</button>
       <button onClick={() => setFormatted(false)}>Clear formatting</button>
       <button onClick={() => setRevision((value) => value + 1)}>Update data</button>
       {Object.entries(chartFixtures)
@@ -38,8 +40,9 @@ function Gallery() {
                     : {}),
                   ...(spec.kind === 'line'
                     ? {
-                        series: spec.series.map((series) => ({
+                        series: (reordered ? spec.series.toReversed() : spec.series).map((series) => ({
                           ...series,
+                          ...(reordered ? { name: series.id === 'a' ? 'Renamed' : series.name, style: undefined } : {}),
                           points: series.points.map(([x, y]) => [x, typeof y === 'number' ? y + revision : y] as const)
                         }))
                       }

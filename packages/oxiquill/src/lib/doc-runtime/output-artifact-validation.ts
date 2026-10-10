@@ -3,6 +3,7 @@ import type {
   BaseChartSpec,
   ChartAxisType,
   ChartNumberFormat,
+  LineSeriesStyle,
   ChartSpec,
   ChartPalette,
   LineChartStyle,
@@ -456,7 +457,7 @@ function validateChartSpec(value: unknown): ChartSpec {
       return {
         ...base,
         kind,
-        series: validateXySeries(requiredOwnValue(record, 'series', `${kind} chart`), xType, yType)
+        series: validateXySeries(requiredOwnValue(record, 'series', `${kind} chart`), xType, yType, kind)
       };
     }
     case 'scatter': {
@@ -465,7 +466,7 @@ function validateChartSpec(value: unknown): ChartSpec {
       return {
         ...base,
         kind,
-        series: validateXySeries(requiredOwnValue(record, 'series', `${kind} chart`), xType, yType)
+        series: validateXySeries(requiredOwnValue(record, 'series', `${kind} chart`), xType, yType, kind)
       };
     }
     case 'area': {
@@ -474,7 +475,7 @@ function validateChartSpec(value: unknown): ChartSpec {
       return {
         ...base,
         kind,
-        series: validateXySeries(requiredOwnValue(record, 'series', `${kind} chart`), xType, yType)
+        series: validateXySeries(requiredOwnValue(record, 'series', `${kind} chart`), xType, yType, kind)
       };
     }
     case 'bar': {
@@ -487,6 +488,7 @@ function validateChartSpec(value: unknown): ChartSpec {
       const rawSeries = plainArray(requiredOwnValue(record, 'series', 'Bar chart'), 'Bar chart series');
       if (rawSeries.length > outputArtifactLimits.chartDataItems) throw chartLimitError(rawSeries.length);
       let dataItems = 0;
+      const ids = new Set<string>();
       const series = rawSeries.map((seriesValue, seriesIndex) => {
         const seriesRecord = plainRecord(seriesValue, `Bar chart series ${seriesIndex + 1}`);
         const values = plainArray(
@@ -506,8 +508,7 @@ function validateChartSpec(value: unknown): ChartSpec {
           );
         }
         dataItems += validatedValues.length;
-        const name = optionalString(seriesRecord, 'name', `Bar chart series ${seriesIndex + 1}`);
-        return { ...(name == null ? {} : { name }), values: validatedValues };
+        return { ...validateSeriesPresentation(seriesRecord, kind, seriesIndex, ids), values: validatedValues };
       });
       const { yType: declaredYType, ...barBase } = base;
       return { ...barBase, kind, ...(declaredYType == null ? {} : { yType }), categories, series };
@@ -661,10 +662,8 @@ function validateChartStyle(value: unknown, kind: string): LineChartStyle & Scat
       if (colors.length < minimum || colors.length > 12)
         throw new ArtifactValidationError(`${context} palette.${theme} must contain ${minimum}–12 colors.`);
       const seen = new Set<string>();
-      validated[theme] = colors.map((color) => {
-        if (typeof color !== 'string' || !/^#(?:[\da-f]{3}|[\da-f]{6})$/iu.test(color)) {
-          throw new ArtifactValidationError(`${context} palette colors must be #RGB or #RRGGBB.`);
-        }
+      validated[theme] = colors.map((value) => {
+        const color = validateChartColor(value, context + ' palette');
         const normalized = (
           color.length === 4 ? Array.from(color.slice(1), (part) => part + part).join('') : color.slice(1)
         ).toLowerCase();
@@ -780,11 +779,13 @@ function validateChartRanges(spec: BaseChartSpec & { kind: string }): void {
 function validateXySeries(
   value: unknown,
   xType: ChartAxisType,
-  yType: ChartAxisType
+  yType: ChartAxisType,
+  kind: 'line' | 'scatter' | 'area'
 ): Extract<ChartSpec, { kind: 'line' }>['series'] {
   const rawSeries = plainArray(value, 'XY chart series');
   if (rawSeries.length > outputArtifactLimits.chartDataItems) throw chartLimitError(rawSeries.length);
   let dataItems = 0;
+  const ids = new Set<string>();
   return rawSeries.map((seriesValue, seriesIndex) => {
     const record = plainRecord(seriesValue, `XY chart series ${seriesIndex + 1}`);
     const rawPoints = plainArray(
@@ -800,9 +801,78 @@ function validateXySeries(
         chartCoordinate(tuple[1], yType, `XY chart series ${seriesIndex + 1} point ${pointIndex + 1} y coordinate`)
       ] as const;
     });
-    const name = optionalString(record, 'name', `XY chart series ${seriesIndex + 1}`);
-    return { ...(name == null ? {} : { name }), points };
+    return { ...validateSeriesPresentation(record, kind, seriesIndex, ids), points };
   });
+}
+
+function validateSeriesPresentation(record: Record<string, unknown>, kind: string, index: number, ids: Set<string>) {
+  const context = `${kind} chart series ${index + 1}`;
+  const id = optionalString(record, 'id', context);
+  const name = optionalString(record, 'name', context);
+  if (id !== undefined) {
+    if (!id.trim() || ids.has(id)) throw new ArtifactValidationError(`${context} id must be non-empty and unique.`);
+    ids.add(id);
+  }
+  const presentation = { ...(id === undefined ? {} : { id }), ...(name === undefined ? {} : { name }) };
+  if (!Object.hasOwn(record, 'style')) return presentation;
+  const styleRecord = plainRecord(requiredOwnValue(record, 'style', context), context + ' style');
+  const line = kind === 'line' || kind === 'area';
+  rejectUnknownStyleFields(
+    styleRecord,
+    ['color', ...(kind !== 'bar' ? ['symbol'] : []), ...(line ? ['lineType', 'smooth', 'step', 'showSymbol'] : [])],
+    context + ' style'
+  );
+  const style: LineSeriesStyle = {};
+  if (Object.hasOwn(styleRecord, 'color')) {
+    const color = requiredOwnValue(styleRecord, 'color', context);
+    if (typeof color === 'string') style.color = validateChartColor(color, context);
+    else {
+      const colors = plainRecord(color, context + ' color');
+      rejectUnknownStyleFields(colors, ['light', 'dark'], context + ' color');
+      if (Reflect.ownKeys(colors).length === 0)
+        throw new ArtifactValidationError(`${context} color requires light or dark.`);
+      const validated: { light?: string; dark?: string } = {};
+      for (const theme of ['light', 'dark'] as const)
+        if (Object.hasOwn(colors, theme))
+          validated[theme] = validateChartColor(requiredOwnValue(colors, theme, context), context);
+      style.color = validated;
+    }
+  }
+  for (const field of ['smooth', 'showSymbol'] as const)
+    if (Object.hasOwn(styleRecord, field)) style[field] = optionalBoolean(styleRecord, field, context);
+  if (Object.hasOwn(styleRecord, 'lineType')) {
+    const value = requiredOwnValue(styleRecord, 'lineType', context);
+    if (value !== 'solid' && value !== 'dashed' && value !== 'dotted')
+      throw new ArtifactValidationError(`${context} lineType must be solid, dashed, or dotted.`);
+    style.lineType = value;
+  }
+  if (Object.hasOwn(styleRecord, 'step')) {
+    const value = requiredOwnValue(styleRecord, 'step', context);
+    if (value !== false && value !== 'start' && value !== 'middle' && value !== 'end')
+      throw new ArtifactValidationError(`${context} step must be false, start, middle, or end.`);
+    style.step = value;
+  }
+  if (style.smooth && style.step) throw new ArtifactValidationError(`${context} cannot combine smooth and step.`);
+  if (Object.hasOwn(styleRecord, 'symbol')) {
+    const value = requiredOwnValue(styleRecord, 'symbol', context);
+    if (
+      value !== 'circle' &&
+      value !== 'emptyCircle' &&
+      value !== 'rect' &&
+      value !== 'triangle' &&
+      value !== 'diamond' &&
+      value !== 'none'
+    )
+      throw new ArtifactValidationError(`${context} has an unsupported symbol.`);
+    style.symbol = value;
+  }
+  return { ...presentation, style };
+}
+
+function validateChartColor(value: unknown, context: string): string {
+  if (typeof value !== 'string' || !/^#(?:[\da-f]{3}|[\da-f]{6})$/iu.test(value))
+    throw new ArtifactValidationError(`${context} colors must be #RGB or #RRGGBB.`);
+  return value;
 }
 
 function safeJsonFormat(value: unknown, maxBytes: number, context: string): JsonFormatResult {
