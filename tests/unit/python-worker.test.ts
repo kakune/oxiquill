@@ -275,6 +275,7 @@ describe('python worker request handling', () => {
     const displayProxy = pythonProxy([{ kind: 'text', stream: 'display', content: 'displayed' }]);
     const matplotlibProxy = pythonProxy([{ kind: 'image', mime: 'image/svg+xml', data: '<svg />' }]);
     const pyodide = {
+      loadedPackages: { matplotlib: 'default channel' },
       loadPackage: vi.fn(async () => undefined),
       loadPackagesFromImports: vi.fn(async () => undefined),
       runPython: vi.fn((source: string) => {
@@ -300,6 +301,7 @@ describe('python worker request handling', () => {
 
     expect(pyodide.loadPackage).toHaveBeenCalledWith(['numpy']);
     expect(pyodide.loadPackagesFromImports).toHaveBeenCalledWith(request.source);
+    expect(pyodide.runPython).toHaveBeenCalledWith('__oxiquill_prepare_cell(True)');
     expect(pyodide.toPy).toHaveBeenCalledWith(request.inputs);
     expect(globals.destroy).toHaveBeenCalledOnce();
     expect(valueProxy.destroy).toHaveBeenCalledOnce();

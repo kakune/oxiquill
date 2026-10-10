@@ -5,6 +5,8 @@ export type MermaidDiagramKind =
   'class' | 'diagram' | 'entityRelationship' | 'flowchart' | 'journey' | 'sequence' | 'state' | 'timeline';
 
 export type ChartSummaryDetails = {
+  xLabel?: string;
+  yLabel?: string;
   dataCount: number;
   seriesCount: number;
   seriesNames: string;
@@ -28,6 +30,7 @@ export type RuntimeLabels = {
   cellRetry: string;
   cellUpdating: string;
   chartCaption: string;
+  chartSeriesName: (index: number) => string;
   chartLoadError: (detail: string) => string;
   chartUpdateError: (detail: string) => string;
   chartLoading: string;
@@ -132,11 +135,14 @@ const runtimeLabels = {
     cellRetry: 'Retry cell',
     cellUpdating: 'Updating…',
     chartCaption: 'Chart data summary',
+    chartSeriesName: (index) => `Series ${index}`,
     chartLoadError: (detail) => `Chart renderer could not be loaded: ${detail}`,
     chartUpdateError: (detail) => `Chart could not be updated: ${detail}`,
     chartLoading: 'Loading chart renderer...',
     chartRetry: 'Retry chart rendering',
     chartSummary: ({
+      xLabel,
+      yLabel,
       dataCount,
       seriesCount,
       seriesNames,
@@ -146,7 +152,7 @@ const runtimeLabels = {
       yCategoryCount,
       yRange
     }) =>
-      `Series: ${seriesCount}${seriesNames ? ` (${seriesNames})` : ''}. Data items: ${dataCount}.${xCategoryCount == null ? '' : ` X categories: ${xCategoryCount}.`}${yCategoryCount == null ? '' : ` Y categories: ${yCategoryCount}.`}${xRange ? ` X range: ${xRange}.` : ''}${yRange ? ` Y range: ${yRange}.` : ''}${valueRange ? ` Heat value range: ${valueRange}.` : ''}`,
+      `${xLabel ? `X: ${xLabel}. ` : ''}${yLabel ? `Y: ${yLabel}. ` : ''}Series: ${seriesCount}${seriesNames ? ` (${seriesNames})` : ''}. Data items: ${dataCount}.${xCategoryCount == null ? '' : ` X categories: ${xCategoryCount}.`}${yCategoryCount == null ? '' : ` Y categories: ${yCategoryCount}.`}${xRange ? ` X range: ${xRange}.` : ''}${yRange ? ` Y range: ${yRange}.` : ''}${valueRange ? ` Heat value range: ${valueRange}.` : ''}`,
     chartTitle: (kind) => chartTitles.en[kind],
     clipboardUnavailable: 'Clipboard access is unavailable.',
     copyCsv: 'Copy visible rows as CSV',
@@ -202,11 +208,14 @@ const runtimeLabels = {
     cellRetry: 'セルの実行を再試行',
     cellUpdating: '更新中…',
     chartCaption: 'グラフデータの概要',
+    chartSeriesName: (index) => `系列 ${index}`,
     chartLoadError: (detail) => `グラフ表示を読み込めませんでした: ${detail}`,
     chartUpdateError: (detail) => `グラフを更新できませんでした: ${detail}`,
     chartLoading: 'グラフ表示を読み込んでいます…',
     chartRetry: 'グラフ表示を再試行',
     chartSummary: ({
+      xLabel,
+      yLabel,
       dataCount,
       seriesCount,
       seriesNames,
@@ -216,7 +225,7 @@ const runtimeLabels = {
       yCategoryCount,
       yRange
     }) =>
-      `系列数: ${seriesCount}${seriesNames ? `（${seriesNames}）` : ''}。データ数: ${dataCount}。${xCategoryCount == null ? '' : `X カテゴリ数: ${xCategoryCount}。`}${yCategoryCount == null ? '' : `Y カテゴリ数: ${yCategoryCount}。`}${xRange ? `X の範囲: ${xRange}。` : ''}${yRange ? `Y の範囲: ${yRange}。` : ''}${valueRange ? `ヒート値の範囲: ${valueRange}。` : ''}`,
+      `${xLabel ? `X: ${xLabel}。` : ''}${yLabel ? `Y: ${yLabel}。` : ''}系列数: ${seriesCount}${seriesNames ? `（${seriesNames}）` : ''}。データ数: ${dataCount}。${xCategoryCount == null ? '' : `X カテゴリ数: ${xCategoryCount}。`}${yCategoryCount == null ? '' : `Y カテゴリ数: ${yCategoryCount}。`}${xRange ? `X の範囲: ${xRange}。` : ''}${yRange ? `Y の範囲: ${yRange}。` : ''}${valueRange ? `ヒート値の範囲: ${valueRange}。` : ''}`,
     chartTitle: (kind) => chartTitles.ja[kind],
     clipboardUnavailable: 'クリップボードを利用できません。',
     copyCsv: '表示中の行を CSV としてコピー',

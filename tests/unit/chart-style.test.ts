@@ -33,7 +33,8 @@ describe('curated chart styles', () => {
       palette: { light: ['#ABC', '#123456'], dark: ['#000', '#fff'] },
       showGrid: false,
       animation: false,
-      animationDurationMs: 2000
+      animationDurationMs: 2000,
+      height: 480
     };
     const result = validate(style, spec);
     expect(result).toMatchObject({ status: 'valid', artifact: { spec: { style } } });
@@ -48,6 +49,7 @@ describe('curated chart styles', () => {
 
   it.each([
     ['animationDurationMs', 0, 2000, specs[0]],
+    ['height', 200, 800, specs[0]],
     ['lineWidth', 1, 8, specs[0]],
     ['lineWidth', 1, 8, specs[1]],
     ['symbolSize', 2, 32, specs[2]]
@@ -57,7 +59,8 @@ describe('curated chart styles', () => {
     for (const value of [minimum - 0.001, maximum + 0.001, NaN, Infinity, -Infinity, null, '2', undefined]) {
       expect(validate({ [field]: value }, spec).status).toBe('error');
     }
-    if (field === 'animationDurationMs') expect(validate({ [field]: 1.5 }, spec).status).toBe('error');
+    if (field === 'animationDurationMs' || field === 'height')
+      expect(validate({ [field]: 201.5 }, spec).status).toBe('error');
   });
 
   it.each(specs)('rejects inapplicable and unknown fields for $kind', (spec) => {
