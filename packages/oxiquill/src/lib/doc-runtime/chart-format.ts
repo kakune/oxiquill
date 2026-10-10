@@ -61,12 +61,14 @@ export function chartNumberFormatter(
   // ECharts already rounds its generated ticks. Preserve their full precision,
   // including when zoom reveals a small interval within a wide original domain.
   const precision = ticks ? 17 : 6;
+  const zeroTolerance = !ticks && bounds && bounds.minimum < 0 && bounds.maximum > 0 ? magnitude * Number.EPSILON : 0;
   const formatter = new Intl.NumberFormat(locale === 'ja' ? 'ja-JP' : 'en-US', {
     useGrouping: !scientific && magnitude >= 10_000,
     maximumSignificantDigits: precision
   });
   return (value) => {
     if (!Number.isFinite(value)) return String(value);
+    if (Math.abs(value) <= zeroTolerance) return '0';
     const clean = ticks ? value : Number(value.toPrecision(precision));
     if (clean === 0) return '0';
     if (!scientific) return formatter.format(clean);
@@ -81,30 +83,65 @@ export function chartCoordinateFormatter(
   type: ChartSpec['xType'],
   locale: RuntimeLocale,
   ticks = false
-): (value: unknown) => string {
+): (value: unknown, index?: number, extra?: TimeTickDetails) => string {
   if (type === 'category') return (value) => String(value);
   if (type !== 'time') {
     const format = chartNumberFormatter(values, locale, ticks);
     return (value) => (typeof value === 'number' ? format(value) : String(value));
   }
-  const bounds = numericBounds(values.map((value) => (typeof value === 'number' ? value : Date.parse(String(value)))));
-  const span = bounds ? bounds.maximum - bounds.minimum : 0;
+  if (ticks) return timeTickFormatter(locale);
   const formatter = new Intl.DateTimeFormat(locale === 'ja' ? 'ja-JP' : 'en-US', {
     timeZone: 'UTC',
-    ...(ticks
-      ? span < 172_800_000
-        ? {
-            hour: '2-digit',
-            minute: '2-digit',
-            second: '2-digit',
-            hourCycle: 'h23',
-            ...(span < 60_000 ? { fractionalSecondDigits: 3 } : {})
-          }
-        : { year: 'numeric', month: 'short', day: 'numeric' }
-      : { dateStyle: 'medium', timeStyle: 'medium' })
+    dateStyle: 'medium',
+    timeStyle: 'medium'
   });
   return (value) => {
     const time = typeof value === 'number' ? value : Date.parse(String(value));
-    return Number.isFinite(time) ? `${formatter.format(time)}${ticks ? '' : ' UTC'}` : String(value);
+    return Number.isFinite(time) ? `${formatter.format(time)} UTC` : String(value);
+  };
+}
+
+type TimeUnit = 'year' | 'month' | 'day' | 'hour' | 'minute' | 'second' | 'millisecond';
+interface TimeTickDetails {
+  time?: { upperTimeUnit: TimeUnit; lowerTimeUnit: TimeUnit; level: number };
+}
+
+function timeTickFormatter(locale: RuntimeLocale) {
+  const formats = new Map<TimeUnit, Intl.DateTimeFormat>();
+  const calendar = new Intl.DateTimeFormat(locale === 'ja' ? 'ja-JP' : 'en-US', {
+    timeZone: 'UTC',
+    year: 'numeric',
+    month: 'short',
+    day: 'numeric'
+  });
+  return (value: unknown, _index?: number, extra?: TimeTickDetails): string => {
+    const time = typeof value === 'number' ? value : Date.parse(String(value));
+    if (!Number.isFinite(time)) return String(value);
+    // ECharts supplies the actual tick unit after zoom, including calendar boundaries.
+    const unit = extra?.time?.lowerTimeUnit ?? 'millisecond';
+    let format = formats.get(unit);
+    if (!format) {
+      const date = unit === 'year' || unit === 'month' || unit === 'day';
+      format = new Intl.DateTimeFormat(locale === 'ja' ? 'ja-JP' : 'en-US', {
+        timeZone: 'UTC',
+        ...(date
+          ? {
+              year: 'numeric',
+              ...(unit !== 'year' ? { month: 'short' } : {}),
+              ...(unit === 'day' ? { day: 'numeric' } : {})
+            }
+          : {
+              hour: '2-digit',
+              minute: '2-digit',
+              hourCycle: 'h23',
+              ...(unit === 'second' || unit === 'millisecond' ? { second: '2-digit' } : {}),
+              ...(unit === 'millisecond' ? { fractionalSecondDigits: 3 } : {})
+            })
+      });
+      formats.set(unit, format);
+    }
+    // Overlap hiding may remove a midnight tick. Keep the date on finer ticks too.
+    const date = unit === 'year' || unit === 'month' || unit === 'day';
+    return date ? format.format(time) : `${calendar.format(time)}\n${format.format(time)}`;
   };
 }

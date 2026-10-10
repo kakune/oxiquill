@@ -91,6 +91,7 @@ export function chartSpecToEChartsOptions(
   const axis = (horizontal: boolean) => {
     const coordinates = horizontal ? xData : values.y;
     const type = horizontal ? xType : yType;
+    const pointerFormat = chartCoordinateFormatter(coordinates, type, locale);
     return {
       type,
       name: horizontal ? spec.xLabel : spec.yLabel,
@@ -115,10 +116,10 @@ export function chartSpecToEChartsOptions(
       },
       axisPointer: {
         label: {
-          formatter: ({ value }: { value: unknown }) => chartCoordinateFormatter(coordinates, type, locale)(value)
+          formatter: ({ value }: { value: unknown }) => pointerFormat(value)
         }
       },
-      axisLine: { show: false },
+      axisLine: { show: Boolean(horizontal && baseline), onZero: true, lineStyle: { color: chrome.axis, width: 1.5 } },
       axisTick: { show: false },
       splitLine: { show: style?.showGrid !== false, lineStyle: { color: chrome.splitLine, opacity: 0.45 } }
     };
@@ -151,8 +152,7 @@ export function chartSpecToEChartsOptions(
             backgroundColor: chrome.tooltipBackground,
             borderColor: chrome.border,
             textStyle: { color: chrome.text, fontFamily: chrome.fontFamily },
-            extraCssText: `border-radius:8px;box-shadow:0 4px 18px rgba(0,0,0,0.12);white-space:normal;overflow-wrap:anywhere;max-width:${Math.max(80, width - 40)}px;`,
-            valueFormatter: chartNumberFormatter(values.y, locale),
+            extraCssText: tooltipCss(width),
             formatter: chartTooltipFormatter(spec, locale, names)
           },
     legend: legend
@@ -191,15 +191,7 @@ export function chartSpecToEChartsOptions(
               itemStyle: { borderColor: chrome.tooltipBackground, borderWidth: 1 }
             }
           : {}),
-        ...(heatmap ? { itemStyle: { borderColor: chrome.background, borderWidth: 1 } } : {}),
-        markLine: {
-          silent: true,
-          animation: false,
-          symbol: 'none',
-          label: { show: false },
-          lineStyle: { color: chrome.axis, width: 1.5, type: 'solid' },
-          data: baseline && index === 0 ? [{ yAxis: 0 }] : []
-        }
+        ...(heatmap ? { itemStyle: { borderColor: chrome.background, borderWidth: 1 } } : {})
       };
     })
   };
@@ -216,6 +208,44 @@ export function chartSpecToEChartsOptions(
     };
   }
   return options;
+}
+
+function tooltipCss(width: number): string {
+  return `border-radius:8px;box-shadow:0 4px 18px rgba(0,0,0,0.12);white-space:normal;overflow-wrap:anywhere;max-width:${Math.max(80, width - 40)}px;`;
+}
+
+/** Resize patches contain neither data nor interactive state. */
+export function chartResizeOptions(spec: ChartSpec, counts: { x: number; y: number }, width: number, height: number) {
+  const legend = showLegend(spec);
+  const layout = chartLayout(spec, width, height, legend);
+  const axis = (horizontal: boolean) => {
+    const category = horizontal
+      ? ['bar', 'histogram', 'heatmap'].includes(spec.kind) || spec.xType === 'category'
+      : spec.kind === 'heatmap' || spec.yType === 'category';
+    return {
+      nameTruncate: { maxWidth: horizontal ? layout.plotWidth : layout.plotHeight, ellipsis: '…' },
+      ...(category
+        ? {
+            axisLabel: categoryLabelLayout(
+              horizontal ? counts.x : counts.y,
+              horizontal ? layout.plotWidth : layout.plotHeight,
+              horizontal,
+              width
+            )
+          }
+        : {})
+    };
+  };
+  return {
+    grid: layout.grid,
+    xAxis: axis(true),
+    yAxis: axis(false),
+    ...(legend
+      ? { legend: { formatter: (name: string) => truncateChartLabel(name, Math.max(36, Math.min(220, width - 180))) } }
+      : {}),
+    ...(spec.tooltip !== false ? { tooltip: { extraCssText: tooltipCss(width) } } : {}),
+    ...(spec.kind === 'heatmap' ? { visualMap: layout.visualMap } : {})
+  };
 }
 
 function chartSeries(spec: ChartSpec): readonly Record<string, unknown>[] {
@@ -279,22 +309,38 @@ function chartTooltipFormatter(spec: ChartSpec, locale: RuntimeLocale, names: re
       (character) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[character] ?? character
     );
   return (input: unknown): string => {
-    const parameters = Array.isArray(input) ? input : [input];
-    return parameters
-      .flatMap((parameter) => {
-        if (!parameter || typeof parameter !== 'object') return [];
-        const item = parameter as { value?: unknown; name?: string; seriesIndex?: number };
-        const tuple = Array.isArray(item.value) ? item.value : undefined;
-        const name = names[item.seriesIndex ?? 0];
+    const axisTooltip = Array.isArray(input);
+    const parameters = axisTooltip ? input : [input];
+    const rows: string[] = [];
+    let heading: string | undefined;
+    for (const parameter of parameters) {
+      if (!parameter || typeof parameter !== 'object') continue;
+      const item = parameter as { value?: unknown; name?: string; seriesIndex?: number; marker?: unknown };
+      const tuple = Array.isArray(item.value) ? item.value : undefined;
+      const name = names[item.seriesIndex ?? 0];
+      const coordinate = tuple ? x(tuple[0]) : (item.name ?? '');
+      const amount = tuple ? tuple[1] : item.value;
+      const formatted = amount == null || amount === '-' ? '-' : y(amount);
+      // ECharts generates the marker; authored labels and values are always escaped.
+      const marker = typeof item.marker === 'string' ? item.marker : '';
+      if (axisTooltip) {
+        heading ??= escape(coordinate);
+        rows.push(
+          marker +
+            [name, formatted]
+              .filter((part) => part != null && part !== '')
+              .map((part) => escape(String(part)))
+              .join(': ')
+        );
+      } else {
         const details =
           spec.kind === 'heatmap' && tuple
-            ? [x(tuple[0]) + ' / ' + y(tuple[1]), value(Number(tuple[2]))]
-            : tuple
-              ? [x(tuple[0]), y(tuple[1])]
-              : [item.name ?? '', y(item.value)];
-        return [[...(name ? [name] : []), ...details].map(escape).join(': ')];
-      })
-      .join('<br/>');
+            ? [coordinate + ' / ' + y(tuple[1]), tuple[2] == null ? '-' : value(Number(tuple[2]))]
+            : [coordinate, formatted];
+        rows.push(marker + [...(name ? [name] : []), ...details].map(escape).join(': '));
+      }
+    }
+    return [...(heading ? [heading] : []), ...rows].join('<br/>');
   };
 }
 
@@ -326,6 +372,9 @@ export function chartDataSummary(spec: ChartSpec, labels: RuntimeLabels): string
       ? { xCategoryCount: values.x.length, yCategoryCount: values.y.length, valueRange: range(values.value, 'value') }
       : {})
   });
-  const text = dataCount === 0 ? [spec.xLabel, spec.yLabel, labels.noChartData].filter(Boolean).join('. ') : summary;
+  const text =
+    dataCount === 0
+      ? [spec.xLabel, spec.yLabel, labels.noChartData].filter(Boolean).join(labels.locale === 'ja' ? '。' : '. ')
+      : summary;
   return text;
 }

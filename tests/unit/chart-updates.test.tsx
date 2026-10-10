@@ -13,6 +13,7 @@ import { chart, echartsInit } from './mocks/external-runtime';
 const line: ChartSpec = { kind: 'line', series: [{ points: [[0, 1]] }] };
 const labels = labelsForLanguage('en');
 const disconnect = vi.fn();
+let resizeCallback: ResizeObserverCallback;
 function output(spec: ChartSpec) {
   return <ChartOutput artifact={{ kind: 'chart', spec }} idPrefix="chart" labels={labels} />;
 }
@@ -24,6 +25,9 @@ beforeEach(() => {
   vi.stubGlobal(
     'ResizeObserver',
     class {
+      constructor(callback: ResizeObserverCallback) {
+        resizeCallback = callback;
+      }
       observe() {}
       disconnect = disconnect;
     }
@@ -35,10 +39,87 @@ beforeEach(() => {
 });
 afterEach(() => {
   cleanup();
+  vi.restoreAllMocks();
   vi.unstubAllGlobals();
 });
 
 describe('persistent chart updates', () => {
+  it('resizes the canvas after an authored height update has already changed layout options', async () => {
+    const height = vi.spyOn(HTMLElement.prototype, 'clientHeight', 'get').mockReturnValue(360);
+    const view = render(output(line));
+    await waitFor(() => expect(chart.setOption).toHaveBeenCalledOnce());
+    view.rerender(output({ ...line, style: { height: 600 } }));
+    await waitFor(() => expect(chart.setOption).toHaveBeenCalledTimes(2));
+    height.mockReturnValue(600);
+    act(() => resizeCallback([], {} as ResizeObserver));
+    await waitFor(() => expect(chart.resize).toHaveBeenCalledOnce());
+    expect(chart.setOption).toHaveBeenCalledTimes(2);
+  });
+  it('updates isolated points and zero visibility from the viewport without converting every point to pixels', async () => {
+    let extent = [0, 2];
+    let yExtent = [-1, 2];
+    const instance = {
+      ...chart,
+      getModel: () => ({
+        getComponent: (axis: string) => ({
+          axis: { scale: { parse: Number, getExtent: () => (axis === 'xAxis' ? extent : yExtent) } }
+        })
+      })
+    };
+    echartsInit.mockReturnValue(instance);
+    render(
+      output({
+        kind: 'line',
+        series: [
+          {
+            points: [
+              [2, 2],
+              [0, -1],
+              [1, 1]
+            ]
+          }
+        ]
+      })
+    );
+    await waitFor(() => expect(chart.setOption).toHaveBeenCalledOnce());
+    const zoom = chart.on.mock.calls.find(([event]) => event === 'datazoom')?.[1] as () => void;
+    act(() => {
+      extent = [0.5, 1.5];
+      yExtent = [0.9, 1.1];
+      zoom();
+    });
+    await waitFor(() => expect(chart.setOption).toHaveBeenCalledTimes(2));
+    expect(chart.setOption).toHaveBeenLastCalledWith({
+      xAxis: { axisLine: { show: false } },
+      series: [{ id: 'line:0', showSymbol: true }]
+    });
+    act(() => {
+      extent = [0, 2];
+      yExtent = [-1, 2];
+      zoom();
+    });
+    await waitFor(() => expect(chart.setOption).toHaveBeenCalledTimes(3));
+    expect(chart.setOption).toHaveBeenLastCalledWith({
+      xAxis: { axisLine: { show: true } },
+      series: [{ id: 'line:0', showSymbol: false }]
+    });
+    expect(chart.convertToPixel).not.toHaveBeenCalled();
+  });
+  it('coalesces resize notifications and sends only layout changes', async () => {
+    const width = vi.spyOn(HTMLElement.prototype, 'clientWidth', 'get').mockReturnValue(720);
+    render(output(line));
+    await waitFor(() => expect(chart.setOption).toHaveBeenCalledOnce());
+    width.mockReturnValue(360);
+    act(() => {
+      resizeCallback([], {} as ResizeObserver);
+      resizeCallback([], {} as ResizeObserver);
+    });
+    await waitFor(() => expect(chart.resize).toHaveBeenCalledOnce());
+    expect(chart.setOption).toHaveBeenCalledTimes(2);
+    expect(chart.setOption.mock.calls[1][0]).not.toHaveProperty('series');
+    expect(chart.setOption.mock.calls[1][0]).not.toHaveProperty('dataZoom');
+    expect(echartsInit).toHaveBeenCalledOnce();
+  });
   it('merges data on the same canvas and instance without resetting zoom', async () => {
     const view = render(output({ ...line, legend: false }));
     await waitFor(() => expect(chart.setOption).toHaveBeenCalledTimes(1));

@@ -1,6 +1,8 @@
 import { vi } from 'vitest';
 
 export const chart = {
+  getWidth: vi.fn(() => 720),
+  getHeight: vi.fn(() => 360),
   on: vi.fn(),
   convertToPixel: vi.fn(() => [0, 0]),
   containPixel: vi.fn(() => true),

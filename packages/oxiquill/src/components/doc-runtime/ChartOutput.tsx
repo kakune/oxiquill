@@ -4,6 +4,7 @@ import type { RuntimeLabels } from '../../lib/doc-runtime/runtime-localization.j
 import type { ChartArtifact, ChartSpec } from '../../lib/doc-runtime/types.js';
 import {
   chartDataSummary,
+  chartResizeOptions,
   chartSpecToEChartsOptions,
   chartStructuralSignature,
   defaultChartChrome,
@@ -12,6 +13,7 @@ import {
 } from '../../lib/doc-runtime/chart-options.js';
 import { chartHeight } from '../../lib/doc-runtime/chart-layout.js';
 import { chartPalette } from '../../lib/doc-runtime/chart-palette.js';
+import { chartAxes, chartPointIndexes, hasIsolatedPoint } from '../../lib/doc-runtime/chart-viewport.js';
 
 export { chartDataSummary, chartSpecToEChartsOptions, chartStructuralSignature };
 export type { ChartChrome, ChartTheme, EChartsOptions } from '../../lib/doc-runtime/chart-options.js';
@@ -40,7 +42,6 @@ function loadECharts(): Promise<EChartsCore> {
         charts.ScatterChart,
         components.GridComponent,
         components.LegendComponent,
-        components.MarkLineComponent,
         components.TooltipComponent,
         components.VisualMapComponent,
         components.DataZoomComponent,
@@ -67,7 +68,11 @@ export default function ChartOutput({ artifact, idPrefix, labels }: ChartOutputP
     height?: number;
     locale?: string;
     symbols?: string;
-    updateSymbols?: () => void;
+    indexes?: ReturnType<typeof chartPointIndexes>;
+    counts?: { x: number; y: number };
+    baseline?: boolean;
+    zeroLine?: boolean;
+    updateViewport?: () => void;
   }>();
   const reducedMotion = useReducedMotion();
   const latest = useRef({ artifact, reducedMotion, labels });
@@ -89,8 +94,6 @@ export default function ChartOutput({ artifact, idPrefix, labels }: ChartOutputP
         current.spec !== next.spec ||
         current.reducedMotion !== motion ||
         current.replace ||
-        current.width !== width ||
-        current.height !== height ||
         current.locale !== nextLabels.locale
       ) {
         const signature = chartStructuralSignature(next.spec);
@@ -116,7 +119,12 @@ export default function ChartOutput({ artifact, idPrefix, labels }: ChartOutputP
         current.height = height;
         current.locale = nextLabels.locale;
         current.symbols = undefined;
-        current.updateSymbols?.();
+        current.indexes = undefined;
+        const xAxis = options.xAxis as { data?: readonly unknown[]; axisLine: { show: boolean } };
+        const yAxis = options.yAxis as { data?: readonly unknown[] };
+        current.counts = { x: xAxis.data?.length ?? 0, y: yAxis.data?.length ?? 0 };
+        current.baseline = current.zeroLine = xAxis.axisLine.show;
+        current.updateViewport?.();
       }
       setDisplayed(next);
       setRenderError(undefined);
@@ -141,6 +149,7 @@ export default function ChartOutput({ artifact, idPrefix, labels }: ChartOutputP
     let instance: EChartsInstance | undefined;
     let resizeObserver: ResizeObserver | undefined;
     let frame: number | undefined;
+    let resizePending = false;
     void loadECharts()
       .then((echarts) => {
         if (cancelled) return;
@@ -155,42 +164,71 @@ export default function ChartOutput({ artifact, idPrefix, labels }: ChartOutputP
           { renderer: 'canvas' }
         );
         chart.current = { instance };
-        const updateSymbols = () => {
-          if (frame !== undefined) cancelAnimationFrame(frame);
+        const updateViewport = () => {
+          if (frame !== undefined) return;
           frame = requestAnimationFrame(() => {
             frame = undefined;
             const current = chart.current;
             const spec = current?.spec;
-            if (!current || !spec || (spec.kind !== 'line' && spec.kind !== 'area')) return;
-            const visible = spec.series.map((series, seriesIndex) => {
-              let count = 0;
-              for (const point of series.points) {
-                const pixel = current.instance.convertToPixel({ seriesIndex }, point as [number, number]);
-                if (pixel && current.instance.containPixel({ gridIndex: 0 }, pixel) && ++count > 1) break;
+            if (!current || !spec) return;
+            try {
+              if (resizePending) {
+                resizePending = false;
+                const width = chartElement.clientWidth || 720;
+                const height = chartElement.clientHeight || current.height || 360;
+                if (current.instance.getWidth() !== width || current.instance.getHeight() !== height) {
+                  current.instance.resize();
+                }
+                if (current.width !== width || current.height !== height) {
+                  current.instance.setOption(chartResizeOptions(spec, current.counts ?? { x: 0, y: 0 }, width, height));
+                  current.width = width;
+                  current.height = height;
+                }
               }
-              return count === 1;
-            });
-            const signature = JSON.stringify(visible);
-            if (current.symbols === signature) return;
-            const previous = current.symbols;
-            current.symbols = signature;
-            // The initial options already handle unzoomed single-point series.
-            if (
-              previous === undefined &&
-              visible.every((show, index) => show === (spec.series[index].points.length === 1))
-            )
-              return;
-            current.instance.setOption({
-              series: visible.map((showSymbol, index) => ({ id: spec.kind + ':' + index, showSymbol }))
-            });
+              const axes = chartAxes(current.instance);
+              if (!axes) return;
+              const x = axes.x.getExtent();
+              const y = axes.y.getExtent();
+              const patch: Record<string, unknown> = {};
+              const zeroLine = Boolean(current.baseline && y[0] <= 0 && y[1] >= 0);
+              if (zeroLine !== current.zeroLine) {
+                current.zeroLine = zeroLine;
+                patch.xAxis = { axisLine: { show: zeroLine } };
+              }
+              if (spec.kind === 'line' || spec.kind === 'area') {
+                current.indexes ??= chartPointIndexes(spec, axes);
+                const visible = current.indexes.map((index) => hasIsolatedPoint(index, x, y));
+                const signature = JSON.stringify(visible);
+                if (current.symbols !== signature) {
+                  const initial =
+                    current.symbols === undefined &&
+                    visible.every((show, index) => show === (spec.series[index].points.length === 1));
+                  current.symbols = signature;
+                  if (!initial)
+                    patch.series = visible.map((showSymbol, index) => ({ id: spec.kind + ':' + index, showSymbol }));
+                }
+              }
+              if (Object.keys(patch).length) current.instance.setOption(patch);
+            } catch (error) {
+              current.replace = true;
+              setRenderError({ message: boundedErrorMessage(error), initialization: false });
+            }
           });
         };
-        chart.current.updateSymbols = updateSymbols;
-        instance.on('datazoom', updateSymbols);
+        chart.current.updateViewport = updateViewport;
+        instance.on('datazoom', updateViewport);
+        for (const event of [
+          'legendselectchanged',
+          'legendselected',
+          'legendunselected',
+          'legendselectall',
+          'legendinverseselect'
+        ]) {
+          instance.on(event, updateViewport);
+        }
         resizeObserver = new ResizeObserver(() => {
-          instance?.resize();
-          applyLatest();
-          updateSymbols();
+          resizePending = true;
+          updateViewport();
         });
         resizeObserver.observe(chartElement);
         applyLatest(true);

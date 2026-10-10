@@ -39,7 +39,7 @@ describe('chart display contracts', () => {
     expect(heat.formatter({ value: ['Long X', 'Long Y', 0.857] })).toBe('Long X / Long Y: 0.857');
     const bar = chartSpecToEChartsOptions({ kind: 'bar', categories: ['Full category'], series: [{ values: [0.3] }] })
       .tooltip as { formatter: (value: unknown) => string };
-    expect(bar.formatter([{ name: 'Full category', value: 0.3 }])).toBe('Full category: 0.3');
+    expect(bar.formatter([{ name: 'Full category', value: 0.3 }])).toBe('Full category<br/>0.3');
   });
   it('keeps full axis names in summaries and uses localized unnamed series', () => {
     const spec: ChartSpec = {
@@ -75,14 +75,33 @@ describe('chart display contracts', () => {
     });
     const spec: ChartSpec = { kind: 'bar', categories: ['a', 'b', 'c'], series: [{ values: [-1, 2, null] }] };
     expect(chartSpecToEChartsOptions(spec).series[0]).toMatchObject({
-      data: [{ value: -1, itemStyle: { borderRadius: [0, 0, 3, 3] } }, 2, null],
-      markLine: { data: [{ yAxis: 0 }] }
+      data: [{ value: -1, itemStyle: { borderRadius: [0, 0, 3, 3] } }, 2, null]
     });
-    expect(chartSpecToEChartsOptions({ ...spec, series: [{ values: [1, 2, null] }] }).series[0]).toMatchObject({
-      markLine: { data: [] }
+    expect(chartSpecToEChartsOptions(spec).xAxis).toMatchObject({ axisLine: { show: true, onZero: true } });
+    expect(chartSpecToEChartsOptions({ ...spec, series: [{ values: [1, 2, null] }] }).xAxis).toMatchObject({
+      axisLine: { show: false }
     });
     expect(
-      chartSpecToEChartsOptions({ ...spec, yType: 'log', series: [{ values: [1, 2, null] }] }).series[0]
-    ).toMatchObject({ markLine: { data: [] } });
+      chartSpecToEChartsOptions({ ...spec, yType: 'log', series: [{ values: [1, 2, null] }] }).xAxis
+    ).toMatchObject({ axisLine: { show: false } });
+  });
+  it('retains markers, escapes authored text, and shows missing values under one axis heading', () => {
+    const tooltip = chartSpecToEChartsOptions({
+      kind: 'bar',
+      categories: ['<B>'],
+      series: [
+        { name: '<S>', values: [null] },
+        { name: 'Other', values: [2] }
+      ]
+    }).tooltip as { formatter: (value: unknown) => string };
+    expect(
+      tooltip.formatter([
+        { name: '<B>', value: null, seriesIndex: 0, marker: '<span>●</span>' },
+        { name: '<B>', value: 2, seriesIndex: 1, marker: '<span>◆</span>' }
+      ])
+    ).toBe('&lt;B&gt;<br/><span>●</span>&lt;S&gt;: -<br/><span>◆</span>Other: 2');
+    expect(
+      chartDataSummary({ kind: 'line', xLabel: '横軸', yLabel: '縦軸', series: [] }, labelsForLanguage('ja'))
+    ).toBe('横軸。縦軸。グラフにデータがありません。');
   });
 });

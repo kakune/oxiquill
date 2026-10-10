@@ -135,3 +135,20 @@ test('maximum-length titles and axis names stay within a narrow figure', async (
   await expect(page.locator('.doc-chart-output__summary')).toContainText('X'.repeat(16000));
   await expect.poll(() => page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(400);
 });
+
+test('heatmap scales change orientation when resizing across 600px', async ({ page }) => {
+  await page.goto('http://127.0.0.1:4323/?fixture=heatmap&width=360');
+  await expect(page.locator('canvas').first()).toBeVisible();
+  const orientation = () =>
+    page.evaluate(() => {
+      const plot = document.querySelector<HTMLElement>('.doc-plot');
+      const chart = plot && window.galleryECharts.getInstanceByDom(plot);
+      return (chart?.getOption() as { visualMap?: { orient: string }[] })?.visualMap?.[0].orient;
+    });
+  await expect.poll(orientation).toBe('horizontal');
+  await page.locator('main').evaluate((element) => (element.style.width = '720px'));
+  await expect.poll(orientation).toBe('vertical');
+  await page.locator('main').evaluate((element) => (element.style.width = '599px'));
+  await expect.poll(orientation).toBe('horizontal');
+  await expect(page.locator('[role="alert"]')).toHaveCount(0);
+});

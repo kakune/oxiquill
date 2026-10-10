@@ -10,6 +10,12 @@ describe('chart number formatting', () => {
     expect(chartNumberFormatter([1998, 2019], locale)(1998)).toBe('1998');
     expect(chartNumberFormatter([0, 1], locale)(0.1 + 0.2)).toBe('0.3');
     expect(chartNumberFormatter([-1, 1], locale)(-0)).toBe('0');
+    expect(chartNumberFormatter([-1, 1], locale)(Math.sin(Math.PI))).toBe('0');
+    expect(chartNumberFormatter([-1, 1], locale)(-Math.sin(Math.PI))).toBe('0');
+    expect(chartNumberFormatter([-1, 1], locale)(1e-12)).not.toBe('0');
+    expect(chartNumberFormatter([-1, 1], locale, true)(Math.sin(Math.PI))).not.toBe('0');
+    expect(chartCoordinateFormatter([1e-20, 1], 'log', locale)(1e-20)).not.toBe('0');
+    expect(chartNumberFormatter([-1e-20, 1e-20], locale)(1e-25)).not.toBe('0');
     expect(chartNumberFormatter([1e6, 3e20], locale)(3e20)).toBe('3×10²⁰');
     expect(chartNumberFormatter([1e-10, 1e-8], locale)(1e-10)).toBe('1×10⁻¹⁰');
     const narrow = chartNumberFormatter([1_000_000, 1_000_010], locale, true);
@@ -35,7 +41,14 @@ describe('chart number formatting', () => {
         const format = chartCoordinateFormatter([0, 3600000], 'time', locale);
         expect(format('2024-03-10T01:30:00-05:00')).toBe(format(Date.parse('2024-03-10T06:30:00Z')));
         expect(format(0)).toContain('UTC');
-        expect(chartCoordinateFormatter([0, 3600000], 'time', locale, true)(0)).toBe('00:00:00');
+        expect(
+          chartCoordinateFormatter(
+            [0, 3600000],
+            'time',
+            locale,
+            true
+          )(0, 0, { time: { upperTimeUnit: 'hour', lowerTimeUnit: 'hour', level: 0 } })
+        ).toMatch(/\n00:00$/u);
         const milliseconds = chartCoordinateFormatter([0, 1000], 'time', locale, true);
         expect(milliseconds(0)).not.toBe(milliseconds(1));
       }
