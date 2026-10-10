@@ -1,11 +1,11 @@
 import { render } from 'preact';
 import { useState } from 'preact/hooks';
-import ChartOutput from '../../../packages/oxiquill/src/components/doc-runtime/ChartOutput';
-import { labelsForLanguage } from '../../../packages/oxiquill/src/lib/doc-runtime/runtime-localization';
+import ChartOutput from '@chart-source/components/doc-runtime/ChartOutput';
+import { labelsForLanguage } from '@chart-source/lib/doc-runtime/runtime-localization';
 import * as echarts from 'echarts/core';
 import { chartFixtures } from '../chart-specs';
 import '../../../examples/docs-site/node_modules/@astrojs/starlight/style/props.css';
-import '../../../packages/oxiquill/src/styles/custom.css';
+import '@chart-source/styles/custom.css';
 
 const query = new URLSearchParams(location.search);
 document.documentElement.dataset.theme = query.get('theme') ?? 'light';

@@ -1,29 +1,30 @@
 import { defineConfig } from 'vite';
 import { fileURLToPath } from 'node:url';
-import { execFileSync } from 'node:child_process';
+import { resolve } from 'node:path';
+import { existsSync } from 'node:fs';
 
-export default defineConfig({
-  plugins: process.env.CHART_BASE_REV
-    ? [
-        {
-          name: 'chart-baseline',
-          load(id) {
-            if (id.endsWith('/components/doc-runtime/ChartOutput.tsx')) {
-              return execFileSync(
-                'git',
-                ['show', `${process.env.CHART_BASE_REV}:packages/oxiquill/src/components/doc-runtime/ChartOutput.tsx`],
-                { encoding: 'utf8' }
-              );
-            }
-          }
-        }
-      ]
-    : [],
-  root: fileURLToPath(new URL('.', import.meta.url)),
-  resolve: {
-    alias: { echarts: fileURLToPath(new URL('../../../packages/oxiquill/node_modules/echarts', import.meta.url)) }
-  },
-  oxc: { jsx: { runtime: 'automatic', importSource: 'preact' } },
-  optimizeDeps: { rolldownOptions: { transform: { jsx: { runtime: 'automatic', importSource: 'preact' } } } },
-  server: { port: 4323, strictPort: true }
-});
+const repository = fileURLToPath(new URL('../../../', import.meta.url));
+
+export function chartGalleryConfig(baseDirectory = process.env.CHART_BASE_DIR) {
+  const source = resolve(baseDirectory || repository, 'packages/oxiquill/src');
+  if (!existsSync(source)) throw new Error(`Chart gallery source does not exist: ${source}`);
+  return defineConfig({
+    root: fileURLToPath(new URL('.', import.meta.url)),
+    resolve: {
+      alias: {
+        '@chart-source': source,
+        echarts: resolve(repository, 'packages/oxiquill/node_modules/echarts'),
+        'preact/jsx-dev-runtime': fileURLToPath(import.meta.resolve('preact/jsx-dev-runtime')),
+        'preact/jsx-runtime': fileURLToPath(import.meta.resolve('preact/jsx-runtime')),
+        'preact/hooks': fileURLToPath(import.meta.resolve('preact/hooks')),
+        preact: fileURLToPath(import.meta.resolve('preact'))
+      },
+      dedupe: ['preact', 'echarts']
+    },
+    oxc: { jsx: { runtime: 'automatic', importSource: 'preact' } },
+    optimizeDeps: { rolldownOptions: { transform: { jsx: { runtime: 'automatic', importSource: 'preact' } } } },
+    server: { port: 4323, strictPort: true, fs: { allow: [repository, source] } }
+  });
+}
+
+export default chartGalleryConfig();

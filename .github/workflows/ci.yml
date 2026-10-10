@@ -356,10 +356,15 @@ jobs:
         env:
           PLAYWRIGHT_PROJECT: ${{ matrix.project }}
         run: pnpm test:e2e --project="$PLAYWRIGHT_PROJECT"
-      - name: Capture baseline chart gallery
-        if: always() && matrix.project == 'chromium'
+      - name: Prepare baseline chart sources
+        if: always() && matrix.project == 'chromium' && github.event_name == 'pull_request'
         env:
           CHART_BASE_REV: ${{ github.event.pull_request.base.sha }}
+        run: git worktree add --detach "$RUNNER_TEMP/chart-base" "$CHART_BASE_REV"
+      - name: Capture baseline chart gallery
+        if: always() && matrix.project == 'chromium' && github.event_name == 'pull_request'
+        env:
+          CHART_BASE_DIR: ${{ runner.temp }}/chart-base
         run: pnpm exec playwright test tests/e2e/chart-gallery.spec.ts --project=chromium --grep="chart gallery [0-9]+px" --output=test-results/before
       - name: Upload failed browser report
         if: failure()
