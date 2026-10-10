@@ -30,6 +30,9 @@ function Gallery() {
                 spec: {
                   ...spec,
                   ...(revision ? { title: `Updated ${name}` } : {}),
+                  ...(query.has('longText')
+                    ? { title: 'T'.repeat(16000), xLabel: 'X'.repeat(16000), yLabel: 'Y'.repeat(16000) }
+                    : {}),
                   ...(spec.kind === 'line'
                     ? {
                         series: spec.series.map((series) => ({

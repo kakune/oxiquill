@@ -126,3 +126,12 @@ test('charts remain present for forced colors and print', async ({ page }) => {
     await expect(page.locator('[role="alert"]')).toHaveCount(0);
   }
 });
+
+test('maximum-length titles and axis names stay within a narrow figure', async ({ page }) => {
+  await page.setViewportSize({ width: 400, height: 900 });
+  await page.goto('http://127.0.0.1:4323/?fixture=years&width=360&longText=1');
+  await expect(page.locator('canvas')).toHaveCount(1);
+  await expect(page.locator('figcaption strong')).toHaveText('T'.repeat(16000));
+  await expect(page.locator('.doc-chart-output__summary')).toContainText('X'.repeat(16000));
+  await expect.poll(() => page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(400);
+});

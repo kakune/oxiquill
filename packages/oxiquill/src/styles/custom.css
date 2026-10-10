@@ -274,6 +274,7 @@
 .doc-chart-output figcaption span,
 .doc-chart-output__summary {
   margin: 0;
+  overflow-wrap: anywhere;
   color: var(--sl-color-gray-2);
   font-size: 0.85rem;
 }
