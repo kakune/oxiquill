@@ -39,19 +39,19 @@
             };
           });
           haskellGhc = ghc-wasm-meta.packages.${system}."wasm32-wasi-ghc-9_14";
-          llvmTools = pkgs.llvmPackages.llvm;
+          # Coverage tools must match rustc's LLVM version, so use the toolchain's llvm-tools component.
+          llvmToolsBin = "${rustToolchain}/lib/rustlib/${pkgs.stdenv.hostPlatform.rust.rustcTarget}/bin";
           playwrightBrowsers = pkgs.playwright-driver.browsers;
           nodeExecutablePath = nixpkgs.lib.getExe nodejs;
           haskellCompilerPath = "${haskellGhc}/bin/wasm32-wasi-ghc";
-          llvmCovPath = "${llvmTools}/bin/llvm-cov";
-          llvmProfdataPath = "${llvmTools}/bin/llvm-profdata";
+          llvmCovPath = "${llvmToolsBin}/llvm-cov";
+          llvmProfdataPath = "${llvmToolsBin}/llvm-profdata";
           packages = [
             nodejs
             pnpm
             rustToolchain
             pkgs.wasm-pack
             pkgs.cargo-llvm-cov
-            llvmTools
             haskellGhc
           ];
           cacheHook = ''
