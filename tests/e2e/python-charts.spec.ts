@@ -85,6 +85,7 @@ for count in [99999, 100000, 100001]:
     display_chart({"kind": "line", "series": [{"points": [[0, 1]] * count}]})
 for count in [50000, 50001]:
     display_line(pd.DataFrame({"x": range(count), "a": [1] * count, "b": [2] * count}), x="x", y=["a", "b"])
+display_chart({"kind": "line", "series": ({"points": ((0, 1),) * 100001},)})
 `,
       `display_chart({"kind": "area", "series": []}, title="Fresh run")`
     ]
@@ -163,7 +164,10 @@ for count in [50000, 50001]:
   expect(invalid[5]).toMatchObject({ message: expect.stringContaining('explicit time zone') });
   await expect(cell.getByText('"after"', { exact: true })).toBeVisible();
   const boundary = await run(4);
-  expect(boundary.map((result) => result.status)).toEqual(['valid', 'valid', 'error', 'valid', 'error']);
+  expect(boundary.map((result) => result.status)).toEqual(['valid', 'valid', 'error', 'valid', 'error', 'error']);
+  for (const [index, fixture] of contract.filter((fixture) => fixture.pointCount).entries()) {
+    expect(boundary[index]).toMatchObject(fixture.expected);
+  }
   const fresh = await run(5);
   expect(fresh).toHaveLength(1);
   expect(fresh[0]).toMatchObject({ artifact: { title: 'Fresh run' } });

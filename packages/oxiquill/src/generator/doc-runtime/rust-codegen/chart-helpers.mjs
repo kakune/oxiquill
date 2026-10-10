@@ -183,7 +183,8 @@ function generateChartLimitHelper() {
         .unwrap_or(0);
     if data_items > ${outputArtifactLimits.chartDataItems} || category_items > ${outputArtifactLimits.chartDataItems} {
         return Err(format!(
-            "chart contains more than {} data items",
+            "Chart contains {} data items; maximum is {}.",
+            data_items.max(category_items),
             ${outputArtifactLimits.chartDataItems}
         ));
     }

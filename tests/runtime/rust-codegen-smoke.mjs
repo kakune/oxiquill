@@ -38,6 +38,7 @@ try {
     assert.equal(actual.status, fixture.expected.status, fixture.name);
     if (fixture.pointCount) {
       if (actual.status === 'valid') assert.equal(actual.artifact.spec.series[0].points.length, fixture.pointCount);
+      else assert.equal(actual.message, fixture.expected.message);
     } else {
       assert.deepEqual(actual, fixture.expected, fixture.name);
     }

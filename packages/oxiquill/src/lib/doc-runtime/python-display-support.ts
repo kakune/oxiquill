@@ -551,10 +551,10 @@ def __oxiquill_check_chart_size(spec):
         raise ValueError("Chart spec must be a dict.")
     for key in ("categories", "xCategories", "yCategories", "series", "bins", "data"):
         items = spec.get(key)
-        if isinstance(items, list) and len(items) > __oxiquill_chart_limit:
+        if isinstance(items, (list, tuple)) and len(items) > __oxiquill_chart_limit:
             raise ValueError(f"Chart contains {len(items)} data items; maximum is {__oxiquill_chart_limit}.")
     series = spec.get("series")
-    if not isinstance(series, list):
+    if not isinstance(series, (list, tuple)):
         return
     count = 0
     for item in series:
@@ -562,7 +562,7 @@ def __oxiquill_check_chart_size(spec):
             continue
         field = "values" if spec.get("kind") == "bar" else "points"
         values = item.get(field)
-        if isinstance(values, list):
+        if isinstance(values, (list, tuple)):
             count += len(values) if field == "values" else max(1, len(values))
         if count > __oxiquill_chart_limit:
             raise ValueError(f"Chart contains {count} data items; maximum is {__oxiquill_chart_limit}.")
