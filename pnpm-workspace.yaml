@@ -6,5 +6,10 @@ allowBuilds:
   esbuild: true
   sharp: true
 
+minimumReleaseAgeExclude:
+  - prettier-plugin-astro@1.1.1
+  - smol-toml@1.9.1
+
 overrides:
-  '@astrojs/markdown-satteri': 0.3.6
+  # expressive-code still requires postcss-nested 6, whose postcss-selector-parser 6 line has no fix for GHSA-rj75-hqrm-r3gf.
+  '@expressive-code/core>postcss-nested': 7.0.2
