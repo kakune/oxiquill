@@ -12,8 +12,8 @@ import warnings
 
 __oxiquill_outputs = []
 __oxiquill_displayed_figures = set()
-__oxiquill_table_limit = 10000
-__oxiquill_table_column_limit = 100
+__oxiquill_table_limit = ${outputArtifactLimits.rowsPerTable}
+__oxiquill_table_column_limit = ${outputArtifactLimits.columnsPerTable}
 __oxiquill_artifact_limit = ${outputArtifactLimits.artifactsPerRun}
 __oxiquill_output_byte_limit = ${outputArtifactLimits.validatedBytesPerRun}
 __oxiquill_diagnostic_byte_limit = ${outputArtifactLimits.bytesPerDiagnostic}

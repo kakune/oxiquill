@@ -7,9 +7,9 @@ import type {
   TextArtifact
 } from './types.js';
 import {
+  publicOutputArtifact,
   validateOutputArtifacts,
-  type ValidatedArtifactResult,
-  type ValidatedOutputArtifact
+  type ValidatedArtifactResult
 } from './output-artifact-validation.js';
 
 export interface NormalizedCellExecutionResult extends CellExecutionResult {
@@ -99,22 +99,6 @@ function ownDataField(record: object, key: PropertyKey): { present: boolean; val
   return descriptor && Object.hasOwn(descriptor, 'value')
     ? { present: true, value: descriptor.value }
     : { present: descriptor != null, value: undefined };
-}
-
-function publicOutputArtifact(artifact: ValidatedOutputArtifact): OutputArtifact {
-  if (artifact.kind === 'json') {
-    return withoutProperty(artifact, 'formattedValue');
-  }
-  if (artifact.kind === 'image') {
-    return withoutProperty(artifact, 'source');
-  }
-  return artifact;
-}
-
-function withoutProperty<Value extends object, Key extends keyof Value>(value: Value, key: Key): Omit<Value, Key> {
-  const output = { ...value };
-  Reflect.deleteProperty(output, key);
-  return output;
 }
 
 export function isOutputArtifact(value: unknown): value is OutputArtifact {
