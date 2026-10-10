@@ -8,6 +8,7 @@ import io
 import json
 import os
 import sys
+import warnings
 
 __oxiquill_outputs = []
 __oxiquill_displayed_figures = set()
@@ -360,6 +361,7 @@ def __oxiquill_configure_matplotlib(available=False):
     except Exception:
         pass
     from cycler import cycler
+    matplotlib.rcdefaults()
     matplotlib.rcParams.update({
         "axes.prop_cycle": cycler(color=${JSON.stringify(chartPalette)}),
         "font.family": "sans-serif",
@@ -394,7 +396,12 @@ def __oxiquill_figure_to_image(fig, *, preferred="svg", title=None, caption=None
         __oxiquill_displayed_figures.add(id(fig))
     if preferred == "svg":
         buffer = io.StringIO()
-        fig.savefig(buffer, format="svg", bbox_inches="tight")
+        import matplotlib
+        with warnings.catch_warnings():
+            if matplotlib.rcParams["svg.fonttype"] == "none":
+                # Browser fonts supply these glyphs for SVG text, but not for PNG or paths.
+                warnings.filterwarnings("ignore", message=r"Glyph .* missing from font\(s\)", category=UserWarning)
+            fig.savefig(buffer, format="svg", bbox_inches="tight")
         data = buffer.getvalue()
         if len(data.encode("utf-8")) <= __oxiquill_image_byte_limit:
             return __oxiquill_meta(
@@ -407,7 +414,8 @@ def __oxiquill_figure_to_image(fig, *, preferred="svg", title=None, caption=None
                 title,
                 caption,
             )
-        print("Matplotlib SVG exceeded the 10 MiB image limit; rendered PNG at 150 DPI.", file=sys.stderr)
+        limit_mib = __oxiquill_image_byte_limit / (1024 * 1024)
+        print(f"Matplotlib SVG exceeded the {limit_mib:g} MiB image limit; rendered PNG at 150 DPI.", file=sys.stderr)
     buffer = io.BytesIO()
     fig.savefig(buffer, format="png", bbox_inches="tight", dpi=150)
     return __oxiquill_meta(

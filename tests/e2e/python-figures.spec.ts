@@ -7,8 +7,9 @@ test('matplotlib styles, text alternatives, overrides, and large-figure fallback
   test.skip(browserName !== 'chromium', 'The real Pyodide image contract is exercised in Chromium.');
   test.setTimeout(240_000);
   await page.addInitScript(
-    (source: string) => {
+    (sources: string[]) => {
       const post = Worker.prototype.postMessage;
+      let run = 0;
       Worker.prototype.postMessage = function (
         message: unknown,
         options?: StructuredSerializeOptions | Transferable[]
@@ -16,14 +17,16 @@ test('matplotlib styles, text alternatives, overrides, and large-figure fallback
         if (
           message &&
           typeof message === 'object' &&
+          'source' in message &&
           'cellId' in message &&
           message.cellId === 'features__rich-output__python-rich-outputs'
         )
-          message = { ...message, source };
+          message = { ...message, source: sources[Math.min(run++, sources.length - 1)] };
         return Reflect.apply(post, this, [message, options]);
       };
     },
-    `
+    [
+      `
 import matplotlib
 import matplotlib.pyplot as plt
 import numpy as np
@@ -53,7 +56,25 @@ third, axes = plt.subplots()
 axes.set_title("Large scatter")
 samples = np.arange(100000)
 _ = axes.scatter(samples, np.sin(samples), s=2)
+plt.style.use("dark_background")
+`,
+      `
+import matplotlib
+import matplotlib.pyplot as plt
+import warnings
+assert matplotlib.rcParams["figure.facecolor"] == "white"
+for key in ["text.color", "xtick.color", "ytick.color", "axes.edgecolor", "axes.labelcolor"]:
+    assert matplotlib.rcParams[key] == "black", (key, matplotlib.rcParams[key])
+assert matplotlib.rcParams["axes.grid"]
+assert matplotlib.rcParams["svg.fonttype"] == "none"
+fig, axes = plt.subplots()
+axes.imshow([[0, 1], [2, 3]])
+axes.grid(False)
+assert not any(line.get_visible() for line in axes.get_xgridlines())
+axes.set_title("Cell defaults restored")
+warnings.warn("Unrelated author warning", UserWarning)
 `
+    ]
   );
   await page.goto('/features/rich-output/');
   const cell = page.getByTestId('cell-features__rich-output__python-rich-outputs');
@@ -70,6 +91,7 @@ _ = axes.scatter(samples, np.sin(samples), s=2)
   await expect(images.nth(2)).toHaveAttribute('alt', 'Large scatter');
   await expect(images.nth(2)).toHaveAttribute('src', /^data:image\/png/);
   await expect(cell).toContainText('rendered PNG at 150 DPI');
+  await expect(cell).not.toContainText('missing from font');
   expect(
     await images.nth(0).evaluate(async (element) => {
       const svg = await fetch((element as HTMLImageElement).src).then((response) => response.text());
@@ -85,4 +107,8 @@ _ = axes.scatter(samples, np.sin(samples), s=2)
   ).toBe(true);
   await page.evaluate(() => (document.documentElement.dataset.theme = 'dark'));
   expect(await images.nth(0).evaluate((element) => getComputedStyle(element).filter)).toBe('none');
+  await cell.getByRole('button', { name: 'Run', exact: true }).click();
+  await expect(images).toHaveCount(1, { timeout: 180_000 });
+  await expect(images.first()).toHaveAttribute('alt', 'Cell defaults restored');
+  await expect(cell).toContainText('Unrelated author warning');
 });
