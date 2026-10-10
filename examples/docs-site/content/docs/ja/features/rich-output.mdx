@@ -237,9 +237,9 @@ return Ok(CellOutput {
 
 任意 helper crate `doc-rust` の `PlotSpec/LinePlot/line_plot` も削除されました。`SeriesPoint` を `[f64::from(point.n), point.x]` に明示変換し、`emit_line_chart!` に渡してください。互換マクロ `emit_line_plot!` は残っています。
 
-出力順は Rust が stdout の後に emit 順、Python が stdout・stderr・display・自動 matplotlib 図・最終値、Haskell が stdout・stderr です。Python の最終値が None または空文字列なら暗黙の JSON 出力はありません。明示した JSON artifact の null・空文字列・false・0 は保持します。これはストリーム捕捉順の変更ではありません。
+出力順は変わりません。Rust は stdout の後に emit 順、Python は stdout・stderr・display・自動 matplotlib 図・最終値、Haskell は stdout・stderr の順です。Python の最終値が None または空文字列なら暗黙の JSON 出力はありません。明示した JSON artifact の null・空文字列・false・0 は保持します。捕捉したストリームは display 呼び出しと交互には並びません。
 
-更新後は `pnpm exec oxiquill docgen --wasm dev` または本番の `pnpm build` で runtime を再生成してください。生成物の直接編集は不要です。
+更新後は `pnpm exec oxiquill docgen --wasm dev` または本番の `pnpm build` で runtime を再生成してください。生成物は直接編集しないでください。
 
 ## Python display helper
 
@@ -306,7 +306,7 @@ Rust セルでは明示的な `emit_*` macro を使います。対応 macro:
 - `emit_svg!` と `emit_image_svg!`
 - `emit_png_base64!` と `emit_image_png!`
 - `emit_table!`、`emit_table_with_columns!`、`emit_records_table!`
-- `emit_line_chart!`、`emit_scatter_chart!`、`emit_bar_chart!`、`emit_histogram!`、`emit_heatmap!`
+- `emit_chart!`、`emit_area_chart!`、`emit_line_chart!`、`emit_scatter_chart!`、`emit_bar_chart!`、`emit_histogram!`、`emit_heatmap!`
 - 互換用の `emit_line_plot!`。新規利用では座標を明示的に変換し、`emit_line_chart!` を使ってください。
 
 `emit_chart!(spec)` は全 6 種類のチャートを受け付けます。`metadata = ...` の `id/title/caption` は artifact に属し、spec の `title/xLabel/yLabel` とは別です。表示タイトルは artifact の title を優先します。metadata の null は省略として扱い、それ以外のフィールドはその出力の診断になります。`emit_area_chart!` は line と同じ点列・系列、軸ラベル、末尾 style、`options = ...` 形式を使えます。既存マクロの引数形式は維持されます。不正な spec は有効な隣接出力を残して、その出力の診断として表示されます。

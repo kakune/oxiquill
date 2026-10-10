@@ -55,7 +55,7 @@ Set `PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH` when using a system/Nix Chromium. The 
 
 ## Output contract migration
 
-P21 was measured on 2026-10-10 with Node v24.21.0, 12th Gen Intel(R) Core(TM) i7-12700F, linux x64. The baseline runtime modules were compiled from commit 19d1f2d before changes; the second run uses the outputs-only implementation. Both runs use the same deterministic inputs, five warmups, and 25 normalization samples per case. Raw reports are in [output-contract-before.json](output-contract-before.json) and [output-contract-after.json](output-contract-after.json). The after report identifies the parent commit and labels the modified working tree explicitly.
+The outputs-only result migration was measured on 2026-10-10 with Node v24.21.0, 12th Gen Intel(R) Core(TM) i7-12700F, linux x64. The baseline runtime modules were compiled from commit 19d1f2d before changes; the second run uses the outputs-only implementation. Both runs use the same deterministic inputs, five warmups, and 25 normalization samples per case. Raw reports are in [output-contract-before.json](output-contract-before.json) and [output-contract-after.json](output-contract-after.json). The after report identifies the parent commit and labels the modified working tree explicitly.
 
 Bytes are UTF-8 serialized worker result sizes after worker bounding. Timings measure main-thread normalization of those same bounded results, without Wasm/Pyodide startup, browser transport, or rendering. Text contains 256 KiB, JSON contains 5,000 records, line contains 100,000 points, and mixed contains text, stderr, JSON, and a two-point line.
 
