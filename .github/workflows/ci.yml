@@ -360,7 +360,10 @@ jobs:
         if: always() && matrix.project == 'chromium' && github.event_name == 'pull_request'
         env:
           CHART_BASE_REV: ${{ github.event.pull_request.base.sha }}
-        run: git worktree add --detach "$RUNNER_TEMP/chart-base" "$CHART_BASE_REV"
+        run: |
+          git worktree add --detach "$RUNNER_TEMP/chart-base" "$CHART_BASE_REV"
+          ln -s "$GITHUB_WORKSPACE/node_modules" "$RUNNER_TEMP/chart-base/node_modules"
+          ln -s "$GITHUB_WORKSPACE/packages/oxiquill/node_modules" "$RUNNER_TEMP/chart-base/packages/oxiquill/node_modules"
       - name: Capture baseline chart gallery
         if: always() && matrix.project == 'chromium' && github.event_name == 'pull_request'
         env:
