@@ -1,4 +1,6 @@
-import { useEffect, useLayoutEffect, useState } from 'preact/hooks';
+import { useEffect, useLayoutEffect, useRef, useState } from 'preact/hooks';
+import { createInputShareUrl, registerSharedInputs, sharedInputMetadata } from '../../lib/doc-runtime/input-sharing.js';
+import { boundedErrorMessage } from '../../lib/doc-runtime/output-limits.mjs';
 import { getPythonPreparationState, subscribePythonPreparation } from '../../lib/doc-runtime/runtime-client.js';
 import { markRuntimeEvent } from '../../lib/doc-runtime/runtime-timing.js';
 import { shouldShowInputControls, shouldShowRunButton } from '../../lib/doc-runtime/interactive-cell-model.js';
@@ -44,6 +46,17 @@ function InteractiveCellPanel({
 }) {
   const [isSourceVisible, setIsSourceVisible] = useState(cell.showSource);
   const runtime = useInteractiveCellRun(cell, runtimeVersion);
+  const section = useRef<HTMLElement>(null);
+  const snapshot = useRef(runtime);
+  snapshot.current = runtime;
+  const [shareStatus, setShareStatus] = useState<{ error: boolean; message: string }>();
+  useEffect(() => {
+    if (section.current)
+      return registerSharedInputs(section.current, () => ({
+        values: snapshot.current.values,
+        valid: snapshot.current.inputsValid
+      }));
+  }, []);
   const ids = interactiveCellIds(cell.id);
   const [pythonPreparation, setPythonPreparation] = useState<ReturnType<typeof getPythonPreparationState>>('idle');
   useEffect(() => {
@@ -62,9 +75,11 @@ function InteractiveCellPanel({
 
   return (
     <section
+      ref={section}
       class="doc-cell"
       aria-labelledby={ids.title}
       data-cell-id={cell.id}
+      data-share-inputs={sharedInputMetadata(cell)}
       data-language={cell.language}
       data-python-packages={cell.language === 'python' ? JSON.stringify(cell.packages) : undefined}
       data-python-timeout={cell.language === 'python' ? cell.timeoutMs : undefined}
@@ -93,6 +108,24 @@ function InteractiveCellPanel({
               {labels.resetInputs}
             </button>
           ) : null}
+          {cell.inputs.some((input) => input.share) ? (
+            <button
+              type="button"
+              class="secondary-button"
+              onClick={async () => {
+                try {
+                  const url = createInputShareUrl(cell.pagePath);
+                  if (!globalThis.navigator.clipboard) throw new Error(labels.clipboardUnavailable);
+                  await navigator.clipboard.writeText(url);
+                  setShareStatus({ error: false, message: labels.copyLinkSuccess });
+                } catch (error) {
+                  setShareStatus({ error: true, message: labels.copyLinkError(boundedErrorMessage(error)) });
+                }
+              }}
+            >
+              {labels.copyLink}
+            </button>
+          ) : null}
           {shouldShowRunButton(cell.run) ? (
             <button
               type="button"
@@ -114,6 +147,8 @@ function InteractiveCellPanel({
           ) : null}
         </div>
       </div>
+
+      {shareStatus ? <p role={shareStatus.error ? 'alert' : 'status'}>{shareStatus.message}</p> : null}
 
       {shouldShowInputControls(cell.run) && cell.inputs.length > 0 ? (
         <fieldset class="doc-input-grid">

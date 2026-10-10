@@ -68,6 +68,9 @@ export type RuntimeLabels = {
   rowsRange: (first: number, last: number, total: number, truncated: boolean) => string;
   run: string;
   resetInputs: string;
+  copyLink: string;
+  copyLinkSuccess: string;
+  copyLinkError: (detail: string) => string;
   runtimeLanguage: (language: 'haskell' | 'python' | 'rust') => string;
   pythonPreparing: string;
   running: string;
@@ -188,6 +191,9 @@ const runtimeLabels = {
     rowsRange: (first, last, total, truncated) => `Rows ${first}-${last} of ${total}${truncated ? ' (truncated)' : ''}`,
     run: 'Run',
     resetInputs: 'Reset inputs',
+    copyLink: 'Copy input link',
+    copyLinkSuccess: 'Copied input link.',
+    copyLinkError: (detail) => `Unable to copy input link: ${detail}`,
     runtimeLanguage: runtimeLanguageLabel,
     pythonPreparing: 'Preparing Python…',
     running: 'Running',
@@ -264,6 +270,9 @@ const runtimeLabels = {
     rowsRange: (first, last, total, truncated) => `${total} 行中 ${first}–${last} 行${truncated ? '（省略あり）' : ''}`,
     run: '実行',
     resetInputs: '入力を初期値に戻す',
+    copyLink: '入力のリンクをコピー',
+    copyLinkSuccess: '入力のリンクをコピーしました。',
+    copyLinkError: (detail) => `入力のリンクをコピーできませんでした: ${translateDiagnostic(detail)}`,
     runtimeLanguage: runtimeLanguageLabel,
     pythonPreparing: 'Python を準備中…',
     running: '実行中…',
