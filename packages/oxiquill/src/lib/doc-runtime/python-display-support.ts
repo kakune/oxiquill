@@ -1,4 +1,5 @@
 import { outputArtifactLimits } from './output-limits.mjs';
+import { chartPalette } from './chart-palette.js';
 
 const pythonDisplayJsonAndScalarSupport = String.raw`
 import base64
@@ -15,6 +16,8 @@ __oxiquill_table_column_limit = 100
 __oxiquill_artifact_limit = ${outputArtifactLimits.artifactsPerRun}
 __oxiquill_output_byte_limit = ${outputArtifactLimits.validatedBytesPerRun}
 __oxiquill_diagnostic_byte_limit = ${outputArtifactLimits.bytesPerDiagnostic}
+__oxiquill_image_byte_limit = ${outputArtifactLimits.decodedBytesPerImage}
+__oxiquill_metadata_byte_limit = ${outputArtifactLimits.bytesPerMetadataField}
 __oxiquill_output_bytes = 0
 __oxiquill_output_omission = None
 
@@ -345,20 +348,46 @@ def __oxiquill_markdown_repr_artifact(value, *, title=None, caption=None):
 `;
 
 const pythonDisplayMatplotlibSupport = String.raw`
-def __oxiquill_configure_matplotlib():
+def __oxiquill_configure_matplotlib(available=False):
     os.environ["MPLBACKEND"] = "Agg"
     matplotlib = sys.modules.get("matplotlib")
+    if matplotlib is None and available:
+        import matplotlib
     if matplotlib is None:
         return False
     try:
         matplotlib.use("Agg", force=True)
     except Exception:
         pass
+    from cycler import cycler
+    matplotlib.rcParams.update({
+        "axes.prop_cycle": cycler(color=${JSON.stringify(chartPalette)}),
+        "font.family": "sans-serif",
+        "axes.grid": True,
+        "axes.axisbelow": True,
+        "grid.color": "#d1d5db",
+        "grid.alpha": 0.45,
+        "axes.spines.top": False,
+        "axes.spines.right": False,
+        "figure.facecolor": "white",
+        "axes.facecolor": "white",
+        "savefig.facecolor": "white",
+        "savefig.transparent": False,
+        "svg.fonttype": "none",
+    })
     return True
 
 def __oxiquill_is_matplotlib_figure(value):
     module = getattr(value.__class__, "__module__", "")
     return module.startswith("matplotlib.") and callable(getattr(value, "savefig", None))
+
+def __oxiquill_figure_alt(fig):
+    parts = [fig.get_suptitle()]
+    for axes in fig.get_axes():
+        parts.extend(axes.get_title(loc=loc) for loc in ("center", "left", "right"))
+        parts.extend([axes.get_xlabel(), axes.get_ylabel()])
+    description = "; ".join(dict.fromkeys(part.strip() for part in parts if part and part.strip()))
+    return __oxiquill_bound_text(description or "matplotlib figure", __oxiquill_metadata_byte_limit)
 
 def __oxiquill_figure_to_image(fig, *, preferred="svg", title=None, caption=None, mark_displayed=False):
     if mark_displayed:
@@ -366,24 +395,27 @@ def __oxiquill_figure_to_image(fig, *, preferred="svg", title=None, caption=None
     if preferred == "svg":
         buffer = io.StringIO()
         fig.savefig(buffer, format="svg", bbox_inches="tight")
-        return __oxiquill_meta(
-            {
-                "kind": "image",
-                "mime": "image/svg+xml",
-                "data": buffer.getvalue(),
-                "alt": "matplotlib figure",
-            },
-            title,
-            caption,
-        )
+        data = buffer.getvalue()
+        if len(data.encode("utf-8")) <= __oxiquill_image_byte_limit:
+            return __oxiquill_meta(
+                {
+                    "kind": "image",
+                    "mime": "image/svg+xml",
+                    "data": data,
+                    "alt": __oxiquill_figure_alt(fig),
+                },
+                title,
+                caption,
+            )
+        print("Matplotlib SVG exceeded the 10 MiB image limit; rendered PNG at 150 DPI.", file=sys.stderr)
     buffer = io.BytesIO()
-    fig.savefig(buffer, format="png", bbox_inches="tight")
+    fig.savefig(buffer, format="png", bbox_inches="tight", dpi=150)
     return __oxiquill_meta(
         {
             "kind": "image",
             "mime": "image/png",
             "data": base64.b64encode(buffer.getvalue()).decode("ascii"),
-            "alt": "matplotlib figure",
+            "alt": __oxiquill_figure_alt(fig),
         },
         title,
         caption,
@@ -505,9 +537,9 @@ def __oxiquill_reset_outputs():
     __oxiquill_output_bytes = 0
     __oxiquill_output_omission = None
 
-def __oxiquill_prepare_cell():
+def __oxiquill_prepare_cell(matplotlib_available=False):
     __oxiquill_reset_outputs()
-    __oxiquill_configure_matplotlib()
+    __oxiquill_configure_matplotlib(matplotlib_available)
 
 def __oxiquill_take_outputs():
     outputs = list(__oxiquill_outputs)
