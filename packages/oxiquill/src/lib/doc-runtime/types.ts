@@ -39,15 +39,6 @@ export interface CellManifest {
 
 export type InputValues = Record<string, string | number | boolean>;
 
-export interface LinePlotSpec {
-  kind: 'line';
-  x_label: string;
-  y_label: string;
-  points: readonly [number, number][];
-}
-
-export type PlotSpec = LinePlotSpec;
-
 export type ArtifactStream = 'stdout' | 'stderr' | 'display';
 export type TableColumnType = 'string' | 'number' | 'integer' | 'boolean' | 'date' | 'datetime' | 'null' | 'unknown';
 export type ChartAxisType = 'value' | 'category' | 'time' | 'log';
@@ -234,18 +225,10 @@ export interface HeatmapChartSpec extends BaseChartSpec {
 }
 
 export interface RawCellExecutionResult {
-  stdout?: string;
-  stderr?: string;
-  value?: unknown;
-  plots?: readonly PlotSpec[];
-  outputs?: readonly unknown[];
+  outputs: readonly unknown[];
 }
 
 export interface CellExecutionResult {
-  stdout: string;
-  stderr?: string;
-  value?: unknown;
-  plots: readonly PlotSpec[];
   outputs: readonly OutputArtifact[];
 }
 

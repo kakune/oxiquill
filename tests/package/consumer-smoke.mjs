@@ -59,9 +59,21 @@ import { createOxiquillCollections } from 'oxiquill/content';
 import type { OxiquillCollections, OxiquillContentDependencies } from 'oxiquill/content';
 import InteractiveCell from 'oxiquill/runtime/InteractiveCell';
 import MermaidDiagram from 'oxiquill/runtime/MermaidDiagram';
-import type { CellManifest } from 'oxiquill/runtime/types';
+import type { CellManifest, CellExecutionResult, RawCellExecutionResult, InputSpec, JsonArtifact } from 'oxiquill/runtime/types';
+// @ts-expect-error Legacy plot result types have been removed.
+import type { PlotSpec, LinePlotSpec } from 'oxiquill/runtime/types';
 
 const cell = {} as CellManifest;
+const execution = { outputs: [{ kind: 'json', value: null }] } satisfies CellExecutionResult;
+const raw: RawCellExecutionResult = { outputs: execution.outputs };
+// @ts-expect-error Execution results require outputs.
+const obsolete: CellExecutionResult = { stdout: 'old', plots: [] };
+// @ts-expect-error Raw results also require outputs.
+const obsoleteRaw: RawCellExecutionResult = { stdout: 'old' };
+// @ts-expect-error Results no longer expose stdout aliases.
+const oldStream = raw.stdout;
+const json: JsonArtifact = { kind: 'json', value: false };
+const inputValue: InputSpec['value'] = 0;
 const paths = { downloadCacheDir: new URL('./verified downloads/', import.meta.url) } satisfies OxiquillPathOptions;
 const python = { preload: true, offline: true, packageMirror: new URL('https://packages.example/pyodide/') } satisfies OxiquillPythonOptions;
 const publicTypes = {} as [
@@ -95,6 +107,13 @@ void [
   InteractiveCell,
   MermaidDiagram,
   cell,
+  execution,
+  raw,
+  obsolete,
+  obsoleteRaw,
+  oldStream,
+  json,
+  inputValue,
   paths,
   python,
   publicTypes

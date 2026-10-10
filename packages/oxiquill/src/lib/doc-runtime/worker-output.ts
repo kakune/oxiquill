@@ -1,6 +1,6 @@
 import { outputArtifactLimits, utf8ByteLength } from './output-limits.mjs';
-import { normalizeCellExecutionResult, outputsToLegacyResult } from './output-artifacts.js';
-import type { ValidatedArtifactResult, ValidatedOutputArtifact } from './output-artifact-validation.js';
+import { normalizeCellExecutionResult } from './output-artifacts.js';
+import { publicOutputArtifact, type ValidatedArtifactResult } from './output-artifact-validation.js';
 import type { OutputArtifact, RawCellExecutionResult } from './types.js';
 
 type ProducerErrorArtifact = {
@@ -49,23 +49,5 @@ function workerOutputCandidate(result: ValidatedArtifactResult): WorkerOutputCan
 }
 
 function workerResultFromCandidates(candidates: readonly WorkerOutputCandidate[]): RawCellExecutionResult {
-  const outputs = candidates.filter((candidate): candidate is OutputArtifact => candidate.kind !== '__oxiquill_error');
-  return {
-    ...outputsToLegacyResult(outputs),
-    outputs: candidates
-  };
-}
-
-function publicOutputArtifact(artifact: ValidatedOutputArtifact): OutputArtifact {
-  if (artifact.kind === 'json') {
-    const output = { ...artifact };
-    Reflect.deleteProperty(output, 'formattedValue');
-    return output;
-  }
-  if (artifact.kind === 'image') {
-    const output = { ...artifact };
-    Reflect.deleteProperty(output, 'source');
-    return output;
-  }
-  return artifact;
+  return { outputs: candidates };
 }

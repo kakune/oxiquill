@@ -33,13 +33,7 @@ afterAll(() => {
 
 describe('Rust runtime worker', () => {
   it('initializes Wasm once and posts parsed cell results', async () => {
-    run_rust_cell.mockReturnValue(
-      JSON.stringify({
-        stdout: 'ok',
-        plots: [],
-        outputs: [{ kind: 'text', stream: 'stdout', content: 'ok' }]
-      })
-    );
+    run_rust_cell.mockReturnValue(JSON.stringify({ outputs: [{ kind: 'text', stream: 'stdout', content: 'ok' }] }));
 
     worker.listener?.({
       data: { requestId: 1, cellId: 'first', inputs: { count: 2 } }
@@ -54,11 +48,7 @@ describe('Rust runtime worker', () => {
     expect(worker.postMessage).toHaveBeenCalledWith({
       requestId: 1,
       ok: true,
-      result: {
-        stdout: 'ok',
-        plots: [],
-        outputs: [{ kind: 'text', stream: 'stdout', content: 'ok' }]
-      }
+      result: { outputs: [{ kind: 'text', stream: 'stdout', content: 'ok' }] }
     });
   });
 

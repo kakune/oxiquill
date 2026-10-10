@@ -77,8 +77,8 @@ function generateRustTest(cell) {
             .expect(${JSON.stringify(failureMessage)});
 
         assert!(
-            output.contains("stdout"),
-            ${JSON.stringify(`generated Rust cell ${cell.id} output should include stdout`)}
+            output.contains("outputs"),
+            ${JSON.stringify(`generated Rust cell ${cell.id} output should include outputs`)}
         );
     }`;
 }

@@ -4,6 +4,6 @@ import type { CellManifest } from '../../../packages/oxiquill/src/lib/doc-runtim
 export const cells: readonly CellManifest[] = [];
 export const runtimeVersion = 'test-runtime-version';
 export const initializeRustWasm = vi.fn(async () => undefined);
-export const run_rust_cell = vi.fn(() => JSON.stringify({ stdout: '', plots: [], outputs: [] }));
+export const run_rust_cell = vi.fn(() => JSON.stringify({ outputs: [] }));
 
 export default initializeRustWasm;
