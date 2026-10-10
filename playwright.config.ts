@@ -24,12 +24,19 @@ export default defineConfig({
       use: { ...devices['Desktop Safari'] }
     }
   ],
-  webServer: {
-    command: 'pnpm --dir examples/docs-site preview --host 127.0.0.1 --port 4322',
-    env: { ASTRO_PREVIEW_BACKGROUND: '0' },
-    url: 'http://127.0.0.1:4322',
-    reuseExistingServer: !process.env.CI
-  },
+  webServer: [
+    {
+      command: 'pnpm --dir examples/docs-site preview --host 127.0.0.1 --port 4322',
+      env: { ASTRO_PREVIEW_BACKGROUND: '0' },
+      url: 'http://127.0.0.1:4322',
+      reuseExistingServer: !process.env.CI
+    },
+    {
+      command: 'pnpm exec vite --config tests/fixtures/chart-gallery/vite.config.ts --host 127.0.0.1',
+      url: 'http://127.0.0.1:4323',
+      reuseExistingServer: !process.env.CI
+    }
+  ],
   use: {
     baseURL: 'http://127.0.0.1:4322',
     screenshot: 'only-on-failure',

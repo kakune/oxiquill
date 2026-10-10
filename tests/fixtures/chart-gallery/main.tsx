@@ -1,0 +1,55 @@
+import { render } from 'preact';
+import { useState } from 'preact/hooks';
+import ChartOutput from '../../../packages/oxiquill/src/components/doc-runtime/ChartOutput';
+import { labelsForLanguage } from '../../../packages/oxiquill/src/lib/doc-runtime/runtime-localization';
+import * as echarts from 'echarts/core';
+import { chartFixtures } from '../chart-specs';
+import '../../../examples/docs-site/node_modules/@astrojs/starlight/style/props.css';
+import '../../../packages/oxiquill/src/styles/custom.css';
+
+const query = new URLSearchParams(location.search);
+document.documentElement.dataset.theme = query.get('theme') ?? 'light';
+document.body.style.cssText =
+  'margin:0;background:var(--sl-color-bg);color:var(--sl-color-text);font-family:system-ui,sans-serif';
+const locale = query.get('locale') === 'ja' ? 'ja' : 'en';
+const width = Number(query.get('width') ?? 720);
+
+function Gallery() {
+  const [revision, setRevision] = useState(0);
+  return (
+    <main style={{ width }}>
+      <button onClick={() => setRevision((value) => value + 1)}>Update data</button>
+      {Object.entries(chartFixtures)
+        .filter(([name]) => !query.has('fixture') || query.get('fixture') === name)
+        .map(([name, spec]) => (
+          <section id={name} key={name}>
+            <h2>{name}</h2>
+            <ChartOutput
+              artifact={{
+                kind: 'chart',
+                spec: {
+                  ...spec,
+                  ...(revision ? { title: `Updated ${name}` } : {}),
+                  ...(spec.kind === 'line'
+                    ? {
+                        series: spec.series.map((series) => ({
+                          ...series,
+                          points: series.points.map(([x, y]) => [x, typeof y === 'number' ? y + revision : y] as const)
+                        }))
+                      }
+                    : {})
+                },
+                caption: `Revision ${revision}`
+              }}
+              idPrefix={name}
+              labels={labelsForLanguage(locale)}
+            />
+          </section>
+        ))}
+    </main>
+  );
+}
+
+Object.assign(window, { galleryECharts: echarts });
+const app = document.getElementById('app');
+if (app) render(<Gallery />, app);
