@@ -21,65 +21,67 @@ const presentation = togglePresentation(lang, dir, 'sidebar');
 </script>
 
 <div class="page sl-flex">
-  <header class="header"><slot name="header" /></header>
-  {
-    hasSidebar && (
-      <nav class="sidebar print:hidden" aria-label={Astro.locals.t('sidebarNav.accessibleLabel')}>
-        <MobileMenuToggle />
-        <script>
-          // Starlight's mobile menu opens the sidebar as a popover; trap focus while it is open.
-          class StarlightSidebarPane extends HTMLElement {
-            constructor() {
-              super();
+  <header class="header">
+    <slot name="header" />
+  </header>
+  {hasSidebar && (
+    <nav class="sidebar print:hidden" aria-label={Astro.locals.t('sidebarNav.accessibleLabel')}>
+      <MobileMenuToggle />
+      <script>
+        // Starlight's mobile menu opens the sidebar as a popover; trap focus while it is open.
+        class StarlightSidebarPane extends HTMLElement {
+          constructor() {
+            super();
 
-              const desktopMediaQuery = matchMedia('(min-width: 50em)');
-              const resetPopoverAttribute = () => {
-                this.popover = desktopMediaQuery.matches ? null : 'auto';
-              };
-              resetPopoverAttribute();
-              desktopMediaQuery.addEventListener('change', () => resetPopoverAttribute());
+            const desktopMediaQuery = matchMedia('(min-width: 50em)');
+            const resetPopoverAttribute = () => {
+              this.popover = desktopMediaQuery.matches ? null : 'auto';
+            };
+            resetPopoverAttribute();
+            desktopMediaQuery.addEventListener('change', () => resetPopoverAttribute());
 
-              this.addEventListener('toggle', ({ newState }) => this.trapFocus(newState === 'open'));
-            }
-
-            trapFocus(shouldTrap: boolean) {
-              document.querySelectorAll<HTMLElement>('.main-frame, .sl-skip-link').forEach((element) => {
-                element.toggleAttribute('inert', shouldTrap);
-              });
-            }
+            this.addEventListener('toggle', ({ newState }) => this.trapFocus(newState === 'open'));
           }
-          customElements.define('sl-sidebar-pane', StarlightSidebarPane);
-        </script>
-        <sl-sidebar-pane popover="" id="starlight__sidebar" class="sidebar-pane">
-          <div class="sidebar-content sl-flex">
-            <slot name="sidebar" />
-          </div>
-        </sl-sidebar-pane>
-        <starlight-sidebar-toggle
-          class="print:hidden"
-          data-collapse-label={presentation.collapseLabel}
-          data-expand-label={presentation.expandLabel}
+
+          trapFocus(shouldTrap: boolean) {
+            document.querySelectorAll<HTMLElement>('.main-frame, .sl-skip-link').forEach((element) => {
+              element.toggleAttribute('inert', shouldTrap);
+            });
+          }
+        }
+        customElements.define('sl-sidebar-pane', StarlightSidebarPane);
+      </script>
+      <sl-sidebar-pane popover="" id="starlight__sidebar" class="sidebar-pane">
+        <div class="sidebar-content sl-flex">
+          <slot name="sidebar" />
+        </div>
+      </sl-sidebar-pane>
+      <starlight-sidebar-toggle
+        class="print:hidden"
+        data-collapse-label={presentation.collapseLabel}
+        data-expand-label={presentation.expandLabel}
+      >
+        <button
+          type="button"
+          class="sidebar-toggle-button sl-flex"
+          aria-controls="starlight__sidebar"
+          aria-expanded="true"
+          aria-label={presentation.collapseLabel}
+          title={presentation.collapseLabel}
         >
-          <button
-            type="button"
-            class="sidebar-toggle-button sl-flex"
-            aria-controls="starlight__sidebar"
-            aria-expanded="true"
-            aria-label={presentation.collapseLabel}
-            title={presentation.collapseLabel}
-          >
-            <span class="collapse-sidebar" aria-hidden="true">
-              <Icon name={presentation.collapseIcon} size="1rem" />
-            </span>
-            <span class="expand-sidebar" aria-hidden="true">
-              <Icon name={presentation.expandIcon} size="1rem" />
-            </span>
-          </button>
-        </starlight-sidebar-toggle>
-      </nav>
-    )
-  }
-  <div class="main-frame"><slot /></div>
+          <span class="collapse-sidebar" aria-hidden="true">
+            <Icon name={presentation.collapseIcon} size="1rem" />
+          </span>
+          <span class="expand-sidebar" aria-hidden="true">
+            <Icon name={presentation.expandIcon} size="1rem" />
+          </span>
+        </button>
+      </starlight-sidebar-toggle>
+    </nav>
+  )}
+  <div class="main-frame">
+    <slot />
+  </div>
 </div>
 
 <script>
