@@ -195,6 +195,9 @@ export default function TableOutput({
           >
             {copyStatus?.kind === 'copying' ? labels.copyingCsv : labels.copyCsv}
           </button>
+          <button type="button" data-testid="table-save-csv" onClick={saveCsv}>
+            {labels.saveCsv}
+          </button>
           <button
             type="button"
             data-testid="table-prev"
@@ -202,9 +205,6 @@ export default function TableOutput({
             onClick={() => setPage((current) => Math.max(0, current - 1))}
           >
             {labels.previousPage}
-          </button>
-          <button type="button" data-testid="table-save-csv" onClick={saveCsv}>
-            {labels.saveCsv}
           </button>
           <button
             type="button"

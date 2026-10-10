@@ -50,7 +50,7 @@ function InteractiveCellPanel({
   const snapshot = useRef(runtime);
   snapshot.current = runtime;
   const [shareStatus, setShareStatus] = useState<{ error: boolean; message: string }>();
-  useEffect(() => {
+  useLayoutEffect(() => {
     if (section.current)
       return registerSharedInputs(section.current, () => ({
         values: snapshot.current.values,
