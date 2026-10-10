@@ -204,6 +204,8 @@ producer は各 language worker 内で `postMessage` より前に limit を適�
 
 ## CSV copy の安全性
 
+表の整数は全桁を表示します。非整数は有効6桁とし、絶対値が `1e6` 以上または `1e-4` 未満なら指数表記にします。負のゼロは `0` と表示します。列内に絶対値10,000以上の数がある場合だけ桁区切りを付け、ページ間でも統一します。数値セルのtitle属性で元の値を確認できます。並べ替えとCSVには元の値を使います。
+
 default table action は表示中の row を spreadsheet-safe CSV として copy します。最初の meaningful character が `=`、`+`、`-`、`@`、tab、carriage return の string header/cell には、RFC-style の comma/quote/line-break escape より前に apostrophe を付けます。この決定的な規則により、一般的な spreadsheet application が string data を formula として評価することを防ぎます。数値は変更しないため、実際の number `-42` は `-42` のままです。
 
 ## 実行結果の移行
