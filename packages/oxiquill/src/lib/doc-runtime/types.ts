@@ -111,7 +111,17 @@ export interface ChartPalette {
   dark?: readonly string[];
 }
 
+export interface ChartNumberFormat {
+  significantDigits?: number;
+  fractionDigits?: number;
+  unit?: string;
+  notation?: 'auto' | 'si';
+}
+
 export interface BaseChartStyle {
+  xFormat?: ChartNumberFormat;
+  yFormat?: ChartNumberFormat;
+  valueFormat?: ChartNumberFormat;
   height?: number;
   palette?: ChartPalette;
   showGrid?: boolean;
@@ -134,12 +144,38 @@ export interface BaseChartSpec {
   yLabel?: string;
   xType?: ChartAxisType;
   yType?: ChartAxisType;
+  xMin?: number;
+  xMax?: number;
+  yMin?: number;
+  yMax?: number;
+  xIncludeZero?: boolean;
+  yIncludeZero?: boolean;
   legend?: boolean;
   tooltip?: boolean;
   dataZoom?: boolean;
 }
 
+export type ChartSymbol = 'circle' | 'emptyCircle' | 'rect' | 'triangle' | 'diamond' | 'none';
+export type ChartSeriesColor = string | { light?: string; dark?: string };
+
+export interface ChartSeriesStyle {
+  color?: ChartSeriesColor;
+}
+
+export interface ScatterSeriesStyle extends ChartSeriesStyle {
+  symbol?: ChartSymbol;
+}
+
+export interface LineSeriesStyle extends ScatterSeriesStyle {
+  lineType?: 'solid' | 'dashed' | 'dotted';
+  step?: false | 'start' | 'middle' | 'end';
+  smooth?: boolean;
+  showSymbol?: boolean;
+}
+
 export interface XyChartSeries {
+  id?: string;
+  style?: LineSeriesStyle;
   name?: string;
   points: readonly (readonly [number | string, number | string])[];
 }
@@ -150,13 +186,19 @@ export interface LineChartSpec extends BaseChartSpec {
   series: readonly XyChartSeries[];
 }
 
+export interface ScatterChartSeries extends Omit<XyChartSeries, 'style'> {
+  style?: ScatterSeriesStyle;
+}
+
 export interface ScatterChartSpec extends BaseChartSpec {
   style?: ScatterChartStyle;
   kind: 'scatter';
-  series: readonly XyChartSeries[];
+  series: readonly ScatterChartSeries[];
 }
 
 export interface BarChartSeries {
+  id?: string;
+  style?: ChartSeriesStyle;
   name?: string;
   values: readonly (number | null)[];
 }
@@ -170,6 +212,8 @@ export interface BarChartSpec extends BaseChartSpec {
 
 export interface HistogramChartSpec extends BaseChartSpec {
   kind: 'histogram';
+  xType?: 'value' | 'category';
+  mode?: 'count' | 'density';
   yType?: 'value' | 'log';
   bins: readonly (readonly [number, number, number])[];
 }

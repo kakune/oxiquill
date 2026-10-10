@@ -30,6 +30,8 @@ export type RuntimeLabels = {
   cellRetry: string;
   cellUpdating: string;
   chartCaption: string;
+  chartHistogramCount: string;
+  chartHistogramDensity: string;
   chartSeriesName: (index: number) => string;
   chartLoadError: (detail: string) => string;
   chartUpdateError: (detail: string) => string;
@@ -135,6 +137,8 @@ const runtimeLabels = {
     cellRetry: 'Retry cell',
     cellUpdating: 'Updating…',
     chartCaption: 'Chart data summary',
+    chartHistogramCount: 'Count',
+    chartHistogramDensity: 'Density',
     chartSeriesName: (index) => `Series ${index}`,
     chartLoadError: (detail) => `Chart renderer could not be loaded: ${detail}`,
     chartUpdateError: (detail) => `Chart could not be updated: ${detail}`,
@@ -208,6 +212,8 @@ const runtimeLabels = {
     cellRetry: 'セルの実行を再試行',
     cellUpdating: '更新中…',
     chartCaption: 'グラフデータの概要',
+    chartHistogramCount: '度数',
+    chartHistogramDensity: '密度',
     chartSeriesName: (index) => `系列 ${index}`,
     chartLoadError: (detail) => `グラフ表示を読み込めませんでした: ${detail}`,
     chartUpdateError: (detail) => `グラフを更新できませんでした: ${detail}`,

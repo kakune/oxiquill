@@ -75,3 +75,40 @@ if early {
 }
 println!("normal return");
 ```
+
+```rust
+//| id: chart-options
+let options = serde_json::json!({ "yMin": 0, "yMax": 5, "style": { "animation": false } });
+emit_line_chart!(&[[0, 1]], options = &options);
+emit_scatter_chart!(&[[0, 2]], options = &options);
+emit_bar_chart!(&["a"], &[3], options = &options);
+emit_histogram!(&[[0, 1, 4]], options = &options);
+```
+
+```rust
+//| id: invalid-chart-options
+//| inputs:
+//|   invalid: { type: checkbox, label: Invalid options, value: false }
+let options = if invalid { serde_json::json!({ "series": [] }) } else { serde_json::json!({}) };
+emit_line_chart!(&[[0, 1]], options = &options);
+```
+
+```rust
+//| id: nonobject-chart-options
+//| inputs:
+//|   invalid: { type: checkbox, label: Invalid options, value: false }
+let options = if invalid { serde_json::json!([]) } else { serde_json::json!({}) };
+emit_histogram!(&[[0, 1, 1]], options = &options);
+```
+
+```rust
+//| id: density-histogram
+emit_histogram!(&[[-1.0, -0.5, 2.0], [0.0, 2.0, 4.0]], options = &serde_json::json!({ "mode": "density", "xMin": -2, "xMax": 3 }));
+```
+
+```rust
+//| id: series-presentation
+let series = serde_json::json!([{ "id": "a", "name": "Same", "points": [[0, 1]], "style": { "lineType": "dashed", "symbol": "diamond", "showSymbol": true } }]);
+emit_line_chart!(&series);
+emit_bar_chart!(&["x"], &serde_json::json!([{ "id": "b", "values": [2], "style": { "color": { "dark": "#123" } } }]));
+```

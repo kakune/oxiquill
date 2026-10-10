@@ -50,7 +50,10 @@ describe('chart display contracts', () => {
     };
     expect(chartDataSummary(spec, labelsForLanguage('en'))).toContain(spec.xLabel);
     expect(chartDataSummary(spec, labelsForLanguage('ja'))).toContain('系列 1');
-    expect(chartSpecToEChartsOptions(spec, 'light', { locale: 'ja' }).series[1].name).toBe('系列 2');
+    const legend = chartSpecToEChartsOptions(spec, 'light', { locale: 'ja' }).legend as {
+      formatter: (name: string) => string;
+    };
+    expect(legend.formatter('line:1')).toBe('系列 2');
   });
   it('orients heat color legends responsively and formats fractional limits', () => {
     const spec: ChartSpec = {

@@ -44,6 +44,57 @@ afterEach(() => {
 });
 
 describe('persistent chart updates', () => {
+  it.each([false, true])('respects explicit showSymbol=%s through viewport updates', async (showSymbol) => {
+    let extent = [0, 2];
+    const instance = {
+      ...chart,
+      getModel: () => ({ getComponent: () => ({ axis: { scale: { parse: Number, getExtent: () => extent } } }) })
+    };
+    echartsInit.mockReturnValue(instance);
+    const spec: ChartSpec = {
+      kind: 'line',
+      series: [
+        {
+          id: 'stable',
+          points: [
+            [0, 0],
+            [1, 1],
+            [2, 2]
+          ],
+          style: { showSymbol }
+        }
+      ]
+    };
+    render(output(spec));
+    await waitFor(() => expect(chart.setOption).toHaveBeenCalledOnce());
+    expect(chart.setOption.mock.calls[0][0].series).toMatchObject([{ id: 'line:id:stable', showSymbol }]);
+    const zoom = chart.on.mock.calls.find(([event]) => event === 'datazoom')?.[1] as () => void;
+    act(() => {
+      extent = [0.5, 1.5];
+      zoom();
+    });
+    await new Promise((resolve) => requestAnimationFrame(() => resolve(undefined)));
+    expect(chart.setOption).toHaveBeenCalledOnce();
+  });
+  it('resets only zoom when authored bounds change or are removed', async () => {
+    const view = render(output({ ...line, yMin: 0, yMax: 1 }));
+    await waitFor(() => expect(chart.setOption).toHaveBeenCalledOnce());
+    view.rerender(output({ ...line, yMin: 0, yMax: 2 }));
+    await waitFor(() => expect(chart.setOption).toHaveBeenCalledTimes(2));
+    expect(chart.setOption).toHaveBeenLastCalledWith(
+      expect.objectContaining({ dataZoom: [expect.objectContaining({ start: 0, end: 100 })] }),
+      expect.objectContaining({ notMerge: false })
+    );
+    view.rerender(output(line));
+    await waitFor(() => expect(chart.setOption).toHaveBeenCalledTimes(3));
+    expect(chart.setOption).toHaveBeenLastCalledWith(
+      expect.objectContaining({
+        yAxis: expect.objectContaining({ min: null, max: null }),
+        dataZoom: expect.any(Array)
+      }),
+      expect.objectContaining({ notMerge: false })
+    );
+  });
   it('resizes the canvas after an authored height update has already changed layout options', async () => {
     const height = vi.spyOn(HTMLElement.prototype, 'clientHeight', 'get').mockReturnValue(360);
     const view = render(output(line));
@@ -260,13 +311,7 @@ describe('persistent chart updates', () => {
         style: { lineWidth: 8 }
       })
     );
-    for (const patch of [
-      { xType: 'time' },
-      { yType: 'log' },
-      { legend: true },
-      { tooltip: false },
-      { dataZoom: false }
-    ]) {
+    for (const patch of [{ xType: 'time' }, { yType: 'log' }, { tooltip: false }, { dataZoom: false }]) {
       expect(chartStructuralSignature({ ...line, ...patch } as ChartSpec)).not.toBe(chartStructuralSignature(line));
     }
     expect(chartStructuralSignature({ ...line, title: 'Title', style: { height: 240 } })).toBe(
@@ -280,7 +325,7 @@ describe('persistent chart updates', () => {
           { name: 'B', points: [] }
         ]
       })
-    ).not.toBe(chartStructuralSignature(line));
+    ).toBe(chartStructuralSignature(line));
   });
 
   it.each(['light', 'dark'] as const)('resolves Starlight chrome and curated options in %s', (theme) => {

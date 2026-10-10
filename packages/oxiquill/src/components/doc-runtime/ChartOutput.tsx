@@ -7,12 +7,13 @@ import {
   chartResizeOptions,
   chartSpecToEChartsOptions,
   chartStructuralSignature,
+  chartSeriesId,
   defaultChartChrome,
   type ChartChrome,
   type ChartTheme
 } from '../../lib/doc-runtime/chart-options.js';
+import { chartRangeSignature } from '../../lib/doc-runtime/chart-axes.js';
 import { chartHeight } from '../../lib/doc-runtime/chart-layout.js';
-import { chartPalette } from '../../lib/doc-runtime/chart-palette.js';
 import { chartAxes, chartPointIndexes, hasIsolatedPoint } from '../../lib/doc-runtime/chart-viewport.js';
 
 export { chartDataSummary, chartSpecToEChartsOptions, chartStructuralSignature };
@@ -37,6 +38,7 @@ function loadECharts(): Promise<EChartsCore> {
     .then(([echarts, charts, components, renderers]) => {
       echarts.use([
         charts.BarChart,
+        charts.CustomChart,
         charts.HeatmapChart,
         charts.LineChart,
         charts.ScatterChart,
@@ -63,6 +65,7 @@ export default function ChartOutput({ artifact, idPrefix, labels }: ChartOutputP
     signature?: string;
     spec?: ChartSpec;
     reducedMotion?: boolean;
+    theme?: ChartTheme;
     replace?: boolean;
     width?: number;
     height?: number;
@@ -75,17 +78,17 @@ export default function ChartOutput({ artifact, idPrefix, labels }: ChartOutputP
     updateViewport?: () => void;
   }>();
   const reducedMotion = useReducedMotion();
-  const latest = useRef({ artifact, reducedMotion, labels });
-  latest.current = { artifact, reducedMotion, labels };
   const [displayed, setDisplayed] = useState(artifact);
   const [theme, setTheme] = useState<ChartTheme>(() => currentChartTheme());
+  const latest = useRef({ artifact, reducedMotion, labels, theme });
+  latest.current = { artifact, reducedMotion, labels, theme };
   const [renderError, setRenderError] = useState<{ message: string; initialization: boolean }>();
   const [renderAttempt, setRenderAttempt] = useState(0);
 
   function applyLatest(force = false): void {
     const current = chart.current;
     if (!current) return;
-    const { artifact: next, reducedMotion: motion, labels: nextLabels } = latest.current;
+    const { artifact: next, reducedMotion: motion, labels: nextLabels, theme: nextTheme } = latest.current;
     const width = element.current?.clientWidth || 720;
     const height = chartHeight(next.spec);
     try {
@@ -93,20 +96,22 @@ export default function ChartOutput({ artifact, idPrefix, labels }: ChartOutputP
         force ||
         current.spec !== next.spec ||
         current.reducedMotion !== motion ||
+        current.theme !== nextTheme ||
         current.replace ||
         current.locale !== nextLabels.locale
       ) {
         const signature = chartStructuralSignature(next.spec);
         const notMerge = force || current.replace || current.signature !== signature;
-        const options = chartSpecToEChartsOptions(next.spec, theme, {
+        const options = chartSpecToEChartsOptions(next.spec, nextTheme, {
           reducedMotion: motion,
           width,
           height,
           locale: nextLabels.locale,
-          chrome: resolveChartChrome(theme, element.current ?? undefined)
+          chrome: resolveChartChrome(nextTheme, element.current ?? undefined)
         });
         // Omit interactive state when merging a compatible chart.
-        if (!notMerge) delete options.dataZoom;
+        if (!notMerge && current.spec && chartRangeSignature(current.spec) === chartRangeSignature(next.spec))
+          delete options.dataZoom;
         current.instance.setOption(
           options,
           notMerge ? { notMerge: true } : { notMerge: false, lazyUpdate: true, replaceMerge: ['series'] }
@@ -114,6 +119,7 @@ export default function ChartOutput({ artifact, idPrefix, labels }: ChartOutputP
         current.signature = signature;
         current.spec = next.spec;
         current.reducedMotion = motion;
+        current.theme = nextTheme;
         current.replace = false;
         current.width = width;
         current.height = height;
@@ -153,16 +159,7 @@ export default function ChartOutput({ artifact, idPrefix, labels }: ChartOutputP
     void loadECharts()
       .then((echarts) => {
         if (cancelled) return;
-        const chrome = resolveChartChrome(theme, chartElement);
-        instance = echarts.init(
-          chartElement,
-          {
-            color: chartPalette,
-            backgroundColor: 'transparent',
-            textStyle: { color: chrome.text, fontFamily: chrome.fontFamily }
-          },
-          { renderer: 'canvas' }
-        );
+        instance = echarts.init(chartElement, undefined, { renderer: 'canvas' });
         chart.current = { instance };
         const updateViewport = () => {
           if (frame !== undefined) return;
@@ -180,7 +177,15 @@ export default function ChartOutput({ artifact, idPrefix, labels }: ChartOutputP
                   current.instance.resize();
                 }
                 if (current.width !== width || current.height !== height) {
-                  current.instance.setOption(chartResizeOptions(spec, current.counts ?? { x: 0, y: 0 }, width, height));
+                  current.instance.setOption(
+                    chartResizeOptions(
+                      spec,
+                      current.counts ?? { x: 0, y: 0 },
+                      width,
+                      height,
+                      latest.current.labels.locale
+                    )
+                  );
                   current.width = width;
                   current.height = height;
                 }
@@ -197,15 +202,20 @@ export default function ChartOutput({ artifact, idPrefix, labels }: ChartOutputP
               }
               if (spec.kind === 'line' || spec.kind === 'area') {
                 current.indexes ??= chartPointIndexes(spec, axes);
-                const visible = current.indexes.map((index) => hasIsolatedPoint(index, x, y));
+                const visible = current.indexes.map(
+                  (index, seriesIndex) => spec.series[seriesIndex].style?.showSymbol ?? hasIsolatedPoint(index, x, y)
+                );
                 const signature = JSON.stringify(visible);
                 if (current.symbols !== signature) {
                   const initial =
                     current.symbols === undefined &&
-                    visible.every((show, index) => show === (spec.series[index].points.length === 1));
+                    visible.every(
+                      (show, index) =>
+                        show === (spec.series[index].style?.showSymbol ?? spec.series[index].points.length === 1)
+                    );
                   current.symbols = signature;
                   if (!initial)
-                    patch.series = visible.map((showSymbol, index) => ({ id: spec.kind + ':' + index, showSymbol }));
+                    patch.series = visible.map((showSymbol, index) => ({ id: chartSeriesId(spec, index), showSymbol }));
                 }
               }
               if (Object.keys(patch).length) current.instance.setOption(patch);
@@ -243,11 +253,11 @@ export default function ChartOutput({ artifact, idPrefix, labels }: ChartOutputP
       instance?.dispose();
       chart.current = undefined;
     };
-  }, [renderAttempt, theme]);
+  }, [renderAttempt]);
 
   useEffect(() => {
     applyLatest();
-  }, [artifact, reducedMotion, labels]);
+  }, [artifact, reducedMotion, labels, theme]);
   const titleId = idPrefix + '-title';
   const captionId = displayed.caption ? idPrefix + '-caption' : undefined;
   const descriptionId = idPrefix + '-description';

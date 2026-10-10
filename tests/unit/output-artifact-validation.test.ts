@@ -532,7 +532,7 @@ describe('output artifact validation', () => {
       kind: 'histogram',
       exact: () => ({
         kind: 'histogram',
-        bins: Array.from({ length: outputArtifactLimits.chartDataItems }, () => [0, 1, 1])
+        bins: Array.from({ length: outputArtifactLimits.chartDataItems }, (_, index) => [index, index + 1, 1])
       }),
       excessive: () => ({
         kind: 'histogram',

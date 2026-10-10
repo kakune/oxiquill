@@ -14,3 +14,6 @@
 flake.lock
 **/Cargo.lock
 pnpm-lock.yaml
+
+# Local assistant settings
+**/.claude/settings.local.json

@@ -33,7 +33,7 @@ table column は `key`、`label`、optional `type` を持ちます。type は `s
 
 ## Chart schema
 
-すべての chart spec は optional `title`、`xLabel`、`yLabel`、`xType`、`yType`、`legend`、`tooltip`、`dataZoom` を受け取ります。axis type は `value`、`category`、`time`、`log` です。未指定 axis は `value` が default ですが、bar/histogram 固有の axis は category です。heatmap は常に X/Y 両方が category axis であり、`xType` と `yType` は省略するか `category` にできますが、`value`、`time`、`log` は reject されます。
+すべての chart spec は optional `title`、`xLabel`、`yLabel`、`xType`、`yType`、`legend`、`tooltip`、`dataZoom` を受け取ります。axis type は `value`、`category`、`time`、`log` です。未指定 axis は `value` が default ですが、bar 固有の x 軸は category です。heatmap は常に X/Y 両方が category axis であり、`xType` と `yType` は省略するか `category` にできますが、`value`、`time`、`log` は reject されます。
 
 - `value` coordinate は finite number、`log` coordinate は 0 より大きい finite number です。
 - `time` coordinate は finite epoch millisecond、または `YYYY-MM-DDTHH:mm:ss[.sss]Z` / `YYYY-MM-DDTHH:mm:ss[.sss]±HH:mm` 形式の ISO-8601 string です。calendar field と明示的な time zone も valid である必要があります。
@@ -47,7 +47,32 @@ table column は `key`、`label`、optional `type` を持ちます。type は `s
 
 empty chart と equal point domain は valid です。heatmap は X/Y の category 数と heat value の範囲を示し、color scale には実際の heat value を使います。empty dataset だけは `0–1` を fallback にします。chart は textual title/caption と bounded accessible summary または equivalent table を提供します。equivalent がある場合、implementation canvas は accessibility API から隠されます。
 
-chart は `html[data-theme]` の変更時に ECharts instance を作り直します。一時的な renderer load failure の後には retry action を表示します。
+chart は `html[data-theme]` の変更時も同じ ECharts instance を使い、ズーム・凡例・heatmap の色範囲の選択を保持します。一時的な renderer load failure の後には retry action を表示します。
+
+### 軸範囲
+
+`xMin/xMax/yMin/yMax` は有限数で指定し、min を max より小さくします。time の境界は epoch milliseconds、log は正数に限定します。category 軸に数値境界は指定できません。`xIncludeZero/yIncludeZero` は value 軸だけに指定できます。固定境界を優先しますが、bar・histogram・area の value y 軸はゼロを含む必要があり、この基準を無効にできません。
+
+データ更新ではズームを保持します。境界やゼロ包含の変更・解除では全範囲へ戻し、凡例の選択は保持します。境界を省略すると自動範囲に戻ります。
+
+Rust の line・scatter・bar・histogram マクロでは、データ引数の後ろに `options = &serde_json::json!({...})` を指定できます。ラベルと nested style を含む公開設定を指定でき、kind やデータは上書きできません。従来の位置引数 style も利用できます。[ロジスティック写像](../../samples/logistic-map/)は 0–1 の固定範囲を使います。
+
+### ヒストグラムの区間
+
+ヒストグラムの x 軸は数値軸です。各矩形は正確な `[lower, upper)` に対応し、負の境界、異なる幅、区間の空白を保ちます。重なるビンは拒否し、重ならないビンの入力順は変更しません。
+
+既定の `mode: 'count'` は度数を高さにします。`mode: 'density'` は `count / (upper - lower)` を高さとし、面積が度数を表します。確率の総和を 1 にする正規化ではありません。y 軸名、tooltip、要約にモードを示します。value y 軸の基準はゼロ、log y 軸の基準は表示範囲の正の下端です。log は正の高さを必要とし、その矩形の面積は度数を表しません。
+
+**移行:** 明示的な `xType: 'category'` は引き続き受理しますが、`value` に正規化します。新しいコードでは省略または `value` を指定してください。データの境界や度数は丸めません。
+
+```rust
+//| id: interval-histogram
+//| title: Unequal-width histogram
+let bins = [[-1.0, -0.5, 2.0], [0.0, 2.0, 4.0]];
+emit_histogram!(&bins, options = &serde_json::json!({
+    "mode": "density", "xLabel": "Measurement", "yLabel": "Frequency"
+}));
+```
 
 ### 表示の既定値
 
@@ -67,7 +92,7 @@ bar・histogram・area の value y 軸はゼロを含み、line・scatter はデ
 
 セルを再実行している間も、最後に成功した出力を表示し続けます。150ms の reactive debounce 中も同様です。更新中の表示はレイアウトを動かしません。再実行が失敗した場合は出力とエラーを併記し、**セルの実行を再試行**からやり直せます。キャンセルや入力不正でも出力を保持し、成功時に結果を置き換えてエラーを消します。出力の並びが動的に変わる場合は artifact に明示的な `id` を付けてください。重複 ID は出現番号で区別し、ID のない artifact は種類ごとの出現番号で対応付けます。
 
-互換性のあるグラフは既存の canvas と ECharts instance を更新し、読者のズーム範囲を保持します。初回とデータ更新のアニメーションは既定で180ms、easing は cubicOut です。構造変更時は同じ instance の設定を置き換え、Starlight の light/dark 変更時には instance を作り直します。グラフ更新が失敗しても最後の表示と概要を残し、局所的な再試行操作を表示します。OS の動作軽減設定は著者の animation 指定より優先され、グラフと更新表示のアニメーションを無効にします。
+互換性のあるグラフは既存の canvas と ECharts instance を更新し、読者のズーム範囲を保持します。初回とデータ更新のアニメーションは既定で180ms、easing は cubicOut です。構造変更時は同じ instance の設定を置き換え、Starlight の light/dark 変更時は色と字体を更新し、読者の操作状態を保持します。グラフ更新が失敗しても最後の表示と概要を残し、局所的な再試行操作を表示します。OS の動作軽減設定は著者の animation 指定より優先され、グラフと更新表示のアニメーションを無効にします。
 
 chart spec は次の optional `style` object を受け取ります。
 
@@ -119,6 +144,44 @@ emit_line_plot!(points, x_label, y_label, style)
 ```
 
 macro は `spec.style` にシリアライズし、通常のグラフ検証が同じ制限を適用します。
+
+### 数値の表示書式
+
+value/log 軸には `style.xFormat` と `style.yFormat`、heatmap の色尺度には `style.valueFormat` を指定できます。目盛、ポインター、tooltip、要約に同じ設定を使います。category と time は専用の表示書式を保ちます。
+
+各書式は `significantDigits`（整数 1–17）、`fractionDigits`（整数 0–20）、`unit`（文字列）、`notation`（`auto` または `si`）を受け付けます。2 種類の桁指定は併用できません。固定小数では末尾のゼロを保持し、小さい値がゼロに丸まる場合があります。負のゼロはゼロと表示します。未指定の書式は従来の規則に従い、設定を削除すると既定値へ戻ります。
+
+単位は数値の後ろに表示し、軸名は `xLabel/yLabel` で指定します。SI はデータ範囲から共通の接頭辞（10⁻²⁴〜10²⁴）を選び、境界での丸めを考慮します。範囲外は指数表記に戻ります。元データを変更せず、callback、書式文字列、HTML、生の ECharts options は受け付けません。
+
+```rust
+//| id: formatted-voltage
+//| title: Voltage measurements
+let points = [[0.0, 1500.0], [1.0, 2400.0]];
+emit_line_chart!(&points, "Time", "Voltage", &serde_json::json!({
+    "xFormat": { "fractionDigits": 1, "unit": "s" },
+    "yFormat": { "significantDigits": 3, "notation": "si", "unit": "V" }
+}));
+```
+
+### 系列の ID とスタイル
+
+XY・bar 系列には空でない一意の `id` を付けられます。実行ごとに同じ ID を使うと、並べ替えや改名後も系列の識別と凡例の選択を保持します。name は表示名であり、同名の系列も個別に選択できます。ID がなければ系列の位置で対応付けます。系列の追加・削除ではズームをリセットしません。既定の配色は記述順に従うため、系列の色を固定するには明示的に指定してください。
+
+`series.style.color` は `#RGB/#RRGGBB` または `{ light, dark }` で指定し、少なくとも一方のテーマを含めます。未指定のテーマは chart palette を使います。line・area はさらに `lineType`（solid/dashed/dotted）、`step`（false/start/middle/end）、`smooth`（boolean）、`symbol`、`showSymbol` を使えます。scatter は色と記号、bar は色に対応します。記号は circle/emptyCircle/rect/triangle/diamond/none です。
+
+smooth と step は同時に有効化できません。既定では平滑化せず、明示した線種・記号は配色循環の自動設定より優先します。showSymbol の指定は孤立点の自動検出より優先します。設定を削除すると既定値へ戻り、従来の chart 全体の lineWidth・symbolSize は引き続きサイズを指定します。
+
+```rust
+//| id: styled-series
+//| title: Measured and reference series
+let series = serde_json::json!([
+    { "id": "measured", "name": "Measurement", "points": [[0, 1], [1, 2]],
+      "style": { "color": { "light": "#3987e5", "dark": "#9085e9" }, "symbol": "diamond", "showSymbol": true } },
+    { "id": "reference", "name": "Reference", "points": [[0, 1.5], [1, 1.5]],
+      "style": { "lineType": "dashed", "step": "end" } }
+]);
+emit_line_chart!(&series, "Observation", "Value");
+```
 
 ## Resource limit
 
