@@ -73,6 +73,7 @@ test.describe('runtime accessibility', () => {
         cellId: 'cell-features__rich-output__rust-rich-outputs',
         runLabel: 'Run',
         tableLabel: 'Data table',
+        htmlLabel: 'HTML output',
         heatmapDescription: /X categories: 2\. Y categories: 2\. Heat value range: 1–4\./u
       },
       {
@@ -80,6 +81,7 @@ test.describe('runtime accessibility', () => {
         cellId: 'cell-ja__features__rich-output__rust-rich-outputs',
         runLabel: '実行',
         tableLabel: 'データ表',
+        htmlLabel: 'HTML 出力',
         heatmapDescription: /X カテゴリ数: 2。Y カテゴリ数: 2。ヒート値の範囲: 1–4。/u
       }
     ]) {
@@ -95,6 +97,7 @@ test.describe('runtime accessibility', () => {
       await expect(cell.getByTestId('doc-plot')).toHaveCount(2);
       await expect(cell.getByTestId('doc-plot').first()).toHaveAttribute('aria-hidden', 'true');
       await expect(cell.getByTestId('doc-plot').nth(1)).toHaveAttribute('aria-hidden', 'true');
+      await expect(cell.getByTestId('html-output')).toHaveAccessibleName(example.htmlLabel);
       await expectNoWcag22AAViolations(page, browserName);
     }
   });
@@ -115,7 +118,8 @@ test.describe('runtime accessibility', () => {
 });
 
 async function expectNoWcag22AAViolations(page: Page, browserName: string): Promise<void> {
-  const builder = new AxeBuilder({ page }).withTags(wcag22AATags);
+  // Sandboxed HTML artifacts cannot run scripts, so axe cannot analyze inside them; tests check their frame name directly.
+  const builder = new AxeBuilder({ page }).withTags(wcag22AATags).exclude('iframe.doc-html-output');
   if (browserName === 'webkit') builder.setLegacyMode();
   const results = await builder.analyze();
   const summary = results.violations.map(({ help, id, nodes }) => ({ help, id, nodes: nodes.length }));
