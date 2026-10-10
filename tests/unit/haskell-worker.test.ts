@@ -32,9 +32,6 @@ describe('haskell worker helpers', () => {
         stderr: 'warning'
       })
     ).toEqual({
-      stdout: 'value = 42',
-      stderr: 'warning',
-      plots: [],
       outputs: [
         { kind: 'text', stream: 'stdout', content: 'value = 42' },
         { kind: 'text', stream: 'stderr', content: 'warning' }
@@ -65,11 +62,7 @@ describe('haskell worker helpers', () => {
       {
         requestId: 4,
         ok: true,
-        result: {
-          stdout: 'sample: ok',
-          plots: [],
-          outputs: [{ kind: 'text', stream: 'stdout', content: 'sample: ok' }]
-        }
+        result: { outputs: [{ kind: 'text', stream: 'stdout', content: 'sample: ok' }] }
       }
     ]);
 

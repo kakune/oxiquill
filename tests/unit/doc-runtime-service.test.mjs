@@ -1008,6 +1008,23 @@ describe('doc runtime service', () => {
     expect(buildRust).toHaveBeenCalledTimes(6);
   });
 
+  it('regenerates a cached Rust runtime with an obsolete output contract', async () => {
+    const { buildRust, fileSystem, sync } = createRustRuntimeHarness();
+    await sync();
+    const ownershipPath = '/repo/.oxiquill/generated/runtime-ownership.json';
+    const ownership = JSON.parse(fileSystem.files.get(ownershipPath).toString());
+    ownership.languages.rust.sourceFingerprint = 'obsolete-output-contract';
+    ownership.languages.rust.buildFingerprint = 'obsolete-output-contract';
+    await fileSystem.writeFile(ownershipPath, JSON.stringify(ownership));
+    await fileSystem.writeFile('/repo/.oxiquill/rust-cells/src/lib.rs', 'struct CellOutput { stdout: String }');
+    await expect(sync()).resolves.toMatchObject({ plan: { languages: { rust: { public: 'build' } } } });
+    expect(buildRust).toHaveBeenCalledTimes(2);
+    const source = fileSystem.files.get('/repo/.oxiquill/rust-cells/src/lib.rs').toString();
+    expect(source).toContain('outputs: Vec<OutputArtifact>');
+    expect(source).not.toContain('stdout: String');
+    await expect(sync()).resolves.toMatchObject({ plan: { languages: { rust: { public: 'keep' } } } });
+  });
+
   it('fingerprints binary helper inputs byte-for-byte', async () => {
     const { buildRust, fileSystem, sync } = createRustRuntimeHarness({
       '/repo/crates/doc-rust/logo.bin': Buffer.from([0x80])

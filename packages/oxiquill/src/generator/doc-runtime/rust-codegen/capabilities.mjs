@@ -1,6 +1,8 @@
 import { scanRustMacroInvocations } from './macro-invocations.mjs';
 
 const chartTokens = [
+  'emit_chart',
+  'emit_area_chart',
   'emit_line_plot',
   'emit_line_chart',
   'emit_scatter_chart',
@@ -16,6 +18,7 @@ const tableTokens = ['emit_table', 'emit_table_with_columns', 'emit_records_tabl
 const sourceFeatureDescriptors = [
   ['legacyPlot', ['emit_line_plot']],
   ['lineChart', ['emit_line_chart']],
+  ['areaChart', ['emit_area_chart']],
   ['scatterChart', ['emit_scatter_chart']],
   ['barChart', ['emit_bar_chart']],
   ['histogramChart', ['emit_histogram']],

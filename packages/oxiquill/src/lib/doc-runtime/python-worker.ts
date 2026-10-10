@@ -114,7 +114,6 @@ export function createPythonWorkerRequestHandler({
           stderr: stderrResult.value.trimEnd(),
           stderrTruncated: stderrResult.truncated,
           value,
-          plots: [],
           displayOutputs: [...displayOutputs, ...matplotlibOutputs]
         })
       );

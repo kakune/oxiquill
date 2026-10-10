@@ -1,0 +1,599 @@
+[
+  {
+    "name": "chart-1",
+    "artifact": {
+      "kind": "chart",
+      "id": "line",
+      "title": "Artifact title",
+      "caption": "Caption",
+      "spec": {
+        "kind": "line",
+        "xLabel": "Time",
+        "yLabel": "Value",
+        "series": [
+          {
+            "name": "A",
+            "points": [
+              [0, 1],
+              [1, 2]
+            ],
+            "style": {
+              "lineType": "dashed"
+            }
+          }
+        ],
+        "style": {
+          "animation": false
+        },
+        "title": "Spec title"
+      }
+    },
+    "expected": {
+      "status": "valid",
+      "artifact": {
+        "id": "line",
+        "title": "Artifact title",
+        "caption": "Caption",
+        "kind": "chart",
+        "spec": {
+          "title": "Spec title",
+          "xLabel": "Time",
+          "yLabel": "Value",
+          "style": {
+            "animation": false
+          },
+          "kind": "line",
+          "series": [
+            {
+              "name": "A",
+              "style": {
+                "lineType": "dashed"
+              },
+              "points": [
+                [0, 1],
+                [1, 2]
+              ]
+            }
+          ]
+        }
+      },
+      "byteLength": 199,
+      "index": 0
+    }
+  },
+  {
+    "name": "chart-2",
+    "artifact": {
+      "kind": "chart",
+      "id": "area",
+      "title": "Artifact title",
+      "caption": "Caption",
+      "spec": {
+        "kind": "area",
+        "series": [
+          {
+            "points": [
+              [0, 1],
+              [1, 2]
+            ]
+          }
+        ],
+        "title": "Spec title"
+      }
+    },
+    "expected": {
+      "status": "valid",
+      "artifact": {
+        "id": "area",
+        "title": "Artifact title",
+        "caption": "Caption",
+        "kind": "chart",
+        "spec": {
+          "title": "Spec title",
+          "kind": "area",
+          "series": [
+            {
+              "points": [
+                [0, 1],
+                [1, 2]
+              ]
+            }
+          ]
+        }
+      },
+      "byteLength": 97,
+      "index": 0
+    }
+  },
+  {
+    "name": "chart-3",
+    "artifact": {
+      "kind": "chart",
+      "id": "scatter",
+      "title": "Artifact title",
+      "caption": "Caption",
+      "spec": {
+        "kind": "scatter",
+        "series": [
+          {
+            "points": [
+              [0, 1],
+              [1, 2]
+            ]
+          }
+        ],
+        "title": "Spec title"
+      }
+    },
+    "expected": {
+      "status": "valid",
+      "artifact": {
+        "id": "scatter",
+        "title": "Artifact title",
+        "caption": "Caption",
+        "kind": "chart",
+        "spec": {
+          "title": "Spec title",
+          "kind": "scatter",
+          "series": [
+            {
+              "points": [
+                [0, 1],
+                [1, 2]
+              ]
+            }
+          ]
+        }
+      },
+      "byteLength": 103,
+      "index": 0
+    }
+  },
+  {
+    "name": "chart-4",
+    "artifact": {
+      "kind": "chart",
+      "id": "bar",
+      "title": "Artifact title",
+      "caption": "Caption",
+      "spec": {
+        "kind": "bar",
+        "categories": ["a", "b"],
+        "series": [
+          {
+            "values": [1, null]
+          }
+        ],
+        "title": "Spec title"
+      }
+    },
+    "expected": {
+      "status": "valid",
+      "artifact": {
+        "id": "bar",
+        "title": "Artifact title",
+        "caption": "Caption",
+        "kind": "chart",
+        "spec": {
+          "title": "Spec title",
+          "kind": "bar",
+          "categories": ["a", "b"],
+          "series": [
+            {
+              "values": [1, null]
+            }
+          ]
+        }
+      },
+      "byteLength": 113,
+      "index": 0
+    }
+  },
+  {
+    "name": "chart-5",
+    "artifact": {
+      "kind": "chart",
+      "id": "histogram",
+      "title": "Artifact title",
+      "caption": "Caption",
+      "spec": {
+        "kind": "histogram",
+        "bins": [
+          [0, 1, 2],
+          [2, 4, 3]
+        ],
+        "mode": "density",
+        "title": "Spec title"
+      }
+    },
+    "expected": {
+      "status": "valid",
+      "artifact": {
+        "id": "histogram",
+        "title": "Artifact title",
+        "caption": "Caption",
+        "kind": "chart",
+        "spec": {
+          "title": "Spec title",
+          "kind": "histogram",
+          "mode": "density",
+          "bins": [
+            [0, 1, 2],
+            [2, 4, 3]
+          ]
+        }
+      },
+      "byteLength": 113,
+      "index": 0
+    }
+  },
+  {
+    "name": "chart-6",
+    "artifact": {
+      "kind": "chart",
+      "id": "heatmap",
+      "title": "Artifact title",
+      "caption": "Caption",
+      "spec": {
+        "kind": "heatmap",
+        "data": [
+          ["a", "x", 1],
+          ["b", "x", 2]
+        ],
+        "title": "Spec title"
+      }
+    },
+    "expected": {
+      "status": "valid",
+      "artifact": {
+        "id": "heatmap",
+        "title": "Artifact title",
+        "caption": "Caption",
+        "kind": "chart",
+        "spec": {
+          "title": "Spec title",
+          "kind": "heatmap",
+          "data": [
+            ["a", "x", 1],
+            ["b", "x", 2]
+          ]
+        }
+      },
+      "byteLength": 100,
+      "index": 0
+    }
+  },
+  {
+    "name": "text-7",
+    "artifact": {
+      "kind": "text",
+      "stream": "stdout",
+      "content": "hello"
+    },
+    "expected": {
+      "status": "valid",
+      "artifact": {
+        "kind": "text",
+        "stream": "stdout",
+        "content": "hello"
+      },
+      "byteLength": 5,
+      "index": 0
+    }
+  },
+  {
+    "name": "json-8",
+    "artifact": {
+      "kind": "json",
+      "value": {
+        "ok": true,
+        "empty": null
+      }
+    },
+    "expected": {
+      "status": "valid",
+      "artifact": {
+        "kind": "json",
+        "value": {
+          "ok": true,
+          "empty": null
+        },
+        "formattedValue": "{\n  \"ok\": true,\n  \"empty\": null\n}"
+      },
+      "byteLength": 33,
+      "index": 0
+    }
+  },
+  {
+    "name": "table-9",
+    "artifact": {
+      "kind": "table",
+      "columns": [
+        {
+          "key": "x",
+          "label": "X",
+          "type": "number"
+        }
+      ],
+      "rows": [[1]],
+      "rowCount": 1
+    },
+    "expected": {
+      "status": "valid",
+      "artifact": {
+        "kind": "table",
+        "columns": [
+          {
+            "key": "x",
+            "label": "X",
+            "type": "number"
+          }
+        ],
+        "rows": [[1]],
+        "rowCount": 1
+      },
+      "byteLength": 10,
+      "index": 0
+    }
+  },
+  {
+    "name": "image-10",
+    "artifact": {
+      "kind": "image",
+      "mime": "image/svg+xml",
+      "data": "<svg xmlns=\"http://www.w3.org/2000/svg\"/>"
+    },
+    "expected": {
+      "status": "valid",
+      "artifact": {
+        "kind": "image",
+        "mime": "image/svg+xml",
+        "data": "<svg xmlns=\"http://www.w3.org/2000/svg\"/>",
+        "source": "data:image/svg+xml;charset=utf-8,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%2F%3E"
+      },
+      "byteLength": 41,
+      "index": 0
+    }
+  },
+  {
+    "name": "image-11",
+    "artifact": {
+      "kind": "image",
+      "mime": "image/png",
+      "data": "iVBORw0KGgo="
+    },
+    "expected": {
+      "status": "valid",
+      "artifact": {
+        "kind": "image",
+        "mime": "image/png",
+        "data": "iVBORw0KGgo=",
+        "source": "data:image/png;base64,iVBORw0KGgo="
+      },
+      "byteLength": 8,
+      "index": 0
+    }
+  },
+  {
+    "name": "html-12",
+    "artifact": {
+      "kind": "html",
+      "sandboxed": true,
+      "html": "<strong>Hello</strong>"
+    },
+    "expected": {
+      "status": "valid",
+      "artifact": {
+        "kind": "html",
+        "html": "<strong>Hello</strong>",
+        "sandboxed": true
+      },
+      "byteLength": 22,
+      "index": 0
+    }
+  },
+  {
+    "name": "chart-13",
+    "artifact": {
+      "kind": "chart",
+      "spec": {
+        "kind": "line",
+        "series": [
+          {
+            "points": [[0, null]]
+          }
+        ]
+      }
+    },
+    "expected": {
+      "status": "error",
+      "message": "XY chart series 1 point 1 y coordinate must be a finite number.",
+      "index": 0
+    }
+  },
+  {
+    "name": "chart-14",
+    "artifact": {
+      "kind": "chart",
+      "spec": {
+        "kind": "line",
+        "xType": "time",
+        "series": [
+          {
+            "points": [["2026-10-10T00:00:00", 1]]
+          }
+        ]
+      }
+    },
+    "expected": {
+      "status": "error",
+      "message": "XY chart series 1 point 1 x coordinate must be finite epoch milliseconds or an ISO-8601 date-time with an explicit time zone.",
+      "index": 0
+    }
+  },
+  {
+    "name": "chart-15",
+    "artifact": {
+      "kind": "chart",
+      "spec": {
+        "kind": "bar",
+        "categories": ["a"],
+        "series": [
+          {
+            "values": [1, 2]
+          }
+        ]
+      }
+    },
+    "expected": {
+      "status": "error",
+      "message": "Bar chart series 1 has 2 values; expected 1.",
+      "index": 0
+    }
+  },
+  {
+    "name": "chart-16",
+    "artifact": {
+      "kind": "chart",
+      "spec": {
+        "kind": "heatmap",
+        "xType": "value",
+        "data": []
+      }
+    },
+    "expected": {
+      "status": "error",
+      "message": "Heatmap chart x axis is always category; received value.",
+      "index": 0
+    }
+  },
+  {
+    "name": "chart-17",
+    "artifact": {
+      "kind": "chart",
+      "spec": {
+        "kind": "unknown"
+      }
+    },
+    "expected": {
+      "status": "error",
+      "message": "Chart kind \"unknown\" is not supported.",
+      "index": 0
+    }
+  },
+  {
+    "name": "chart-18",
+    "artifact": {
+      "kind": "chart",
+      "title": 123,
+      "spec": {
+        "kind": "line",
+        "series": []
+      }
+    },
+    "expected": {
+      "status": "error",
+      "message": "Artifact field \"title\" must be a string when provided.",
+      "index": 0
+    }
+  },
+  {
+    "name": "image-19",
+    "artifact": {
+      "kind": "image",
+      "mime": "image/png",
+      "data": "invalid"
+    },
+    "expected": {
+      "status": "error",
+      "message": "Image artifact contains invalid base64 data.",
+      "index": 0
+    }
+  },
+  {
+    "name": "table-20",
+    "artifact": {
+      "kind": "table",
+      "columns": [
+        {
+          "key": "x",
+          "label": "X"
+        }
+      ],
+      "rows": [[1, 2]]
+    },
+    "expected": {
+      "status": "error",
+      "message": "Table artifact row 1 has 2 cells; expected 1.",
+      "index": 0
+    }
+  },
+  {
+    "name": "html-21",
+    "artifact": {
+      "kind": "html",
+      "sandboxed": false,
+      "html": "x"
+    },
+    "expected": {
+      "status": "error",
+      "message": "HTML artifact sandboxed must be true.",
+      "index": 0
+    }
+  },
+  {
+    "name": "chart-99999-points",
+    "artifact": {
+      "kind": "chart",
+      "spec": {
+        "kind": "line",
+        "series": [
+          {
+            "points": [[0, 1]]
+          }
+        ]
+      }
+    },
+    "pointCount": 99999,
+    "expected": {
+      "status": "valid"
+    }
+  },
+  {
+    "name": "chart-100000-points",
+    "artifact": {
+      "kind": "chart",
+      "spec": {
+        "kind": "line",
+        "series": [
+          {
+            "points": [[0, 1]]
+          }
+        ]
+      }
+    },
+    "pointCount": 100000,
+    "expected": {
+      "status": "valid"
+    }
+  },
+  {
+    "name": "chart-100001-points",
+    "artifact": {
+      "kind": "chart",
+      "spec": {
+        "kind": "line",
+        "series": [
+          {
+            "points": [[0, 1]]
+          }
+        ]
+      }
+    },
+    "pointCount": 100001,
+    "expected": {
+      "status": "error",
+      "message": "Chart contains 100001 data items; maximum is 100000."
+    }
+  }
+]

@@ -8,6 +8,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ### Added
 
+- Python `display_chart` for declarative interactive charts and bounded `display_line` for pandas columns, with explicit missing-value and timezone diagnostics.
+
+- Generic Rust `emit_chart!` with artifact metadata and `emit_area_chart!`, sharing bounded chart output helpers.
+
 - Stable chart series IDs and per-series colors, line patterns, steps, smoothing, and symbols; same-named legend entries remain independently selectable.
 
 - Numeric chart formats for significant digits, fixed decimals, units, and SI prefixes, shared by axes, tooltips, summaries, and heatmap scales.
@@ -18,6 +22,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 - Real ECharts SVG layout checks and Chromium chart galleries for visual review in CI.
 
 ### Changed
+
+- **Breaking API migration (next minor):** cell results now require `outputs`; top-level `stdout/stderr/value/plots`, legacy result conversion, and the `PlotSpec/LinePlotSpec` public types are removed. Regenerate runtime artifacts after upgrading and update explicit Rust `CellOutput` early returns to contain artifacts. JSON artifact values and input values are unchanged. See the English and Japanese rich-output migration guide.
 
 - **Display migration:** histograms render numeric intervals with their actual widths and gaps; legacy category x axes normalize to value. Density mode makes area represent count. Overlapping bins are rejected.
 
@@ -32,9 +38,11 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ### Deprecated
 
-- Nothing yet.
+- New examples use explicit coordinates and `emit_line_chart!`; `emit_line_plot!` remains available for compatibility.
 
 ### Removed
+
+- The unused `doc-rust` legacy `PlotSpec`, `LinePlot`, and `line_plot` helpers; convert series coordinates explicitly and use `emit_line_chart!`.
 
 - Dependabot version and security update pull requests; dependency updates are made manually and Dependabot alerts still gate releases.
 

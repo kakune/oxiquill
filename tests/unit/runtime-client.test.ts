@@ -58,11 +58,7 @@ class FakeWorker {
   }
 }
 
-const result: CellExecutionResult = {
-  stdout: 'ok',
-  plots: [],
-  outputs: [{ kind: 'text', stream: 'stdout', content: 'ok' }]
-};
+const result: CellExecutionResult = { outputs: [{ kind: 'text', stream: 'stdout', content: 'ok' }] };
 const normalizedResult = normalizeCellExecutionResult(result);
 
 type DefaultFakeWorker = FakeWorker & {
@@ -296,7 +292,7 @@ describe('runtime client', () => {
     }
   );
 
-  it('normalizes legacy worker responses before resolving', async () => {
+  it('normalizes artifact worker responses before resolving', async () => {
     const { runner, workers } = makeRunner();
     const promise = runner.runInteractiveCell(makeCell('python'), {});
 
@@ -304,18 +300,29 @@ describe('runtime client', () => {
       requestId: 1,
       ok: true,
       result: {
-        stdout: 'legacy stdout',
-        value: { answer: 42 },
-        plots: [{ kind: 'line', x_label: 'x', y_label: 'y', points: [[0, 1]] }]
+        outputs: [
+          { kind: 'text', stream: 'stdout', content: 'captured stdout' },
+          { kind: 'json', value: { answer: 42 } },
+          {
+            kind: 'chart',
+            spec: {
+              kind: 'line',
+              xLabel: 'x',
+              yLabel: 'y',
+              xType: 'value',
+              yType: 'value',
+              tooltip: true,
+              dataZoom: true,
+              series: [{ points: [[0, 1]] }]
+            }
+          }
+        ]
       }
     });
 
     await expect(promise).resolves.toMatchObject({
-      stdout: 'legacy stdout',
-      value: { answer: 42 },
-      plots: [{ kind: 'line', x_label: 'x', y_label: 'y', points: [[0, 1]] }],
       outputs: [
-        { kind: 'text', stream: 'stdout', content: 'legacy stdout' },
+        { kind: 'text', stream: 'stdout', content: 'captured stdout' },
         { kind: 'json', value: { answer: 42 } },
         {
           kind: 'chart',

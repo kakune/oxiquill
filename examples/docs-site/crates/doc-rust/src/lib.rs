@@ -18,26 +18,6 @@ pub struct SeriesPoint {
     pub x: f64,
 }
 
-/// A plot specification consumed by the documentation runtime.
-#[derive(Debug, Clone, PartialEq, Serialize)]
-#[serde(tag = "kind")]
-pub enum PlotSpec {
-    /// A two-dimensional line plot.
-    #[serde(rename = "line")]
-    Line(LinePlot),
-}
-
-/// A two-dimensional line plot.
-#[derive(Debug, Clone, PartialEq, Serialize)]
-pub struct LinePlot {
-    /// Label for the x-axis.
-    pub x_label: String,
-    /// Label for the y-axis.
-    pub y_label: String,
-    /// Data points as `[x, y]` pairs.
-    pub points: Vec<[f64; 2]>,
-}
-
 /// Errors returned by reusable documentation helpers.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum DocRustError {
@@ -68,9 +48,8 @@ pub fn logistic_step(r: f64, x: f64) -> f64 {
 pub fn logistic_series(r: f64, x0: f64, steps: u32) -> Result<Vec<SeriesPoint>, DocRustError> {
     validate_logistic_inputs(r, x0, steps)?;
 
-    Ok(iter::successors(
-        Some(SeriesPoint { n: 0, x: x0 }),
-        move |point| {
+    Ok(
+        iter::successors(Some(SeriesPoint { n: 0, x: x0 }), move |point| {
             if point.n >= steps {
                 None
             } else {
@@ -80,23 +59,8 @@ pub fn logistic_series(r: f64, x0: f64, steps: u32) -> Result<Vec<SeriesPoint>, 
                 })
             }
         })
-    .collect())
-}
-
-/// Converts logistic series points into a line plot.
-pub fn line_plot(
-    points: &[SeriesPoint],
-    x_label: impl Into<String>,
-    y_label: impl Into<String>,
-) -> PlotSpec {
-    PlotSpec::Line(LinePlot {
-        x_label: x_label.into(),
-        y_label: y_label.into(),
-        points: points
-            .iter()
-            .map(|point| [f64::from(point.n), point.x])
-            .collect(),
-    })
+        .collect(),
+    )
 }
 
 fn validate_logistic_inputs(r: f64, x0: f64, steps: u32) -> Result<(), DocRustError> {
@@ -219,35 +183,6 @@ mod tests {
                 SeriesPoint { n: 1, x: 0.0 },
             ]),
             "upper bounds should be accepted",
-        );
-    }
-
-    #[test]
-    fn line_plot_converts_series_points() {
-        assert_eq!(
-            line_plot(
-                &[
-                    SeriesPoint { n: 0, x: 0.2 },
-                    SeriesPoint { n: 1, x: 0.512 },
-                ],
-                "step",
-                "value",
-            ),
-            PlotSpec::Line(LinePlot {
-                x_label: "step".to_owned(),
-                y_label: "value".to_owned(),
-                points: vec![[0.0, 0.2], [1.0, 0.512]],
-            }),
-            "plot data should keep labels and convert n to f64",
-        );
-        assert_eq!(
-            line_plot(&[], "n", "x"),
-            PlotSpec::Line(LinePlot {
-                x_label: "n".to_owned(),
-                y_label: "x".to_owned(),
-                points: Vec::new(),
-            }),
-            "empty plot data should keep labels",
         );
     }
 }
