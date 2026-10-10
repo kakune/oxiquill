@@ -3,6 +3,7 @@ import { boundedErrorMessage } from '../../lib/doc-runtime/output-limits.mjs';
 import { labelsForLanguage, type RuntimeLabels } from '../../lib/doc-runtime/runtime-localization.js';
 import type { TableArtifact, TableColumn } from '../../lib/doc-runtime/types.js';
 import { formatTableNumber, tableColumnGrouping } from '../../lib/doc-runtime/table-format.js';
+import { artifactDownloadName, downloadBlob } from '../../lib/doc-runtime/download.js';
 
 interface TableOutputProps {
   idPrefix?: string;
@@ -37,6 +38,7 @@ export default function TableOutput({
   const [page, setPage] = useState(0);
   const [sort, setSort] = useState<SortState>();
   const [copyStatus, setCopyStatus] = useState<CopyStatus>();
+  const [downloadError, setDownloadError] = useState<string>();
   const identity = resultIdentity ?? table;
   const identityRef = useRef(identity);
   const resultGenerationRef = useRef(0);
@@ -64,6 +66,7 @@ export default function TableOutput({
     setPage((current) => (resultChanged ? 0 : Math.min(current, pageCount - 1)));
     setSort((current) => (resultChanged || !isSortValid(current, table.columns) ? undefined : current));
     setCopyStatus(undefined);
+    setDownloadError(undefined);
   }, [columnKeys, identity, pageCount, resultChanged, table.columns]);
 
   function updateSort(columnIndex: number): void {
@@ -105,6 +108,20 @@ export default function TableOutput({
           message: labels.copyCsvError(boundedErrorMessage(error))
         });
       }
+    }
+  }
+
+  function saveCsv(): void {
+    try {
+      const converted = tableToCsv(table.columns, sortedRows, labels);
+      if (!converted.ok) throw new Error(converted.error);
+      downloadBlob(
+        new Blob([converted.csv], { type: 'text/csv;charset=utf-8' }),
+        artifactDownloadName(table, 'csv', 'table')
+      );
+      setDownloadError(undefined);
+    } catch (error) {
+      setDownloadError(labels.saveCsvError(boundedErrorMessage(error)));
     }
   }
 
@@ -186,6 +203,9 @@ export default function TableOutput({
           >
             {labels.previousPage}
           </button>
+          <button type="button" data-testid="table-save-csv" onClick={saveCsv}>
+            {labels.saveCsv}
+          </button>
           <button
             type="button"
             data-testid="table-next"
@@ -196,6 +216,14 @@ export default function TableOutput({
           </button>
         </fieldset>
       </div>
+      {table.truncated || (table.rowCount ?? sortedRows.length) > sortedRows.length ? (
+        <p>{labels.saveCsvPartial(sortedRows.length)}</p>
+      ) : null}
+      {downloadError ? (
+        <p class="error-state" role="alert">
+          {downloadError}
+        </p>
+      ) : null}
       {copyStatus ? (
         <p
           class={copyStatus.kind === 'error' ? 'error-state' : 'doc-table-output__status'}
