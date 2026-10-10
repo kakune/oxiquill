@@ -103,7 +103,10 @@ export default function ChartOutput({ artifact, idPrefix, labels }: ChartOutputP
         });
         if (!current.spec && savedView.current?.signature === signature) {
           const state = { ...savedView.current.state };
-          if (savedView.current.rangeSignature !== chartRangeSignature(next.spec)) delete state.dataZoom;
+          if (savedView.current.rangeSignature !== chartRangeSignature(next.spec)) {
+            delete state.dataZoom;
+            delete state.symbols;
+          }
           applyChartViewState(options, state);
         }
         savedView.current = undefined;
