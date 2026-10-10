@@ -1,10 +1,8 @@
 import { describe, expect, it } from 'vitest';
 import {
   isOutputArtifact,
-  legacyResultToOutputs,
   type NormalizedCellExecutionResult,
-  normalizeCellExecutionResult,
-  outputsToLegacyResult
+  normalizeCellExecutionResult
 } from '../../packages/oxiquill/src/lib/doc-runtime/output-artifacts';
 
 function publicResult(result: NormalizedCellExecutionResult) {
@@ -14,149 +12,36 @@ function publicResult(result: NormalizedCellExecutionResult) {
 }
 
 describe('output artifact normalization', () => {
-  it('converts legacy cell fields to ordered output artifacts', () => {
-    expect(legacyResultToOutputs({})).toEqual([]);
-
-    const outputs = legacyResultToOutputs({
-      stdout: 'printed',
-      stderr: 'warned',
-      value: { ok: true },
-      plots: [{ kind: 'line', x_label: 'n', y_label: 'x', points: [[0, 0.2]] }]
-    });
-
-    expect(outputs).toEqual([
-      { kind: 'text', stream: 'stdout', content: 'printed' },
-      { kind: 'text', stream: 'stderr', content: 'warned' },
-      { kind: 'json', value: { ok: true } },
-      {
-        kind: 'chart',
-        spec: {
-          kind: 'line',
-          xLabel: 'n',
-          yLabel: 'x',
-          xType: 'value',
-          yType: 'value',
-          tooltip: true,
-          dataZoom: true,
-          series: [{ points: [[0, 0.2]] }]
-        }
+  it('requires an outputs array and diagnoses obsolete results without invoking getters', () => {
+    const getter = {
+      get outputs() {
+        throw new Error('Getter must not run');
       }
-    ]);
+    };
+    const revoked = Proxy.revocable({}, {});
+    revoked.revoke();
+    for (const result of [undefined, null, {}, { stdout: 'old', plots: [] }, { outputs: {} }, getter, revoked.proxy]) {
+      const normalized = normalizeCellExecutionResult(result);
+      expect(normalized.outputs).toEqual([]);
+      expect(normalized.outputResults).toMatchObject([
+        { status: 'error', message: expect.stringContaining('require an outputs array') }
+      ]);
+    }
   });
 
-  it('derives legacy aliases from output artifacts', () => {
-    const result = outputsToLegacyResult([
+  it('returns only outputs and preserves explicit empty outputs over legacy fields', () => {
+    expect(publicResult(normalizeCellExecutionResult({ stdout: 'ignored', value: 1, outputs: [] }))).toEqual({
+      outputs: []
+    });
+    const outputs = [
       { kind: 'text', stream: 'stdout', content: 'first' },
-      { kind: 'text', stream: 'stdout', content: 'second' },
       { kind: 'text', stream: 'stderr', content: 'warning' },
-      { kind: 'json', value: { answer: 42 } },
-      {
-        kind: 'chart',
-        spec: {
-          kind: 'line',
-          xLabel: 'x',
-          yLabel: 'y',
-          series: [{ points: [[1, 2]] }]
-        }
-      }
-    ]);
-
-    expect(result).toMatchObject({
-      stdout: 'first\nsecond',
-      stderr: 'warning',
-      value: { answer: 42 },
-      plots: [{ kind: 'line', x_label: 'x', y_label: 'y', points: [[1, 2]] }]
-    });
-
-    expect(
-      outputsToLegacyResult([
-        {
-          kind: 'chart',
-          spec: {
-            kind: 'line',
-            series: [{ points: [[1, 'not numeric']] }]
-          }
-        }
-      ])
-    ).toMatchObject({ plots: [] });
-
-    expect(
-      outputsToLegacyResult([
-        {
-          kind: 'chart',
-          spec: {
-            kind: 'line',
-            series: [{ points: [[1, 2]] }]
-          }
-        }
-      ])
-    ).toMatchObject({ plots: [{ kind: 'line', x_label: '', y_label: '', points: [[1, 2]] }] });
-  });
-
-  it('normalizes legacy-only and outputs-only worker results', () => {
-    expect(publicResult(normalizeCellExecutionResult({ stdout: 'old', plots: [] }))).toEqual({
-      stdout: 'old',
-      plots: [],
-      outputs: [{ kind: 'text', stream: 'stdout', content: 'old' }]
-    });
-
-    expect(
-      publicResult(
-        normalizeCellExecutionResult({
-          outputs: [{ kind: 'json', value: ['new'] }]
-        })
-      )
-    ).toEqual({
-      stdout: '',
-      value: ['new'],
-      plots: [],
-      outputs: [{ kind: 'json', value: ['new'] }]
-    });
-
-    expect(
-      publicResult(
-        normalizeCellExecutionResult({
-          outputs: [{ kind: 'text', stream: 'stderr', content: 'from outputs' }]
-        })
-      )
-    ).toEqual({
-      stdout: '',
-      stderr: 'from outputs',
-      plots: [],
-      outputs: [{ kind: 'text', stream: 'stderr', content: 'from outputs' }]
-    });
-
-    expect(
-      publicResult(
-        normalizeCellExecutionResult({
-          stderr: 'explicit',
-          outputs: [{ kind: 'text', stream: 'stderr', content: 'from outputs' }]
-        })
-      )
-    ).toEqual({
-      stdout: '',
-      stderr: 'from outputs',
-      plots: [],
-      outputs: [{ kind: 'text', stream: 'stderr', content: 'from outputs' }]
-    });
-  });
-
-  it('replaces explicit legacy aliases with equivalents derived from bounded outputs', () => {
-    expect(
-      publicResult(
-        normalizeCellExecutionResult({
-          stdout: 'alias',
-          value: null,
-          plots: [{ kind: 'line', x_label: 'old-x', y_label: 'old-y', points: [[0, 0]] }],
-          outputs: [{ kind: 'json', value: { from: 'outputs' } }]
-        })
-      )
-    ).toEqual({
-      stdout: '',
-      value: { from: 'outputs' },
-      plots: [],
-      outputs: [{ kind: 'json', value: { from: 'outputs' } }]
-    });
+      { kind: 'json', value: null },
+      { kind: 'json', value: false },
+      { kind: 'json', value: 0 },
+      { kind: 'json', value: '' }
+    ];
+    expect(publicResult(normalizeCellExecutionResult({ outputs }))).toEqual({ outputs });
   });
 
   it('keeps validation failures scoped and never exposes invalid artifacts as normalized outputs', () => {

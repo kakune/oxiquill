@@ -203,10 +203,24 @@ describe('InteractiveCell', () => {
   it('renders controls, toggles source, runs button cells, and displays all output types', async () => {
     setManifestCells([makeCell()]);
     mocks.runInteractiveCell.mockResolvedValue({
-      stdout: 'stdout',
-      stderr: 'stderr',
-      value: { ok: true },
-      plots: [{ kind: 'line', x_label: 'x', y_label: 'y', points: [[0, 1]] }]
+      outputs: [
+        { kind: 'text', stream: 'stdout', content: 'stdout' },
+        { kind: 'text', stream: 'stderr', content: 'stderr' },
+        { kind: 'json', value: { ok: true } },
+        {
+          kind: 'chart',
+          spec: {
+            kind: 'line',
+            xLabel: 'x',
+            yLabel: 'y',
+            xType: 'value',
+            yType: 'value',
+            tooltip: true,
+            dataZoom: true,
+            series: [{ points: [[0, 1]] }]
+          }
+        }
+      ]
     });
 
     render(<InteractiveCell cellId="cell-one" />);
@@ -364,7 +378,7 @@ describe('InteractiveCell', () => {
   });
 
   it('preserves invalid numeric edits and never commits or runs them', async () => {
-    mocks.runInteractiveCell.mockResolvedValue({ stdout: 'ok', plots: [] });
+    mocks.runInteractiveCell.mockResolvedValue({ outputs: [{ kind: 'text', stream: 'stdout', content: 'ok' }] });
     setManifestCells([
       makeCell({
         inputs: [{ name: 'count', type: 'number', label: 'count', value: 1, min: -2, max: 2, step: 0.5, options: [] }]
@@ -463,11 +477,7 @@ describe('InteractiveCell', () => {
     fireEvent.click(runButton);
 
     await act(async () => {
-      execution.resolve({
-        stdout: 'done',
-        plots: [],
-        outputs: [{ kind: 'text', stream: 'stdout', content: 'done' }]
-      });
+      execution.resolve({ outputs: [{ kind: 'text', stream: 'stdout', content: 'done' }] });
       await execution.promise;
     });
 
@@ -496,7 +506,9 @@ describe('InteractiveCell', () => {
     'keeps the last output mounted while running and after %s',
     async (outcome) => {
       setManifestCells([makeCell()]);
-      mocks.runInteractiveCell.mockResolvedValueOnce({ stdout: 'retained', plots: [] });
+      mocks.runInteractiveCell.mockResolvedValueOnce({
+        outputs: [{ kind: 'text', stream: 'stdout', content: 'retained' }]
+      });
       render(<InteractiveCell cellId="cell-one" />);
       fireEvent.click(screen.getByRole('button', { name: 'Run' }));
       const previous = await screen.findByTestId('run-output');
@@ -528,7 +540,9 @@ describe('InteractiveCell', () => {
       );
       if (outcome === 'error') {
         expect(screen.getByRole('alert')).toHaveTextContent('rerun failed');
-        mocks.runInteractiveCell.mockResolvedValueOnce({ stdout: 'recovered', plots: [] });
+        mocks.runInteractiveCell.mockResolvedValueOnce({
+          outputs: [{ kind: 'text', stream: 'stdout', content: 'recovered' }]
+        });
         fireEvent.click(screen.getByRole('button', { name: 'Retry cell' }));
         await waitFor(() => expect(previous).toHaveTextContent('recovered'));
         expect(screen.queryByRole('alert')).not.toBeInTheDocument();
@@ -578,7 +592,7 @@ describe('InteractiveCell', () => {
   });
 
   it('runs autorun exactly once per cell, source, and runtime version without rendering execution controls', async () => {
-    mocks.runInteractiveCell.mockResolvedValue({ stdout: 'auto', plots: [] });
+    mocks.runInteractiveCell.mockResolvedValue({ outputs: [{ kind: 'text', stream: 'stdout', content: 'auto' }] });
     setManifestCells([makeCell({ run: 'autorun' })], 'autorun-v1');
 
     const first = render(<InteractiveCell cellId="cell-one" />);
@@ -598,7 +612,7 @@ describe('InteractiveCell', () => {
   });
 
   it('runs reactive cells initially and debounces later input changes', async () => {
-    mocks.runInteractiveCell.mockResolvedValue({ stdout: 'auto', plots: [] });
+    mocks.runInteractiveCell.mockResolvedValue({ outputs: [{ kind: 'text', stream: 'stdout', content: 'auto' }] });
     setManifestCells([makeCell({ run: 'reactive' })]);
 
     render(<InteractiveCell cellId="cell-one" />);
@@ -620,7 +634,7 @@ describe('InteractiveCell', () => {
   });
 
   it('blocks invalid reactive edits and source updates until validity returns', async () => {
-    mocks.runInteractiveCell.mockResolvedValue({ stdout: 'auto', plots: [] });
+    mocks.runInteractiveCell.mockResolvedValue({ outputs: [{ kind: 'text', stream: 'stdout', content: 'auto' }] });
     const cell = makeCell({
       run: 'reactive',
       inputs: [{ name: 'count', type: 'number', label: 'count', value: 1, min: 0, max: 4, step: 0.5, options: [] }]
@@ -686,13 +700,7 @@ describe('InteractiveCell', () => {
     expect(screen.queryByText('obsolete result')).not.toBeInTheDocument();
 
     await act(async () => {
-      pending[1].resolve({
-        stdout: 'newer result',
-        stderr: '',
-        value: null,
-        plots: [],
-        outputs: [{ kind: 'text', stream: 'stdout', content: 'newer result' }]
-      });
+      pending[1].resolve({ outputs: [{ kind: 'text', stream: 'stdout', content: 'newer result' }] });
       await pending[1].promise;
     });
 
@@ -728,13 +736,7 @@ describe('InteractiveCell', () => {
     expect(screen.queryByText('older failure')).not.toBeInTheDocument();
 
     await act(async () => {
-      pending[1].resolve({
-        stdout: 'newer result',
-        stderr: '',
-        value: null,
-        plots: [],
-        outputs: [{ kind: 'text', stream: 'stdout', content: 'newer result' }]
-      });
+      pending[1].resolve({ outputs: [{ kind: 'text', stream: 'stdout', content: 'newer result' }] });
       await pending[1].promise;
     });
 
@@ -796,7 +798,7 @@ describe('InteractiveCell', () => {
 
   it('renders Python labeling and empty successful results', async () => {
     setManifestCells([makeCell({ language: 'python', inputs: [] })]);
-    mocks.runInteractiveCell.mockResolvedValue({ stdout: '', stderr: '', value: '', plots: [] });
+    mocks.runInteractiveCell.mockResolvedValue({ outputs: [] });
 
     render(<InteractiveCell cellId="cell-one" />);
     expect(screen.getByText('Python + Pyodide')).toBeVisible();
@@ -827,7 +829,7 @@ describe('InteractiveCell', () => {
       'aria-busy',
       'true'
     );
-    act(() => finish?.({ stdout: 'done', plots: [], outputs: [{ kind: 'text', stream: 'stdout', content: 'done' }] }));
+    act(() => finish?.({ outputs: [{ kind: 'text', stream: 'stdout', content: 'done' }] }));
     await waitFor(() =>
       expect(
         screen.getByRole('region', { name: labelsForLanguage('en').cellOutput(makeCell().title) })
@@ -854,7 +856,7 @@ describe('InteractiveCell', () => {
     'reruns %s cells when source arrives after the runtime version update',
     async (run) => {
       mocks.runInteractiveCell.mockImplementation((cell: CellManifest) =>
-        Promise.resolve({ stdout: cell.source, plots: [] })
+        Promise.resolve({ outputs: [{ kind: 'text', stream: 'stdout', content: cell.source }] })
       );
       const cell = makeCell({ language: 'python', run, source: 'print(7.5)', inputs: [] });
       setManifestCells([cell], `source-refresh-${run}-v1`);

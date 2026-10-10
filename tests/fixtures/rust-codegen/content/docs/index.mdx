@@ -102,10 +102,11 @@ emit_text!(format!("{__stdout}:{__outputs}"));
 //|   early: { type: checkbox, label: early return, value: false }
 if early {
     return Ok(CellOutput {
-        stdout: "early return".to_owned(),
-        plots: Vec::new(),
-        value: serde_json::Value::Null,
-        outputs: Vec::new(),
+        outputs: vec![OutputArtifact::Text(TextArtifact {
+            stream: "stdout",
+            content: "early return".to_owned(),
+            truncated: false,
+        })],
     });
 }
 println!("normal return");

@@ -1,5 +1,5 @@
 import { outputArtifactLimits, utf8ByteLength } from './output-limits.mjs';
-import { normalizeCellExecutionResult, outputsToLegacyResult } from './output-artifacts.js';
+import { normalizeCellExecutionResult } from './output-artifacts.js';
 import { publicOutputArtifact, type ValidatedArtifactResult } from './output-artifact-validation.js';
 import type { OutputArtifact, RawCellExecutionResult } from './types.js';
 
@@ -49,9 +49,5 @@ function workerOutputCandidate(result: ValidatedArtifactResult): WorkerOutputCan
 }
 
 function workerResultFromCandidates(candidates: readonly WorkerOutputCandidate[]): RawCellExecutionResult {
-  const outputs = candidates.filter((candidate): candidate is OutputArtifact => candidate.kind !== '__oxiquill_error');
-  return {
-    ...outputsToLegacyResult(outputs),
-    outputs: candidates
-  };
+  return { outputs: candidates };
 }

@@ -1,9 +1,7 @@
-import { legacyResultToOutputs } from './output-artifacts.js';
-import type { RawCellExecutionResult } from './types.js';
+import type { RawCellExecutionResult, TextArtifact } from './types.js';
 
 export function createPythonCellResult({
   displayOutputs,
-  plots,
   stderr,
   stderrTruncated = false,
   stdout,
@@ -11,27 +9,36 @@ export function createPythonCellResult({
   value
 }: {
   displayOutputs: readonly unknown[];
-  plots: NonNullable<RawCellExecutionResult['plots']>;
   stderr: string;
   stderrTruncated?: boolean;
   stdout: string;
   stdoutTruncated?: boolean;
   value: unknown;
 }): RawCellExecutionResult {
-  const streamOutputs = legacyResultToOutputs({ stdout, stderr, plots: [] }).map((output) =>
-    output.kind === 'text' &&
-    ((output.stream === 'stdout' && stdoutTruncated) || (output.stream === 'stderr' && stderrTruncated))
-      ? { ...output, truncated: true }
-      : output
-  );
-  const valueOutputs = legacyResultToOutputs({ value, plots: [] });
-
+  const streamOutputs: TextArtifact[] = [
+    ...(stdout
+      ? [
+          {
+            kind: 'text' as const,
+            stream: 'stdout' as const,
+            content: stdout,
+            ...(stdoutTruncated ? { truncated: true } : {})
+          }
+        ]
+      : []),
+    ...(stderr
+      ? [
+          {
+            kind: 'text' as const,
+            stream: 'stderr' as const,
+            content: stderr,
+            ...(stderrTruncated ? { truncated: true } : {})
+          }
+        ]
+      : [])
+  ];
   return {
-    stdout,
-    stderr,
-    value,
-    plots,
-    outputs: [...streamOutputs, ...displayOutputs, ...valueOutputs]
+    outputs: [...streamOutputs, ...displayOutputs, ...(value != null && value !== '' ? [{ kind: 'json', value }] : [])]
   };
 }
 

@@ -143,8 +143,6 @@ fn truncate_string(value: &mut String, max_bytes: usize) -> bool {
     : '';
 
   return `
-type PlotSpec = Value;
-
 #[derive(Debug, Serialize)]
 #[serde(tag = "kind")]
 enum OutputArtifact {
@@ -298,9 +296,6 @@ ${generateRustChartHelpers(capabilities)}
 }
 #[derive(Debug, Serialize)]
 struct CellOutput {
-    stdout: String,
-    plots: Vec<PlotSpec>,
-    value: Value,
     outputs: Vec<OutputArtifact>,
 }
 
@@ -315,18 +310,13 @@ fn finish_cell_output(
             0,
             OutputArtifact::Text(TextArtifact {
                 stream: "stdout",
-                content: stdout.clone(),
+                content: stdout,
                 truncated,
             }),
         );
         outputs.truncate(${outputArtifactLimits.artifactsPerRun});
     }
-    CellOutput {
-        stdout,
-        plots: Vec::new(),
-        value: Value::Null,
-        outputs,
-    }
+    CellOutput { outputs }
 }
 
 fn serialize_cell_output(mut output: CellOutput) -> Result<String, String> {

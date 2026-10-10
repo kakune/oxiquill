@@ -96,7 +96,7 @@ export async function runHaskellCell(
   });
 
   if (exitCode !== 0) {
-    throw new Error(result.stderr || `Haskell cell exited with status ${exitCode}`);
+    throw new Error(stderrResult.value || `Haskell cell exited with status ${exitCode}`);
   }
 
   return result;
@@ -136,12 +136,7 @@ export function createHaskellCellResult({
       : []
   ].flat();
 
-  return {
-    stdout,
-    ...(stderr ? { stderr } : {}),
-    plots: [],
-    outputs
-  };
+  return { outputs };
 }
 
 export function resolveHaskellWasmUrl(baseUrl = import.meta.env.BASE_URL, runtimePath = haskellWasmPath): string {

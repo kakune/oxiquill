@@ -71,13 +71,13 @@ describe('producer output limits', () => {
     }
   });
 
-  it('normalizes aliases from bounded outputs and caps complete worker responses', () => {
+  it('drops obsolete aliases and caps complete worker responses', () => {
     const rawAlias = 'x'.repeat(outputArtifactLimits.workerResponseBytes + 1);
     const boundedAlias = boundWorkerResult({
-      stdout: rawAlias,
+      ...{ stdout: rawAlias },
       outputs: [{ kind: 'text', stream: 'stdout', content: 'bounded' }]
     });
-    expect(boundedAlias.stdout).toBe('bounded');
+    expect(boundedAlias).not.toHaveProperty('stdout');
     expect(boundedAlias.outputs).toEqual([{ kind: 'text', stream: 'stdout', content: 'bounded' }]);
 
     const oneMiB = 'x'.repeat(outputArtifactLimits.bytesPerTextJsonOrHtml);
@@ -100,6 +100,6 @@ describe('producer output limits', () => {
       outputArtifactLimits.bytesPerDiagnostic
     );
     expect(result.outputs?.[1]).toMatchObject({ kind: 'text', content: 'still usable' });
-    expect(result.stdout).toBe('still usable');
+    expect(result).not.toHaveProperty('stdout');
   });
 });

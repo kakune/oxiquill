@@ -312,10 +312,6 @@ describe('python worker request handling', () => {
         requestId: 7,
         ok: true,
         result: {
-          stdout: 'printed',
-          stderr: 'warning',
-          value: { answer: 42 },
-          plots: [],
           outputs: [
             { kind: 'text', stream: 'stdout', content: 'printed' },
             { kind: 'text', stream: 'stderr', content: 'warning' },
@@ -410,7 +406,6 @@ describe('python rich display support', () => {
       stderr: 'bounded stderr',
       stderrTruncated: true,
       value: null,
-      plots: [],
       displayOutputs: []
     });
     expect(result.outputs).toEqual([
@@ -456,7 +451,6 @@ describe('python rich display support', () => {
         stdout: 'printed',
         stderr: 'warned',
         value: { ok: true },
-        plots: [],
         displayOutputs: [
           { kind: 'html', html: '<strong>display</strong>', sandboxed: true },
           { kind: 'image', mime: 'image/svg+xml', data: '<svg />', alt: 'plot' },
@@ -464,10 +458,6 @@ describe('python rich display support', () => {
         ]
       })
     ).toEqual({
-      stdout: 'printed',
-      stderr: 'warned',
-      value: { ok: true },
-      plots: [],
       outputs: [
         { kind: 'text', stream: 'stdout', content: 'printed' },
         { kind: 'text', stream: 'stderr', content: 'warned' },
