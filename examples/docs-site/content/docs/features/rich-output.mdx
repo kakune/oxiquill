@@ -47,7 +47,7 @@ All chart specs accept optional `title`, `xLabel`, `yLabel`, `xType`, `yType`, `
 
 Empty charts and equal point domains are valid. Heatmaps report X- and Y-category counts plus the heat-value range; their color scale uses the actual heat values, with a `0–1` fallback only for an empty dataset. Charts expose a textual title/caption and bounded accessible summary or equivalent table. The implementation canvas is hidden from accessibility APIs when that equivalent is present.
 
-Charts recreate their ECharts instance when `html[data-theme]` changes and expose a retry action after a transient renderer load failure.
+Charts update their existing ECharts instance when `html[data-theme]` changes, preserving zoom, legend selections, and heatmap color-range selections and expose a retry action after a transient renderer load failure.
 
 ### Axis ranges
 
@@ -92,7 +92,7 @@ The fixed eight-color palette is shared across light and dark themes. On default
 
 The last successful output stays visible while a cell reruns, including the 150ms reactive debounce. A small updating indicator does not move the layout. Failed reruns keep that output alongside an error and a **Retry cell** action; cancellation and invalid inputs also retain it. Success replaces the result and clears the error. Use explicit artifact IDs when an output sequence changes dynamically: IDs retain identity across insertions, duplicate IDs receive occurrence numbers, and artifacts without IDs are matched by kind and occurrence.
 
-Compatible charts update the existing canvas and ECharts instance, preserving the reader's zoom window. Initial and data-update transitions use 180ms with cubicOut easing. Structural changes replace chart options on the same instance; Starlight light/dark theme changes recreate it. A chart update failure keeps the last successful visualization and summary with a local retry action. Reduced-motion preferences disable chart and updating-indicator animation, even when an author requests animation.
+Compatible charts update the existing canvas and ECharts instance, preserving the reader's zoom window. Initial and data-update transitions use 180ms with cubicOut easing. Structural changes replace chart options on the same instance; Starlight light/dark theme changes merge colors and typography without resetting reader interactions. A chart update failure keeps the last successful visualization and summary with a local retry action. Reduced-motion preferences disable chart and updating-indicator animation, even when an author requests animation.
 
 Chart specs accept an optional nested `style` object:
 

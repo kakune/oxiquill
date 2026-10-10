@@ -36,6 +36,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ### Fixed
 
+- Theme changes preserve the chart instance, zoom, legend selection, and heatmap color-range selection.
+
 - Zero baselines for value-axis bars, histograms, and areas; isolated line/area points; negative bar rounding; and heatmap cell boundaries.
 - Matplotlib image alternatives now describe figure titles and axis labels.
 - Long chart captions stay within narrow figures in WebKit. UTC ticks retain calendar context and zoom precision; tooltips retain color markers and display missing values as `-`.

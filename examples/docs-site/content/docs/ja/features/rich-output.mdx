@@ -47,7 +47,7 @@ table column は `key`、`label`、optional `type` を持ちます。type は `s
 
 empty chart と equal point domain は valid です。heatmap は X/Y の category 数と heat value の範囲を示し、color scale には実際の heat value を使います。empty dataset だけは `0–1` を fallback にします。chart は textual title/caption と bounded accessible summary または equivalent table を提供します。equivalent がある場合、implementation canvas は accessibility API から隠されます。
 
-chart は `html[data-theme]` の変更時に ECharts instance を作り直します。一時的な renderer load failure の後には retry action を表示します。
+chart は `html[data-theme]` の変更時も同じ ECharts instance を使い、ズーム・凡例・heatmap の色範囲の選択を保持します。一時的な renderer load failure の後には retry action を表示します。
 
 ### 軸範囲
 
@@ -92,7 +92,7 @@ bar・histogram・area の value y 軸はゼロを含み、line・scatter はデ
 
 セルを再実行している間も、最後に成功した出力を表示し続けます。150ms の reactive debounce 中も同様です。更新中の表示はレイアウトを動かしません。再実行が失敗した場合は出力とエラーを併記し、**セルの実行を再試行**からやり直せます。キャンセルや入力不正でも出力を保持し、成功時に結果を置き換えてエラーを消します。出力の並びが動的に変わる場合は artifact に明示的な `id` を付けてください。重複 ID は出現番号で区別し、ID のない artifact は種類ごとの出現番号で対応付けます。
 
-互換性のあるグラフは既存の canvas と ECharts instance を更新し、読者のズーム範囲を保持します。初回とデータ更新のアニメーションは既定で180ms、easing は cubicOut です。構造変更時は同じ instance の設定を置き換え、Starlight の light/dark 変更時には instance を作り直します。グラフ更新が失敗しても最後の表示と概要を残し、局所的な再試行操作を表示します。OS の動作軽減設定は著者の animation 指定より優先され、グラフと更新表示のアニメーションを無効にします。
+互換性のあるグラフは既存の canvas と ECharts instance を更新し、読者のズーム範囲を保持します。初回とデータ更新のアニメーションは既定で180ms、easing は cubicOut です。構造変更時は同じ instance の設定を置き換え、Starlight の light/dark 変更時は色と字体を更新し、読者の操作状態を保持します。グラフ更新が失敗しても最後の表示と概要を残し、局所的な再試行操作を表示します。OS の動作軽減設定は著者の animation 指定より優先され、グラフと更新表示のアニメーションを無効にします。
 
 chart spec は次の optional `style` object を受け取ります。
 

@@ -1490,7 +1490,7 @@ describe('ChartOutput options', () => {
     );
   });
 
-  it('recreates charts with legible options when the Starlight theme changes', async () => {
+  it('updates chart colors without recreating the instance when the Starlight theme changes', async () => {
     const ChartOutput = chartOutputModule.default;
     render(
       <ChartOutput
@@ -1502,14 +1502,16 @@ describe('ChartOutput options', () => {
 
     await waitFor(() => expect(mocks.echartsInit).toHaveBeenCalledTimes(1));
     expect(screen.getByTestId('doc-plot')).toHaveAttribute('data-chart-theme', 'light');
-    expect(mocks.echartsInit.mock.calls[0]?.[1]).toMatchObject({ textStyle: { color: '#111827' } });
+    expect(mocks.chart.setOption.mock.calls.at(-1)?.[0]).toMatchObject({ textStyle: { color: '#111827' } });
 
     document.documentElement.dataset.theme = 'dark';
 
-    await waitFor(() => expect(mocks.echartsInit).toHaveBeenCalledTimes(2));
+    await waitFor(() =>
+      expect(mocks.chart.setOption.mock.calls.at(-1)?.[0]).toMatchObject({ textStyle: { color: '#f3f4f6' } })
+    );
     expect(screen.getByTestId('doc-plot')).toHaveAttribute('data-chart-theme', 'dark');
-    expect(mocks.echartsInit.mock.calls[1]?.[1]).toMatchObject({ textStyle: { color: '#f3f4f6' } });
-    expect(mocks.chart.dispose).toHaveBeenCalled();
+    expect(mocks.echartsInit).toHaveBeenCalledOnce();
+    expect(mocks.chart.dispose).not.toHaveBeenCalled();
   });
 });
 

@@ -167,3 +167,39 @@ test('histogram density uses numeric intervals and survives a partial-bin zoom',
   await expect(page.locator('.doc-chart-output__summary')).toContainText('Density');
   await expect(page.locator('[role="alert"]')).toHaveCount(0);
 });
+
+for (const fixture of ['legend', 'heatmap']) {
+  test(`theme changes preserve the instance and reader selections for ${fixture}`, async ({ page }) => {
+    await page.goto(`http://127.0.0.1:4323/?fixture=${fixture}`);
+    await expect(page.locator('canvas').first()).toBeVisible();
+    if (fixture === 'legend') {
+      await action(page, { type: 'dataZoom', start: 20, end: 70 });
+      await action(page, { type: 'legendUnSelect', name: 'A long descriptive name for measurement series 1' });
+      await action(page, { type: 'legendScroll', scrollDataIndex: 3 });
+    } else await action(page, { type: 'selectDataRange', selected: [0.2, 0.6] });
+    const read = () =>
+      page.locator('.doc-plot').evaluate((element) => {
+        const chart = window.galleryECharts.getInstanceByDom(element as HTMLElement);
+        const options = chart?.getOption() as {
+          dataZoom?: unknown;
+          legend?: { selected?: unknown; scrollDataIndex?: number }[];
+          visualMap?: { range?: unknown }[];
+        };
+        return {
+          id: chart?.id,
+          zoom: options.dataZoom,
+          legend: options.legend?.map(({ selected, scrollDataIndex }) => ({ selected, scrollDataIndex })),
+          range: options.visualMap?.[0]?.range
+        };
+      });
+    const before = await read();
+    for (const theme of ['dark', 'light']) {
+      await page.evaluate((value) => {
+        document.documentElement.dataset.theme = value;
+      }, theme);
+      await expect(page.locator('.doc-plot')).toHaveAttribute('data-chart-theme', theme);
+      await expect.poll(read).toEqual(before);
+    }
+    await expect(page.locator('[role="alert"]')).toHaveCount(0);
+  });
+}
