@@ -34,8 +34,7 @@ function generateXyChartHelpers() {
     if let Some(y_label) = y_label {
         spec.insert("yLabel".to_owned(), Value::String(y_label));
     }
-    let spec = Value::Object(spec);
-    Ok(spec)
+    Ok(Value::Object(spec))
 }
 
 fn normalize_xy_series(value: Value) -> Result<Value, String> {
@@ -64,13 +63,12 @@ function generateBarChartHelpers() {
   return `fn bar_chart_spec(categories: Value, series: Value) -> Result<Value, String> {
     let categories = normalize_string_array(categories, "bar chart categories")?;
     let series = normalize_bar_series(series)?;
-    let spec = serde_json::json!({
+    Ok(serde_json::json!({
         "kind": "bar",
         "categories": categories,
         "series": series,
         "tooltip": true
-    });
-    Ok(spec)
+    }))
 }
 
 fn normalize_bar_series(value: Value) -> Result<Value, String> {
@@ -111,14 +109,11 @@ fn normalize_string_array(value: Value, label: &str) -> Result<Vec<String>, Stri
 function generateHistogramChartHelper() {
   return `fn histogram_chart_spec(bins: Value) -> Result<Value, String> {
     match bins {
-        value @ Value::Array(_) => {
-            let spec = serde_json::json!({
-                "kind": "histogram",
-                "bins": value,
-                "tooltip": true
-            });
-            Ok(spec)
-        }
+        value @ Value::Array(_) => Ok(serde_json::json!({
+            "kind": "histogram",
+            "bins": value,
+            "tooltip": true
+        })),
         _ => Err("histogram bins must serialize as an array".to_owned()),
     }
 }
@@ -128,14 +123,11 @@ function generateHistogramChartHelper() {
 function generateHeatmapChartHelper() {
   return `fn heatmap_chart_spec(data: Value) -> Result<Value, String> {
     match data {
-        value @ Value::Array(_) => {
-            let spec = serde_json::json!({
-                "kind": "heatmap",
-                "data": value,
-                "tooltip": true
-            });
-            Ok(spec)
-        }
+        value @ Value::Array(_) => Ok(serde_json::json!({
+            "kind": "heatmap",
+            "data": value,
+            "tooltip": true
+        })),
         _ => Err("heatmap data must serialize as an array".to_owned()),
     }
 }
