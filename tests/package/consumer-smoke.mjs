@@ -7,6 +7,7 @@ import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { chromium } from '@playwright/test';
+import { packRecords } from '../../.github/scripts/release-archive.mjs';
 import { loadDocumentedConsumerConfig } from '../docs/documented-config.mjs';
 import { assertMathDependencies } from './math-contract.mjs';
 
@@ -111,7 +112,7 @@ try {
       packageRoot,
       true
     );
-    const [packed] = JSON.parse(packResult.stdout);
+    const [packed] = packRecords(packResult.stdout);
     packageSource = path.join(temporaryRoot, packed.filename);
   }
 
@@ -211,7 +212,7 @@ try {
   const productionHtml = await readFile(path.join(consumerRoot, 'dist/index.html'), 'utf8');
   assert.match(productionHtml, /id="starlight__search"/u);
   assert.match(productionHtml, /class="katex-html"/u);
-  assert.match(productionHtml, /sizing reset-size6 size3/u);
+  assert.match(productionHtml, /katex-sizing reset-size6 size3/u);
   assert.doesNotMatch(productionHtml, /search\.devWarning|Search is only available in production builds/u);
   run(packageManager, ['run', 'preview', '--', '--background', '--host', '127.0.0.1', '--port', '4321'], consumerRoot);
   await assertFile(path.join(consumerRoot, '.astro/preview.json'));

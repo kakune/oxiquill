@@ -1,5 +1,5 @@
 ---
-import { Icon } from '@astrojs/starlight/components';
+import ArrowIcon from './ArrowIcon.astro';
 import { togglePresentation } from './toggle-localization.js';
 
 const { dir, lang, toc } = Astro.locals.starlightRoute;
@@ -21,39 +21,39 @@ const hasTableOfContents = Boolean(toc);
 </script>
 
 <div class="two-column-content lg:sl-flex">
-  {
-    toc && (
-      <>
-        <aside id="starlight__right-sidebar" class="right-sidebar-container print:hidden">
-          <div class="right-sidebar">
-            <slot name="right-sidebar" />
-          </div>
-        </aside>
-        <starlight-table-of-contents-toggle
-          class="print:hidden"
-          data-collapse-label={presentation.collapseLabel}
-          data-expand-label={presentation.expandLabel}
+  {toc && (
+    <>
+      <aside id="starlight__right-sidebar" class="right-sidebar-container print:hidden">
+        <div class="right-sidebar">
+          <slot name="right-sidebar" />
+        </div>
+      </aside>
+      <starlight-table-of-contents-toggle
+        class="print:hidden"
+        data-collapse-label={presentation.collapseLabel}
+        data-expand-label={presentation.expandLabel}
+      >
+        <button
+          type="button"
+          class="table-of-contents-toggle-button sl-flex"
+          aria-controls="starlight__right-sidebar"
+          aria-expanded="true"
+          aria-label={presentation.collapseLabel}
+          title={presentation.collapseLabel}
         >
-          <button
-            type="button"
-            class="table-of-contents-toggle-button sl-flex"
-            aria-controls="starlight__right-sidebar"
-            aria-expanded="true"
-            aria-label={presentation.collapseLabel}
-            title={presentation.collapseLabel}
-          >
-            <span class="collapse-table-of-contents" aria-hidden="true">
-              <Icon name={presentation.collapseIcon} size="1rem" />
-            </span>
-            <span class="expand-table-of-contents" aria-hidden="true">
-              <Icon name={presentation.expandIcon} size="1rem" />
-            </span>
-          </button>
-        </starlight-table-of-contents-toggle>
-      </>
-    )
-  }
-  <div class="main-pane"><slot /></div>
+          <span class="collapse-table-of-contents" aria-hidden="true">
+            <ArrowIcon name={presentation.collapseIcon} />
+          </span>
+          <span class="expand-table-of-contents" aria-hidden="true">
+            <ArrowIcon name={presentation.expandIcon} />
+          </span>
+        </button>
+      </starlight-table-of-contents-toggle>
+    </>
+  )}
+  <div class="main-pane">
+    <slot />
+  </div>
 </div>
 
 <script>

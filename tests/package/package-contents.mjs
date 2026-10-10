@@ -4,6 +4,7 @@ import { mkdtemp, mkdir, readFile, readdir, rm, stat, writeFile } from 'node:fs/
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { packRecords } from '../../.github/scripts/release-archive.mjs';
 import { assertMathDependencies } from './math-contract.mjs';
 
 const repositoryRoot = fileURLToPath(new URL('../../', import.meta.url));
@@ -96,8 +97,8 @@ function pack(destination) {
   const buildCount = Array.from(lifecycleOutput.matchAll(new RegExp(`^\\$ ${escapedBuildCommand}$`, 'gmu'))).length;
   assert.equal(buildCount, 1, 'npm pack must run the package build exactly once');
 
-  const finalJsonStart = result.stdout.lastIndexOf('\n[') + 1;
-  const [packed] = JSON.parse(result.stdout.slice(finalJsonStart));
+  const finalJsonStart = Math.max(result.stdout.lastIndexOf('\n['), result.stdout.lastIndexOf('\n{')) + 1;
+  const [packed] = packRecords(result.stdout.slice(finalJsonStart));
   return packed;
 }
 
@@ -131,6 +132,7 @@ async function expectedPackageFiles() {
       `dist/cli/starter/v1/${normalizePath(path.relative(starterRoot, filePath)) === '.gitignore' ? 'gitignore' : normalizePath(path.relative(starterRoot, filePath))}`
   );
   const copiedFiles = [
+    'dist/components/starlight/ArrowIcon.astro',
     'dist/components/starlight/PageFrame.astro',
     'dist/components/starlight/TwoColumnContent.astro',
     'dist/env.d.ts',

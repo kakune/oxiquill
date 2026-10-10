@@ -28,30 +28,30 @@
           pkgs = import nixpkgs { inherit system; };
           rustToolchain = fenix.packages.${system}.fromToolchainFile {
             file = ./rust-toolchain.toml;
-            sha256 = "sha256-gh/xTkxKHL4eiRXzWv8KP7vfjSk61Iq48x47BEDFgfk=";
+            sha256 = "sha256-zm3dyIY2T414ZRR3EhLOvptzG6gta4WZUcawzMUWtqI=";
           };
           nodejs = pkgs.nodejs_24;
-          pnpm = pkgs.pnpm_11.overrideAttrs (_oldAttrs: {
-            version = "11.2.2";
+          pnpm = pkgs.pnpm_12.overrideAttrs (_oldAttrs: {
+            version = "12.10.1";
             src = pkgs.fetchurl {
-              url = "https://registry.npmjs.org/pnpm/-/pnpm-11.2.2.tgz";
-              hash = "sha256-mcS+gx7SMYKYlRQtlnk9vnWvxTeVkzrtg2bmjczh4bg=";
+              url = "https://registry.npmjs.org/pnpm/-/pnpm-12.10.1.tgz";
+              hash = "sha256-mSBw5CLa4z6sciaP+95GXhTa6B7SUBSSmdH+49hC1g4=";
             };
           });
           haskellGhc = ghc-wasm-meta.packages.${system}."wasm32-wasi-ghc-9_14";
-          llvmTools = pkgs.llvmPackages.llvm;
+          # Coverage tools must match rustc's LLVM version, so use the toolchain's llvm-tools component.
+          llvmToolsBin = "${rustToolchain}/lib/rustlib/${pkgs.stdenv.hostPlatform.rust.rustcTarget}/bin";
           playwrightBrowsers = pkgs.playwright-driver.browsers;
           nodeExecutablePath = nixpkgs.lib.getExe nodejs;
           haskellCompilerPath = "${haskellGhc}/bin/wasm32-wasi-ghc";
-          llvmCovPath = "${llvmTools}/bin/llvm-cov";
-          llvmProfdataPath = "${llvmTools}/bin/llvm-profdata";
+          llvmCovPath = "${llvmToolsBin}/llvm-cov";
+          llvmProfdataPath = "${llvmToolsBin}/llvm-profdata";
           packages = [
             nodejs
             pnpm
             rustToolchain
             pkgs.wasm-pack
             pkgs.cargo-llvm-cov
-            llvmTools
             haskellGhc
           ];
           cacheHook = ''
@@ -117,22 +117,22 @@
             node_version="$(node --version)"
             node --eval '
               const [major, minor] = process.versions.node.split(".").map(Number);
-              if (major !== 24 || minor < 15) {
-                console.error("expected Node.js 24.15.0 or newer in the 24.x series, got " + process.version);
+              if (major !== 24 || minor < 21) {
+                console.error("expected Node.js 24.21.0 or newer in the 24.x series, got " + process.version);
                 process.exit(1);
               }
             '
 
             pnpm_version="$(pnpm --version)"
-            if [ "$pnpm_version" != "11.2.2" ]; then
-              echo "expected pnpm 11.2.2, got $pnpm_version" >&2
+            if [ "$pnpm_version" != "12.10.1" ]; then
+              echo "expected pnpm 12.10.1, got $pnpm_version" >&2
               exit 1
             fi
 
             rustc_version="$(rustc --version)"
             case "$rustc_version" in
-              "rustc 1.95.0 "*) ;;
-              *) echo "expected rustc 1.95.0, got $rustc_version" >&2; exit 1 ;;
+              "rustc 1.99.0 "*) ;;
+              *) echo "expected rustc 1.99.0, got $rustc_version" >&2; exit 1 ;;
             esac
 
             cargo llvm-cov --version
