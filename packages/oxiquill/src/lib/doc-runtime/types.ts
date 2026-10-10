@@ -10,6 +10,7 @@ export interface InputOption {
 }
 
 export interface InputSpec {
+  share?: boolean;
   name: string;
   type: InputType;
   label: string;

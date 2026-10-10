@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'preact/hooks';
 import { initialValues } from '../../lib/doc-runtime/interactive-cell-model.js';
+import { restoreSharedInputs } from '../../lib/doc-runtime/input-sharing.js';
 import { createLatestRequestScheduler, createRunOnceCache } from '../../lib/doc-runtime/interactive-cell-scheduler.js';
 import { boundedErrorMessage } from '../../lib/doc-runtime/output-limits.mjs';
 import { runInteractiveCell } from '../../lib/doc-runtime/runtime-client.js';
@@ -26,7 +27,7 @@ const autorunRequests = createRunOnceCache<string, NormalizedCellExecutionResult
 const reactiveDebounceMs = 150;
 
 export function useInteractiveCellRun(cell: CellManifest, runtimeVersion: string) {
-  const [values, setValues] = useState<InputValues>(() => initialValues(cell.inputs));
+  const [values, setValues] = useState<InputValues>(() => restoreSharedInputs(cell));
   const [execution, setExecution] = useState<ExecutionState>({ status: 'idle' });
   const [inputsValid, setInputsValid] = useState(true);
   const [inputRevision, setInputRevision] = useState(0);
@@ -75,9 +76,23 @@ export function useInteractiveCellRun(cell: CellManifest, runtimeVersion: string
     if (cell.run === 'reactive' && invalidInputsRef.current.size === 0) {
       schedule(valuesRef.current);
     } else if (cell.run === 'autorun') {
-      schedule(valuesRef.current, 0, JSON.stringify([cell.id, runtimeVersion, cell.source]));
+      schedule(valuesRef.current, 0, JSON.stringify([cell.id, runtimeVersion, cell.source, valuesRef.current]));
     }
   }, [cell.id, cell.run, cell.source, runtimeVersion]);
+
+  useEffect(() => {
+    const restore = () => {
+      const restored = restoreSharedInputs(cell);
+      replaceInputs({
+        ...valuesRef.current,
+        ...Object.fromEntries(
+          cell.inputs.filter((input) => input.share).map((input) => [input.name, restored[input.name]])
+        )
+      });
+    };
+    globalThis.addEventListener('popstate', restore);
+    return () => globalThis.removeEventListener('popstate', restore);
+  }, [cell]);
 
   function schedule(nextValues: InputValues, delayMs = 0, autorunKey?: string): void {
     schedulerRef.current?.schedule({ autorunKey, cell, runtimeVersion, values: nextValues }, delayMs);
@@ -99,8 +114,11 @@ export function useInteractiveCellRun(cell: CellManifest, runtimeVersion: string
   }
 
   function resetInputs(): void {
+    replaceInputs(initialValues(cell.inputs));
+  }
+
+  function replaceInputs(nextValues: InputValues): void {
     schedulerRef.current?.cancel();
-    const nextValues = initialValues(cell.inputs);
     invalidInputsRef.current.clear();
     valuesRef.current = nextValues;
     setValues(nextValues);
