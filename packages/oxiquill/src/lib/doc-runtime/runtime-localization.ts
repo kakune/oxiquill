@@ -385,9 +385,20 @@ function translateDiagnostic(detail: string): string {
   if (detail.includes('exceeds the remaining 16 MiB run limit')) {
     return '実行あたり 16 MiB の残り上限を超えています。';
   }
-  const chartLimit = /^Chart data item limit exceeded: received (\d+), maximum (\d+)\.$/u.exec(detail);
+  const chartLimit = /^Chart contains (\d+) data items; maximum is (\d+)\.$/u.exec(detail);
   if (chartLimit) {
     return `グラフデータの上限を超えました。${chartLimit[1]} 件を受け取りましたが、上限は ${chartLimit[2]} 件です。`;
+  }
+  if (detail === 'Complete invalid inputs before copying a link.') {
+    return '入力の誤りを修正してからリンクをコピーしてください。';
+  }
+  const shareLength = /^The input sharing link exceeds (\d+) characters\.$/u.exec(detail);
+  if (shareLength) {
+    return `入力の共有リンクが ${shareLength[1]} 文字を超えています。`;
+  }
+  const unshippedPackage = /^Python package (.+) is not shipped with this site\.$/u.exec(detail);
+  if (unshippedPackage) {
+    return `Python パッケージ ${unshippedPackage[1]} はこのサイトで配布されていません。`;
   }
   return detail;
 }
