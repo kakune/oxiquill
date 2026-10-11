@@ -1,6 +1,9 @@
 import { describe, expect, it } from 'vitest';
 import { chartPalette, heatmapPalette } from '../../packages/oxiquill/src/lib/doc-runtime/chart-palette';
-import { chartSpecToEChartsOptions } from '../../packages/oxiquill/src/lib/doc-runtime/chart-options';
+import {
+  chartSeriesPresentation,
+  chartSpecToEChartsOptions
+} from '../../packages/oxiquill/src/lib/doc-runtime/chart-options';
 
 const linear = (value: number) => (value <= 0.04045 ? value / 12.92 : ((value + 0.055) / 1.055) ** 2.4);
 const rgb = (color: string) => [1, 3, 5].map((index) => linear(parseInt(color.slice(index, index + 2), 16) / 255));
@@ -88,5 +91,16 @@ describe('fixed chart palette', () => {
     const points = chartSpecToEChartsOptions({ kind: 'scatter', series }).series;
     expect(points[0].symbol).toBe('circle');
     expect(points[8].symbol).toBe('rect');
+  });
+
+  it.each(['line', 'area', 'scatter'] as const)('describes %s legend swatches with the rendered symbols', (kind) => {
+    const spec = {
+      kind,
+      series: [{ points: [[0, 1]] as const }, { points: [[1, 2]] as const, style: { symbol: 'diamond' as const } }]
+    };
+    const rendered = chartSpecToEChartsOptions(spec).series;
+    expect([0, 1].map((index) => chartSeriesPresentation(spec, index, 'light').symbol)).toEqual(
+      rendered.map((series) => series.symbol)
+    );
   });
 });

@@ -58,7 +58,7 @@ export function chartSeriesPresentation(spec: ChartSpec, index: number, theme: C
     symbol:
       spec.kind === 'scatter'
         ? (spec.series[index].style?.symbol ?? (['circle', 'rect', 'triangle', 'diamond'] as const)[cycle % 4])
-        : (line?.symbol ?? 'circle')
+        : (line?.symbol ?? 'emptyCircle')
   };
 }
 
