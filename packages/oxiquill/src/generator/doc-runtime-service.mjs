@@ -166,8 +166,8 @@ export async function syncDocRuntime({
   const haskellCells = cells.filter((cell) => cell.language === 'haskell');
   const pythonCells = cells.filter((cell) => cell.language === 'python');
   const rustCells = cells.filter((cell) => cell.language === 'rust');
-  const requestedPythonPackages = Array.from(new Set(pythonCells.flatMap((cell) => cell.packages))).sort();
   const summary = summarizeCells(cells);
+  const requestedPythonPackages = summary.pythonPackages;
   const toolchains = await preflightToolchains({
     fileSystem,
     haskellCellCount: haskellCells.length,

@@ -6,6 +6,7 @@ import {
   subscribePythonPreparation,
   resetInteractiveRuntime,
   runtimeHaskellFingerprintHash,
+  runtimePythonPackages,
   runInteractiveCell
 } from '../../packages/oxiquill/src/lib/doc-runtime/runtime-client';
 import { normalizeCellExecutionResult } from '../../packages/oxiquill/src/lib/doc-runtime/output-artifacts';
@@ -418,6 +419,21 @@ describe('runtime client', () => {
     expect(runtimeHaskellFingerprintHash('"not-an-object"')).toBeUndefined();
     expect(runtimeHaskellFingerprintHash('not-json')).toBeUndefined();
     expect(runtimeHaskellFingerprintHash(undefined)).toBeUndefined();
+  });
+
+  it('sends the shipped Python packages from generated runtime versions', () => {
+    expect(runtimePythonPackages('{"python":["matplotlib","pandas"]}')).toEqual(['matplotlib', 'pandas']);
+    expect(runtimePythonPackages('{"python":["numpy",1]}')).toBeUndefined();
+    expect(runtimePythonPackages('{"haskell":"hash"}')).toBeUndefined();
+    expect(runtimePythonPackages('not-json')).toBeUndefined();
+
+    const { runner, workers } = makeRunner();
+    void runner.runInteractiveCell(makeCell('python'), {}, '{"python":["matplotlib"]}');
+    void runner.runInteractiveCell(makeCell('python'), {}, '{"rust":"hash"}');
+    void runner.runInteractiveCell(makeCell('rust'), {}, '{"python":["matplotlib"]}');
+    expect(workers[0].messages[0]).toMatchObject({ shippedPackages: ['matplotlib'] });
+    expect(workers[0].messages[1]).not.toHaveProperty('shippedPackages');
+    expect(workers[1].messages[0]).not.toHaveProperty('shippedPackages');
   });
 
   it('rejects failed cell responses without resetting the shared worker', async () => {

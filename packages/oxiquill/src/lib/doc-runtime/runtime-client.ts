@@ -307,6 +307,7 @@ function createWorkerRequest(
   inputs: InputValues,
   runtimeVersion?: string
 ): RuntimeWorkerRequest {
+  const shippedPackages = cell.language === 'python' ? runtimePythonPackages(runtimeVersion) : undefined;
   return {
     requestId,
     cellId: cell.id,
@@ -318,21 +319,30 @@ function createWorkerRequest(
         : undefined,
     inputs,
     source: cell.language === 'python' ? cell.source : undefined,
-    packages: cell.language === 'python' ? cell.packages : undefined
+    packages: cell.language === 'python' ? cell.packages : undefined,
+    ...(shippedPackages ? { shippedPackages } : {})
   };
 }
 
 export function runtimeHaskellFingerprintHash(runtimeVersion: string | undefined): string | undefined {
+  const haskell = parseRuntimeVersion(runtimeVersion)?.haskell;
+  return typeof haskell === 'string' ? haskell : undefined;
+}
+
+export function runtimePythonPackages(runtimeVersion: string | undefined): readonly string[] | undefined {
+  const python = parseRuntimeVersion(runtimeVersion)?.python;
+  return Array.isArray(python) && python.every((name) => typeof name === 'string') ? python : undefined;
+}
+
+function parseRuntimeVersion(runtimeVersion: string | undefined): Record<string, unknown> | undefined {
   if (!runtimeVersion) return undefined;
 
   try {
     const parsed = JSON.parse(runtimeVersion) as unknown;
-    if (isRecord(parsed) && typeof parsed.haskell === 'string') return parsed.haskell;
+    return isRecord(parsed) ? parsed : undefined;
   } catch {
     return undefined;
   }
-
-  return undefined;
 }
 
 function createDefaultWorker(language: CellLanguage): Worker {
