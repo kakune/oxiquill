@@ -78,7 +78,7 @@ export default function MermaidDiagram({ diagramId, source }: MermaidDiagramProp
 
   return (
     <figure
-      class="mermaid-diagram"
+      class="mermaid-diagram not-content"
       aria-labelledby={ids.title}
       aria-describedby={ids.description}
       data-state={state.status}
