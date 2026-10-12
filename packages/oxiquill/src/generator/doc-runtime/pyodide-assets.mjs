@@ -5,6 +5,7 @@ import { pathInUrl } from '../../config/paths.mjs';
 import { vendoredPyodidePackageRoots } from './constants.mjs';
 import { copyFileIfChanged, defaultFileSystem, hashFileSha256, hasPackageContent } from './file-system.mjs';
 import { createSha256, hashBytes, stableFingerprint } from './hashing.mjs';
+import { resolvePythonPackageNotices } from './python-package-notices.mjs';
 
 const require = createRequire(import.meta.url);
 const defaultPackageCdn = 'https://cdn.jsdelivr.net/pyodide/';
@@ -24,6 +25,8 @@ export const requiredPyodideFiles = [
 export async function resolvePyodideRuntimeInputs({
   fileSystem = defaultFileSystem,
   requestedPackages = vendoredPyodidePackageRoots,
+  pythonOptions = {},
+  paths,
   resolvePackageJson = resolvePyodidePackageJson
 } = {}) {
   const packageDir = resolvePyodidePackageDir(resolvePackageJson);
@@ -48,9 +51,14 @@ export async function resolvePyodideRuntimeInputs({
     })
   );
   const packages = resolveVendoredPyodidePackages(lockFile, requestedPackages);
+  const notices =
+    Object.keys(pythonOptions.additionalPackages ?? {}).length > 0
+      ? await resolvePythonPackageNotices({ packages, lockFile, pythonOptions, paths, fileSystem })
+      : [];
   const fingerprint = stableFingerprint({
     core: coreAssets.map(({ fileName, sha256 }) => ({ fileName, sha256 })),
     lockSha256,
+    notices,
     packages: packages.map(({ depends, file_name: fileName, name, sha256, version: packageVersion }) => ({
       depends,
       fileName,
@@ -67,6 +75,7 @@ export async function resolvePyodideRuntimeInputs({
     defaultPackageBaseUrl: new URL(`v${version}/full/`, defaultPackageCdn).href,
     fingerprint,
     lockFile,
+    notices,
     lockSha256,
     packageDir,
     packages: Object.freeze(packages),

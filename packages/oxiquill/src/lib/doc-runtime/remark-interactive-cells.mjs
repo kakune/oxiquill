@@ -11,14 +11,14 @@ import {
   visit
 } from './remark-mdx-helpers.mjs';
 
-export default function remarkInteractiveCells({ root = process.cwd() } = {}) {
+export default function remarkInteractiveCells({ root = process.cwd(), pythonOptions = {} } = {}) {
   return (tree, file) => {
     const pagePath = relativePagePath(root, file?.path);
     const diagnostics = [];
     const cells = [];
 
     visit(tree, (node) => {
-      const result = parseInteractiveCellNode(node, pagePath);
+      const result = parseInteractiveCellNode(node, pagePath, pythonOptions);
       if (result.kind === 'invalid') diagnostics.push(...result.diagnostics);
       if (result.kind === 'cell') cells.push({ cell: result.cell, node });
     });

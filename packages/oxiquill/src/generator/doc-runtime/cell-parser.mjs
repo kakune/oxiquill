@@ -14,14 +14,14 @@ import { assertUniqueCellIds } from './validators.mjs';
 const markdownParser = unified().use(remarkParse);
 const mdxParser = unified().use(remarkParse).use(remarkMath).use(remarkMdx);
 
-export function parseCellsFromMarkdown(source, pagePath) {
+export function parseCellsFromMarkdown(source, pagePath, pythonOptions = {}) {
   const parser = String(pagePath).endsWith('.mdx') ? mdxParser : markdownParser;
   const tree = parser.parse(source);
   const cells = [];
   const diagnostics = [];
 
   visit(tree, (node) => {
-    const result = parseInteractiveCellNode(node, pagePath);
+    const result = parseInteractiveCellNode(node, pagePath, pythonOptions);
     if (result.kind === 'cell') cells.push(result.cell);
     if (result.kind === 'invalid') diagnostics.push(...result.diagnostics);
   });
@@ -30,7 +30,7 @@ export function parseCellsFromMarkdown(source, pagePath) {
 }
 
 export async function extractCellsFromMarkdown(source, pagePath, context) {
-  const parsed = parseCellsFromMarkdown(source, pagePath);
+  const parsed = parseCellsFromMarkdown(source, pagePath, context.pythonOptions);
   const diagnostics = [
     ...parsed.diagnostics,
     ...parsed.cells.flatMap((cell) => validateCellDependencies(cell, context.helperCrates))

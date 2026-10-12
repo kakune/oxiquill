@@ -162,7 +162,8 @@ export async function syncDocRuntime({
     fileSystem,
     helperCrates,
     highlighter,
-    paths
+    paths,
+    pythonOptions
   });
   const haskellCells = cells.filter((cell) => cell.language === 'haskell');
   const pythonCells = cells.filter((cell) => cell.language === 'python');
@@ -178,8 +179,8 @@ export async function syncDocRuntime({
     tolerateHaskellFailure: tolerateHaskellBuildFailure
   });
   const pyodideRuntimeInputs =
-    pythonCells.length > 0
-      ? await resolvePyodideInputs({ fileSystem, requestedPackages: requestedPythonPackages })
+    pythonCells.length > 0 || Object.keys(pythonOptions.additionalPackages ?? {}).length > 0
+      ? await resolvePyodideInputs({ fileSystem, requestedPackages: requestedPythonPackages, paths, pythonOptions })
       : undefined;
   const generated = {
     cellsJson: generateCellsJson(cells),
@@ -214,7 +215,8 @@ export async function syncDocRuntime({
     const licensesChanged = await syncLicenses({
       fileSystem,
       includeRustBuildFiles: false,
-      paths
+      paths,
+      pythonOptions
     });
     return runtimeResult({ licensesChanged, plan, summary });
   }
@@ -278,7 +280,8 @@ export async function syncDocRuntime({
     const licensesChanged = await syncLicenses({
       fileSystem,
       includeRustBuildFiles: false,
-      paths
+      paths,
+      pythonOptions
     });
     await replaceDirectory(generatedStage, paths.generatedDir, { fileSystem });
 
@@ -581,7 +584,13 @@ async function fingerprintHelperSources({ fileSystem, paths }) {
   return stableFingerprint(entries);
 }
 
-export async function collectCells({ fileSystem = defaultFileSystem, helperCrates, highlighter, paths }) {
+export async function collectCells({
+  fileSystem = defaultFileSystem,
+  helperCrates,
+  highlighter,
+  paths,
+  pythonOptions = {}
+}) {
   const docsDir = pathFromUrl(paths.docsDir);
   const workspaceRoot = pathFromUrl(paths.workspaceRoot);
   const files = await listFiles(docsDir, { fileSystem });
@@ -590,7 +599,7 @@ export async function collectCells({ fileSystem = defaultFileSystem, helperCrate
     markdownFiles.map(async (filePath) => {
       const pagePath = normalizePath(path.relative(workspaceRoot, filePath));
       const source = await fileSystem.readFile(filePath, 'utf8');
-      return parseCellsFromMarkdown(source, pagePath);
+      return parseCellsFromMarkdown(source, pagePath, pythonOptions);
     })
   );
   const authoringCells = parsedPages.flatMap((page) => page.cells);

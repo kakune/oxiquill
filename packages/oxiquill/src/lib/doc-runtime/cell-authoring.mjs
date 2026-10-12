@@ -57,7 +57,7 @@ export function parseLanguage(info) {
   return supportedLanguages.get(raw);
 }
 
-export function parseInteractiveCellNode(node, pagePath) {
+export function parseInteractiveCellNode(node, pagePath, pythonOptions = {}) {
   if (!node || node.type !== 'code') return { kind: 'skip' };
 
   const language = parseLanguage(node.lang);
@@ -95,7 +95,7 @@ export function parseInteractiveCellNode(node, pagePath) {
   const packages = normalizeStringArray(metadata, 'packages', context, diagnostics);
   const crates = normalizeStringArray(metadata, 'crates', context, diagnostics);
 
-  validateDependencyFields(metadata, language, packages, context, diagnostics);
+  validateDependencyFields(metadata, language, packages, context, diagnostics, pythonOptions);
   if (run === 'autorun' && hasOwn(metadata, 'inputs')) {
     diagnostics.push(diagnostic(context, 'inputs', 'Autorun cells cannot specify inputs.'));
   }
@@ -555,7 +555,7 @@ function validateOptionDefault(type, value, options, inputPath, context, diagnos
   }
 }
 
-function validateDependencyFields(metadata, language, packages, context, diagnostics) {
+function validateDependencyFields(metadata, language, packages, context, diagnostics, pythonOptions) {
   if (hasOwn(metadata, 'packages') && language !== 'python') {
     diagnostics.push(
       diagnostic(context, 'packages', `This field is not supported for ${languageLabel(language)} cells.`)
@@ -567,13 +567,14 @@ function validateDependencyFields(metadata, language, packages, context, diagnos
     );
   }
   if (language === 'python') {
+    const allowedPackages = [...supportedPyodidePackages, ...Object.keys(pythonOptions.additionalPackages ?? {})];
     packages.forEach((packageName, index) => {
-      if (!supportedPyodidePackages.includes(packageName)) {
+      if (!allowedPackages.includes(packageName)) {
         diagnostics.push(
           diagnostic(
             context,
             `packages[${index}]`,
-            `Unsupported Pyodide package ${JSON.stringify(packageName)}. Vendored packages: ${supportedPyodidePackages.join(', ')}.`
+            `Unsupported Pyodide package ${JSON.stringify(packageName)}. Vendored packages: ${allowedPackages.join(', ')}.`
           )
         );
       }

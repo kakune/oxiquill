@@ -1,3 +1,5 @@
+import { supportedPyodidePackages } from '../lib/doc-runtime/python-packages.mjs';
+
 const metadataKey = Symbol.for('oxiquill.project-config');
 
 export const oxiquillPathOptionNames = Object.freeze([
@@ -37,7 +39,7 @@ function normalizePythonOptions(options) {
     throw new TypeError('python must be an object.');
   }
   const unknownFields = Object.keys(options).filter(
-    (name) => name !== 'offline' && name !== 'packageMirror' && name !== 'preload'
+    (name) => !['offline', 'packageMirror', 'preload', 'additionalPackages'].includes(name)
   );
   if (unknownFields.length > 0) {
     throw new TypeError(`Unknown python option: ${unknownFields.sort().join(', ')}.`);
@@ -48,7 +50,64 @@ function normalizePythonOptions(options) {
   const offline = options.offline ?? false;
   if (typeof offline !== 'boolean') throw new TypeError('python.offline must be a boolean.');
   const packageMirror = normalizePackageMirror(options.packageMirror);
-  return Object.freeze({ offline, preload, ...(packageMirror ? { packageMirror } : {}) });
+  const additionalPackages = normalizeAdditionalPackages(options.additionalPackages);
+  return Object.freeze({
+    offline,
+    preload,
+    ...(packageMirror ? { packageMirror } : {}),
+    ...(additionalPackages ? { additionalPackages } : {})
+  });
+}
+
+function normalizeAdditionalPackages(value) {
+  if (value === undefined) return undefined;
+  if (!value || typeof value !== 'object' || Array.isArray(value))
+    throw new TypeError('python.additionalPackages must be an object.');
+  return Object.freeze(
+    Object.fromEntries(
+      Object.entries(value)
+        .sort(([a], [b]) => a.localeCompare(b))
+        .map(([name, notice]) => {
+          const context = `python.additionalPackages.${name}`;
+          if (!/^[a-z0-9]+(?:[-_][a-z0-9]+)*$/u.test(name) || supportedPyodidePackages.includes(name)) {
+            throw new TypeError(`${context} must name an additional Pyodide lock package.`);
+          }
+          if (
+            !notice ||
+            typeof notice !== 'object' ||
+            Array.isArray(notice) ||
+            Object.keys(notice).some((key) => !['version', 'license', 'licenseFiles'].includes(key))
+          ) {
+            throw new TypeError(`${context} requires version, license, and licenseFiles.`);
+          }
+          for (const key of ['version', 'license']) {
+            if (
+              typeof notice[key] !== 'string' ||
+              !notice[key].trim() ||
+              /^(unknown|none|unlicensed)$/iu.test(notice[key].trim())
+            ) {
+              throw new TypeError(`${context}.${key} must contain known metadata.`);
+            }
+          }
+          if (
+            !Array.isArray(notice.licenseFiles) ||
+            !notice.licenseFiles.length ||
+            notice.licenseFiles.some((file) => typeof file !== 'string' || !file.trim()) ||
+            new Set(notice.licenseFiles).size !== notice.licenseFiles.length
+          ) {
+            throw new TypeError(`${context}.licenseFiles must be a non-empty list of unique file paths.`);
+          }
+          return [
+            name,
+            Object.freeze({
+              version: notice.version.trim(),
+              license: notice.license.trim(),
+              licenseFiles: Object.freeze([...notice.licenseFiles])
+            })
+          ];
+        })
+    )
+  );
 }
 
 function normalizePackageMirror(value) {

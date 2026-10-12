@@ -80,6 +80,31 @@ Python `packages` must be a non-empty, unique list of names vendored by the inst
 
 See [Interactive Cells](/features/interactive-cells/) for metadata and [Troubleshooting](/guides/troubleshooting/) for recovery steps.
 
+### Additional Packages
+
+`python.additionalPackages` extends the built-in allowlist with packages from the installed Pyodide lock. Each entry pins the notice to that package's exact version and supplies complete license text files, relative to the workspace root:
+
+```js
+python: {
+  additionalPackages: {
+    sympy: {
+      version: '1.14.0',
+      license: 'BSD-3-Clause AND MIT',
+      licenseFiles: ['legal/sympy-LICENSES.txt']
+    },
+    mpmath: {
+      version: '1.4.1',
+      license: 'BSD-3-Clause',
+      licenseFiles: ['legal/mpmath-LICENSES.txt']
+    }
+  }
+}
+```
+
+A cell can then declare `packages: [sympy]`. Generation resolves `mpmath` from the lock and verifies both notices. Supply notices for every additional dependency; existing bundled notices cover built-in dependencies. Copy complete notices from the verified distribution, including bundled components. Unknown packages, version mismatches, missing or empty notice files, and hash mismatches fail generation.
+
+Allowing a package does not distribute it. Only declared packages and their dependencies are copied. For Pyodide 314.0.7, the verified SymPy and mpmath wheels add 4,616,552 bytes together. Their names, versions, hashes, and notice contents participate in runtime invalidation. Development watches notice changes and reloads Python configuration changes. The same package set is used for imports, preload, mirrors, offline generation, and the final third-party report. Arbitrary PyPI URLs and runtime network fallback are not supported.
+
 ## Bounded Tables and Figure Cleanup
 
 `display_table` reads at most 10,001 rows and 101 values per row to detect truncation, retaining at most 10,000 rows and 100 columns. This also applies to generators. DataFrame index columns count toward the column limit. Discarded columns are not converted.

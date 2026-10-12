@@ -96,6 +96,26 @@ const runtimeManifest = {
 };
 
 describe('license notices', () => {
+  it('includes configured notices for copied wheels and rejects uncovered copies', async () => {
+    const paths = createDocRuntimePaths({ workspaceRoot, frameworkRoot });
+    const info = { version: '1.0', file_name: 'extra.whl' };
+    const fileSystem = createMemoryFileSystem({
+      [licensePath('MIT.txt')]: 'Built-in notice',
+      [workspacePath('public/oxiquill/pyodide/pyodide-lock.json')]: JSON.stringify({ packages: { extra: info } }),
+      [workspacePath('public/oxiquill/pyodide/extra.whl')]: 'wheel',
+      [workspacePath('NOTICE.txt')]: 'Additional package notice'
+    });
+    const options = { fileSystem, paths, manifest: runtimeManifest, licenseDataDir };
+    await expect(collectRuntimeArtifactNotices(options)).rejects.toThrow('missing a license notice');
+    await expect(
+      collectRuntimeArtifactNotices({
+        ...options,
+        pythonOptions: {
+          additionalPackages: { extra: { version: '1.0', license: 'MIT', licenseFiles: ['NOTICE.txt'] } }
+        }
+      })
+    ).resolves.toMatchObject([{ name: 'extra', licenseText: '[NOTICE.txt]\nAdditional package notice' }]);
+  });
   it('discovers and groups module ids from main and worker chunks', () => {
     const mainModule = path.join(packageRoot, 'main.js');
     const workerModule = `${path.join(packageRoot, 'worker.js')}?worker_file`;

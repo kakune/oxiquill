@@ -1,7 +1,18 @@
 import assert from 'node:assert/strict';
 import { spawn, spawnSync } from 'node:child_process';
 import { createHash } from 'node:crypto';
-import { appendFile, mkdir, mkdtemp, readFile, realpath, rename, rm, writeFile } from 'node:fs/promises';
+import {
+  appendFile,
+  copyFile,
+  mkdir,
+  mkdtemp,
+  readFile,
+  realpath,
+  rename,
+  rm,
+  stat,
+  writeFile
+} from 'node:fs/promises';
 import { createRequire } from 'node:module';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
@@ -26,6 +37,11 @@ const supportedPythonPackages = [
   'pytz',
   'six'
 ];
+const configuredPythonPackages = [...supportedPythonPackages, 'sympy'];
+const additionalPythonPackages = {
+  mpmath: { version: '1.4.1', license: 'BSD-3-Clause', licenseFiles: ['legal/mpmath-LICENSES.txt'] },
+  sympy: { version: '1.14.0', license: 'BSD-3-Clause AND MIT', licenseFiles: ['legal/sympy-LICENSES.txt'] }
+};
 
 const packageManagerArgument = process.argv.indexOf('--package-manager');
 const packageManager = process.argv[packageManagerArgument + 1];
@@ -240,6 +256,13 @@ try {
 
   const projectRoot = path.join(consumerRoot, 'site root');
   await mkdir(projectRoot);
+  await mkdir(path.join(projectRoot, 'legal'));
+  for (const name of Object.keys(additionalPythonPackages)) {
+    await copyFile(
+      path.join(repositoryRoot, `tests/fixtures/python-packages/${name}-LICENSES.txt`),
+      path.join(projectRoot, `legal/${name}-LICENSES.txt`)
+    );
+  }
   await rename(path.join(consumerRoot, 'content'), path.join(projectRoot, 'content'));
   await rename(path.join(consumerRoot, 'crates'), path.join(projectRoot, 'helper crates'));
   await mkdir(path.join(projectRoot, 'helper crates/packed-helper/src'), { recursive: true });
@@ -290,7 +313,7 @@ try {
       '#| id: package-python',
       '#| run: autorun',
       '#| timeoutMs: 180000',
-      `#| packages: [${supportedPythonPackages.join(', ')}]`,
+      `#| packages: [${configuredPythonPackages.join(', ')}]`,
       'import contourpy',
       'import cycler',
       'import fontTools',
@@ -304,6 +327,8 @@ try {
       'import dateutil',
       'import pytz',
       'import six',
+      'import sympy',
+      'assert sympy.factor(sympy.Symbol("x") ** 2 - 1) == (sympy.Symbol("x") - 1) * (sympy.Symbol("x") + 1)',
       'print("packed python imports: ok")',
       '```',
       ...(process.platform === 'win32'
@@ -339,7 +364,9 @@ try {
     pyodidePackage.version,
     lockSha256
   );
-  const packageWheels = supportedPythonPackages.map((packageName) => lockFile.packages[packageName].file_name);
+  const packageWheels = [...configuredPythonPackages, 'mpmath'].map(
+    (packageName) => lockFile.packages[packageName].file_name
+  );
   const requiredPyodideFiles = [
     'pyodide.mjs',
     'pyodide.asm.mjs',
@@ -354,12 +381,25 @@ try {
     await assertFile(path.join(pyodideBuildDir, fileName));
     await assertFile(path.join(downloadCacheDirectory, fileName));
   }
+  await assertMissing(path.join(pyodidePublicDir, lockFile.packages.scipy.file_name));
+  const extraBytes = await Promise.all(
+    ['sympy', 'mpmath'].map(async (name) => ({
+      name,
+      bytes: (await stat(path.join(pyodidePublicDir, lockFile.packages[name].file_name))).size
+    }))
+  );
+  console.log('Additional Pyodide distribution:', extraBytes);
 
   const publicLicenses = path.join(projectRoot, 'static files/oxiquill assets/legal notices');
   const builtLicenses = path.join(projectRoot, 'built site/oxiquill assets/legal notices');
   for (const fileName of ['LICENSE-MIT', 'LICENSE-APACHE', 'THIRD_PARTY_LICENSES.txt']) {
     await assertFile(path.join(publicLicenses, fileName));
     await assertFile(path.join(builtLicenses, fileName));
+  }
+  for (const directory of [publicLicenses, builtLicenses]) {
+    const notices = await readFile(path.join(directory, 'THIRD_PARTY_LICENSES.txt'), 'utf8');
+    for (const [name, notice] of Object.entries(additionalPythonPackages))
+      assert.ok(notices.includes(`${name} ${notice.version}`));
   }
   const bundleReportPath = path.join(projectRoot, 'built site/oxiquill/bundle-report.json');
   const bundleReport = JSON.parse(await readFile(bundleReportPath, 'utf8'));
@@ -441,6 +481,11 @@ async function runInstalledBrowserSmoke({ consumerRoot, installedCliPath, projec
       ...(executablePath ? { executablePath } : {})
     });
     const page = await browser.newPage();
+    const externalRequests = [];
+    page.on('request', (request) => {
+      const url = new URL(request.url());
+      if (url.protocol.startsWith('http') && url.hostname !== '127.0.0.1') externalRequests.push(url.href);
+    });
     const pageErrors = collectPageErrors(page);
     await page.goto(`http://127.0.0.1:${port}/`);
     await assertMermaidHydration(page);
@@ -457,12 +502,13 @@ async function runInstalledBrowserSmoke({ consumerRoot, installedCliPath, projec
     );
     const manifest = JSON.parse(await readFile(path.join(projectRoot, 'state cache/generated runtime/cells.json')));
     const pythonCell = manifest.find((cell) => cell.id.endsWith('__package-python'));
-    assert.deepEqual(pythonCell?.packages, supportedPythonPackages);
+    assert.deepEqual(pythonCell?.packages, configuredPythonPackages);
     const python = page.getByTestId(`cell-${pythonCell.id}`);
     await python.scrollIntoViewIfNeeded();
     const pythonOutput = python.getByTestId('run-output');
     await pythonOutput.waitFor({ state: 'visible', timeout: 180_000 });
     assert.match(await pythonOutput.textContent(), /packed python imports: ok/u);
+    assert.deepEqual(externalRequests, [], 'Python attempted to fetch an external runtime package.');
 
     const haskellCell = manifest.find((cell) => cell.id.endsWith('__package-haskell'));
     if (haskellCell) {
@@ -675,7 +721,7 @@ function packedAstroConfig({ offline }) {
     "  publicDir: 'static files',",
     "  cacheDir: 'state cache',",
     "  outDir: 'built site',",
-    `  python: { offline: ${offline} },`,
+    `  python: ${JSON.stringify({ offline, additionalPackages: additionalPythonPackages })},`,
     '  paths: {',
     "    docsDir: new URL('./site root/content/docs/', import.meta.url),",
     "    cratesDir: 'helper crates',",

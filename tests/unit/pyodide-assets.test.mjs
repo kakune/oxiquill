@@ -26,6 +26,38 @@ afterEach(async () => {
 });
 
 describe('Pyodide assets', () => {
+  it('validates dependency notices and fingerprints notice contents without distributing unused packages', async () => {
+    const fixture = await createInstalledPyodide();
+    const paths = createDocRuntimePaths(fixture.workspaceRoot);
+    const lock = JSON.parse(await readFile(fixture.lockPath, 'utf8'));
+    lock.packages.unused = packageEntry('unused', 'unused.whl', Buffer.from('unused'));
+    await writeFile(fixture.lockPath, JSON.stringify(lock));
+    await writeFile(path.join(fixture.workspaceRoot, 'NOTICE.txt'), 'Original notice');
+    const notice = { version: 'fixture-package', license: 'MIT', licenseFiles: ['NOTICE.txt'] };
+    const options = {
+      requestedPackages: ['root'],
+      paths,
+      resolvePackageJson: fixture.resolvePackageJson,
+      pythonOptions: {
+        additionalPackages: {
+          root: notice,
+          dependency: notice,
+          unused: { ...notice, licenseFiles: ['not-needed.txt'] }
+        }
+      }
+    };
+    const first = await resolvePyodideRuntimeInputs(options);
+    expect(first.packages.map((info) => info.name)).toEqual(['dependency', 'root']);
+    expect(first.notices.map((info) => info.name)).toEqual(['dependency', 'root']);
+    await writeFile(path.join(fixture.workspaceRoot, 'NOTICE.txt'), 'Updated notice');
+    const updated = await resolvePyodideRuntimeInputs(options);
+    expect(updated.fingerprint).not.toBe(first.fingerprint);
+    await copyPyodideAssets({ paths, runtimeInputs: updated, fetchPackage: async (name) => fixture.wheels[name] });
+    expect(await readdir(paths.pyodidePublicDir)).not.toContain('unused.whl');
+    await expect(
+      resolvePyodideRuntimeInputs({ ...options, pythonOptions: { additionalPackages: { root: notice } } })
+    ).rejects.toThrow('dependency');
+  });
   it('derives a deterministic release, package graph, and hashes from installed metadata', async () => {
     const fixture = await createInstalledPyodide();
 
