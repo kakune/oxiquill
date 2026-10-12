@@ -657,7 +657,13 @@ def __oxiquill_reset_outputs():
     __oxiquill_output_bytes = 0
     __oxiquill_output_omission = None
 
+def __oxiquill_close_figures():
+    plt = sys.modules.get("matplotlib.pyplot")
+    if plt is not None:
+        plt.close("all")
+
 def __oxiquill_prepare_cell(matplotlib_available=False):
+    __oxiquill_close_figures()
     __oxiquill_reset_outputs()
     __oxiquill_configure_matplotlib(matplotlib_available)
 

@@ -292,6 +292,32 @@ describe('python worker asset URLs', () => {
 });
 
 describe('python worker request handling', () => {
+  it('attempts figure cleanup after every failure without replacing the execution error', async () => {
+    const cleanup = vi.fn(() => {
+      throw new Error('cleanup failed');
+    });
+    const pyodide = {
+      loadPackage: vi.fn(),
+      loadPackagesFromImports: vi.fn(),
+      lockfile: { packages: {} },
+      runPython: vi.fn((source: string) => {
+        if (source === '__oxiquill_close_figures()') return cleanup();
+        if (source.includes('find_imports')) return pythonProxy([]);
+      }),
+      runPythonAsync: vi.fn(async () => {
+        throw new Error('original failure');
+      }),
+      setStdout: vi.fn(),
+      setStderr: vi.fn(),
+      toPy: () => ({ destroy: vi.fn() })
+    };
+    const postMessage = vi.fn();
+    const handle = createPythonWorkerRequestHandler({ ensurePyodide: async () => pyodide as never, postMessage });
+    await handle(pythonRequest());
+    await handle(pythonRequest({ requestId: 8 }));
+    expect(cleanup).toHaveBeenCalledTimes(2);
+    expect(postMessage).toHaveBeenLastCalledWith({ requestId: 8, ok: false, error: 'original failure' });
+  });
   it('prepares only dependencies, skips loaded packages, and reports readiness without evaluating a cell', async () => {
     const loadPackage = vi.fn();
     const ensurePyodide = vi.fn(async () => ({ loadedPackages: { numpy: 'default channel' }, loadPackage }) as never);

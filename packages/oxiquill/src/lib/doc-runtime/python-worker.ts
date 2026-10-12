@@ -51,9 +51,11 @@ export function createPythonWorkerRequestHandler({
   postMessage
 }: PythonWorkerHandlerDependencies): (request: PythonWorkerRequest) => Promise<void> {
   return async (request) => {
+    let initializedRuntime: PyodideRuntime | undefined;
     try {
       postMessage({ type: 'progress', requestId: request.requestId, phase: 'preparing' });
       const pyodide = await ensurePyodide(request.packages);
+      initializedRuntime = pyodide;
       const packages = request.packages?.filter((name) => !Object.hasOwn(pyodide.loadedPackages ?? {}, name)) ?? [];
       if (packages.length > 0) {
         await measureRuntimePhase('packages', 'cellId' in request ? request.cellId : 'python', () =>
@@ -127,6 +129,14 @@ export function createPythonWorkerRequestHandler({
         ok: false,
         error: boundedErrorMessage(error)
       });
+    } finally {
+      if (initializedRuntime && 'cellId' in request) {
+        try {
+          initializedRuntime.runPython('__oxiquill_close_figures()');
+        } catch {
+          // Cleanup must not replace the original execution error.
+        }
+      }
     }
   };
 }
