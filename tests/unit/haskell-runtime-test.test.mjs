@@ -121,8 +121,7 @@ describe('generated Haskell runtime tests', () => {
       })
     ).resolves.toEqual({
       stderr: '',
-      stdout: 'standard output',
-      outputs: [{ kind: 'text', stream: 'stdout', content: 'standard output' }]
+      stdout: 'standard output'
     });
     expect(invocations).toEqual([['doc_haskell_cells', 'defaults', '2.5', 'false', 'hello']]);
     expect(instantiate).toHaveBeenCalledWith(module, { wasi_snapshot_preview1: { fixture: true } });

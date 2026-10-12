@@ -30,4 +30,14 @@ test('failed Python figures never leak into later executions', async ({ page, br
   await run.click();
   await expect(cell.getByTestId('table-output')).toContainText('total unknown; truncated');
   await expect(cell.getByTestId('table-output')).toContainText('10000 retrieved rows');
+  await page.clock.install();
+  await source.fill('import matplotlib.pyplot as plt\nplt.figure()\nwhile True:\n    pass');
+  await run.click();
+  await expect(cell.getByRole('button', { name: 'Running', exact: true })).toBeVisible();
+  await page.clock.fastForward(180_000);
+  await expect(cell.locator('.doc-cell__error')).toContainText('timed out');
+  await source.fill('print("Recovered after timeout")');
+  await run.click();
+  await expect(cell.getByTestId('run-output')).toContainText('Recovered after timeout', { timeout: 180_000 });
+  await expect(cell.getByTestId('image-output')).toHaveCount(0);
 });

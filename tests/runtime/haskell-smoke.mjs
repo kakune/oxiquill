@@ -1,5 +1,7 @@
 import { fileURLToPath } from 'node:url';
 import assert from 'node:assert/strict';
+import { createHaskellOutputCapture } from '../../packages/oxiquill/dist/lib/doc-runtime/haskell-output.js';
+import { validateOutputArtifacts } from '../../packages/oxiquill/dist/lib/doc-runtime/output-artifact-validation.js';
 import { createOxiquillPaths } from '../../packages/oxiquill/dist/config/paths.mjs';
 import {
   executeGeneratedHaskellCell,
@@ -11,16 +13,24 @@ const result = await testGeneratedHaskellCells({
   paths: createOxiquillPaths({ workspaceRoot }),
   executeCell: async (options) => {
     const result = await executeGeneratedHaskellCell(options);
+    const capture = createHaskellOutputCapture();
+    capture.writeStdout(Buffer.from(result.stdout));
+    capture.writeStderr(Buffer.from(result.stderr));
+    const { outputs } = capture.take();
+    assert.deepEqual(
+      validateOutputArtifacts(outputs).filter((artifact) => artifact.status === 'error'),
+      []
+    );
     if (options.cell.id.endsWith('__haskell-structured-output')) {
       assert.deepEqual(
-        result.outputs.map((output) => output.kind),
+        outputs.map((output) => output.kind),
         ['text', 'json', 'table', 'chart', 'text']
       );
-      assert.deepEqual(result.outputs[1].value, {
+      assert.deepEqual(outputs[1].value, {
         message: 'Unicode: \u65e5\u672c \ud83c\udf0d\nquoted: "value"',
         ready: true
       });
-      assert.deepEqual(result.outputs[2].rows, [
+      assert.deepEqual(outputs[2].rows, [
         [1, 1],
         [2, 4],
         [3, 9],

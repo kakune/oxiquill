@@ -8,7 +8,7 @@ test('Haskell renders ordered JSON, table, and chart output', async ({ page }) =
   await expect(cell.getByTestId('value-output')).toContainText('"ready": true');
   await expect(cell.getByTestId('table-output')).toContainText('Square');
   await expect(cell.getByTestId('table-output')).toContainText('16');
-  await expect(cell.getByTestId('chart-output')).toBeVisible();
+  await expect(cell.getByTestId('doc-plot')).toBeVisible();
   const text = await cell.locator('.doc-cell__outputs').innerText();
   expect(text.indexOf('Before structured output')).toBeLessThan(text.indexOf('"ready"'));
   expect(text.indexOf('"ready"')).toBeLessThan(text.indexOf('After structured output'));
