@@ -7,6 +7,7 @@ import type {
   RuntimeExecutionPhase
 } from './types.js';
 import { ExecutionCancellationError } from './execution-cancellation.js';
+import { CellExecutionError } from './execution-error.js';
 import { assertValidInputValues, completeInputValues } from './interactive-input-validation.js';
 import { normalizeCellExecutionResult, type NormalizedCellExecutionResult } from './output-artifacts.js';
 import { boundedErrorMessage } from './output-limits.mjs';
@@ -225,7 +226,7 @@ export function createInteractiveCellRunner(dependencies: RuntimeClientDependenc
         request.removeAbortListener();
 
         if (!event.data.ok) {
-          request.reject(toError(event.data.error));
+          request.reject(new CellExecutionError(event.data.error, event.data.partialResult));
           return;
         }
 

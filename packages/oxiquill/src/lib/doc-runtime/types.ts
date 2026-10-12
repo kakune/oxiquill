@@ -270,4 +270,5 @@ export type RuntimeWorkerResponse =
       requestId: number;
       ok: false;
       error: string;
+      partialResult?: RawCellExecutionResult;
     };

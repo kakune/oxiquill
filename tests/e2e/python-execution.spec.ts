@@ -15,10 +15,12 @@ test('failed Python figures never leak into later executions', async ({ page, br
     );
     await run.click();
     await expect(cell.locator('.doc-cell__error')).toContainText('intentional failure', { timeout: 180_000 });
+    await expect(cell.getByTestId('failed-output').getByTestId('image-output')).toHaveCount(1);
     await source.fill('print("Clean execution")');
     await run.click();
     await expect(cell.getByTestId('run-output')).toContainText('Clean execution');
     await expect(cell.getByTestId('image-output')).toHaveCount(0);
+    await expect(cell.getByTestId('failed-output')).toHaveCount(0);
   }
   await source.fill('import matplotlib.pyplot as plt\nfig, ax = plt.subplots()\nax.set_title("Current figure")');
   await run.click();

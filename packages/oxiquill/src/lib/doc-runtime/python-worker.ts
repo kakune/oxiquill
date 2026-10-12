@@ -52,6 +52,24 @@ export function createPythonWorkerRequestHandler({
 }: PythonWorkerHandlerDependencies): (request: PythonWorkerRequest) => Promise<void> {
   return async (request) => {
     let initializedRuntime: PyodideRuntime | undefined;
+    let prepared = false;
+    const stdout = createBoundedTextAccumulator(outputArtifactLimits.bytesPerStream, '\n');
+    const stderr = createBoundedTextAccumulator(outputArtifactLimits.bytesPerStream, '\n');
+    const collectResult = (value: unknown = null) => {
+      const displayOutputs = initializedRuntime ? collectPythonOutputs(initializedRuntime) : [];
+      const stdoutResult = stdout.take();
+      const stderrResult = stderr.take();
+      return boundWorkerResult(
+        createPythonCellResult({
+          stdout: stdoutResult.value.trimEnd(),
+          stdoutTruncated: stdoutResult.truncated,
+          stderr: stderrResult.value.trimEnd(),
+          stderrTruncated: stderrResult.truncated,
+          value,
+          displayOutputs
+        })
+      );
+    };
     try {
       postMessage({ type: 'progress', requestId: request.requestId, phase: 'preparing' });
       const pyodide = await ensurePyodide(request.packages);
@@ -66,23 +84,23 @@ export function createPythonWorkerRequestHandler({
         postMessage({ type: 'ready', requestId: request.requestId, ok: true });
         return;
       }
-      const stdout = createBoundedTextAccumulator(outputArtifactLimits.bytesPerStream, '\n');
-      const stderr = createBoundedTextAccumulator(outputArtifactLimits.bytesPerStream, '\n');
-
       pyodide.setStdout({ batched: stdout.append });
       pyodide.setStderr({ batched: stderr.append });
-
-      if (request.source) {
-        assertSupportedPythonImports(pyodide, request.source, request.shippedPackages);
-        await measureRuntimePhase('imports', request.cellId, () =>
-          pyodide.loadPackagesFromImports(request.source ?? '')
-        );
-      }
       await measureRuntimePhase('display-prepare', request.cellId, () =>
         pyodide.runPython(
           `__oxiquill_prepare_cell(${Object.hasOwn(pyodide.loadedPackages ?? {}, 'matplotlib') ? 'True' : 'False'})`
         )
       );
+      prepared = true;
+      if (request.source) {
+        assertSupportedPythonImports(pyodide, request.source, request.shippedPackages);
+        await measureRuntimePhase('imports', request.cellId, () =>
+          pyodide.loadPackagesFromImports(request.source ?? '')
+        );
+        pyodide.runPython(
+          `__oxiquill_configure_matplotlib(${Object.hasOwn(pyodide.loadedPackages ?? {}, 'matplotlib') ? 'True' : 'False'})`
+        );
+      }
       postMessage({ type: 'progress', requestId: request.requestId, phase: 'executing' });
 
       const globals = pyodide.toPy(request.inputs);
@@ -98,36 +116,22 @@ export function createPythonWorkerRequestHandler({
           )
         );
       } finally {
-        globals.destroy();
+        try {
+          globals.destroy();
+        } catch (error) {
+          stderr.append(`Failed to release Python globals: ${boundedErrorMessage(error)}`);
+        }
       }
-      const displayOutputs = toOutputArtifacts(toSerializable(pyodide.runPython('__oxiquill_take_outputs()')));
-      const matplotlibOutputs = toOutputArtifacts(
-        toSerializable(
-          await measureRuntimePhase('display-collect', request.cellId, () =>
-            pyodide.runPython('__oxiquill_collect_matplotlib_outputs()')
-          )
-        )
-      );
-
-      const stdoutResult = stdout.take();
-      const stderrResult = stderr.take();
-      const result = boundWorkerResult(
-        createPythonCellResult({
-          stdout: stdoutResult.value.trimEnd(),
-          stdoutTruncated: stdoutResult.truncated,
-          stderr: stderrResult.value.trimEnd(),
-          stderrTruncated: stderrResult.truncated,
-          value,
-          displayOutputs: [...displayOutputs, ...matplotlibOutputs]
-        })
-      );
+      const result = await measureRuntimePhase('display-collect', request.cellId, () => collectResult(value));
 
       postMessage({ requestId: request.requestId, ok: true, result });
     } catch (error) {
+      const partialResult = prepared ? collectResult() : undefined;
       postMessage({
         requestId: request.requestId,
         ok: false,
-        error: boundedErrorMessage(error)
+        error: boundedErrorMessage(error),
+        ...(partialResult?.outputs.length ? { partialResult } : {})
       });
     } finally {
       if (initializedRuntime && 'cellId' in request) {
@@ -139,6 +143,16 @@ export function createPythonWorkerRequestHandler({
       }
     }
   };
+}
+
+function collectPythonOutputs(pyodide: PyodideRuntime): readonly unknown[] {
+  return ['__oxiquill_take_outputs()', '__oxiquill_collect_matplotlib_outputs()'].flatMap((source) => {
+    try {
+      return toOutputArtifacts(toSerializable(pyodide.runPython(source)));
+    } catch (error) {
+      return [{ kind: '__oxiquill_error', message: `Failed to collect Python output: ${boundedErrorMessage(error)}` }];
+    }
+  });
 }
 
 /**

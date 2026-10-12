@@ -212,6 +212,7 @@ function InteractiveCellPanel({
         cellTitle={cell.title}
         result={runtime.result}
         error={runtime.error}
+        partialResult={runtime.partialResult}
         isRunning={runtime.isRunning}
         isPreparing={runtime.phase === 'preparing'}
         isComplete={runtime.isComplete}

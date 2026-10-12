@@ -292,6 +292,55 @@ describe('python worker asset URLs', () => {
 });
 
 describe('python worker request handling', () => {
+  it.each([false, true])('retains bounded diagnostic output when collection fails: %s', async (collectionFails) => {
+    const pyodide = {
+      loadPackage: vi.fn(),
+      loadPackagesFromImports: vi.fn(),
+      lockfile: { packages: {} },
+      runPython: vi.fn((source: string) => {
+        if (source.includes('find_imports')) return pythonProxy([]);
+        if (source === '__oxiquill_take_outputs()') {
+          if (collectionFails) throw new Error('display collection failed');
+          return pythonProxy([{ kind: 'json', value: { checkpoint: 1 } }]);
+        }
+        if (source === '__oxiquill_collect_matplotlib_outputs()')
+          return pythonProxy([{ kind: 'image', mime: 'image/svg+xml', data: '<svg />' }]);
+      }),
+      runPythonAsync: vi.fn(async () => {
+        throw new Error('original failure');
+      }),
+      setStdout: ({ batched }: { batched: (value: string) => void }) =>
+        batched('x'.repeat(outputArtifactLimits.bytesPerStream + 1)),
+      setStderr: vi.fn(),
+      toPy: () => ({
+        destroy: () => {
+          throw new Error('release failed');
+        }
+      })
+    };
+    const postMessage = vi.fn();
+    await createPythonWorkerRequestHandler({ ensurePyodide: async () => pyodide as never, postMessage })(
+      pythonRequest()
+    );
+    const response = postMessage.mock.lastCall?.[0] as RuntimeWorkerResponse;
+    expect(response).toMatchObject({ ok: false, error: 'original failure' });
+    if (response.ok) throw new Error('Expected a failed response.');
+    expect(response.partialResult?.outputs).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ kind: 'text', stream: 'stdout', truncated: true }),
+        expect.objectContaining({ kind: 'image' }),
+        collectionFails
+          ? expect.objectContaining({
+              kind: '__oxiquill_error',
+              message: expect.stringContaining('display collection failed')
+            })
+          : { kind: 'json', value: { checkpoint: 1 } }
+      ])
+    );
+    expect(new TextEncoder().encode(JSON.stringify(response.partialResult)).byteLength).toBeLessThanOrEqual(
+      outputArtifactLimits.workerResponseBytes
+    );
+  });
   it('attempts figure cleanup after every failure without replacing the execution error', async () => {
     const cleanup = vi.fn(() => {
       throw new Error('cleanup failed');
@@ -337,7 +386,7 @@ describe('python worker request handling', () => {
     const pyodide = {
       loadedPackages: { numpy: 'default channel' },
       loadPackagesFromImports: vi.fn(),
-      runPython: vi.fn(() => ({ toJs: () => ['pandas'], destroy: vi.fn() })),
+      runPython: vi.fn((source: string) => pythonProxy(source.includes('find_imports') ? ['pandas'] : [])),
       lockfile: { packages: { numpy: { imports: ['numpy'] }, pandas: { imports: ['pandas'], depends: ['numpy'] } } },
       setStderr: vi.fn(),
       setStdout: vi.fn()

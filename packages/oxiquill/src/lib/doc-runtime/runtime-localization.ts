@@ -61,6 +61,8 @@ export type RuntimeLabels = {
   diagnosticDetail: (detail: string) => string;
   executionError: (detail: string) => string;
   executionErrorLabel: string;
+  failedOutput: string;
+  previousSuccessfulOutput: string;
   hideCode: string;
   htmlOutput: string;
   idleButton: string;
@@ -203,6 +205,8 @@ const runtimeLabels = {
     diagnosticDetail: (detail) => detail,
     executionError: (detail) => `Cell execution failed: ${detail}`,
     executionErrorLabel: 'Cell execution failed:',
+    failedOutput: 'Output from the failed execution',
+    previousSuccessfulOutput: 'Previous successful output',
     hideCode: 'Hide code',
     htmlOutput: 'HTML output',
     idleButton: 'Run the cell to show its output.',
@@ -305,6 +309,8 @@ const runtimeLabels = {
     diagnosticDetail: translateDiagnostic,
     executionError: (detail) => `セルの実行に失敗しました: ${translateDiagnostic(detail)}`,
     executionErrorLabel: 'セルの実行に失敗しました:',
+    failedOutput: 'Output from the failed execution',
+    previousSuccessfulOutput: 'Previous successful output',
     hideCode: 'コードを隠す',
     htmlOutput: 'HTML 出力',
     idleButton: 'セルを実行すると出力が表示されます。',
