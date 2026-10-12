@@ -103,3 +103,10 @@ it('requires a color mapping only when a point supplies a color value', () => {
     ])[0].status
   ).toBe('valid');
 });
+
+it('keeps extreme size labels compact without changing the size data', () => {
+  const chart = { kind: 'bubble', series: [{ points: [[0, 1, 1e300]] }] };
+  const options = chartSpecToEChartsOptions(chart);
+  expect(options.tooltip.formatter({ value: [0, 1, 1e300] })).toContain('Size: 1×10³⁰⁰');
+  expect(options.series[0].data[0].value[2]).toBe(1e300);
+});

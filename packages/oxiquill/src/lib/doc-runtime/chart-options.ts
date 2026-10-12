@@ -472,6 +472,10 @@ function chartTooltipFormatter(spec: ChartSpec, locale: RuntimeLocale, names: re
   const x = chartCoordinateFormatter(values.x, xType, locale, false, style?.xFormat);
   const y = chartCoordinateFormatter(values.y, yType, locale, false, style?.yFormat);
   const value = chartNumberFormatter(values.value, locale, false, style?.valueFormat);
+  const size = chartNumberFormatter(
+    spec.kind === 'bubble' ? spec.series.flatMap((series) => series.points.map((point) => point[2])) : [],
+    locale
+  );
   const nameById = seriesLabels(spec, names);
   return (input: unknown): string => {
     const axisTooltip = Array.isArray(input);
@@ -517,7 +521,7 @@ function chartTooltipFormatter(spec: ChartSpec, locale: RuntimeLocale, names: re
               name,
               x(tuple[0]),
               y(tuple[1]),
-              labels.chartSize + ': ' + chartNumberFormatter([], locale)(Number(tuple[2])),
+              labels.chartSize + ': ' + size(Number(tuple[2])),
               ...(tuple[3] == null ? [] : [labels.chartValue + ': ' + value(Number(tuple[3]))])
             ]
               .filter(Boolean)
@@ -629,7 +633,7 @@ export function chartDataSummary(spec: ChartSpec, labels: RuntimeLabels): string
             ' (' +
             (spec.sizeMapping?.scale ?? 'area') +
             '): 0–' +
-            chartNumberFormatter([], labels.locale)(bubbleSizeMapping(spec).maximum)
+            chartNumberFormatter([bubbleSizeMapping(spec).maximum], labels.locale)(bubbleSizeMapping(spec).maximum)
         ]
       : []),
     ...(spec.annotations ?? []).map((item) => annotationDescription(spec, item, labels, values))
