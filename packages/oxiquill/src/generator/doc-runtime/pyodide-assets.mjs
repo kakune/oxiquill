@@ -58,7 +58,10 @@ export async function resolvePyodideRuntimeInputs({
   const fingerprint = stableFingerprint({
     core: coreAssets.map(({ fileName, sha256 }) => ({ fileName, sha256 })),
     lockSha256,
-    notices,
+    notices: notices.map(({ licenseText, ...notice }) => ({
+      ...notice,
+      licenseTextSha256: hashBytes(Buffer.from(licenseText))
+    })),
     packages: packages.map(({ depends, file_name: fileName, name, sha256, version: packageVersion }) => ({
       depends,
       fileName,
