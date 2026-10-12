@@ -38,7 +38,7 @@ let final_point = points.last().ok_or_else(|| "series is empty".to_owned())?;
 println!("x_{} = {:.6}", final_point.n, final_point.x);
 let coordinates: Vec<[f64; 2]> = points.iter().map(|point| [f64::from(point.n), point.x]).collect();
 emit_line_chart!(&coordinates, options = &serde_json::json!({
-    "xLabel": "n", "yLabel": "x", "yMin": 0, "yMax": 1, "annotations": [{ "kind": "line", "axis": "y", "value": 0.5, "label": "Threshold" }]
+    "xLabel": "n", "yLabel": "x", "yMin": 0, "yMax": 1, "annotations": [{ "kind": "line", "axis": "y", "value": 0.5, "label": "Critical point" }]
 }));
 ```
 

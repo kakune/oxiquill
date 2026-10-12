@@ -10,7 +10,6 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 - Signed stack groups for bar and area charts, horizontal bars, bounded axis annotations, and fixed or centered diverging heatmap color scales.
 - Error bars, interval bands, five-number box plots, area-scaled bubbles, and nonuniform grid fields through the existing Rust, Python, and Haskell chart APIs. New charts support accessible summaries, original-data tables, and PNG/SVG downloads.
-
 - Input resets, explicit opt-in input sharing links, and local Python source editing with manual execution.
 - CSV downloads for all retrieved table rows, PNG/SVG chart downloads, and authored Canvas/SVG renderer selection.
 - Keyboard chart series controls, zoom reset, and bounded, paginated tables of original chart data.
