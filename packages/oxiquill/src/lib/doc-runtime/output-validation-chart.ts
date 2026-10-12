@@ -1,3 +1,4 @@
+import { heatmapColorScale } from './chart-color-scale.js';
 import type {
   BaseChartSpec,
   ChartAnnotation,
@@ -39,6 +40,7 @@ export function validateChartArtifact(record: Record<string, unknown>, remaining
   const base = validateBaseArtifact(record);
   const spec = validateChartSpec(requiredOwnValue(record, 'spec', 'Chart artifact'));
   validateChartStacks(spec);
+  if (spec.kind === 'heatmap') heatmapColorScale(spec);
   const rawSpec = plainRecord(record.spec, 'Chart spec');
   if (Object.hasOwn(rawSpec, 'annotations')) spec.annotations = validateAnnotations(rawSpec.annotations, spec);
   const byteLength = base.byteLength + payloadByteLength(spec);
@@ -218,6 +220,19 @@ function validateChartSpec(value: unknown): ChartSpec {
       };
     }
     case 'heatmap': {
+      const colorScale = optionalString(record, 'colorScale', 'Heatmap');
+      if (colorScale !== undefined && colorScale !== 'sequential' && colorScale !== 'diverging')
+        throw new ArtifactValidationError('Heatmap colorScale must be sequential or diverging.');
+      const color: Partial<Extract<ChartSpec, { kind: 'heatmap' }>> = {};
+      if (colorScale !== undefined) color.colorScale = colorScale;
+      for (const field of ['colorMin', 'colorMax', 'center'] as const)
+        if (Object.hasOwn(record, field)) color[field] = finiteNumber(record[field], 'Heatmap ' + field);
+      if (color.center !== undefined && colorScale !== 'diverging')
+        throw new ArtifactValidationError('Heatmap center requires a diverging colorScale.');
+      if (colorScale === 'diverging')
+        for (const colors of Object.values(base.style?.palette ?? {}))
+          if (colors.length < 3 || colors.length % 2 === 0)
+            throw new ArtifactValidationError('Diverging palettes require an odd number of at least three colors.');
       const { xType: declaredXType, yType: declaredYType, ...heatmapBase } = base;
       const xCategories = optionalStringArray(record, 'xCategories', 'Heatmap chart');
       const yCategories = optionalStringArray(record, 'yCategories', 'Heatmap chart');
@@ -241,6 +256,7 @@ function validateChartSpec(value: unknown): ChartSpec {
       });
       return {
         ...heatmapBase,
+        ...color,
         kind,
         ...(declaredXType == null ? {} : { xType: 'category' as const }),
         ...(declaredYType == null ? {} : { yType: 'category' as const }),

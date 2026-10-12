@@ -1,3 +1,4 @@
+import { heatmapColorScale } from './chart-color-scale.js';
 import { chartAnnotationSeries, annotationDescription } from './chart-annotations.js';
 import { intervalSeries } from './chart-intervals.js';
 import { histogramLabel, histogramSeries } from './chart-histogram.js';
@@ -7,7 +8,7 @@ import { normalizeHeatmapSpec } from './heatmap-normalization.js';
 import { labelsForLanguage, type RuntimeLabels, type RuntimeLocale } from './runtime-localization.js';
 import { chartCoordinateFormatter, chartCoordinates, chartNumberFormatter, numericBounds } from './chart-format.js';
 import { categoryLabelLayout, chartHeight, chartLayout, truncateChartLabel } from './chart-layout.js';
-import { chartPalette, heatmapPalette } from './chart-palette.js';
+import { chartPalette, heatmapPalette, divergingPalette } from './chart-palette.js';
 
 export type ChartTheme = 'light' | 'dark';
 export type EChartsOptions = Record<string, unknown> & { series: readonly Record<string, unknown>[] };
@@ -271,16 +272,22 @@ export function chartSpecToEChartsOptions(
       };
     })
   };
-  if (heatmap) {
-    const range = numericBounds(values.value);
+  if (spec.kind === 'heatmap') {
+    const scale = heatmapColorScale(spec);
     options.visualMap = {
       calculable: true,
       ...layout.visualMap,
-      min: range?.minimum ?? 0,
-      max: range?.maximum ?? 1,
-      formatter: chartNumberFormatter(values.value, locale, false, style?.valueFormat),
+      min: scale.visualMin,
+      max: scale.visualMax,
+      dimension: spec.colorScale === 'diverging' ? 3 : 2,
+      seriesIndex: 0,
+      formatter: (value: number) =>
+        chartNumberFormatter(values.value, locale, false, style?.valueFormat)(scale.unmap(value)),
       textStyle: { color: chrome.text },
-      inRange: { color: style?.palette?.[theme] ?? heatmapPalette[theme] }
+      inRange: {
+        color:
+          style?.palette?.[theme] ?? (spec.colorScale === 'diverging' ? divergingPalette[theme] : heatmapPalette[theme])
+      }
     };
   }
   const annotations = chartAnnotationSeries(spec, chrome, labels);
@@ -365,8 +372,16 @@ function chartSeries(spec: ChartSpec): readonly Record<string, unknown>[] {
       return spec.series.map((series) => intervalSeries(spec, series) as Record<string, unknown>);
     case 'histogram':
       return [histogramSeries(spec) as Record<string, unknown>];
-    case 'heatmap':
-      return [{ type: 'heatmap', data: normalizeHeatmapSpec(spec).data }];
+    case 'heatmap': {
+      const scale = heatmapColorScale(spec);
+      const data = normalizeHeatmapSpec(spec).data;
+      return [
+        {
+          type: 'heatmap',
+          data: spec.colorScale === 'diverging' ? data.map((point) => [...point, scale.map(point[2])]) : data
+        }
+      ];
+    }
     default:
       return [];
   }

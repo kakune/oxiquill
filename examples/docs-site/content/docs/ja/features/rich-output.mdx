@@ -428,3 +428,14 @@ display_chart({"kind": "line", "xMin": 0, "xMax": 10, "yMin": 0, "yMax": 1,
         {"kind": "line", "axis": "y", "value": 0.5, "label": "Threshold"},
         {"kind": "range", "axis": "x", "from": 2, "to": 4, "label": "Window"}]})
 ```
+
+## ヒートマップの色尺度
+
+`colorMin` と `colorMax` で色範囲を固定できます。`colorScale: "diverging"` は既定0の `center` を中間色に置き、自動範囲を中心から対称に取ります。明示した境界は優先され、中心は範囲の内側に必要です。範囲外は端色に飽和し、元の値は表と tooltip に残ります。パレットは `style.palette` に指定し、発散色では中央色を持つ3色以上の奇数個にします。
+
+```python
+#| id: heatmap-color-scales
+display_chart({"kind": "heatmap", "colorScale": "diverging",
+    "colorMin": -2, "colorMax": 8, "center": 0,
+    "data": [[0, 0, -2], [1, 0, 0], [2, 0, 8]]})
+```

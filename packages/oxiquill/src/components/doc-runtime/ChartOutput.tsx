@@ -1,3 +1,4 @@
+import { heatmapColorScale, heatmapColorSignature } from '../../lib/doc-runtime/chart-color-scale.js';
 import { useEffect, useMemo, useRef, useState } from 'preact/hooks';
 import { boundedErrorMessage } from '../../lib/doc-runtime/output-limits.mjs';
 import type { RuntimeLabels } from '../../lib/doc-runtime/runtime-localization.js';
@@ -111,6 +112,17 @@ export default function ChartOutput({ artifact, idPrefix, labels }: ChartOutputP
         // Omit interactive state when merging a compatible chart.
         if (!notMerge && current.spec && chartRangeSignature(current.spec) === chartRangeSignature(next.spec))
           delete options.dataZoom;
+        if (
+          next.spec.kind === 'heatmap' &&
+          current.spec?.kind === 'heatmap' &&
+          heatmapColorSignature(next.spec) !== heatmapColorSignature(current.spec)
+        ) {
+          const scale = heatmapColorScale(next.spec);
+          options.visualMap = {
+            ...(options.visualMap as Record<string, unknown>),
+            range: [scale.visualMin, scale.visualMax]
+          };
+        }
         current.instance.setOption(
           options,
           notMerge ? { notMerge: true } : { notMerge: false, lazyUpdate: true, replaceMerge: ['series'] }

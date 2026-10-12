@@ -250,6 +250,10 @@ export interface AreaChartSeries extends XyChartSeries {
 }
 
 export interface HeatmapChartSpec extends BaseChartSpec {
+  colorScale?: 'sequential' | 'diverging';
+  colorMin?: number;
+  colorMax?: number;
+  center?: number;
   kind: 'heatmap';
   xType?: 'category';
   yType?: 'category';

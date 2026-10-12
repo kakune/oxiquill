@@ -428,3 +428,14 @@ display_chart({"kind": "line", "xMin": 0, "xMax": 10, "yMin": 0, "yMax": 1,
         {"kind": "line", "axis": "y", "value": 0.5, "label": "Threshold"},
         {"kind": "range", "axis": "x", "from": 2, "to": 4, "label": "Window"}]})
 ```
+
+## Heatmap color scales
+
+Use `colorMin`/`colorMax` to fix the color domain across reruns. `colorScale: "diverging"` places `center` (default 0) at the middle color, even with asymmetric explicit bounds. Automatic bounds are symmetric about the center; each explicit bound takes precedence. The center must lie strictly inside the resulting domain. Out-of-range values saturate at endpoint colors. Empty scales use 0–1 or center ±1; constant sequential domains use the middle color. `style.palette` owns the colors; diverging palettes require an odd number of at least three colors. Changing the authored domain resets the color-range selection; theme changes preserve it.
+
+```python
+#| id: heatmap-color-scales
+display_chart({"kind": "heatmap", "colorScale": "diverging",
+    "colorMin": -2, "colorMax": 8, "center": 0,
+    "data": [[0, 0, -2], [1, 0, 0], [2, 0, 8]]})
+```
