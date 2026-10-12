@@ -416,3 +416,15 @@ for kind in ("errorbar", "band"):
         "series": [{"name": "Estimate and interval", "points": [
             [0, -3, -5, -2], [1, 0, -2, 3], [2, 4, 3, 6]]}]})
 ```
+
+## Reference lines and ranges
+
+Use `annotations` for axis-coordinate lines and ranges. Annotations do not expand axis extents and are clipped to the viewport. Empty charts can display annotations with explicit axis bounds. Categories reference an existing name or index; time coordinates use the chart time contract, and log positions must be positive. Limit: 100 annotations, each label a single line of at most 256 UTF-8 bytes. Line styles accept hex `color`, `lineType` (solid/dashed/dotted), and `width` (0.5–4); range styles accept hex `color` and `opacity` (0–1).
+
+```python
+#| id: chart-annotations
+display_chart({"kind": "line", "xMin": 0, "xMax": 10, "yMin": 0, "yMax": 1,
+    "series": [], "annotations": [
+        {"kind": "line", "axis": "y", "value": 0.5, "label": "Threshold"},
+        {"kind": "range", "axis": "x", "from": 2, "to": 4, "label": "Window"}]})
+```

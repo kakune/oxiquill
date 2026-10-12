@@ -1,3 +1,4 @@
+import { chartAnnotationSeries, annotationDescription } from './chart-annotations.js';
 import { intervalSeries } from './chart-intervals.js';
 import { histogramLabel, histogramSeries } from './chart-histogram.js';
 import { chartAxisType, chartIncludesZero } from './chart-axes.js';
@@ -174,7 +175,7 @@ export function chartSpecToEChartsOptions(
         }
       },
       axisLine: {
-        show: Boolean(horizontal !== horizontalBar && baseline),
+        show: false,
         onZero: true,
         lineStyle: { color: chrome.axis, width: 1.5 }
       },
@@ -182,9 +183,6 @@ export function chartSpecToEChartsOptions(
       splitLine: { show: style?.showGrid !== false, lineStyle: { color: chrome.splitLine, opacity: 0.45 } }
     };
   };
-  const amountBounds = numericBounds(horizontalBar ? values.x : values.y);
-  const baseline =
-    (horizontalBar ? xType : yType) === 'value' && amountBounds && amountBounds.minimum < 0 && amountBounds.maximum > 0;
   const animation = !reducedMotion && style?.animation !== false;
   const duration = animation ? (style?.animationDurationMs ?? 180) : 0;
   const options: EChartsOptions = {
@@ -285,6 +283,8 @@ export function chartSpecToEChartsOptions(
       inRange: { color: style?.palette?.[theme] ?? heatmapPalette[theme] }
     };
   }
+  const annotations = chartAnnotationSeries(spec, chrome, labels);
+  if (annotations) options.series = [...options.series, annotations];
   return options;
 }
 
@@ -498,5 +498,7 @@ export function chartDataSummary(spec: ChartSpec, labels: RuntimeLabels): string
     dataCount === 0
       ? [spec.xLabel, spec.yLabel, labels.noChartData].filter(Boolean).join(labels.locale === 'ja' ? '。' : '. ')
       : summary;
-  return text;
+  return [text, ...(spec.annotations ?? []).map((item) => annotationDescription(spec, item, labels))].join(
+    labels.locale === 'ja' ? '。' : '. '
+  );
 }

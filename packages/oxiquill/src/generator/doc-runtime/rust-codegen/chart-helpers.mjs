@@ -136,6 +136,9 @@ function generateHeatmapChartHelper() {
 
 function generateChartLimitHelper() {
   return `fn ensure_chart_data_limit(spec: &Value) -> Result<(), String> {
+    if spec.get("annotations").and_then(Value::as_array).is_some_and(|items| items.len() > ${outputArtifactLimits.chartAnnotations}) {
+        return Err("Chart annotations exceed the 100 item limit.".to_owned());
+    }
     let kind = spec.get("kind").and_then(Value::as_str).unwrap_or_default();
     let data_items = match kind {
         "line" | "scatter" | "area" | "errorbar" | "band" => spec

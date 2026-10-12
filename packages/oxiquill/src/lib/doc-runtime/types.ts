@@ -145,6 +145,7 @@ export interface ScatterChartStyle extends BaseChartStyle {
 }
 
 export interface BaseChartSpec {
+  annotations?: readonly ChartAnnotation[];
   style?: BaseChartStyle;
   title?: string;
   xLabel?: string;
@@ -161,6 +162,18 @@ export interface BaseChartSpec {
   tooltip?: boolean;
   dataZoom?: boolean;
 }
+
+export type ChartAnnotation = {
+  axis: 'x' | 'y';
+  label?: string;
+} & (
+  | {
+      kind: 'line';
+      value: number | string;
+      style?: { color?: string; lineType?: 'solid' | 'dashed' | 'dotted'; width?: number };
+    }
+  | { kind: 'range'; from: number | string; to: number | string; style?: { color?: string; opacity?: number } }
+);
 
 export type ChartSymbol = 'circle' | 'emptyCircle' | 'rect' | 'triangle' | 'diamond' | 'none';
 export type ChartSeriesColor = string | { light?: string; dark?: string };

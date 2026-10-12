@@ -589,6 +589,9 @@ const pythonDisplayChartSupport = String.raw`
 def __oxiquill_check_chart_size(spec):
     if not isinstance(spec, dict):
         raise ValueError("Chart spec must be a dict.")
+    annotations = spec.get("annotations")
+    if isinstance(annotations, (list, tuple)) and len(annotations) > ${outputArtifactLimits.chartAnnotations}:
+        raise ValueError("Chart annotations exceed the 100 item limit.")
     for key in ("categories", "xCategories", "yCategories", "series", "bins", "data"):
         items = spec.get(key)
         if isinstance(items, (list, tuple)) and len(items) > __oxiquill_chart_limit:

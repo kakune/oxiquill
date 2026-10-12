@@ -17,6 +17,8 @@ export function loadECharts(): Promise<EChartsCore> {
         charts.LineChart,
         charts.ScatterChart,
         components.GridComponent,
+        components.MarkLineComponent,
+        components.MarkAreaComponent,
         components.LegendComponent,
         components.TooltipComponent,
         components.VisualMapComponent,

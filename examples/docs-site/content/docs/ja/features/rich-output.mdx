@@ -416,3 +416,15 @@ for kind in ("errorbar", "band"):
         "series": [{"name": "Estimate and interval", "points": [
             [0, -3, -5, -2], [1, 0, -2, 3], [2, 4, 3, 6]]}]})
 ```
+
+## 基準線と範囲注釈
+
+`annotations` に軸上の線と範囲を指定できます。注釈は軸範囲を拡大せず、表示領域で切り取られます。空データでは明示した軸範囲内に表示できます。カテゴリは既存の名前またはインデックスで参照します。最大100件、ラベルは改行を含まない256 UTF-8 bytes以内のテキストです。
+
+```python
+#| id: chart-annotations
+display_chart({"kind": "line", "xMin": 0, "xMax": 10, "yMin": 0, "yMax": 1,
+    "series": [], "annotations": [
+        {"kind": "line", "axis": "y", "value": 0.5, "label": "Threshold"},
+        {"kind": "range", "axis": "x", "from": 2, "to": 4, "label": "Window"}]})
+```

@@ -300,7 +300,7 @@ function generateChartOptions() {
             for (key, value) in options {
                 if !matches!(key.as_str(), "title" | "xLabel" | "yLabel" | "xType" | "yType" |
                     "legend" | "tooltip" | "dataZoom" | "style" | "xMin" | "xMax" | "yMin" |
-                    "yMax" | "xIncludeZero" | "yIncludeZero") &&
+                    "yMax" | "xIncludeZero" | "yIncludeZero" | "annotations") &&
                     !(key == "mode" && spec["kind"] == "histogram") &&
                     !(key == "orientation" && spec["kind"] == "bar") {
                     return Err(format!("unsupported chart option: {key}"));

@@ -1,5 +1,6 @@
 import type {
   BaseChartSpec,
+  ChartAnnotation,
   IntervalPoint,
   ChartAxisType,
   ChartNumberFormat,
@@ -10,7 +11,8 @@ import type {
   ScatterChartStyle
 } from './types.js';
 import { validateChartStacks } from './chart-stacks.js';
-import { outputArtifactLimits } from './output-limits.mjs';
+import { chartCoordinates } from './chart-format.js';
+import { outputArtifactLimits, utf8ByteLength } from './output-limits.mjs';
 import { histogramHeight } from './chart-histogram.js';
 import { chartAxisType } from './chart-axes.js';
 import type { ValidationSuccess } from './output-validation-common.js';
@@ -37,6 +39,8 @@ export function validateChartArtifact(record: Record<string, unknown>, remaining
   const base = validateBaseArtifact(record);
   const spec = validateChartSpec(requiredOwnValue(record, 'spec', 'Chart artifact'));
   validateChartStacks(spec);
+  const rawSpec = plainRecord(record.spec, 'Chart spec');
+  if (Object.hasOwn(rawSpec, 'annotations')) spec.annotations = validateAnnotations(rawSpec.annotations, spec);
   const byteLength = base.byteLength + payloadByteLength(spec);
   if (byteLength > remainingBytes) {
     throw new ArtifactValidationError('Chart artifact exceeds the remaining 16 MiB run limit.');
@@ -672,4 +676,82 @@ function chartLimitError(dataItems: number): ArtifactValidationError {
   return new ArtifactValidationError(
     `Chart contains ${dataItems} data items; maximum is ${outputArtifactLimits.chartDataItems}.`
   );
+}
+
+function validateAnnotations(value: unknown, spec: ChartSpec): ChartAnnotation[] {
+  const annotations = plainArray(value, 'Chart annotations');
+  if (annotations.length > outputArtifactLimits.chartAnnotations)
+    throw new ArtifactValidationError('Chart annotations exceed the 100 item limit.');
+  const coordinates = chartCoordinates(spec);
+  return annotations.map((raw, index): ChartAnnotation => {
+    const context = 'Chart annotation ' + (index + 1);
+    const item = plainRecord(raw, context);
+    const kind = requiredString(item, 'kind', context);
+    const axis = requiredString(item, 'axis', context);
+    if (axis !== 'x' && axis !== 'y') throw new ArtifactValidationError(context + ' axis must be x or y.');
+    if (kind !== 'line' && kind !== 'range')
+      throw new ArtifactValidationError(context + ' kind must be line or range.');
+    rejectUnknownStyleFields(
+      item,
+      ['kind', 'axis', 'label', 'style', ...(kind === 'line' ? ['value'] : ['from', 'to'])],
+      context
+    );
+    const label = optionalString(item, 'label', context);
+    if (
+      label !== undefined &&
+      (utf8ByteLength(label) > outputArtifactLimits.bytesPerAnnotationLabel || /[\r\n]/u.test(label))
+    )
+      throw new ArtifactValidationError(context + ' label must be one line within 256 UTF-8 bytes.');
+    const type = chartAxisType(spec, axis);
+    const categories = [...new Set(coordinates[axis].map(String))];
+    const coordinate = (key: string) => {
+      const value = requiredOwnValue(item, key, context);
+      if (type !== 'category') return chartCoordinate(value, type, context + ' ' + key);
+      const category = typeof value === 'number' && Number.isSafeInteger(value) ? categories[value] : value;
+      if (typeof category !== 'string' || !categories.includes(category))
+        throw new ArtifactValidationError(context + ' ' + key + ' must reference an existing category.');
+      return category;
+    };
+    const style = Object.hasOwn(item, 'style') ? plainRecord(item.style, context + ' style') : {};
+    rejectUnknownStyleFields(
+      style,
+      kind === 'line' ? ['color', 'width', 'lineType'] : ['color', 'opacity'],
+      context + ' style'
+    );
+    const color = Object.hasOwn(style, 'color') ? validateChartColor(style.color, context) : undefined;
+    const common = { axis, ...(label === undefined ? {} : { label }) };
+    const colorStyle = color === undefined ? {} : { color };
+    if (kind === 'line') {
+      const lineType = optionalString(style, 'lineType', context);
+      if (lineType !== undefined && !['solid', 'dashed', 'dotted'].includes(lineType))
+        throw new ArtifactValidationError(context + ' lineType is unsupported.');
+      const width = Object.hasOwn(style, 'width') ? finiteNumber(style.width, context + ' width') : undefined;
+      if (width !== undefined && (width < 0.5 || width > 4))
+        throw new ArtifactValidationError(context + ' width must be within 0.5–4.');
+      return {
+        ...common,
+        axis,
+        kind,
+        value: coordinate('value'),
+        style: {
+          ...colorStyle,
+          ...(width === undefined ? {} : { width }),
+          ...(lineType === undefined ? {} : { lineType: lineType as 'solid' | 'dashed' | 'dotted' })
+        }
+      };
+    }
+    const from = coordinate('from');
+    const to = coordinate('to');
+    const order = (value: number | string) =>
+      type === 'category'
+        ? categories.indexOf(String(value))
+        : type === 'time' && typeof value === 'string'
+          ? Date.parse(value)
+          : Number(value);
+    if (order(from) >= order(to)) throw new ArtifactValidationError(context + ' from must precede to.');
+    const opacity = Object.hasOwn(style, 'opacity') ? finiteNumber(style.opacity, context + ' opacity') : undefined;
+    if (opacity !== undefined && (opacity < 0 || opacity > 1))
+      throw new ArtifactValidationError(context + ' opacity must be within 0–1.');
+    return { ...common, axis, kind, from, to, style: { ...colorStyle, ...(opacity === undefined ? {} : { opacity }) } };
+  });
 }
