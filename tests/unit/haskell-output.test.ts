@@ -75,6 +75,19 @@ describe('Haskell output framing', () => {
     ]);
   });
 
+  it.each([
+    [6, '日本', 6, { content: '日本' }],
+    [6, '日本語', 9, { content: '日…', truncated: true }],
+    [6, '日本', 1, { content: '日本' }],
+    [4, '日本', 1, { content: '日', truncated: true }]
+  ])('bounds %s UTF-8 bytes of %j written in %s-byte chunks', (bytesPerStream, text, size, expected) => {
+    const capture = createHaskellOutputCapture({ ...outputArtifactLimits, bytesPerStream });
+    const bytes = encoder.encode(text);
+    for (let offset = 0; offset < bytes.length; offset += size)
+      capture.writeStdout(bytes.subarray(offset, offset + size));
+    expect(capture.take().outputs).toEqual([{ kind: 'text', stream: 'stdout', ...expected }]);
+  });
+
   it('bounds headers, frames, cumulative bytes, and artifact count', () => {
     const capture = createHaskellOutputCapture({ ...outputArtifactLimits, validatedBytesPerRun: 100 });
     capture.writeStdout(encoder.encode(`\x1eOXIQUILL/1 ${'9'.repeat(70)}\n{}\x1f${frame(json)}${frame(json)}`));
