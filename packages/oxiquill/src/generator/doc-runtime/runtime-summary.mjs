@@ -1,4 +1,5 @@
 import { hashText, stableFingerprint } from './hashing.mjs';
+import { generateHaskellOutput } from './haskell-output-codegen.mjs';
 
 export function summarizeCells(cells) {
   const rustCells = cells.filter((cell) => cell.language === 'rust');
@@ -8,13 +9,14 @@ export function summarizeCells(cells) {
   return {
     cellCount: cells.length,
     haskellCellCount: haskellCells.length,
-    haskellFingerprint: stableFingerprint(
-      haskellCells.map((cell) => ({
+    haskellFingerprint: stableFingerprint({
+      outputHelperSha256: hashText(generateHaskellOutput()),
+      cells: haskellCells.map((cell) => ({
         id: cell.id,
         inputs: cell.inputs,
         source: cell.source
       }))
-    ),
+    }),
     manifestFingerprint: stableFingerprint(cells),
     pythonCellCount: pythonCells.length,
     // Pyodide ships these packages and their lock-file dependencies.

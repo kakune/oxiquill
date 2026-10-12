@@ -36,6 +36,7 @@ import {
   writeIfChanged
 } from '../../packages/oxiquill/src/generator/doc-runtime-service.mjs';
 import { pathFromUrl } from '../../packages/oxiquill/src/config/paths.mjs';
+import * as haskellOutputCodegen from '../../packages/oxiquill/src/generator/doc-runtime/haskell-output-codegen.mjs';
 
 const repoRoot = path.resolve('/repo');
 const repoRootMemoryPath = String(repoRoot).replaceAll('\\', '/');
@@ -276,6 +277,16 @@ function pyodidePackage(name, fileName, content, depends = []) {
 }
 
 describe('doc runtime service', () => {
+  it('invalidates browser runtime identities when the Haskell helper changes', () => {
+    const cells = [{ id: 'one', language: 'haskell', inputs: [], source: 'pure ()' }];
+    const before = createRuntimeVersion(summarizeCells(cells));
+    const helper = vi.spyOn(haskellOutputCodegen, 'generateHaskellOutput').mockReturnValue('-- changed helper');
+    try {
+      expect(createRuntimeVersion(summarizeCells(cells))).not.toBe(before);
+    } finally {
+      helper.mockRestore();
+    }
+  });
   it('postprocesses wasm-pack JavaScript without unused cached state', async () => {
     const generatedSource = [
       'let wasmModule, wasmInstance, wasm;',

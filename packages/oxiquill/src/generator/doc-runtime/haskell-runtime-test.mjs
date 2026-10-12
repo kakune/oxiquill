@@ -59,6 +59,7 @@ export async function executeGeneratedHaskellCell({
   if (exitCode !== 0) {
     throw new Error(output.stderr || output.stdout || `process exited with status ${exitCode}`);
   }
+
   return output;
 }
 
