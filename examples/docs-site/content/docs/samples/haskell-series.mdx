@@ -41,3 +41,30 @@ if show_deltas
 ## Notes
 
 Haskell cells are intended for deterministic examples that fit the standard library. Use them when a short functional transformation is clearer than a handwritten table of results.
+
+## Structured Output
+
+Import the bundled `Oxiquill.Output` helper to emit JSON values, tables, and existing chart specifications. It uses only GHC's `base` package. Build JSON explicitly with `JsonValue` constructors; Haskell's `show` is not a JSON encoder. Numbers must be finite and strings must contain Unicode scalar values.
+
+```haskell
+--| id: haskell-structured-output
+--| title: Structured Haskell output
+--| run: button
+import qualified Oxiquill.Output as Output
+
+putStrLn "Before structured output"
+Output.displayJson (Output.JsonObject
+  [("message", Output.JsonString "Unicode: \x65e5\x672c \x1f30d\nquoted: \"value\"")
+  ,("ready", Output.JsonBool True)])
+Output.displayTable ["Index", "Square"]
+  [[Output.JsonInteger n, Output.JsonInteger (n * n)] | n <- [1 .. 4]]
+Output.displayChart (Output.JsonObject
+  [("kind", Output.JsonString "line")
+  ,("series", Output.JsonArray [Output.JsonObject
+    [("name", Output.JsonString "Squares")
+    ,("points", Output.JsonArray
+      [Output.JsonArray [Output.JsonInteger n, Output.JsonInteger (n * n)] | n <- [1 .. 4]])]])])
+putStrLn "After structured output"
+```
+
+The helper writes versioned, length-prefixed frames to stdout. Ordinary `putStrLn` text is preserved; use `Output.putText` when printing the reserved record separator (`0x1e`) literally. Frames contain one JSON, table, or chart artifact. Malformed frames are reported locally. Text streams retain their separate 1 MiB limits, while structured output uses the shared artifact count and byte budgets.

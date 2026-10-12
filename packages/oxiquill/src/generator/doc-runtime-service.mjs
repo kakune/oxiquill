@@ -33,6 +33,7 @@ import {
   summarizeCells
 } from './doc-runtime/runtime-summary.mjs';
 import { hashBytes, hashText, stableFingerprint } from './doc-runtime/hashing.mjs';
+import { generateHaskellOutput } from './doc-runtime/haskell-output-codegen.mjs';
 import { createRuntimePlan } from './doc-runtime/runtime-plan.mjs';
 import {
   createRuntimeOwnedOutputs,
@@ -184,6 +185,7 @@ export async function syncDocRuntime({
     cellsJson: generateCellsJson(cells),
     cellsModule: generateCellsModule(cells),
     haskellMain: generateHaskellMain(haskellCells),
+    haskellOutput: generateHaskellOutput(),
     rustCargo: generateRustCargoToml(rustCells, helperCrates, runtimeInputs),
     rustLib: generateRustLib(rustCells)
   };
@@ -305,7 +307,7 @@ async function createDesiredRuntime({
       lockSha256: runtimeInputs.rustLockSha256
     })
   );
-  const haskellSourceFingerprint = hashText(generated.haskellMain);
+  const haskellSourceFingerprint = hashText(stableFingerprint([generated.haskellMain, generated.haskellOutput]));
   const pythonAssetFingerprint = pythonCellCount > 0 ? pyodideRuntimeInputs.fingerprint : stableFingerprint([]);
 
   return Object.freeze({
@@ -358,7 +360,11 @@ function runtimeOutputState({ fileSystem, paths, state }) {
         ),
       rustPublic: recordedFilesExist(state?.languages?.rust?.publicFiles, paths.rustWasmPublicDir, fileSystem),
       pythonPublic: recordedFilesExist(state?.languages?.python?.publicFiles, paths.pyodidePublicDir, fileSystem),
-      haskellSource: outputPresent.haskellSource && fileSystem.existsSync(pathInUrl(paths.haskellCellsDir, 'Main.hs')),
+      haskellSource:
+        outputPresent.haskellSource &&
+        ['Main.hs', 'Oxiquill/Output.hs'].every((file) =>
+          fileSystem.existsSync(pathInUrl(paths.haskellCellsDir, file))
+        ),
       haskellPublic: recordedFilesExist(state?.languages?.haskell?.publicFiles, paths.haskellWasmPublicDir, fileSystem)
     }
   };
@@ -401,6 +407,7 @@ async function stageLanguageOutputs({
   if (plan.languages.haskell.source === 'write' || plan.languages.haskell.public === 'build') {
     const stagePath = await addDirectoryStage('haskellCellsDir', paths, stagedPaths, stages, { fileSystem });
     await writeIfChanged(pathInUrl(stagePath, 'Main.hs'), generated.haskellMain, { fileSystem });
+    await writeIfChanged(pathInUrl(stagePath, 'Oxiquill/Output.hs'), generated.haskellOutput, { fileSystem });
   }
   if (plan.languages.haskell.public === 'build') {
     await addDirectoryStage('haskellWasmPublicDir', paths, stagedPaths, stages, { fileSystem });

@@ -3,6 +3,8 @@ import { ConsoleStdout, File, OpenFile, WASI } from '@bjorn3/browser_wasi_shim';
 import { pathInUrl } from '../../config/paths.mjs';
 import { HASKELL_RUNTIME_STATUS_FILE, HASKELL_WASM_FILE } from './wasm-build.mjs';
 import { hashText } from './hashing.mjs';
+import { createHaskellOutputCapture } from '../../lib/doc-runtime/haskell-output.js';
+import { validateOutputArtifacts } from '../../lib/doc-runtime/output-artifact-validation.js';
 
 const defaultFileSystem = { readFile };
 
@@ -48,8 +50,19 @@ export async function executeGeneratedHaskellCell({
 }) {
   const stdout = createOutputCapture();
   const stderr = createOutputCapture();
+  const capture = createHaskellOutputCapture();
   const args = ['doc_haskell_cells', cell.id, ...cell.inputs.map(({ value }) => inputArgument(value))];
-  const wasi = createWasi({ args, stderr: stderr.write, stdout: stdout.write });
+  const wasi = createWasi({
+    args,
+    stderr: (bytes) => {
+      stderr.write(bytes);
+      capture.writeStderr(bytes);
+    },
+    stdout: (bytes) => {
+      stdout.write(bytes);
+      capture.writeStdout(bytes);
+    }
+  });
   const instance = await instantiate(module, {
     wasi_snapshot_preview1: wasi.wasiImport
   });
@@ -59,8 +72,10 @@ export async function executeGeneratedHaskellCell({
   if (exitCode !== 0) {
     throw new Error(output.stderr || output.stdout || `process exited with status ${exitCode}`);
   }
-
-  return output;
+  const result = capture.take();
+  const errors = validateOutputArtifacts(result.outputs).filter((artifact) => artifact.status === 'error');
+  if (errors.length > 0) throw new Error(errors.map((error) => error.message).join('\n'));
+  return { ...output, outputs: result.outputs };
 }
 
 function createHaskellWasi({ args, stderr, stdout }) {

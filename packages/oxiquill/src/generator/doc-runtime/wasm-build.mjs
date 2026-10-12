@@ -88,6 +88,7 @@ export async function buildHaskellWasm({
       compiler,
       [
         optimizationFlag,
+        `-i${pathFromUrl(resolvedPaths.haskellCellsDir)}`,
         '-odir',
         buildDir,
         '-hidir',

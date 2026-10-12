@@ -3,6 +3,7 @@ import { haskellWasmPath } from 'virtual:oxiquill/runtime-paths';
 import { boundedErrorMessage, outputArtifactLimits, truncateUtf8 } from './output-limits.mjs';
 import type { RawCellExecutionResult, RuntimeWorkerRequest, RuntimeWorkerResponse, TextArtifact } from './types.js';
 import { boundWorkerResult } from './worker-output.js';
+import { createHaskellOutputCapture } from './haskell-output.js';
 
 type WorkerScope = {
   addEventListener(type: 'message', listener: (event: MessageEvent<RuntimeWorkerRequest>) => void): void;
@@ -75,28 +76,24 @@ export async function runHaskellCell(
   module: WebAssembly.Module,
   request: Pick<RuntimeWorkerRequest, 'cellId' | 'inputArgs'>
 ): Promise<RawCellExecutionResult> {
-  const stdout = createOutputCapture();
-  const stderr = createOutputCapture();
+  const capture = createHaskellOutputCapture();
   const wasi = new WASI(
     ['doc_haskell_cells', request.cellId, ...(request.inputArgs ?? [])],
     [],
-    [new OpenFile(new File([])), stdout.file, stderr.file]
+    [new OpenFile(new File([])), new ConsoleStdout(capture.writeStdout), new ConsoleStdout(capture.writeStderr)]
   );
   const instance = (await WebAssembly.instantiate(module, {
     wasi_snapshot_preview1: wasi.wasiImport
   })) as WasiInstance;
   const exitCode = wasi.start(instance);
-  const stdoutResult = stdout.take();
-  const stderrResult = stderr.take();
-  const result = createHaskellCellResult({
-    stdout: stdoutResult.value,
-    stdoutTruncated: stdoutResult.truncated,
-    stderr: stderrResult.value,
-    stderrTruncated: stderrResult.truncated
-  });
+  const result = capture.take();
 
   if (exitCode !== 0) {
-    throw new Error(stderrResult.value || `Haskell cell exited with status ${exitCode}`);
+    const stderr = result.outputs
+      .filter((output) => isRecord(output) && output.kind === 'text' && output.stream === 'stderr')
+      .map((output) => (output as Record<string, unknown>).content)
+      .join('\n');
+    throw new Error(stderr || `Haskell cell exited with status ${exitCode}`);
   }
 
   return result;
