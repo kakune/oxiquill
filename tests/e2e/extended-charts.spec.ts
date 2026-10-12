@@ -34,7 +34,33 @@ for (const fixture of [
   test(`${fixture} updates, retains reader state, and exports its data and SVG`, async ({ page }, testInfo) => {
     await page.emulateMedia({ reducedMotion: 'reduce' });
     await page.goto(`http://127.0.0.1:4323/?fixture=${fixture}&width=360`);
-    await expect(page.locator('canvas').first()).toBeVisible();
+    await expect(page.locator('canvas').first()).toBeVisible({ timeout: 30_000 });
+    const details: Record<string, string> = {
+      stackedBars: 'First: 2',
+      stackedAreas: 'Second: 3',
+      horizontalBars: 'North America (estimate)',
+      errorBars: 'Lower boundary: -5',
+      intervalBand: 'Upper boundary: -2',
+      divergingHeatmap: ': -2',
+      boxplot: 'Median: -2',
+      bubble: 'Size: 25',
+      field: 'X: [-3, -1)'
+    };
+    if (details[fixture]) {
+      await page
+        .locator('.doc-plot')
+        .evaluate((element) =>
+          window.galleryECharts
+            .getInstanceByDom(element as HTMLElement)
+            ?.dispatchAction({ type: 'showTip', seriesIndex: 0, dataIndex: 0 })
+        );
+      await expect(page.locator('.doc-plot')).toContainText(details[fixture]);
+      await page
+        .locator('.doc-plot')
+        .evaluate((element) =>
+          window.galleryECharts.getInstanceByDom(element as HTMLElement)?.dispatchAction({ type: 'hideTip' })
+        );
+    }
     await page.locator('.doc-plot').evaluate((element, fixture) => {
       const chart = window.galleryECharts.getInstanceByDom(element as HTMLElement);
       if (fixture === 'divergingHeatmap') chart?.dispatchAction({ type: 'selectDataRange', selected: [-0.5, 0.5] });

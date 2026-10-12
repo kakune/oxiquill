@@ -50,6 +50,27 @@ describe('stacked chart groups', () => {
         chart.dispose();
       }
     });
+    it(`recomputes ${kind} stacks when series and groups change`, () => {
+      const chart = echarts.init(null, null, { renderer: 'svg', ssr: true, width: 720, height: 360 });
+      try {
+        const initial = spec([
+          [2, 3],
+          [3, 4]
+        ]);
+        chart.setOption(chartSpecToEChartsOptions(initial));
+        chart.setOption(chartSpecToEChartsOptions(spec([[2, 3]])), { replaceMerge: ['series'] });
+        expect(chart.getModel().getSeries()).toHaveLength(1);
+        for (const series of initial.series) delete series.stack;
+        chart.setOption(chartSpecToEChartsOptions(initial), { replaceMerge: ['series'] });
+        expect(chart.getModel().getSeries()).toHaveLength(2);
+        expect(
+          chart.getModel().getSeriesByIndex(1).getData().getCalculationInfo('stackResultDimension')
+        ).toBeUndefined();
+        expect(chart.renderToSVGString()).not.toMatch(/NaN|Infinity/);
+      } finally {
+        chart.dispose();
+      }
+    });
     it(`rejects invalid ${kind} groups and overflow`, () => {
       expect(validate({ ...spec([[2, 3]]), yType: 'log' }).status).toBe('error');
       const empty = spec([[1, 2]]);
