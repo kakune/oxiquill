@@ -439,3 +439,15 @@ display_chart({"kind": "heatmap", "colorScale": "diverging",
     "colorMin": -2, "colorMax": 8, "center": 0,
     "data": [[0, 0, -2], [1, 0, 0], [2, 0, 8]]})
 ```
+
+## 箱ひげ図
+
+`boxplot` はカテゴリごとに `[min, q1, median, q3, max]` の集計済み五数要約を受け取ります。値は有限で昇順、系列の長さはカテゴリ数と一致させます。欠損は null にします。統計量の計算と、ひげの意味の説明は著者が行ってください。
+
+```python
+#| id: boxplot-charts
+display_chart({"kind": "boxplot", "categories": ["First", "Second"],
+    "series": [{"name": "Measurements", "values": [
+        [-5, -3, -2, 0, 4], [1, 2, 3, 4, 8]]}]},
+    caption="Whiskers show the observed minimum and maximum.")
+```

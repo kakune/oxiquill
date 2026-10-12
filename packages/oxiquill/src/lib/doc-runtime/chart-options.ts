@@ -203,7 +203,8 @@ export function chartSpecToEChartsOptions(
       spec.tooltip === false
         ? undefined
         : {
-            trigger: ['scatter', 'histogram', 'errorbar', 'band'].includes(spec.kind) || heatmap ? 'item' : 'axis',
+            trigger:
+              ['scatter', 'histogram', 'errorbar', 'band', 'boxplot'].includes(spec.kind) || heatmap ? 'item' : 'axis',
             confine: true,
             padding: [10, 12],
             borderWidth: 1,
@@ -370,6 +371,11 @@ function chartSeries(spec: ChartSpec): readonly Record<string, unknown>[] {
     case 'errorbar':
     case 'band':
       return spec.series.map((series) => intervalSeries(spec, series) as Record<string, unknown>);
+    case 'boxplot':
+      return spec.series.map((series) => ({
+        type: 'boxplot',
+        data: series.values.map((value) => value ?? ['-', '-', '-', '-', '-'])
+      }));
     case 'histogram':
       return [histogramSeries(spec) as Record<string, unknown>];
     case 'heatmap': {
@@ -428,7 +434,16 @@ function chartTooltipFormatter(spec: ChartSpec, locale: RuntimeLocale, names: re
       const formatted = amount == null || amount === '-' ? '-' : horizontalBar ? x(amount) : y(amount);
       // ECharts generates the marker; authored labels and values are always escaped.
       const marker = typeof item.marker === 'string' ? item.marker : '';
-      if ((spec.kind === 'errorbar' || spec.kind === 'band') && tuple) {
+      if (spec.kind === 'boxplot' && tuple) {
+        const stats = tuple.length === 6 ? tuple.slice(1) : tuple;
+        rows.push(
+          marker +
+            [name, item.name, ...stats.map((value, index) => labels.chartBoxStatistics[index] + ': ' + y(value))]
+              .filter(Boolean)
+              .map((part) => escapeChartText(String(part)))
+              .join(': ')
+        );
+      } else if ((spec.kind === 'errorbar' || spec.kind === 'band') && tuple) {
         rows.push(
           marker +
             [
@@ -490,7 +505,7 @@ export function chartDataSummary(spec: ChartSpec, labels: RuntimeLabels): string
       ? spec.series.reduce((sum, series) => sum + series.points.length, 0)
       : spec.kind === 'heatmap'
         ? spec.data.length
-        : spec.kind === 'bar'
+        : spec.kind === 'bar' || spec.kind === 'boxplot'
           ? spec.series.reduce((count, series) => count + series.values.length, 0)
           : values.y.length;
   const summary = labels.chartSummary({

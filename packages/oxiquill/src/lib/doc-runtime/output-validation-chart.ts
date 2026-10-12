@@ -1,6 +1,7 @@
 import { heatmapColorScale } from './chart-color-scale.js';
 import type {
   BaseChartSpec,
+  BoxplotValue,
   ChartAnnotation,
   IntervalPoint,
   ChartAxisType,
@@ -133,6 +134,34 @@ function validateChartSpec(value: unknown): ChartSpec {
         return { ...validateSeriesPresentation(item, kind, index, ids), points };
       });
       return { ...base, kind, yType, series };
+    }
+    case 'boxplot': {
+      requireEffectiveAxis(base.xType, 'category', 'Boxplot x axis');
+      const yType = numericAxisType(base.yType, 'Boxplot y axis');
+      const categories = stringArray(requiredOwnValue(record, 'categories', 'Boxplot'), 'Boxplot categories');
+      const rawSeries = plainArray(requiredOwnValue(record, 'series', 'Boxplot'), 'Boxplot series');
+      if (rawSeries.length > outputArtifactLimits.chartDataItems) throw chartLimitError(rawSeries.length);
+      let count = 0;
+      const ids = new Set<string>();
+      const series = rawSeries.map((raw, index) => {
+        const context = 'Boxplot series ' + (index + 1);
+        const item = plainRecord(raw, context);
+        const rawValues = plainArray(requiredOwnValue(item, 'values', context), context + ' values');
+        count += Math.max(1, rawValues.length);
+        if (count > outputArtifactLimits.chartDataItems) throw chartLimitError(count);
+        if (rawValues.length !== categories.length)
+          throw new ArtifactValidationError(context + ' values must match categories.');
+        const values = rawValues.map((rawValue, valueIndex): BoxplotValue | null => {
+          if (rawValue === null) return null;
+          const label = context + ' value ' + (valueIndex + 1);
+          const tuple = fixedTuple(rawValue, 5, label).map((value) => numericCoordinate(value, yType, label));
+          if (tuple.some((value, index) => index > 0 && value < tuple[index - 1]))
+            throw new ArtifactValidationError(label + ' requires min <= q1 <= median <= q3 <= max.');
+          return [tuple[0], tuple[1], tuple[2], tuple[3], tuple[4]];
+        });
+        return { ...validateSeriesPresentation(item, kind, index, ids), values };
+      });
+      return { ...base, kind, xType: 'category', yType, categories, series };
     }
     case 'bar': {
       const horizontal = orientation === 'horizontal';

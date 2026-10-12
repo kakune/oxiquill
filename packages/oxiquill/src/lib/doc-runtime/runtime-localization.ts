@@ -1,6 +1,6 @@
 export type RuntimeLocale = 'en' | 'ja';
 
-export type ChartKind = 'errorbar' | 'band' | 'area' | 'bar' | 'heatmap' | 'histogram' | 'line' | 'scatter';
+export type ChartKind = 'boxplot' | 'errorbar' | 'band' | 'area' | 'bar' | 'heatmap' | 'histogram' | 'line' | 'scatter';
 export type MermaidDiagramKind =
   'class' | 'diagram' | 'entityRelationship' | 'flowchart' | 'journey' | 'sequence' | 'state' | 'timeline';
 
@@ -29,6 +29,7 @@ export type RuntimeLabels = {
   cellRunningAnnouncement: string;
   cellRetry: string;
   cellUpdating: string;
+  chartBoxStatistics: readonly string[];
   chartCaption: string;
   chartData: string;
   chartSeries: string;
@@ -108,6 +109,7 @@ export type RuntimeLabels = {
 
 const chartTitles = {
   en: {
+    boxplot: 'Box plot',
     errorbar: 'Error bars',
     band: 'Interval band',
     area: 'Area chart',
@@ -118,6 +120,7 @@ const chartTitles = {
     scatter: 'Scatter chart'
   },
   ja: {
+    boxplot: '箱ひげ図',
     errorbar: '誤差棒',
     band: '区間帯',
     area: '面グラフ',
@@ -165,6 +168,7 @@ const runtimeLabels = {
     cellRunningAnnouncement: 'Cell execution started.',
     cellRetry: 'Retry cell',
     cellUpdating: 'Updating…',
+    chartBoxStatistics: ['Minimum', 'Q1', 'Median', 'Q3', 'Maximum'],
     chartCaption: 'Chart data summary',
     chartData: 'Chart data',
     chartSeries: 'Series',
@@ -269,6 +273,7 @@ const runtimeLabels = {
     cellRunningAnnouncement: 'セルの実行を開始しました。',
     cellRetry: 'セルの実行を再試行',
     cellUpdating: '更新中…',
+    chartBoxStatistics: ['最小値', '第1四分位数', '中央値', '第3四分位数', '最大値'],
     chartCaption: 'グラフデータの概要',
     chartData: 'グラフのデータ',
     chartSeries: '系列',

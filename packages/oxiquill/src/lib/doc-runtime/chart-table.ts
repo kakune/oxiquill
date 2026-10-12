@@ -14,7 +14,25 @@ export function chartToTable(spec: ChartSpec, labels: RuntimeLabels): TableArtif
     label,
     type
   });
-  if (spec.kind === 'errorbar' || spec.kind === 'band') {
+  if (spec.kind === 'boxplot') {
+    columns = [
+      column('series', labels.chartSeries, 'string'),
+      column('category', spec.xLabel ?? 'X', 'string'),
+      ...['min', 'q1', 'median', 'q3', 'max'].map((key, index) => column(key, labels.chartBoxStatistics[index]))
+    ];
+    spec.series.forEach((series, index) => {
+      rowCount += series.values.length;
+      series.values
+        .slice(0, limit - rows.length)
+        .forEach((value, category) =>
+          rows.push([
+            series.name ?? labels.chartSeriesName(index + 1),
+            spec.categories[category],
+            ...(value ?? [null, null, null, null, null])
+          ])
+        );
+    });
+  } else if (spec.kind === 'errorbar' || spec.kind === 'band') {
     columns = [
       column('series', labels.chartSeries, 'string'),
       column(

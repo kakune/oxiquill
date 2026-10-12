@@ -58,7 +58,8 @@ export type ChartSpec =
   | HistogramChartSpec
   | AreaChartSpec
   | HeatmapChartSpec
-  | IntervalChartSpec;
+  | IntervalChartSpec
+  | BoxplotChartSpec;
 export type OutputArtifact = TextArtifact | JsonArtifact | TableArtifact | ChartArtifact | ImageArtifact | HtmlArtifact;
 
 export interface BaseArtifact {
@@ -326,3 +327,12 @@ export type RuntimeWorkerResponse =
       error: string;
       partialResult?: RawCellExecutionResult;
     };
+
+export type BoxplotValue = readonly [number, number, number, number, number];
+export interface BoxplotChartSpec extends BaseChartSpec {
+  kind: 'boxplot';
+  xType?: 'category';
+  yType?: 'value' | 'log';
+  categories: readonly string[];
+  series: readonly { id?: string; name?: string; style?: ChartSeriesStyle; values: readonly (BoxplotValue | null)[] }[];
+}

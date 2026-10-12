@@ -603,7 +603,7 @@ def __oxiquill_check_chart_size(spec):
     for item in series:
         if not isinstance(item, dict):
             continue
-        field = "values" if spec.get("kind") == "bar" else "points"
+        field = "values" if spec.get("kind") in ("bar", "boxplot") else "points"
         values = item.get(field)
         if isinstance(values, (list, tuple)):
             count += len(values) if field == "values" else max(1, len(values))

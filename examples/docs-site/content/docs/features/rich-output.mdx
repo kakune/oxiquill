@@ -439,3 +439,15 @@ display_chart({"kind": "heatmap", "colorScale": "diverging",
     "colorMin": -2, "colorMax": 8, "center": 0,
     "data": [[0, 0, -2], [1, 0, 0], [2, 0, 8]]})
 ```
+
+## Box plots
+
+A `boxplot` accepts precomputed `[min, q1, median, q3, max]` values, one per category per series. Values must be finite and ordered; null denotes a missing box. The Y axis accepts value or log (all five statistics must then be positive). Authors compute the statistics and explain the whisker definition. No raw-sample aggregation or separate outlier collection is performed.
+
+```python
+#| id: boxplot-charts
+display_chart({"kind": "boxplot", "categories": ["First", "Second"],
+    "series": [{"name": "Measurements", "values": [
+        [-5, -3, -2, 0, 4], [1, 2, 3, 4, 8]]}]},
+    caption="Whiskers show the observed minimum and maximum.")
+```

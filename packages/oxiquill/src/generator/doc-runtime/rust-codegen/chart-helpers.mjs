@@ -156,7 +156,7 @@ function generateChartLimitHelper() {
                     .sum()
             })
             .unwrap_or(0),
-        "bar" => spec
+        "bar" | "boxplot" => spec
             .get("series")
             .and_then(Value::as_array)
             .map(|series| {

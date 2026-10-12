@@ -3,7 +3,11 @@ import type { BaseChartSpec, ChartAxisType, ChartSpec } from './types.js';
 type AxesSpec = BaseChartSpec & { kind: string; orientation?: 'vertical' | 'horizontal' };
 
 export function chartAxisType(spec: AxesSpec, axis: 'x' | 'y'): ChartAxisType {
-  if (spec.kind === 'heatmap' || (spec.kind === 'bar' && axis === (spec.orientation === 'horizontal' ? 'y' : 'x')))
+  if (
+    (spec.kind === 'boxplot' && axis === 'x') ||
+    spec.kind === 'heatmap' ||
+    (spec.kind === 'bar' && axis === (spec.orientation === 'horizontal' ? 'y' : 'x'))
+  )
     return 'category';
   if (axis === 'x' && spec.kind === 'histogram') return 'value';
   return spec[axis === 'x' ? 'xType' : 'yType'] ?? 'value';
