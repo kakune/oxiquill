@@ -1339,7 +1339,7 @@ describe('doc runtime service', () => {
         'wasm32-wasi-ghc',
         [
           '-O2',
-          '-i/repo/.oxiquill/haskell-cells',
+          `-i${repoPath('.oxiquill/haskell-cells')}`,
           '-odir',
           repoPath('.oxiquill/haskell-cells/build'),
           '-hidir',
