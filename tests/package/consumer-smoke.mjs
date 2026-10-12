@@ -91,7 +91,7 @@ const oldStream = raw.stdout;
 const json: JsonArtifact = { kind: 'json', value: false };
 const inputValue: InputSpec['value'] = 0;
 const paths = { downloadCacheDir: new URL('./verified downloads/', import.meta.url) } satisfies OxiquillPathOptions;
-const python = { preload: true, offline: true, packageMirror: new URL('https://packages.example/pyodide/') } satisfies OxiquillPythonOptions;
+const python = { preload: true, offline: true, experimentalSetup: true, additionalPackages: ${JSON.stringify(additionalPythonPackages)}, packageMirror: new URL('https://packages.example/pyodide/') } satisfies OxiquillPythonOptions;
 const publicTypes = {} as [
   OxiquillConfig,
   OxiquillFrameworkOptions,

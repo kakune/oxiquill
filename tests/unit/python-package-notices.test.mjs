@@ -1,5 +1,7 @@
 // @vitest-environment node
 import { describe, expect, it, vi } from 'vitest';
+import path from 'node:path';
+import { pathToFileURL } from 'node:url';
 import { createOxiquillIntegrationMetadata } from '../../packages/oxiquill/src/config/metadata.mjs';
 import {
   resolvePythonPackageNotices,
@@ -7,7 +9,8 @@ import {
 } from '../../packages/oxiquill/src/generator/doc-runtime/python-package-notices.mjs';
 import { parseCellsFromMarkdown } from '../../packages/oxiquill/src/generator/doc-runtime/cell-parser.mjs';
 
-const paths = { workspaceRoot: new URL('file:///site/') };
+const workspaceRoot = path.resolve('/site');
+const paths = { workspaceRoot: pathToFileURL(`${workspaceRoot}${path.sep}`) };
 const packageInfo = { name: 'extra', version: '1.0', file_name: 'extra.whl' };
 const options = {
   additionalPackages: { extra: { version: '1.0', license: 'MIT', licenseFiles: ['legal/extra.txt'] } }
@@ -30,7 +33,7 @@ describe('additional Python packages', () => {
     const source = '```python\n#| id: example\n#| packages: [extra]\nimport extra\n```';
     expect(parseCellsFromMarkdown(source, 'page.mdx').diagnostics).toHaveLength(1);
     expect(parseCellsFromMarkdown(source, 'page.mdx', normalize(options)).diagnostics).toEqual([]);
-    expect(pythonLicensePaths(normalize(options), paths)).toEqual(['/site/legal/extra.txt']);
+    expect(pythonLicensePaths(normalize(options), paths)).toEqual([path.join(workspaceRoot, 'legal/extra.txt')]);
   });
   it.each([
     null,
