@@ -198,6 +198,7 @@ export interface ScatterChartSpec extends BaseChartSpec {
 }
 
 export interface BarChartSeries {
+  stack?: string;
   id?: string;
   style?: ChartSeriesStyle;
   name?: string;
@@ -222,7 +223,11 @@ export interface HistogramChartSpec extends BaseChartSpec {
 export interface AreaChartSpec extends BaseChartSpec {
   style?: LineChartStyle;
   kind: 'area';
-  series: readonly XyChartSeries[];
+  series: readonly AreaChartSeries[];
+}
+
+export interface AreaChartSeries extends XyChartSeries {
+  stack?: string;
 }
 
 export interface HeatmapChartSpec extends BaseChartSpec {

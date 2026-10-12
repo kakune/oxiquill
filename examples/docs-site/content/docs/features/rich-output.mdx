@@ -375,3 +375,21 @@ Use stdout for short explanatory text. Use JSON when readers need the exact stru
 Copy, sort, pagination, validation, running, completion, and failure states are keyboard-operable and announced with localized English/Japanese labels. Sandboxed HTML intentionally has no script or same-origin permission, sends no referrer, and blocks external subresources by default; see [Support and Security](/guides/support-and-security/) for the exact policy and trust boundary.
 
 Table interaction state is scoped to one execution result. A new result resets the page, sort, and copy status. Rerenders of the same result preserve a compatible sort and page, but row shrinkage stores the clamped page and a removed or replaced sorted column clears the sort.
+
+## Stacked charts
+
+Bar and area series accept a nonempty `stack` group. Positive and negative values accumulate separately from zero on a value axis. Missing bar values do not contribute. Area series in each group must have identical, ordered X coordinates; numeric/time coordinates must increase. Tooltips and data tables retain the individual values. Percent normalization is not performed.
+
+```rust
+//| id: stacked-charts
+//| crates: []
+let series = serde_json::json!([
+    { "name": "First", "stack": "total", "points": [[0, 2], [1, -2]] },
+    { "name": "Second", "stack": "total", "points": [[0, 3], [1, -3]] }
+]);
+emit_area_chart!(&series, "Observation", "Amount");
+emit_bar_chart!(&["A", "B"], &serde_json::json!([
+    { "name": "First", "stack": "total", "values": [2, -2] },
+    { "name": "Second", "stack": "total", "values": [3, null] }
+]));
+```

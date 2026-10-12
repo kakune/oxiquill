@@ -8,6 +8,7 @@ import type {
   LineChartStyle,
   ScatterChartStyle
 } from './types.js';
+import { validateChartStacks } from './chart-stacks.js';
 import { outputArtifactLimits } from './output-limits.mjs';
 import { histogramHeight } from './chart-histogram.js';
 import { chartAxisType } from './chart-axes.js';
@@ -34,6 +35,7 @@ export function validateChartArtifact(record: Record<string, unknown>, remaining
   rejectTruncated(record, 'Chart artifact');
   const base = validateBaseArtifact(record);
   const spec = validateChartSpec(requiredOwnValue(record, 'spec', 'Chart artifact'));
+  validateChartStacks(spec);
   const byteLength = base.byteLength + payloadByteLength(spec);
   if (byteLength > remainingBytes) {
     throw new ArtifactValidationError('Chart artifact exceeds the remaining 16 MiB run limit.');
@@ -393,7 +395,7 @@ function validateXySeries(
   xType: ChartAxisType,
   yType: ChartAxisType,
   kind: 'line' | 'scatter' | 'area'
-): Extract<ChartSpec, { kind: 'line' }>['series'] {
+): Extract<ChartSpec, { kind: 'area' }>['series'] {
   const rawSeries = plainArray(value, 'XY chart series');
   if (rawSeries.length > outputArtifactLimits.chartDataItems) throw chartLimitError(rawSeries.length);
   let dataItems = 0;
@@ -421,11 +423,18 @@ function validateSeriesPresentation(record: Record<string, unknown>, kind: strin
   const context = `${kind} chart series ${index + 1}`;
   const id = optionalString(record, 'id', context);
   const name = optionalString(record, 'name', context);
+  const stack = optionalString(record, 'stack', context);
+  if (stack !== undefined && (!['bar', 'area'].includes(kind) || !stack.trim()))
+    throw new ArtifactValidationError(`${context} stack requires a non-empty group on bar or area charts.`);
   if (id !== undefined) {
     if (!id.trim() || ids.has(id)) throw new ArtifactValidationError(`${context} id must be non-empty and unique.`);
     ids.add(id);
   }
-  const presentation = { ...(id === undefined ? {} : { id }), ...(name === undefined ? {} : { name }) };
+  const presentation = {
+    ...(id === undefined ? {} : { id }),
+    ...(name === undefined ? {} : { name }),
+    ...(stack === undefined ? {} : { stack })
+  };
   if (!Object.hasOwn(record, 'style')) return presentation;
   const styleRecord = plainRecord(requiredOwnValue(record, 'style', context), context + ' style');
   const line = kind === 'line' || kind === 'area';

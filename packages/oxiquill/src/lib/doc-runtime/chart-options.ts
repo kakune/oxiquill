@@ -328,6 +328,8 @@ function chartSeries(spec: ChartSpec): readonly Record<string, unknown>[] {
     case 'area':
       return spec.series.map((series) => ({
         type: 'line',
+        stack: 'stack' in series ? (series.stack ?? '') : '',
+        stackStrategy: 'samesign',
         showSymbol: series.style?.showSymbol ?? series.points.length === 1,
         symbol: series.style?.symbol ?? 'emptyCircle',
         smooth: series.style?.smooth ?? false,
@@ -345,9 +347,11 @@ function chartSeries(spec: ChartSpec): readonly Record<string, unknown>[] {
     case 'bar':
       return spec.series.map((series) => ({
         type: 'bar',
+        stack: series.stack ?? '',
+        stackStrategy: 'samesign',
         barMaxWidth: 40,
-        itemStyle: { borderRadius: [3, 3, 0, 0] },
-        data: barData(series.values)
+        itemStyle: { borderRadius: series.stack ? 0 : [3, 3, 0, 0] },
+        data: series.stack ? series.values : barData(series.values)
       }));
     case 'histogram':
       return [histogramSeries(spec) as Record<string, unknown>];

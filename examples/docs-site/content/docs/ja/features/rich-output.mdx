@@ -375,3 +375,21 @@ emit_html!(r#"<p><strong>Sandboxed HTML</strong> emitted from Rust.</p>"#);
 copy、sort、pagination、validation、running、completion、failure state は keyboard 操作可能で、localized English/Japanese label とともに announce されます。sandboxed HTML には意図的に script/same-origin permission がなく、referrer を送らず、external subresource を default で block します。正確な policy と trust boundary は [サポートとセキュリティ](/ja/guides/support-and-security/) を参照してください。
 
 table interaction state は一つの execution result に限定されます。新しい result では page、sort、copy status を reset します。同じ result の rerender は互換性のある sort/page を維持しますが、row が減った場合は clamp 後の page を保存し、sort 対象 column が削除・置換された場合は sort を解除します。
+
+## 積み上げグラフ
+
+bar と area の系列には空でない `stack` グループを指定できます。正値と負値は value 軸のゼロから別々に積み上がり、棒の欠損は加算されません。同じグループの area は X 座標と順序を一致させ、数値・時刻は昇順にします。tooltip とデータ表は各系列の元の値を示します。百分率への正規化は行いません。
+
+```rust
+//| id: stacked-charts
+//| crates: []
+let series = serde_json::json!([
+    { "name": "First", "stack": "total", "points": [[0, 2], [1, -2]] },
+    { "name": "Second", "stack": "total", "points": [[0, 3], [1, -3]] }
+]);
+emit_area_chart!(&series, "Observation", "Amount");
+emit_bar_chart!(&["A", "B"], &serde_json::json!([
+    { "name": "First", "stack": "total", "values": [2, -2] },
+    { "name": "Second", "stack": "total", "values": [3, null] }
+]));
+```
