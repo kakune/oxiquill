@@ -284,6 +284,10 @@ export function chartSpecToEChartsOptions(
               itemStyle: { color, borderColor: chrome.tooltipBackground, borderWidth: 1 }
             }
           : {}),
+        // Box paths include the median, so a filled box must not share the stroke color.
+        ...(spec.kind === 'boxplot'
+          ? { itemStyle: { color: chrome.background, borderColor: color, borderWidth: 1.5 } }
+          : {}),
         ...(heatmap ? { itemStyle: { borderColor: chrome.background, borderWidth: 1 } } : {})
       };
     })

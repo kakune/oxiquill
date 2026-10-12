@@ -3,7 +3,11 @@ import { createRequire } from 'node:module';
 import { resolve } from 'node:path';
 import { expect, it } from 'vitest';
 import { validateOutputArtifacts } from '../../packages/oxiquill/src/lib/doc-runtime/output-artifact-validation';
-import { chartSpecToEChartsOptions } from '../../packages/oxiquill/src/lib/doc-runtime/chart-options';
+import {
+  chartSpecToEChartsOptions,
+  defaultChartChrome
+} from '../../packages/oxiquill/src/lib/doc-runtime/chart-options';
+import { chartPalette } from '../../packages/oxiquill/src/lib/doc-runtime/chart-palette';
 import { chartToTable } from '../../packages/oxiquill/src/lib/doc-runtime/chart-table';
 import { labelsForLanguage } from '../../packages/oxiquill/src/lib/doc-runtime/runtime-localization';
 const echarts = createRequire(resolve('packages/oxiquill/package.json'))('echarts');
@@ -51,3 +55,26 @@ it.each([
   { yType: 'time' },
   { yType: 'log' }
 ])('rejects invalid boxplots %j', (patch) => expect(validate(patch).status).toBe('error'));
+
+it.each(['light', 'dark'])('keeps the median visible inside series-colored boxes in %s', (theme) => {
+  const chart = echarts.init(null, null, { renderer: 'svg', ssr: true, width: 360, height: 360 });
+  try {
+    const authored = validate({
+      series: [
+        { values: [[-5, -3, -2, 0, 4], null, null] },
+        { style: { color: '#b91c1c' }, values: [[1, 2, 3, 4, 8], null, null] }
+      ]
+    });
+    chart.setOption({ ...chartSpecToEChartsOptions(authored.artifact.spec, theme), animation: false });
+    const boxes = (chart.renderToSVGString().match(/<path [^>]*ecmeta_series_index="[01]"[^>]*>/gu) ?? []).filter(
+      (path) => path.includes('ecmeta_ssr_type="chart"')
+    );
+    const paint = boxes.map((box) => [/fill="([^"]+)"/u.exec(box)?.[1], /stroke="([^"]+)"/u.exec(box)?.[1]]);
+    expect(paint).toEqual([
+      [defaultChartChrome(theme).background, chartPalette[0]],
+      [defaultChartChrome(theme).background, '#b91c1c']
+    ]);
+  } finally {
+    chart.dispose();
+  }
+});
