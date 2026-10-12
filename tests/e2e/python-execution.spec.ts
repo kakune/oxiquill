@@ -24,4 +24,8 @@ test('failed Python figures never leak into later executions', async ({ page, br
   await run.click();
   await expect(cell.getByTestId('image-output')).toHaveCount(1);
   await expect(cell.getByTestId('image-output')).toHaveAttribute('alt', 'Current figure');
+  await source.fill('from itertools import count\ndisplay_table(([n] for n in count()))');
+  await run.click();
+  await expect(cell.getByTestId('table-output')).toContainText('total unknown; truncated');
+  await expect(cell.getByTestId('table-output')).toContainText('10000 retrieved rows');
 });

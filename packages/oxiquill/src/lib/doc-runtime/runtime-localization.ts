@@ -79,7 +79,7 @@ export type RuntimeLabels = {
   outputTruncated: string;
   previousPage: string;
   rowsPerPage: string;
-  rowsRange: (first: number, last: number, total: number, truncated: boolean) => string;
+  rowsRange: (first: number, last: number, total: number | undefined, truncated: boolean) => string;
   run: string;
   resetInputs: string;
   editCode: string;
@@ -221,7 +221,10 @@ const runtimeLabels = {
     outputTruncated: 'Output truncated.',
     previousPage: 'Previous page',
     rowsPerPage: 'Rows per page',
-    rowsRange: (first, last, total, truncated) => `Rows ${first}-${last} of ${total}${truncated ? ' (truncated)' : ''}`,
+    rowsRange: (first, last, total, truncated) =>
+      total === undefined
+        ? `Rows ${first}-${last} (total unknown; truncated)`
+        : `Rows ${first}-${last} of ${total}${truncated ? ' (truncated)' : ''}`,
     run: 'Run',
     resetInputs: 'Reset inputs',
     editCode: 'Edit Python',
@@ -320,7 +323,10 @@ const runtimeLabels = {
     outputTruncated: '出力は省略されています。',
     previousPage: '前のページ',
     rowsPerPage: '1ページあたりの行数',
-    rowsRange: (first, last, total, truncated) => `${total} 行中 ${first}–${last} 行${truncated ? '（省略あり）' : ''}`,
+    rowsRange: (first, last, total, truncated) =>
+      total === undefined
+        ? `Rows ${first}-${last} (total unknown; truncated)`
+        : `${total} 行中 ${first}–${last} 行${truncated ? '（省略あり）' : ''}`,
     run: '実行',
     resetInputs: '入力を初期値に戻す',
     editCode: 'Pythonを編集',

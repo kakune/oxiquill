@@ -6,6 +6,7 @@ import base64
 import builtins
 import datetime
 import io
+from itertools import islice
 import json
 import math
 import os
@@ -169,26 +170,26 @@ def __oxiquill_pandas_dataframe_artifact(
     include_index=None,
 ):
     row_count = int(len(dataframe))
-    column_labels = list(dataframe.columns)
+    include_index_column = __oxiquill_should_include_index(dataframe.index, include_index)
+    data_column_limit = max(0, max_columns - int(include_index_column))
     truncated_rows = row_count > max_rows
-    truncated_columns = len(column_labels) > max_columns
-    preview = dataframe.iloc[:max_rows, :max_columns]
+    truncated_columns = len(dataframe.columns) > data_column_limit
+    preview = dataframe.iloc[:max_rows, :data_column_limit]
     used_keys = set()
     columns = []
-    if __oxiquill_should_include_index(dataframe.index, include_index):
+    if include_index_column:
         columns.append({
             "key": __oxiquill_column_key("__index__", used_keys),
             "label": str(getattr(dataframe.index, "name", None) or "index"),
             "type": __oxiquill_dtype_name(getattr(dataframe.index, "dtype", "unknown")),
         })
-    for label in list(preview.columns):
+    for column_index, label in enumerate(preview.columns):
         columns.append({
             "key": __oxiquill_column_key(label, used_keys),
             "label": str(label),
-            "type": __oxiquill_dtype_name(getattr(preview[label], "dtype", "unknown")),
+            "type": __oxiquill_dtype_name(preview.dtypes.iloc[column_index]),
         })
     rows = []
-    include_index_column = len(columns) > len(list(preview.columns))
     for row_index, values in enumerate(preview.itertuples(index=False, name=None)):
         row = []
         if include_index_column:
@@ -522,27 +523,63 @@ def display_table(value, *, title=None, caption=None):
     if dataframe_artifact is not None:
         __oxiquill_append_output(dataframe_artifact)
         return
-    rows = list(value)
-    truncated = len(rows) > __oxiquill_table_limit
-    preview = rows[:__oxiquill_table_limit]
-    if preview and isinstance(preview[0], dict):
-        keys = list(preview[0].keys())
-        columns = [{"key": str(key), "label": str(key), "type": "unknown"} for key in keys]
-        table_rows = [[__oxiquill_jsonable(row.get(key)) for key in keys] for row in preview]
-    else:
-        width = max((len(row) if isinstance(row, (list, tuple)) else 1 for row in preview), default=0)
-        columns = [{"key": str(index), "label": str(index + 1), "type": "unknown"} for index in range(width)]
-        table_rows = [
-            [__oxiquill_jsonable(row[index]) if isinstance(row, (list, tuple)) and index < len(row) else None for index in range(width)]
-            for row in preview
-        ]
-    __oxiquill_append_output(__oxiquill_meta({
+    table_rows = []
+    keys = None
+    truncated = False
+    row_count = None
+    failure = None
+    try:
+        if type(value) in (list, tuple, range):
+            row_count = len(value)
+        iterator = iter(value)
+        sentinel = object()
+        for index in range(__oxiquill_table_limit + 1):
+            row = next(iterator, sentinel)
+            if row is sentinel:
+                row_count = len(table_rows)
+                break
+            if index == __oxiquill_table_limit:
+                truncated = True
+                break
+            if index == 0 and isinstance(row, dict):
+                key_preview = list(islice(row, __oxiquill_table_column_limit + 1))
+                truncated |= len(key_preview) > __oxiquill_table_column_limit
+                keys = key_preview[:__oxiquill_table_column_limit]
+            if keys is not None:
+                values = [row.get(key) for key in keys]
+            else:
+                try:
+                    row_iterator = iter(row) if not isinstance(row, (str, bytes)) else iter([row])
+                except TypeError:
+                    row_iterator = iter([row])
+                values = list(islice(row_iterator, __oxiquill_table_column_limit + 1))
+                truncated |= len(values) > __oxiquill_table_column_limit
+                values = values[:__oxiquill_table_column_limit]
+            table_rows.append([__oxiquill_jsonable(item) for item in values])
+    except Exception as error:
+        truncated = True
+        failure = f"Table conversion stopped after {len(table_rows)} rows: {error}"
+    width = max((len(row) for row in table_rows), default=0)
+    used_keys = set()
+    columns = [
+        {"key": __oxiquill_column_key(key, used_keys), "label": str(key), "type": "unknown"}
+        for key in keys
+    ] if keys is not None else [
+        {"key": str(index), "label": str(index + 1), "type": "unknown"} for index in range(width)
+    ]
+    for row in table_rows:
+        row.extend([None] * (len(columns) - len(row)))
+    artifact = {
         "kind": "table",
         "columns": columns,
         "rows": table_rows,
-        "rowCount": len(rows),
         "truncated": truncated,
-    }, title, caption))
+    }
+    if row_count is not None:
+        artifact["rowCount"] = row_count
+    __oxiquill_append_output(__oxiquill_meta(artifact, title, caption))
+    if failure is not None:
+        __oxiquill_append_output(__oxiquill_error_artifact(failure))
 `;
 
 const pythonDisplayChartSupport = String.raw`

@@ -136,8 +136,10 @@ function validateTableArtifact(record: Record<string, unknown>, remainingBytes: 
   const producerTruncated = optionalBoolean(record, 'truncated', 'Table artifact') ?? false;
   const rawColumns = plainArray(requiredOwnValue(record, 'columns', 'Table artifact'), 'Table artifact columns');
   const rawRows = plainArray(requiredOwnValue(record, 'rows', 'Table artifact'), 'Table artifact rows');
-  const rowCount = optionalNonNegativeInteger(record, 'rowCount', 'Table artifact') ?? rawRows.length;
-  if (rowCount < rawRows.length) {
+  const rowCount =
+    optionalNonNegativeInteger(record, 'rowCount', 'Table artifact') ??
+    (producerTruncated ? undefined : rawRows.length);
+  if (rowCount !== undefined && rowCount < rawRows.length) {
     throw new ArtifactValidationError('Table artifact rowCount cannot be smaller than rows.length.');
   }
 
@@ -190,7 +192,7 @@ function validateTableArtifact(record: Record<string, unknown>, remainingBytes: 
       kind: 'table',
       columns,
       rows,
-      rowCount,
+      ...(rowCount !== undefined ? { rowCount } : {}),
       ...(truncated ? { truncated: true } : {})
     },
     byteLength

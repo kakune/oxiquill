@@ -79,3 +79,11 @@ The Python runtime fingerprint records the Pyodide version, lockfile hash, core-
 Python `packages` must be a non-empty, unique list of names vendored by the installed Pyodide release. Generation rejects unknown names before downloading. Imports discovered from source may load packages already present in the published runtime, but release builds should declare non-core dependencies explicitly for deterministic preflight and caching.
 
 See [Interactive Cells](/features/interactive-cells/) for metadata and [Troubleshooting](/guides/troubleshooting/) for recovery steps.
+
+## Bounded Tables and Figure Cleanup
+
+`display_table` reads at most 10,001 rows and 101 values per row to detect truncation, retaining at most 10,000 rows and 100 columns. This also applies to generators. DataFrame index columns count toward the column limit. Discarded columns are not converted.
+
+The table reports a total only when it is known. A truncated iterator shows **total unknown**, and CSV downloads contain only retained rows. If iteration raises an exception, completed rows remain available alongside a conversion diagnostic.
+
+Every Python execution starts with fresh display state. Matplotlib figures are closed after execution, including failures, so a failed cell cannot contribute figures to a later cell.
