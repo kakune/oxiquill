@@ -1,3 +1,4 @@
+import { intervalSeries } from './chart-intervals.js';
 import { histogramLabel, histogramSeries } from './chart-histogram.js';
 import { chartAxisType, chartIncludesZero } from './chart-axes.js';
 import type { ChartSpec, ChartNumberFormat } from './types.js';
@@ -203,7 +204,7 @@ export function chartSpecToEChartsOptions(
       spec.tooltip === false
         ? undefined
         : {
-            trigger: spec.kind === 'scatter' || spec.kind === 'histogram' || heatmap ? 'item' : 'axis',
+            trigger: ['scatter', 'histogram', 'errorbar', 'band'].includes(spec.kind) || heatmap ? 'item' : 'axis',
             confine: true,
             padding: [10, 12],
             borderWidth: 1,
@@ -239,7 +240,7 @@ export function chartSpecToEChartsOptions(
             {
               type: 'inside',
               ...(horizontalBar ? { yAxisIndex: 0 } : { xAxisIndex: 0 }),
-              filterMode: spec.kind === 'histogram' ? 'weakFilter' : 'filter',
+              filterMode: ['histogram', 'errorbar', 'band'].includes(spec.kind) ? 'weakFilter' : 'filter',
               start: 0,
               end: 100,
               startValue: null,
@@ -359,6 +360,9 @@ function chartSeries(spec: ChartSpec): readonly Record<string, unknown>[] {
         itemStyle: { borderRadius: series.stack ? 0 : spec.orientation === 'horizontal' ? [0, 3, 3, 0] : [3, 3, 0, 0] },
         data: series.stack ? series.values : barData(series.values, spec.orientation === 'horizontal')
       }));
+    case 'errorbar':
+    case 'band':
+      return spec.series.map((series) => intervalSeries(spec, series) as Record<string, unknown>);
     case 'histogram':
       return [histogramSeries(spec) as Record<string, unknown>];
     case 'heatmap':
@@ -409,7 +413,21 @@ function chartTooltipFormatter(spec: ChartSpec, locale: RuntimeLocale, names: re
       const formatted = amount == null || amount === '-' ? '-' : horizontalBar ? x(amount) : y(amount);
       // ECharts generates the marker; authored labels and values are always escaped.
       const marker = typeof item.marker === 'string' ? item.marker : '';
-      if (spec.kind === 'histogram' && tuple) {
+      if ((spec.kind === 'errorbar' || spec.kind === 'band') && tuple) {
+        rows.push(
+          marker +
+            [
+              name,
+              x(tuple[0]),
+              labels.chartValue + ': ' + y(tuple[1]),
+              labels.chartBinLower + ': ' + y(tuple[2]),
+              labels.chartBinUpper + ': ' + y(tuple[3])
+            ]
+              .filter(Boolean)
+              .map((part) => escapeChartText(String(part)))
+              .join(': ')
+        );
+      } else if (spec.kind === 'histogram' && tuple) {
         rows.push(
           marker +
             escapeChartText(
@@ -453,11 +471,13 @@ export function chartDataSummary(spec: ChartSpec, labels: RuntimeLabels): string
       : format(bounds.minimum) + '–' + format(bounds.maximum);
   };
   const dataCount =
-    spec.kind === 'heatmap'
-      ? spec.data.length
-      : spec.kind === 'bar'
-        ? spec.series.reduce((count, series) => count + series.values.length, 0)
-        : values.y.length;
+    spec.kind === 'errorbar' || spec.kind === 'band'
+      ? spec.series.reduce((sum, series) => sum + series.points.length, 0)
+      : spec.kind === 'heatmap'
+        ? spec.data.length
+        : spec.kind === 'bar'
+          ? spec.series.reduce((count, series) => count + series.values.length, 0)
+          : values.y.length;
   const summary = labels.chartSummary({
     xLabel: spec.xLabel,
     yLabel: spec.kind === 'histogram' ? histogramLabel(spec, labels) : spec.yLabel,

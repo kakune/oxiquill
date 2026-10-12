@@ -1,6 +1,6 @@
 export type RuntimeLocale = 'en' | 'ja';
 
-export type ChartKind = 'area' | 'bar' | 'heatmap' | 'histogram' | 'line' | 'scatter';
+export type ChartKind = 'errorbar' | 'band' | 'area' | 'bar' | 'heatmap' | 'histogram' | 'line' | 'scatter';
 export type MermaidDiagramKind =
   'class' | 'diagram' | 'entityRelationship' | 'flowchart' | 'journey' | 'sequence' | 'state' | 'timeline';
 
@@ -108,6 +108,8 @@ export type RuntimeLabels = {
 
 const chartTitles = {
   en: {
+    errorbar: 'Error bars',
+    band: 'Interval band',
     area: 'Area chart',
     bar: 'Bar chart',
     heatmap: 'Heatmap',
@@ -116,6 +118,8 @@ const chartTitles = {
     scatter: 'Scatter chart'
   },
   ja: {
+    errorbar: '誤差棒',
+    band: '区間帯',
     area: '面グラフ',
     bar: '棒グラフ',
     heatmap: 'ヒートマップ',

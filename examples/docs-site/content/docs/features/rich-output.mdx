@@ -404,3 +404,15 @@ Set bar `orientation: "horizontal"` to use a numeric x axis and category y axis.
 emit_bar_chart!(&["North America", "South America", "Europe"], &[12, -4, 8],
     options = serde_json::json!({ "orientation": "horizontal", "xLabel": "Change", "yLabel": "Region" }));
 ```
+
+## Error bars and interval bands
+
+Use `errorbar` or `band` with `[x, center, lower, upper]` points satisfying `lower <= center <= upper`. Set all three Y values to null for a gap. Bands connect adjacent valid points with straight segments and require increasing value/time/log X coordinates. Y uses value or log; log intervals must be positive. Statistical estimation belongs in the cell. A single isolated band point is shown as an interval glyph. Chart and series colors follow the existing styles; interval charts also accept chart-level `lineWidth`.
+
+```python
+#| id: interval-charts
+for kind in ("errorbar", "band"):
+    display_chart({"kind": kind, "xLabel": "Observation", "yLabel": "Estimate",
+        "series": [{"name": "Estimate and interval", "points": [
+            [0, -3, -5, -2], [1, 0, -2, 3], [2, 4, 3, 6]]}]})
+```

@@ -1,5 +1,6 @@
 import type {
   BaseChartSpec,
+  IntervalPoint,
   ChartAxisType,
   ChartNumberFormat,
   LineSeriesStyle,
@@ -89,6 +90,43 @@ function validateChartSpec(value: unknown): ChartSpec {
         kind,
         series: validateXySeries(requiredOwnValue(record, 'series', `${kind} chart`), xType, yType, kind)
       };
+    }
+    case 'errorbar':
+    case 'band': {
+      const xType = base.xType ?? 'value';
+      const yType = numericAxisType(base.yType, 'Interval chart y axis');
+      if (kind === 'band' && xType === 'category')
+        throw new ArtifactValidationError('Band charts require a value, time, or log x axis.');
+      const rawSeries = plainArray(requiredOwnValue(record, 'series', 'Interval chart'), 'Interval chart series');
+      if (rawSeries.length > outputArtifactLimits.chartDataItems) throw chartLimitError(rawSeries.length);
+      const ids = new Set<string>();
+      let count = 0;
+      const series = rawSeries.map((raw, index) => {
+        const context = kind + ' chart series ' + (index + 1);
+        const item = plainRecord(raw, context);
+        const rawPoints = plainArray(requiredOwnValue(item, 'points', context), context + ' points');
+        count += Math.max(1, rawPoints.length);
+        if (count > outputArtifactLimits.chartDataItems) throw chartLimitError(count);
+        let previous = -Infinity;
+        const points = rawPoints.map((rawPoint, pointIndex): IntervalPoint => {
+          const label = context + ' point ' + (pointIndex + 1);
+          const tuple = fixedTuple(rawPoint, 4, label);
+          const x = chartCoordinate(tuple[0], xType, label + ' x');
+          const orderedX = xType === 'time' && typeof x === 'string' ? Date.parse(x) : Number(x);
+          if (kind === 'band' && orderedX <= previous)
+            throw new ArtifactValidationError(label + ' x must be strictly increasing.');
+          previous = orderedX;
+          if (tuple.slice(1).every((value) => value === null)) return [x, null, null, null];
+          const center = numericCoordinate(tuple[1], yType, label + ' center');
+          const lower = numericCoordinate(tuple[2], yType, label + ' lower');
+          const upper = numericCoordinate(tuple[3], yType, label + ' upper');
+          if (lower > center || center > upper)
+            throw new ArtifactValidationError(label + ' requires lower <= center <= upper.');
+          return [x, center, lower, upper];
+        });
+        return { ...validateSeriesPresentation(item, kind, index, ids), points };
+      });
+      return { ...base, kind, yType, series };
     }
     case 'bar': {
       const horizontal = orientation === 'horizontal';
@@ -215,7 +253,7 @@ function validateChartSpec(value: unknown): ChartSpec {
 function validateChartStyle(value: unknown, kind: string): LineChartStyle & ScatterChartStyle {
   const context = `${kind} chart style`;
   const record = plainRecord(value, context);
-  const line = kind === 'line' || kind === 'area';
+  const line = ['line', 'area', 'errorbar', 'band'].includes(kind);
   rejectUnknownStyleFields(
     record,
     [
@@ -444,7 +482,11 @@ function validateSeriesPresentation(record: Record<string, unknown>, kind: strin
   const line = kind === 'line' || kind === 'area';
   rejectUnknownStyleFields(
     styleRecord,
-    ['color', ...(kind !== 'bar' ? ['symbol'] : []), ...(line ? ['lineType', 'smooth', 'step', 'showSymbol'] : [])],
+    [
+      'color',
+      ...(['line', 'area', 'scatter'].includes(kind) ? ['symbol'] : []),
+      ...(line ? ['lineType', 'smooth', 'step', 'showSymbol'] : [])
+    ],
     context + ' style'
   );
   const style: LineSeriesStyle = {};

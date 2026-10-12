@@ -404,3 +404,15 @@ bar の `orientation: "horizontal"` は x を数値軸、y をカテゴリ軸に
 emit_bar_chart!(&["North America", "South America", "Europe"], &[12, -4, 8],
     options = serde_json::json!({ "orientation": "horizontal", "xLabel": "Change", "yLabel": "Region" }));
 ```
+
+## 誤差棒と区間帯
+
+`errorbar` と `band` は `[x, center, lower, upper]` の点を持ち、`lower ≤ center ≤ upper` を満たす必要があります。全ての y 値を null にすると欠損になり、帯はそこで分断します。帯の x は昇順の数値・時刻・log 座標、y は value または log です。log の区間は全て正値にします。統計量はセル側で計算してください。
+
+```python
+#| id: interval-charts
+for kind in ("errorbar", "band"):
+    display_chart({"kind": kind, "xLabel": "Observation", "yLabel": "Estimate",
+        "series": [{"name": "Estimate and interval", "points": [
+            [0, -3, -5, -2], [1, 0, -2, 3], [2, 4, 3, 6]]}]})
+```

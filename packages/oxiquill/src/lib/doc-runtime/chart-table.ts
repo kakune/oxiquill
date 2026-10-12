@@ -14,7 +14,28 @@ export function chartToTable(spec: ChartSpec, labels: RuntimeLabels): TableArtif
     label,
     type
   });
-  if (spec.kind === 'histogram') {
+  if (spec.kind === 'errorbar' || spec.kind === 'band') {
+    columns = [
+      column('series', labels.chartSeries, 'string'),
+      column(
+        'x',
+        spec.xLabel ?? 'X',
+        spec.xType === 'time' ? 'datetime' : spec.xType === 'category' ? 'string' : 'number'
+      ),
+      column('center', labels.chartValue),
+      column('lower', labels.chartBinLower),
+      column('upper', labels.chartBinUpper)
+    ];
+    spec.series.forEach((series, index) => {
+      rowCount += series.points.length;
+      for (const point of series.points.slice(0, limit - rows.length))
+        rows.push([
+          series.name ?? labels.chartSeriesName(index + 1),
+          spec.xType === 'time' ? timeCoordinate(point[0]) : point[0],
+          ...point.slice(1)
+        ]);
+    });
+  } else if (spec.kind === 'histogram') {
     columns = [
       column('lower', labels.chartBinLower),
       column('upper', labels.chartBinUpper),

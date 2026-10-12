@@ -138,7 +138,7 @@ function generateChartLimitHelper() {
   return `fn ensure_chart_data_limit(spec: &Value) -> Result<(), String> {
     let kind = spec.get("kind").and_then(Value::as_str).unwrap_or_default();
     let data_items = match kind {
-        "line" | "scatter" | "area" => spec
+        "line" | "scatter" | "area" | "errorbar" | "band" => spec
             .get("series")
             .and_then(Value::as_array)
             .map(|series| {

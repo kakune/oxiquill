@@ -52,7 +52,13 @@ export type ArtifactStream = 'stdout' | 'stderr' | 'display';
 export type TableColumnType = 'string' | 'number' | 'integer' | 'boolean' | 'date' | 'datetime' | 'null' | 'unknown';
 export type ChartAxisType = 'value' | 'category' | 'time' | 'log';
 export type ChartSpec =
-  LineChartSpec | ScatterChartSpec | BarChartSpec | HistogramChartSpec | AreaChartSpec | HeatmapChartSpec;
+  | LineChartSpec
+  | ScatterChartSpec
+  | BarChartSpec
+  | HistogramChartSpec
+  | AreaChartSpec
+  | HeatmapChartSpec
+  | IntervalChartSpec;
 export type OutputArtifact = TextArtifact | JsonArtifact | TableArtifact | ChartArtifact | ImageArtifact | HtmlArtifact;
 
 export interface BaseArtifact {
@@ -237,6 +243,23 @@ export interface HeatmapChartSpec extends BaseChartSpec {
   xCategories?: readonly string[];
   yCategories?: readonly string[];
   data: readonly (readonly [number | string, number | string, number])[];
+}
+
+export type IntervalPoint =
+  readonly [number | string, number, number, number] | readonly [number | string, null, null, null];
+
+export interface IntervalChartSeries {
+  id?: string;
+  name?: string;
+  style?: ChartSeriesStyle;
+  points: readonly IntervalPoint[];
+}
+
+export interface IntervalChartSpec extends BaseChartSpec {
+  kind: 'errorbar' | 'band';
+  style?: LineChartStyle;
+  yType?: 'value' | 'log';
+  series: readonly IntervalChartSeries[];
 }
 
 export interface RawCellExecutionResult {

@@ -24,6 +24,11 @@ export function chartCoordinates(spec: ChartSpec): {
       return spec.orientation === 'horizontal'
         ? { x: spec.series.flatMap((series) => series.values), y: spec.categories, value: [] }
         : { x: spec.categories, y: spec.series.flatMap((series) => series.values), value: [] };
+    case 'errorbar':
+    case 'band': {
+      const points = spec.series.flatMap((series) => series.points);
+      return { x: points.map((point) => point[0]), y: points.flatMap((point) => point.slice(1)), value: [] };
+    }
     case 'histogram':
       return {
         x: spec.bins.flatMap((bin) => [bin[0], bin[1]]),
