@@ -89,6 +89,36 @@ describe('persistent chart updates', () => {
     expect(screen.getByRole('button', { name: 'Show data as a table' })).toHaveFocus();
   });
 
+  it('tracks legend selection from events and restored state without cloning chart options', async () => {
+    const spec = (y: number): ChartSpec => ({
+      kind: 'line',
+      series: [
+        { name: 'First', points: [[0, y]] },
+        { name: 'Second', points: [[1, y]] }
+      ]
+    });
+    const view = render(output(spec(1)));
+    await waitFor(() => expect(screen.getByRole('button', { name: 'First' })).toBeEnabled());
+    const selectionChanged = chart.on.mock.calls.find(([event]) => event === 'legendselectchanged')?.[1] as (
+      params: unknown
+    ) => void;
+    act(() => selectionChanged({ name: 'line:0', selected: { 'line:0': false, 'line:1': true } }));
+    expect(screen.getByRole('button', { name: 'First' })).toHaveAttribute('aria-pressed', 'false');
+    expect(screen.getByRole('button', { name: 'Second' })).toHaveAttribute('aria-pressed', 'true');
+    view.rerender(output(spec(2)));
+    await waitFor(() => expect(chart.setOption).toHaveBeenCalledTimes(2));
+    expect(screen.getByRole('button', { name: 'First' })).toHaveAttribute('aria-pressed', 'false');
+    expect(chart.getOption).not.toHaveBeenCalled();
+
+    chart.getOption.mockReturnValue({ legend: [{ selected: { 'line:1': false } }] });
+    view.rerender(output({ ...spec(2), style: { renderer: 'svg' } }));
+    await waitFor(() => expect(echartsInit).toHaveBeenCalledTimes(2));
+    await waitFor(() =>
+      expect(screen.getByRole('button', { name: 'Second' })).toHaveAttribute('aria-pressed', 'false')
+    );
+    expect(screen.getByRole('button', { name: 'First' })).toHaveAttribute('aria-pressed', 'true');
+  });
+
   it.each([false, true])('respects explicit showSymbol=%s through viewport updates', async (showSymbol) => {
     let extent = [0, 2];
     const instance = {

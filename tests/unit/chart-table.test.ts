@@ -15,7 +15,33 @@ it.each(['line', 'area', 'scatter'] as const)('retains exact %s coordinates and 
     ).rows
   ).toEqual([
     ['Named', '2024-01-01', 0.30000000000000004],
-    ['Series 2', 0, 2]
+    ['Series 2', '1970-01-01T00:00:00.000Z', 2]
+  ]);
+});
+
+it('shows whole epoch milliseconds on time axes as UTC timestamps', () => {
+  const table = chartToTable(
+    {
+      kind: 'scatter',
+      xType: 'value',
+      yType: 'time',
+      series: [
+        {
+          points: [
+            [1_700_000_000_000, 1_700_000_000_000],
+            [1, 1.5],
+            [2, 9e15]
+          ]
+        }
+      ]
+    },
+    labels
+  );
+  expect(table.columns.map((column) => column.type)).toEqual(['string', 'number', 'datetime']);
+  expect(table.rows).toEqual([
+    ['Series 1', 1_700_000_000_000, '2023-11-14T22:13:20.000Z'],
+    ['Series 1', 1, 1.5],
+    ['Series 1', 2, 9e15]
   ]);
 });
 

@@ -71,7 +71,7 @@ export function createPythonWorkerRequestHandler({
       pyodide.setStderr({ batched: stderr.append });
 
       if (request.source) {
-        assertSupportedPythonImports(pyodide, request.source);
+        assertSupportedPythonImports(pyodide, request.source, request.shippedPackages);
         await measureRuntimePhase('imports', request.cellId, () =>
           pyodide.loadPackagesFromImports(request.source ?? '')
         );
@@ -131,23 +131,41 @@ export function createPythonWorkerRequestHandler({
   };
 }
 
+/**
+ * Rejects imports of lock-file packages outside the site's shipped set, the declared packages' dependency
+ * closure. The full lock file is copied, so Pyodide would otherwise try to fetch wheels that were never shipped.
+ */
 export function assertSupportedPythonImports(
   pyodide: Pick<PyodideRuntime, 'runPython' | 'lockfile'>,
-  source: string
+  source: string,
+  shippedPackages?: readonly string[]
 ): void {
   const proxy = pyodide.runPython(
     `__import__('pyodide.code', fromlist=['find_imports']).find_imports(${JSON.stringify(source)})`
   );
   const imports = toSerializable(proxy);
   if (!Array.isArray(imports)) throw new Error('Unable to inspect Python imports.');
+  const available = shippedPackages
+    ? lockfileDependencyClosure(pyodide.lockfile.packages, shippedPackages)
+    : new Set(supportedPyodidePackages);
   const unsupported = Object.entries(pyodide.lockfile.packages).find(
-    ([name, info]) =>
-      !supportedPyodidePackages.includes(name) && info.imports.some((module) => imports.includes(module.split('.')[0]))
+    ([name, info]) => !available.has(name) && info.imports.some((module) => imports.includes(module.split('.')[0]))
   );
-  if (unsupported)
-    throw new Error(
-      `Python package ${unsupported[0]} is not shipped with this site. Only bundled packages are available while editing.`
-    );
+  if (unsupported) throw new Error(`Python package ${unsupported[0]} is not shipped with this site.`);
+}
+
+function lockfileDependencyClosure(
+  packages: PyodideRuntime['lockfile']['packages'],
+  roots: readonly string[]
+): Set<string> {
+  const selected = new Set<string>();
+  const visit = (name: string): void => {
+    if (selected.has(name)) return;
+    selected.add(name);
+    (packages[name]?.depends ?? []).forEach(visit);
+  };
+  roots.forEach(visit);
+  return selected;
 }
 
 export function createPythonRuntimeLoader({

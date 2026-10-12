@@ -117,6 +117,8 @@ export default function ChartOutput({ artifact, idPrefix, labels }: ChartOutputP
           options,
           notMerge ? { notMerge: true } : { notMerge: false, lazyUpdate: true, replaceMerge: ['series'] }
         );
+        // Merges keep ECharts' legend selection; replacements start from the applied option.
+        if (notMerge) setSelected({ ...(options.legend as { selected?: Record<string, boolean> }).selected });
         current.signature = signature;
         current.spec = next.spec;
         current.reducedMotion = motion;
@@ -134,7 +136,6 @@ export default function ChartOutput({ artifact, idPrefix, labels }: ChartOutputP
         current.updateViewport?.();
       }
       setDisplayed(next);
-      setSelected(chartViewState(current.instance).legend?.[0]?.selected ?? {});
       setIsReady(true);
       setRenderError(undefined);
     } catch (error) {
@@ -241,8 +242,10 @@ export default function ChartOutput({ artifact, idPrefix, labels }: ChartOutputP
           'legendselectall',
           'legendinverseselect'
         ]) {
-          instance.on(event, () => {
-            if (instance) setSelected(chartViewState(instance).legend?.[0]?.selected ?? {});
+          // Legend actions report the complete selection; getOption() would clone every data point.
+          instance.on(event, (params: unknown) => {
+            const selected = (params as { selected?: Record<string, boolean> } | undefined)?.selected;
+            if (selected) setSelected({ ...selected });
             updateViewport();
           });
         }

@@ -17,6 +17,8 @@ export function summarizeCells(cells) {
     ),
     manifestFingerprint: stableFingerprint(cells),
     pythonCellCount: pythonCells.length,
+    // Pyodide ships these packages and their lock-file dependencies.
+    pythonPackages: Array.from(new Set(pythonCells.flatMap((cell) => cell.packages))).sort(),
     pythonFingerprint: stableFingerprint(
       pythonCells.map((cell) => ({
         id: cell.id,
@@ -53,6 +55,7 @@ export function createRuntimeVersion(summary) {
   return stableFingerprint({
     haskell: hashText(summary?.haskellFingerprint ?? ''),
     manifest: hashText(summary?.manifestFingerprint ?? ''),
+    python: summary?.pythonPackages ?? [],
     rust: hashText(summary?.rustFingerprint ?? '')
   });
 }

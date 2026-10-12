@@ -31,6 +31,29 @@ it('checks imports against bundled packages and releases the import proxy', () =
   expect(() => assertSupportedPythonImports(pyodide as never, '')).toThrow('Unable to inspect');
 });
 
+it('limits imports to the dependency closure of packages shipped with the site', () => {
+  const pyodide = {
+    runPython: vi.fn(),
+    lockfile: {
+      packages: {
+        matplotlib: { imports: ['matplotlib'], depends: ['numpy'] },
+        numpy: { imports: ['numpy'], depends: [] },
+        pandas: { imports: ['pandas'], depends: ['numpy'] }
+      }
+    }
+  };
+  const check = (imports: string[]) => {
+    pyodide.runPython.mockReturnValue({ toJs: () => imports, destroy: vi.fn() });
+    return () => assertSupportedPythonImports(pyodide as never, '', ['matplotlib']);
+  };
+  expect(check(['matplotlib', 'numpy', 'math'])).not.toThrow();
+  expect(check(['pandas'])).toThrow('Python package pandas is not shipped with this site.');
+  expect(() => {
+    pyodide.runPython.mockReturnValue({ toJs: () => ['numpy'], destroy: vi.fn() });
+    assertSupportedPythonImports(pyodide as never, '', []);
+  }).toThrow('numpy is not shipped');
+});
+
 function createDeferred() {
   let reject!: (reason: Error) => void;
   let resolve!: () => void;
@@ -283,6 +306,30 @@ describe('python worker request handling', () => {
     ]);
     await handle({ type: 'prepare', requestId: 2, packages: ['numpy'] });
     expect(loadPackage).toHaveBeenCalledOnce();
+  });
+  it('rejects imports outside the shipped packages before fetching wheels', async () => {
+    const pyodide = {
+      loadedPackages: { numpy: 'default channel' },
+      loadPackagesFromImports: vi.fn(),
+      runPython: vi.fn(() => ({ toJs: () => ['pandas'], destroy: vi.fn() })),
+      lockfile: { packages: { numpy: { imports: ['numpy'] }, pandas: { imports: ['pandas'], depends: ['numpy'] } } },
+      setStderr: vi.fn(),
+      setStdout: vi.fn()
+    };
+    const postMessage = vi.fn();
+    const handleRequest = createPythonWorkerRequestHandler({
+      ensurePyodide: async () => pyodide as never,
+      postMessage
+    });
+
+    await handleRequest(pythonRequest({ source: 'import pandas', shippedPackages: ['numpy'] }));
+
+    expect(pyodide.loadPackagesFromImports).not.toHaveBeenCalled();
+    expect(postMessage).toHaveBeenLastCalledWith({
+      requestId: 7,
+      ok: false,
+      error: 'Python package pandas is not shipped with this site.'
+    });
   });
   it('loads packages, evaluates source, destroys proxies, and posts normalized output', async () => {
     const globals = { destroy: vi.fn() };

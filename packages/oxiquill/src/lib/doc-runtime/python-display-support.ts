@@ -619,8 +619,10 @@ def display_line(df, *, x, y, id=None, title=None, caption=None, style=None):
         columns = [y] if isinstance(y, str) else y
         if not isinstance(x, str) or not isinstance(columns, list) or not columns or not all(isinstance(name, str) for name in columns):
             raise ValueError("display_line requires an x column name and a y column name or nonempty list of names.")
-        if len(columns) > __oxiquill_chart_limit or max(1, len(df)) * len(columns) > __oxiquill_chart_limit:
-            raise ValueError(f"Line chart exceeds {__oxiquill_chart_limit} data items.")
+        # Each series counts at least one item, as in the chart validator.
+        item_count = max(1, len(df)) * len(columns)
+        if item_count > __oxiquill_chart_limit:
+            raise ValueError(f"Chart contains {item_count} data items; maximum is {__oxiquill_chart_limit}.")
         if not df.columns.is_unique or len(set(columns)) != len(columns):
             raise ValueError("display_line requires unique column names.")
         for name in [x, *columns]:
