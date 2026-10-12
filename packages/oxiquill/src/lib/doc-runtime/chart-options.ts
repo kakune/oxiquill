@@ -629,6 +629,7 @@ export function chartDataSummary(spec: ChartSpec, labels: RuntimeLabels): string
     dataCount === 0
       ? [spec.xLabel, spec.yLabel, labels.noChartData].filter(Boolean).join(labels.locale === 'ja' ? '。' : '. ')
       : summary;
+  const sizeMaximum = spec.kind === 'bubble' ? bubbleSizeMapping(spec).maximum : 0;
   return [
     text,
     ...(spec.kind === 'bubble'
@@ -637,7 +638,7 @@ export function chartDataSummary(spec: ChartSpec, labels: RuntimeLabels): string
             ' (' +
             (spec.sizeMapping?.scale ?? 'area') +
             '): 0–' +
-            chartNumberFormatter([bubbleSizeMapping(spec).maximum], labels.locale)(bubbleSizeMapping(spec).maximum)
+            chartNumberFormatter([sizeMaximum], labels.locale)(sizeMaximum)
         ]
       : []),
     ...(spec.annotations ?? []).map((item) => annotationDescription(spec, item, labels, values))

@@ -134,8 +134,8 @@ export default function ChartOutput({ artifact, idPrefix, labels }: ChartOutputP
         current.locale = nextLabels.locale;
         current.symbols = undefined;
         current.indexes = undefined;
-        const xAxis = options.xAxis as { data?: readonly unknown[]; axisLine: { show: boolean } };
-        const yAxis = options.yAxis as { data?: readonly unknown[]; axisLine: { show: boolean } };
+        const xAxis = options.xAxis as { data?: readonly unknown[] };
+        const yAxis = options.yAxis as { data?: readonly unknown[] };
         current.counts = { x: xAxis.data?.length ?? 0, y: yAxis.data?.length ?? 0 };
         current.updateViewport?.();
       }
