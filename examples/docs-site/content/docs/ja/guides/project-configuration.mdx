@@ -139,3 +139,5 @@ subpath 配下へ公開するときは Astro の `base` を設定します。Oxi
 生成 directory を変更するときは、resolved cache、helper-crate target、output、public-asset path に合わせて `tsconfig.json` の exclusion も更新します。そうしないと `**/*` のような広い include により、Astro/TypeScript が Pyodide などの生成 JavaScript を output ではなく source として解析することがあります。
 
 `python.preload` の default は `false` です。有効にすると Python cell がある page の DOM ready 時に準備を始めます。詳細は [Python runtime asset](/ja/guides/python-runtime/#browser-の準備) を参照してください。
+
+`python.additionalPackages` はパッケージ名から `{ version, license, licenseFiles }` への mapping です。固定 Pyodide lock の配布物を許可リストへ追加します。`python.experimentalSetup` は既定で `false` で、有効にすると同じページの Python setup を毎回再実行できます。詳細は [Python runtime asset](/ja/guides/python-runtime/) を参照してください。
