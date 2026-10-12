@@ -28,7 +28,11 @@ export function chartGalleryConfig(baseDirectory = process.env.CHART_BASE_DIR) {
     },
     oxc: { jsx: { runtime: 'automatic', importSource: 'preact' } },
     optimizeDeps: { rolldownOptions: { transform: { jsx: { runtime: 'automatic', importSource: 'preact' } } } },
-    server: { port: 4323, strictPort: true, fs: { allow: [repository, source] } }
+    server: {
+      port: 4323,
+      strictPort: true,
+      fs: { allow: [repository, source, resolve(baseDirectory || repository, 'tests/fixtures')] }
+    }
   });
 }
 
