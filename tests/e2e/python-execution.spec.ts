@@ -6,6 +6,7 @@ test('failed Python figures never leak into later executions', async ({ page, br
   await page.goto('/features/rich-output/');
   const cell = page.getByTestId('cell-features__rich-output__python-rich-outputs');
   await cell.scrollIntoViewIfNeeded();
+  await expect(cell.locator('xpath=ancestor::astro-island[1]')).not.toHaveAttribute('ssr', '', { timeout: 30_000 });
   await cell.getByRole('button', { name: 'Edit Python', exact: true }).click();
   const source = cell.getByLabel('Python draft');
   const run = cell.getByRole('button', { name: 'Run', exact: true });
