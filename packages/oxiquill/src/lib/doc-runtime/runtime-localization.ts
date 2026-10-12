@@ -309,8 +309,8 @@ const runtimeLabels = {
     diagnosticDetail: translateDiagnostic,
     executionError: (detail) => `セルの実行に失敗しました: ${translateDiagnostic(detail)}`,
     executionErrorLabel: 'セルの実行に失敗しました:',
-    failedOutput: 'Output from the failed execution',
-    previousSuccessfulOutput: 'Previous successful output',
+    failedOutput: '失敗した実行の出力',
+    previousSuccessfulOutput: '前回成功した実行の出力',
     hideCode: 'コードを隠す',
     htmlOutput: 'HTML 出力',
     idleButton: 'セルを実行すると出力が表示されます。',
@@ -331,7 +331,7 @@ const runtimeLabels = {
     rowsPerPage: '1ページあたりの行数',
     rowsRange: (first, last, total, truncated) =>
       total === undefined
-        ? `Rows ${first}-${last} (total unknown; truncated)`
+        ? `${first}–${last} 行（総数不明・省略あり）`
         : `${total} 行中 ${first}–${last} 行${truncated ? '（省略あり）' : ''}`,
     run: '実行',
     resetInputs: '入力を初期値に戻す',
