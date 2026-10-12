@@ -16,7 +16,11 @@ import {
   parseCellsFromMarkdown,
   sourceThemes
 } from './doc-runtime-core.mjs';
-import { throwInteractiveCellDiagnostics, validateCellDependencies } from '../lib/doc-runtime/cell-authoring.mjs';
+import {
+  resolvePythonSetups,
+  throwInteractiveCellDiagnostics,
+  validateCellDependencies
+} from '../lib/doc-runtime/cell-authoring.mjs';
 import { defaultFileSystem, listFiles, writeIfChanged } from './doc-runtime/file-system.mjs';
 import { listAuthoredHelperInputFiles } from './doc-runtime/helper-inputs.mjs';
 import { listHelperCrates } from './doc-runtime/helper-crate-service.mjs';
@@ -33,6 +37,7 @@ import {
   summarizeCells
 } from './doc-runtime/runtime-summary.mjs';
 import { hashBytes, hashText, stableFingerprint } from './doc-runtime/hashing.mjs';
+import { generateHaskellOutput } from './doc-runtime/haskell-output-codegen.mjs';
 import { createRuntimePlan } from './doc-runtime/runtime-plan.mjs';
 import {
   createRuntimeOwnedOutputs,
@@ -161,7 +166,8 @@ export async function syncDocRuntime({
     fileSystem,
     helperCrates,
     highlighter,
-    paths
+    paths,
+    pythonOptions
   });
   const haskellCells = cells.filter((cell) => cell.language === 'haskell');
   const pythonCells = cells.filter((cell) => cell.language === 'python');
@@ -177,13 +183,14 @@ export async function syncDocRuntime({
     tolerateHaskellFailure: tolerateHaskellBuildFailure
   });
   const pyodideRuntimeInputs =
-    pythonCells.length > 0
-      ? await resolvePyodideInputs({ fileSystem, requestedPackages: requestedPythonPackages })
+    pythonCells.length > 0 || Object.keys(pythonOptions.additionalPackages ?? {}).length > 0
+      ? await resolvePyodideInputs({ fileSystem, requestedPackages: requestedPythonPackages, paths, pythonOptions })
       : undefined;
   const generated = {
     cellsJson: generateCellsJson(cells),
     cellsModule: generateCellsModule(cells),
     haskellMain: generateHaskellMain(haskellCells),
+    haskellOutput: generateHaskellOutput(),
     rustCargo: generateRustCargoToml(rustCells, helperCrates, runtimeInputs),
     rustLib: generateRustLib(rustCells)
   };
@@ -212,7 +219,8 @@ export async function syncDocRuntime({
     const licensesChanged = await syncLicenses({
       fileSystem,
       includeRustBuildFiles: false,
-      paths
+      paths,
+      pythonOptions
     });
     return runtimeResult({ licensesChanged, plan, summary });
   }
@@ -276,7 +284,8 @@ export async function syncDocRuntime({
     const licensesChanged = await syncLicenses({
       fileSystem,
       includeRustBuildFiles: false,
-      paths
+      paths,
+      pythonOptions
     });
     await replaceDirectory(generatedStage, paths.generatedDir, { fileSystem });
 
@@ -305,7 +314,7 @@ async function createDesiredRuntime({
       lockSha256: runtimeInputs.rustLockSha256
     })
   );
-  const haskellSourceFingerprint = hashText(generated.haskellMain);
+  const haskellSourceFingerprint = hashText(stableFingerprint([generated.haskellMain, generated.haskellOutput]));
   const pythonAssetFingerprint = pythonCellCount > 0 ? pyodideRuntimeInputs.fingerprint : stableFingerprint([]);
 
   return Object.freeze({
@@ -358,7 +367,11 @@ function runtimeOutputState({ fileSystem, paths, state }) {
         ),
       rustPublic: recordedFilesExist(state?.languages?.rust?.publicFiles, paths.rustWasmPublicDir, fileSystem),
       pythonPublic: recordedFilesExist(state?.languages?.python?.publicFiles, paths.pyodidePublicDir, fileSystem),
-      haskellSource: outputPresent.haskellSource && fileSystem.existsSync(pathInUrl(paths.haskellCellsDir, 'Main.hs')),
+      haskellSource:
+        outputPresent.haskellSource &&
+        ['Main.hs', 'Oxiquill/Output.hs'].every((file) =>
+          fileSystem.existsSync(pathInUrl(paths.haskellCellsDir, file))
+        ),
       haskellPublic: recordedFilesExist(state?.languages?.haskell?.publicFiles, paths.haskellWasmPublicDir, fileSystem)
     }
   };
@@ -401,6 +414,7 @@ async function stageLanguageOutputs({
   if (plan.languages.haskell.source === 'write' || plan.languages.haskell.public === 'build') {
     const stagePath = await addDirectoryStage('haskellCellsDir', paths, stagedPaths, stages, { fileSystem });
     await writeIfChanged(pathInUrl(stagePath, 'Main.hs'), generated.haskellMain, { fileSystem });
+    await writeIfChanged(pathInUrl(stagePath, 'Oxiquill/Output.hs'), generated.haskellOutput, { fileSystem });
   }
   if (plan.languages.haskell.public === 'build') {
     await addDirectoryStage('haskellWasmPublicDir', paths, stagedPaths, stages, { fileSystem });
@@ -574,7 +588,13 @@ async function fingerprintHelperSources({ fileSystem, paths }) {
   return stableFingerprint(entries);
 }
 
-export async function collectCells({ fileSystem = defaultFileSystem, helperCrates, highlighter, paths }) {
+export async function collectCells({
+  fileSystem = defaultFileSystem,
+  helperCrates,
+  highlighter,
+  paths,
+  pythonOptions = {}
+}) {
   const docsDir = pathFromUrl(paths.docsDir);
   const workspaceRoot = pathFromUrl(paths.workspaceRoot);
   const files = await listFiles(docsDir, { fileSystem });
@@ -583,7 +603,7 @@ export async function collectCells({ fileSystem = defaultFileSystem, helperCrate
     markdownFiles.map(async (filePath) => {
       const pagePath = normalizePath(path.relative(workspaceRoot, filePath));
       const source = await fileSystem.readFile(filePath, 'utf8');
-      return parseCellsFromMarkdown(source, pagePath);
+      return parseCellsFromMarkdown(source, pagePath, pythonOptions);
     })
   );
   const authoringCells = parsedPages.flatMap((page) => page.cells);
@@ -601,7 +621,7 @@ export async function collectCells({ fileSystem = defaultFileSystem, helperCrate
   assertUniqueRustFunctionNames(rustCells);
   assertUniqueRustInputBindings(rustCells);
 
-  return Promise.all(authoringCells.map((cell) => createCellManifest(cell, highlighter)));
+  return Promise.all(resolvePythonSetups(authoringCells).map((cell) => createCellManifest(cell, highlighter)));
 }
 
 export async function markRuntimeReady({

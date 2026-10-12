@@ -3,6 +3,7 @@ import { initialValues } from '../../lib/doc-runtime/interactive-cell-model.js';
 import { restoreSharedInputs, sharedInputsParameter } from '../../lib/doc-runtime/input-sharing.js';
 import { createLatestRequestScheduler, createRunOnceCache } from '../../lib/doc-runtime/interactive-cell-scheduler.js';
 import { boundedErrorMessage } from '../../lib/doc-runtime/output-limits.mjs';
+import { CellExecutionError } from '../../lib/doc-runtime/execution-error.js';
 import { runInteractiveCell } from '../../lib/doc-runtime/runtime-client.js';
 import type { NormalizedCellExecutionResult } from '../../lib/doc-runtime/output-artifacts.js';
 import type { CellManifest, InputValues, RuntimeExecutionPhase } from '../../lib/doc-runtime/types.js';
@@ -23,6 +24,7 @@ type ExecutionState = {
   result?: NormalizedCellExecutionResult;
   resultFromDraft?: boolean;
   error?: string;
+  partialResult?: NormalizedCellExecutionResult;
 };
 
 const autorunRequests = createRunOnceCache<string, NormalizedCellExecutionResult>();
@@ -70,7 +72,12 @@ export function useInteractiveCellRun(cell: CellManifest, runtimeVersion: string
       setExecution((previous) => ({ ...previous, status: 'idle' }));
     },
     onError: (caught) => {
-      setExecution((previous) => ({ ...previous, error: boundedErrorMessage(caught), status: 'error' }));
+      setExecution((previous) => ({
+        ...previous,
+        error: boundedErrorMessage(caught),
+        partialResult: caught instanceof CellExecutionError ? caught.partialResult : undefined,
+        status: 'error'
+      }));
     },
     onResult: (result) => {
       setExecution({ result, resultFromDraft: latestRequestIsDraftRef.current, status: 'success' });
@@ -78,6 +85,8 @@ export function useInteractiveCellRun(cell: CellManifest, runtimeVersion: string
     onScheduled: () => {
       setExecution((previous) => ({
         ...previous,
+        error: undefined,
+        partialResult: undefined,
         phase: cell.language === 'python' ? 'preparing' : 'executing',
         status: 'running'
       }));
@@ -152,13 +161,13 @@ export function useInteractiveCellRun(cell: CellManifest, runtimeVersion: string
     setValues(nextValues);
     setInputsValid(true);
     setInputRevision((revision) => revision + 1);
-    setExecution((previous) => ({ ...previous, error: undefined, status: 'idle' }));
+    setExecution((previous) => ({ ...previous, error: undefined, partialResult: undefined, status: 'idle' }));
     if (cell.run === 'reactive' && !isEditing) schedule(nextValues, reactiveDebounceMs);
   }
 
   function stopExecution(): void {
     schedulerRef.current?.cancel();
-    setExecution((previous) => ({ ...previous, error: undefined, status: 'idle' }));
+    setExecution((previous) => ({ ...previous, error: undefined, partialResult: undefined, status: 'idle' }));
   }
 
   function editSource(source: string): void {
@@ -194,6 +203,7 @@ export function useInteractiveCellRun(cell: CellManifest, runtimeVersion: string
   return {
     phase: execution.phase,
     error: execution.error,
+    partialResult: execution.partialResult,
     isComplete: execution.status === 'success',
     inputsValid,
     inputRevision,

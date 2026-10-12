@@ -35,6 +35,7 @@ import { createBrowserBundleCollector, syncBrowserBundleReport } from '../genera
 import { maintainCleanupOwnership, prepareCleanupOwnership } from '../generator/cleanup-ownership.mjs';
 import rehypeKatex from '../lib/doc-runtime/rehype-katex.mjs';
 import remarkInteractiveCells from '../lib/doc-runtime/remark-interactive-cells.mjs';
+import { pythonLicensePaths } from '../generator/doc-runtime/python-package-notices.mjs';
 import remarkMermaidDiagrams from '../lib/doc-runtime/remark-mermaid-diagrams.mjs';
 import remarkPublicAssetBase from '../lib/doc-runtime/remark-public-asset-base.mjs';
 import { oxiquillVirtualModulesPlugin } from './virtual-modules.mjs';
@@ -105,9 +106,11 @@ export interface OxiquillFrameworkOptions<StarlightOptions extends object = obje
 }
 
 export interface OxiquillPythonOptions {
+  experimentalSetup?: boolean;
   preload?: boolean;
   offline?: boolean;
   packageMirror?: string | URL;
+  additionalPackages?: Readonly<Record<string, { version: string; license: string; licenseFiles: readonly string[] }>>;
 }
 
 export type OxiquillMarkdownConfig = Omit<AstroMarkdownConfig, 'processor'> & {
@@ -150,7 +153,7 @@ export interface OxiquillIntegrationOptions {
 
 const createDocRuntimeContextForPaths = createDocRuntimeContext as unknown as (options: {
   paths: OxiquillPaths;
-  pythonOptions?: Readonly<{ offline: boolean; preload: boolean; packageMirror?: string }>;
+  pythonOptions?: Readonly<OxiquillPythonOptions>;
 }) => Promise<DocRuntimeContext>;
 const syncDocRuntimeForBuild = syncDocRuntime as unknown as (
   options: DocRuntimeContext & { mode: 'build' }
@@ -258,7 +261,7 @@ function createOxiquillIntegration(
   rejectCustomMarkdownProcessor(markdown);
   const metadata = createOxiquillIntegrationMetadata({ astro: astroOptions, paths: pathOptions, python });
   let paths: OxiquillPaths | undefined;
-  let pythonOptions: Readonly<{ offline: boolean; preload: boolean; packageMirror?: string }> | undefined;
+  let pythonOptions: Readonly<OxiquillPythonOptions> | undefined;
   let buildOwnership: Awaited<ReturnType<typeof prepareCleanupOwnership>> = Object.freeze([]);
   const bundledModules = createBundledModuleCollector();
   const browserBundle = createBrowserBundleCollector();
@@ -285,10 +288,11 @@ function createOxiquillIntegration(
         }
         addWatchFile(paths.docsDir);
         addWatchFile(paths.cratesDir);
+        pythonLicensePaths(pythonOptions, paths).forEach((file) => addWatchFile(pathToFileURL(file)));
 
         const update = {
           cacheDir: astroDirectoryUrl(paths.cacheDir),
-          markdown: mergeMarkdownConfig(base, paths, markdown),
+          markdown: mergeMarkdownConfig(base, paths, markdown, pythonOptions),
           outDir: astroDirectoryUrl(paths.outDir),
           publicDir: astroDirectoryUrl(paths.publicDir),
           vite: mergeViteConfig(paths, vite, bundledModules, browserBundle)
@@ -339,6 +343,7 @@ function createOxiquillIntegration(
         await syncLicenseArtifacts({
           moduleGroups: bundledModules.snapshot(),
           outputDirectory: pathInUrl(dir, relativePathFromUrl(paths.publicDir, paths.licensesPublicDir)),
+          pythonOptions,
           paths
         });
         await syncBrowserBundleReport({
@@ -438,7 +443,8 @@ function rejectCustomMarkdownProcessor(markdown: OxiquillMarkdownConfig): void {
 function mergeMarkdownConfig(
   base: BaseAstroUserConfig['base'],
   paths: OxiquillPaths,
-  markdown: OxiquillMarkdownConfig
+  markdown: OxiquillMarkdownConfig,
+  pythonOptions?: Readonly<OxiquillPythonOptions>
 ) {
   const {
     gfm,
@@ -458,7 +464,7 @@ function mergeMarkdownConfig(
       remarkPlugins: [
         remarkMath,
         [remarkPublicAssetBase, { base }],
-        [remarkInteractiveCells, { root: pathFromUrl(paths.workspaceRoot) }],
+        [remarkInteractiveCells, { root: pathFromUrl(paths.workspaceRoot), pythonOptions }],
         remarkMermaidDiagrams,
         ...remarkPlugins
       ],

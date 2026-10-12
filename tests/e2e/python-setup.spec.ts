@@ -1,0 +1,27 @@
+import { expect, test } from '@playwright/test';
+
+test('Python setup is repeatable across execution order, reset, and navigation', async ({ page, browserName }) => {
+  test.skip(browserName !== 'chromium', 'Real Pyodide setup coverage runs in Chromium.');
+  test.setTimeout(240_000);
+  await page.goto('/guides/python-runtime/');
+  const range = page.getByTestId('cell-guides__python-runtime__setup-range');
+  await range.scrollIntoViewIfNeeded();
+  await range.getByRole('button', { name: 'Run', exact: true }).click();
+  await expect(range.getByTestId('run-output')).toContainText('Range: 1.0 to 10.0', { timeout: 180_000 });
+  await expect(range).not.toContainText('Setup completed');
+  const mean = page.getByTestId('cell-guides__python-runtime__setup-mean');
+  await mean.scrollIntoViewIfNeeded();
+  await mean.getByRole('button', { name: 'Run', exact: true }).click();
+  await expect(mean.getByTestId('run-output')).toContainText('Mean: 6.714629');
+  await mean.getByLabel('scale', { exact: true }).fill('2');
+  await mean.getByRole('button', { name: 'Run', exact: true }).click();
+  await expect(mean.getByTestId('run-output')).toContainText('Mean: 13.429259');
+  await mean.getByRole('button', { name: 'Reset inputs', exact: true }).click();
+  await mean.getByRole('button', { name: 'Run', exact: true }).click();
+  await expect(mean.getByTestId('run-output')).toContainText('Mean: 6.714629');
+  await page.goto('/');
+  await page.goto('/guides/python-runtime/');
+  await range.scrollIntoViewIfNeeded();
+  await range.getByRole('button', { name: 'Run', exact: true }).click();
+  await expect(range.getByTestId('run-output')).toContainText('Range: 1.0 to 10.0', { timeout: 180_000 });
+});

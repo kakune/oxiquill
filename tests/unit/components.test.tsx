@@ -6,6 +6,7 @@ import {
   type ValidatedImageArtifact
 } from '../../packages/oxiquill/src/lib/doc-runtime/output-artifact-validation';
 import { labelsForLanguage } from '../../packages/oxiquill/src/lib/doc-runtime/runtime-localization';
+import { CellExecutionError } from '../../packages/oxiquill/src/lib/doc-runtime/execution-error';
 import { chart, echartsInit, echartsUse, mermaidInitialize, mermaidRender } from './mocks/external-runtime';
 
 type ManifestSnapshot = {
@@ -625,6 +626,28 @@ describe('InteractiveCell', () => {
     await waitFor(() => expect(screen.getByText('string failure')).toBeVisible());
     fireEvent.click(screen.getByRole('button', { name: 'Run' }));
     await waitFor(() => expect(screen.getByRole('alert')).toHaveTextContent('Cell execution failed: Unknown error.'));
+  });
+
+  it('separates failure diagnostics from the previous result and clears them on retry', async () => {
+    setManifestCells([makeCell()]);
+    mocks.runInteractiveCell.mockResolvedValueOnce({
+      outputs: [{ kind: 'text', stream: 'stdout', content: 'successful output' }]
+    });
+    render(<InteractiveCell cellId="cell-one" />);
+    fireEvent.click(screen.getByRole('button', { name: 'Run' }));
+    await screen.findByText('successful output');
+    mocks.runInteractiveCell.mockRejectedValueOnce(
+      new CellExecutionError('failed', { outputs: [{ kind: 'text', stream: 'stdout', content: 'partial output' }] })
+    );
+    fireEvent.click(screen.getByRole('button', { name: 'Run' }));
+    expect(await screen.findByTestId('failed-output')).toHaveTextContent('partial output');
+    expect(screen.getByText('successful output')).toBeVisible();
+    expect(screen.getByText('Previous successful output')).toBeVisible();
+    const next = createDeferredResult();
+    mocks.runInteractiveCell.mockReturnValueOnce(next.promise);
+    fireEvent.click(screen.getByRole('button', { name: 'Retry cell' }));
+    await waitFor(() => expect(screen.queryByTestId('failed-output')).not.toBeInTheDocument());
+    await act(async () => next.resolve({ outputs: [] }));
   });
 
   it.each(['error', 'cancel', 'invalid'])(

@@ -1,6 +1,7 @@
 import { relativePagePath } from './authoring-ids.mjs';
 import {
   parseInteractiveCellNode,
+  resolvePythonSetups,
   throwInteractiveCellDiagnostics,
   uniqueCellIdDiagnostics
 } from './cell-authoring.mjs';
@@ -11,20 +12,21 @@ import {
   visit
 } from './remark-mdx-helpers.mjs';
 
-export default function remarkInteractiveCells({ root = process.cwd() } = {}) {
+export default function remarkInteractiveCells({ root = process.cwd(), pythonOptions = {} } = {}) {
   return (tree, file) => {
     const pagePath = relativePagePath(root, file?.path);
     const diagnostics = [];
     const cells = [];
 
     visit(tree, (node) => {
-      const result = parseInteractiveCellNode(node, pagePath);
+      const result = parseInteractiveCellNode(node, pagePath, pythonOptions);
       if (result.kind === 'invalid') diagnostics.push(...result.diagnostics);
       if (result.kind === 'cell') cells.push({ cell: result.cell, node });
     });
 
     throwInteractiveCellDiagnostics(diagnostics);
     throwInteractiveCellDiagnostics(uniqueCellIdDiagnostics(cells.map(({ cell }) => cell)));
+    resolvePythonSetups(cells.map(({ cell }) => cell));
 
     const reservedIdentifiers = collectReservedMdxIdentifiers(tree);
     const componentIdentifier = allocateMdxIdentifier(reservedIdentifiers, '__OxiquillInteractiveCell');

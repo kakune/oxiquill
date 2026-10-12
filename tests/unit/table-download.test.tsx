@@ -8,6 +8,15 @@ afterEach(() => {
   vi.unstubAllGlobals();
 });
 
+it('shows an unknown total without inventing a count or unavailable pages', () => {
+  render(
+    <TableOutput table={{ kind: 'table', columns: [{ key: 'v', label: 'Value' }], rows: [[1]], truncated: true }} />
+  );
+  expect(screen.getByText('Rows 1-1 (total unknown; truncated)')).toBeVisible();
+  expect(screen.getByText('CSV includes only the 1 retrieved rows.')).toBeVisible();
+  expect(screen.getByTestId('table-next')).toBeDisabled();
+});
+
 it('downloads all sorted retained rows without clipboard access', async () => {
   let saved: Blob | undefined;
   vi.stubGlobal(

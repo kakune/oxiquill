@@ -105,6 +105,43 @@ afterEach(() => {
 });
 
 describe('runtime client', () => {
+  it('sends resolved setup and uses the combined timeout budget', async () => {
+    vi.useFakeTimers();
+    const { runner, workers } = makeRunner();
+    const setup = [{ id: 'common', source: 'x = 1', packages: [], timeoutMs: 500 }];
+    const pending = runner.runInteractiveCell(makeCell('python', { setup }), {});
+    const rejected = expect(pending).rejects.toThrow('timed out after 1500ms');
+    expect(workers[0].messages[0].setup).toEqual(setup);
+    await vi.advanceTimersByTimeAsync(1000);
+    expect(workers[0].terminated).toBe(false);
+    await vi.advanceTimersByTimeAsync(500);
+    await rejected;
+    expect(workers[0].terminated).toBe(true);
+  });
+  it('validates partial outputs while preserving the original failure and ignoring late responses', async () => {
+    const { runner, workers } = makeRunner();
+    const pending = runner.runInteractiveCell(makeCell('python'), {});
+    const failed = pending.catch((error: unknown) => error);
+    const requestId = workers[0].messages[0].requestId;
+    workers[0].emitMessage({
+      requestId,
+      ok: false,
+      error: 'original failure',
+      partialResult: {
+        outputs: [{ kind: 'text', stream: 'stdout', content: 'before failure' }, { kind: 'invalid' }]
+      }
+    });
+    const error = await failed;
+    expect(error).toMatchObject({
+      message: 'original failure',
+      partialResult: {
+        outputs: [{ kind: 'text', content: 'before failure' }],
+        outputResults: [{ status: 'valid' }, { status: 'error' }]
+      }
+    });
+    workers[0].emitMessage({ requestId, ok: false, error: 'late failure', partialResult: result });
+    expect(error).toHaveProperty('message', 'original failure');
+  });
   it('sends draft source without mutating the manifest and retains timeout recovery', async () => {
     vi.useFakeTimers();
     const { runner, workers } = makeRunner();

@@ -16,6 +16,13 @@ export function initialValues(inputs: readonly InputSpec[]): InputValues {
   return Object.fromEntries(inputs.map((input) => [input.name, input.value]));
 }
 
+export function cellExecutionTimeoutMs(cell: CellManifest): number {
+  return (cell.language === 'python' ? (cell.setup ?? []) : []).reduce(
+    (total, step) => total + step.timeoutMs,
+    cell.timeoutMs
+  );
+}
+
 export function shouldShowRunButton(runMode: RunMode): boolean {
   return runMode === 'button';
 }

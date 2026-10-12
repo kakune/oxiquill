@@ -79,3 +79,74 @@ The Python runtime fingerprint records the Pyodide version, lockfile hash, core-
 Python `packages` must be a non-empty, unique list of names vendored by the installed Pyodide release. Generation rejects unknown names before downloading. Imports discovered from source may load packages already present in the published runtime, but release builds should declare non-core dependencies explicitly for deterministic preflight and caching.
 
 See [Interactive Cells](/features/interactive-cells/) for metadata and [Troubleshooting](/guides/troubleshooting/) for recovery steps.
+
+### Additional Packages
+
+`python.additionalPackages` extends the built-in allowlist with packages from the installed Pyodide lock. Each entry pins the notice to that package's exact version and supplies complete license text files, relative to the workspace root:
+
+```js
+python: {
+  additionalPackages: {
+    sympy: {
+      version: '1.14.0',
+      license: 'BSD-3-Clause AND MIT',
+      licenseFiles: ['legal/sympy-LICENSES.txt']
+    },
+    mpmath: {
+      version: '1.4.1',
+      license: 'BSD-3-Clause',
+      licenseFiles: ['legal/mpmath-LICENSES.txt']
+    }
+  }
+}
+```
+
+A cell can then declare `packages: [sympy]`. Generation resolves `mpmath` from the lock and verifies both notices. Supply notices for every additional dependency; existing bundled notices cover built-in dependencies. Copy complete notices from the verified distribution, including bundled components. Unknown packages, version mismatches, missing or empty notice files, and hash mismatches fail generation.
+
+Allowing a package does not distribute it. Only declared packages and their dependencies are copied. For Pyodide 314.0.7, the verified SymPy and mpmath wheels add 4,616,552 bytes together. Their names, versions, hashes, and notice contents participate in runtime invalidation. Development watches notice changes and reloads Python configuration changes. The same package set is used for imports, preload, mirrors, offline generation, and the final third-party report. Arbitrary PyPI URLs and runtime network fallback are not supported.
+
+## Bounded Tables and Figure Cleanup
+
+`display_table` reads at most 10,001 rows and 101 values per row to detect truncation, retaining at most 10,000 rows and 100 columns. This also applies to generators. DataFrame index columns count toward the column limit. Discarded columns are not converted.
+
+The table reports a total only when it is known. A truncated iterator shows **total unknown**, and CSV downloads contain only retained rows. If iteration raises an exception, completed rows remain available alongside a conversion diagnostic.
+
+Every Python execution starts with fresh display state. Matplotlib figures are closed after execution, including failures, so a failed cell cannot contribute figures to a later cell.
+
+When execution raises an exception, bounded print, display, and figure output is shown under **Output from the failed execution**. A previous successful result remains separate. Starting another execution clears the failure diagnostics. Output recovery is best effort: collecting a figure must not replace the original error, and terminating or timing out a worker cannot recover output it has not sent.
+
+## Experimental Setup
+
+Enable `python: { experimentalSetup: true }` to reuse a page-local Python cell as setup. The default is disabled. A setup reference must name one Python cell without inputs; chained references execute in dependency order. Missing references, references outside the page, and cycles fail generation.
+
+```python
+#| id: common-data
+#| title: Common data preparation
+#| run: button
+from math import sqrt
+
+samples = [sqrt(value) for value in range(1, 101)]
+print("Setup completed")
+```
+
+```python
+#| id: setup-mean
+#| title: Mean from reproducible setup
+#| setup: common-data
+#| inputs:
+#|   scale: { type: number, value: 1, min: 1, max: 5 }
+print(f"Mean: {scale * sum(samples) / len(samples):.6f}")
+```
+
+```python
+#| id: setup-range
+#| title: Range from reproducible setup
+#| setup: common-data
+print(f"Range: {min(samples):.1f} to {max(samples):.1f}")
+```
+
+Each execution creates new globals, executes setup, injects the reader's inputs, and executes the body. Reader inputs override setup bindings with the same names. Setup runs again after retries, resets, and worker replacement; execution order does not supply state. Its declared packages are included in the consumer cell's manifest and preload set. The total request timeout is the sum of the setup and body timeouts.
+
+Successful setup logs, displays, return values, and figures are discarded. A failing setup stops the body and exposes only that failed stage's bounded diagnostics. Running the setup cell directly still displays its own output. Reader edits remain local drafts and do not change another cell's authored setup.
+
+This experiment removes duplicated preparation source; it does not reuse results from a previous cell. Modules still share the worker's interpreter, so setup must explicitly initialize state it relies on. The repository includes a warm-run timing comparison in `tests/performance/python-setup.mjs`; the feature remains opt-in while its cost is evaluated.
