@@ -14,7 +14,46 @@ export function chartToTable(spec: ChartSpec, labels: RuntimeLabels): TableArtif
     label,
     type
   });
-  if (spec.kind === 'boxplot') {
+  if (spec.kind === 'field') {
+    columns = [
+      column('xLower', 'X: ' + labels.chartBinLower),
+      column('xUpper', 'X: ' + labels.chartBinUpper),
+      column('yLower', 'Y: ' + labels.chartBinLower),
+      column('yUpper', 'Y: ' + labels.chartBinUpper),
+      column('value', labels.chartValue)
+    ];
+    rowCount = spec.values.reduce((sum, row) => sum + row.length, 0);
+    for (let y = 0; y < spec.values.length && rows.length < limit; y++)
+      for (let x = 0; x < spec.values[y].length && rows.length < limit; x++)
+        rows.push([spec.xEdges[x], spec.xEdges[x + 1], spec.yEdges[y], spec.yEdges[y + 1], spec.values[y][x]]);
+  } else if (spec.kind === 'bubble') {
+    columns = [
+      column('series', labels.chartSeries, 'string'),
+      column(
+        'x',
+        spec.xLabel ?? 'X',
+        spec.xType === 'time' ? 'datetime' : spec.xType === 'category' ? 'string' : 'number'
+      ),
+      column(
+        'y',
+        spec.yLabel ?? 'Y',
+        spec.yType === 'time' ? 'datetime' : spec.yType === 'category' ? 'string' : 'number'
+      ),
+      column('size', labels.chartSize),
+      column('color', labels.chartValue)
+    ];
+    spec.series.forEach((series, index) => {
+      rowCount += series.points.length;
+      for (const [x, y, size, color] of series.points.slice(0, limit - rows.length))
+        rows.push([
+          series.name ?? labels.chartSeriesName(index + 1),
+          spec.xType === 'time' ? timeCoordinate(x) : x,
+          spec.yType === 'time' ? timeCoordinate(y) : y,
+          size,
+          color ?? null
+        ]);
+    });
+  } else if (spec.kind === 'boxplot') {
     columns = [
       column('series', labels.chartSeries, 'string'),
       column('category', spec.xLabel ?? 'X', 'string'),

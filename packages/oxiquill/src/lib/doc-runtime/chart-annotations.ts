@@ -6,8 +6,13 @@ import type { RuntimeLabels } from './runtime-localization.js';
 
 export const annotationSeriesId = 'oxiquill:annotations';
 
-export function annotationDescription(spec: ChartSpec, annotation: ChartAnnotation, labels: RuntimeLabels): string {
-  const values = chartCoordinates(spec)[annotation.axis];
+export function annotationDescription(
+  spec: ChartSpec,
+  annotation: ChartAnnotation,
+  labels: RuntimeLabels,
+  coordinates = chartCoordinates(spec)
+): string {
+  const values = coordinates[annotation.axis];
   const format = chartCoordinateFormatter(
     values,
     chartAxisType(spec, annotation.axis),
@@ -24,10 +29,11 @@ export function annotationDescription(spec: ChartSpec, annotation: ChartAnnotati
 export function chartAnnotationSeries(
   spec: ChartSpec,
   chrome: ChartChrome,
-  labels: RuntimeLabels
+  labels: RuntimeLabels,
+  coordinates = chartCoordinates(spec)
 ): Record<string, unknown> | undefined {
   const amountAxis = spec.kind === 'bar' && spec.orientation === 'horizontal' ? 'x' : 'y';
-  const bounds = numericBounds(chartCoordinates(spec)[amountAxis]);
+  const bounds = numericBounds(coordinates[amountAxis]);
   const annotations = [...(spec.annotations ?? [])];
   if (
     chartAxisType(spec, amountAxis) === 'value' &&
@@ -39,7 +45,7 @@ export function chartAnnotationSeries(
     annotations.unshift({ kind: 'line', axis: amountAxis, value: 0, style: { width: 1.5 } });
   if (!annotations.length) return;
   const format = (annotation: ChartAnnotation) => () =>
-    annotationDescription(spec, annotation, labels).replace(
+    annotationDescription(spec, annotation, labels, coordinates).replace(
       /[&<>"']/gu,
       (value) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[value] ?? value
     );

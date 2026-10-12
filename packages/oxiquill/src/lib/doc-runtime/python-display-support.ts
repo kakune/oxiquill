@@ -596,6 +596,18 @@ def __oxiquill_check_chart_size(spec):
         items = spec.get(key)
         if isinstance(items, (list, tuple)) and len(items) > __oxiquill_chart_limit:
             raise ValueError(f"Chart contains {len(items)} data items; maximum is {__oxiquill_chart_limit}.")
+    for key in ("xEdges", "yEdges"):
+        edges = spec.get(key)
+        if isinstance(edges, (list, tuple)) and len(edges) > __oxiquill_chart_limit + 1:
+            raise ValueError("Field boundaries exceed the chart data limit.")
+    if spec.get("kind") == "field":
+        rows = spec.get("values")
+        if isinstance(rows, (list, tuple)):
+            count = 0
+            for row in rows:
+                count += max(1, len(row)) if isinstance(row, (list, tuple)) else 1
+                if count > __oxiquill_chart_limit:
+                    raise ValueError(f"Chart contains {count} data items; maximum is {__oxiquill_chart_limit}.")
     series = spec.get("series")
     if not isinstance(series, (list, tuple)):
         return

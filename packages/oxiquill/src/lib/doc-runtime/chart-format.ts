@@ -29,6 +29,16 @@ export function chartCoordinates(spec: ChartSpec): {
       const points = spec.series.flatMap((series) => series.points);
       return { x: points.map((point) => point[0]), y: points.flatMap((point) => point.slice(1)), value: [] };
     }
+    case 'field':
+      return { x: spec.xEdges, y: spec.yEdges, value: spec.values.flat() };
+    case 'bubble': {
+      const points = spec.series.flatMap((series) => series.points);
+      return {
+        x: points.map((point) => point[0]),
+        y: points.map((point) => point[1]),
+        value: points.map((point) => point[3])
+      };
+    }
     case 'boxplot':
       return {
         x: spec.categories,

@@ -4,7 +4,10 @@ import { resolve } from 'node:path';
 import { expect, it } from 'vitest';
 import { validateOutputArtifacts } from '../../packages/oxiquill/src/lib/doc-runtime/output-artifact-validation';
 import { chartSpecToEChartsOptions } from '../../packages/oxiquill/src/lib/doc-runtime/chart-options';
-import { heatmapColorScale } from '../../packages/oxiquill/src/lib/doc-runtime/chart-color-scale';
+import {
+  heatmapColorScale,
+  updatedColorSelection
+} from '../../packages/oxiquill/src/lib/doc-runtime/chart-color-scale';
 const echarts = createRequire(resolve('packages/oxiquill/package.json'))('echarts');
 const spec = {
   kind: 'heatmap',
@@ -78,3 +81,29 @@ it.each([
   { colorScale: 'sequential' },
   { style: { palette: { light: ['#123', '#456'] } } }
 ])('rejects inconsistent scales %j', (patch) => expect(validate(patch).status).toBe('error'));
+
+it('keeps selected values across automatic domains and resets only for authored changes', () => {
+  const automatic = {
+    kind: 'heatmap',
+    colorScale: 'diverging',
+    data: [
+      [0, 0, -2],
+      [1, 0, 2]
+    ]
+  };
+  const wider = {
+    ...automatic,
+    data: [
+      [0, 0, -4],
+      [1, 0, 4]
+    ]
+  };
+  expect(updatedColorSelection(automatic, wider, [-0.5, 0.5])).toEqual([-0.25, 0.25]);
+  expect(updatedColorSelection(automatic, wider, [-1, 1])).toEqual([-1, 1]);
+  expect(updatedColorSelection(spec, { ...spec, colorMax: 10 }, [-0.5, 0.5])).toEqual([-1, 1]);
+  const bubbles = { kind: 'bubble', colorMapping: { min: 0, max: 10 }, series: [] };
+  expect(updatedColorSelection(bubbles, { ...bubbles, colorMapping: { min: 0, max: 20 } }, [2, 8])).toEqual([0, 20]);
+  const field = { kind: 'field', xEdges: [0, 1], yEdges: [0, 1, 2], values: [[0], [10]] };
+  expect(updatedColorSelection(field, { ...field, values: [[5], [15]] }, [2, 8])).toEqual([5, 8]);
+  expect(updatedColorSelection(field, { ...field, values: [[20], [30]] }, [2, 8])).toEqual([20, 30]);
+});

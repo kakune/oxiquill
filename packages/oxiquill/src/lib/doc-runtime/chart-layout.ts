@@ -11,8 +11,8 @@ export function chartHeight(spec: ChartSpec): number {
 }
 
 export function chartLayout(spec: ChartSpec, width: number, height: number, legend: boolean) {
-  const verticalMap = spec.kind === 'heatmap' && width >= 600;
-  const bottom = spec.kind === 'heatmap' && !verticalMap ? 88 : 16;
+  const verticalMap = hasChartColorScale(spec) && width >= 600;
+  const bottom = hasChartColorScale(spec) && !verticalMap ? 88 : 16;
   const right = verticalMap ? 112 : 16;
   const top = legend ? 48 : 16;
   return {
@@ -73,4 +73,10 @@ export function categoryLabelLayout(count: number, extent: number, horizontal: b
     // The formatter owns truncation so grapheme clusters remain intact.
     margin: 10
   };
+}
+
+export function hasChartColorScale(spec: ChartSpec): boolean {
+  return (
+    spec.kind === 'heatmap' || spec.kind === 'field' || (spec.kind === 'bubble' && spec.colorMapping !== undefined)
+  );
 }

@@ -59,7 +59,9 @@ export type ChartSpec =
   | AreaChartSpec
   | HeatmapChartSpec
   | IntervalChartSpec
-  | BoxplotChartSpec;
+  | BoxplotChartSpec
+  | BubbleChartSpec
+  | FieldChartSpec;
 export type OutputArtifact = TextArtifact | JsonArtifact | TableArtifact | ChartArtifact | ImageArtifact | HtmlArtifact;
 
 export interface BaseArtifact {
@@ -335,4 +337,27 @@ export interface BoxplotChartSpec extends BaseChartSpec {
   yType?: 'value' | 'log';
   categories: readonly string[];
   series: readonly { id?: string; name?: string; style?: ChartSeriesStyle; values: readonly (BoxplotValue | null)[] }[];
+}
+
+export type BubblePoint = readonly [number | string, number | string, number, (number | null)?];
+export interface BubbleSizeMapping {
+  maxValue?: number;
+  minPixels?: number;
+  maxPixels?: number;
+  scale?: 'area' | 'radius';
+}
+export interface BubbleChartSpec extends BaseChartSpec {
+  kind: 'bubble';
+  sizeMapping?: BubbleSizeMapping;
+  colorMapping?: { min: number; max: number; palette?: ChartPalette };
+  series: readonly { id?: string; name?: string; style?: ScatterSeriesStyle; points: readonly BubblePoint[] }[];
+}
+
+export interface FieldChartSpec extends BaseChartSpec {
+  kind: 'field';
+  xType?: 'value';
+  yType?: 'value';
+  xEdges: readonly number[];
+  yEdges: readonly number[];
+  values: readonly (readonly (number | null)[])[];
 }

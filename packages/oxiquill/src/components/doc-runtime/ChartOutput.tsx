@@ -1,4 +1,4 @@
-import { heatmapColorScale, heatmapColorSignature } from '../../lib/doc-runtime/chart-color-scale.js';
+import { updatedColorSelection, selectedColorRange } from '../../lib/doc-runtime/chart-color-scale.js';
 import { useEffect, useMemo, useRef, useState } from 'preact/hooks';
 import { boundedErrorMessage } from '../../lib/doc-runtime/output-limits.mjs';
 import type { RuntimeLabels } from '../../lib/doc-runtime/runtime-localization.js';
@@ -73,7 +73,7 @@ export default function ChartOutput({ artifact, idPrefix, labels }: ChartOutputP
     [tableOpen, displayed.spec, labels]
   );
   const [exportError, setExportError] = useState<string>();
-  const savedView = useRef<{ signature: string; rangeSignature: string; state: ChartViewState }>();
+  const savedView = useRef<{ signature: string; rangeSignature: string; spec: ChartSpec; state: ChartViewState }>();
 
   function applyLatest(force = false): void {
     const current = chart.current;
@@ -106,22 +106,17 @@ export default function ChartOutput({ artifact, idPrefix, labels }: ChartOutputP
             delete state.dataZoom;
             delete state.symbols;
           }
+          const range = updatedColorSelection(savedView.current.spec, next.spec, state.visualMap?.[0]?.range);
+          if (range) state.visualMap = [{ range }];
           applyChartViewState(options, state);
         }
         savedView.current = undefined;
         // Omit interactive state when merging a compatible chart.
         if (!notMerge && current.spec && chartRangeSignature(current.spec) === chartRangeSignature(next.spec))
           delete options.dataZoom;
-        if (
-          next.spec.kind === 'heatmap' &&
-          current.spec?.kind === 'heatmap' &&
-          heatmapColorSignature(next.spec) !== heatmapColorSignature(current.spec)
-        ) {
-          const scale = heatmapColorScale(next.spec);
-          options.visualMap = {
-            ...(options.visualMap as Record<string, unknown>),
-            range: [scale.visualMin, scale.visualMax]
-          };
+        if (current.spec && options.visualMap) {
+          const range = updatedColorSelection(current.spec, next.spec, selectedColorRange(current.instance));
+          if (range) options.visualMap = { ...(options.visualMap as Record<string, unknown>), range };
         }
         current.instance.setOption(
           options,
@@ -271,6 +266,7 @@ export default function ChartOutput({ artifact, idPrefix, labels }: ChartOutputP
         savedView.current = {
           signature: chart.current.signature,
           rangeSignature: chartRangeSignature(chart.current.spec),
+          spec: chart.current.spec,
           state: chartViewState(instance)
         };
       instance?.dispose();

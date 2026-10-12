@@ -51,7 +51,9 @@ it.each(
 
 it('validates category references and positive log positions', () => {
   const category = { kind: 'bar', categories: ['A', 'B'], series: [], xMin: undefined, xMax: undefined };
-  const { xMin: _min, xMax: _max, ...base } = spec;
+  const base = { ...spec };
+  delete base.xMin;
+  delete base.xMax;
   const validateCategory = (value) =>
     validateOutputArtifacts([
       {

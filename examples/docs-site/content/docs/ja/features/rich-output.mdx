@@ -33,7 +33,7 @@ table column は `key`、`label`、optional `type` を持ちます。type は `s
 
 ## Chart schema
 
-すべての chart spec は optional `title`、`xLabel`、`yLabel`、`xType`、`yType`、`legend`、`tooltip`、`dataZoom` を受け取ります。axis type は `value`、`category`、`time`、`log` です。未指定 axis は `value` が default ですが、bar 固有の x 軸は category です。heatmap は常に X/Y 両方が category axis であり、`xType` と `yType` は省略するか `category` にできますが、`value`、`time`、`log` は reject されます。
+すべての chart spec は optional `title`、`xLabel`、`yLabel`、`xType`、`yType`、`legend`、`tooltip`、`dataZoom` を受け取ります。axis type は `value`、`category`、`time`、`log` です。未指定 axis は `value` が default ですが、bar のカテゴリ軸（縦棒では x、横棒では y）と boxplot の x 軸は category です。heatmap は常に X/Y 両方が category axis であり、`xType` と `yType` は省略するか `category` にできますが、`value`、`time`、`log` は reject されます。
 
 - `value` coordinate は finite number、`log` coordinate は 0 より大きい finite number です。
 - `time` coordinate は finite epoch millisecond、または `YYYY-MM-DDTHH:mm:ss[.sss]Z` / `YYYY-MM-DDTHH:mm:ss[.sss]±HH:mm` 形式の ISO-8601 string です。calendar field と明示的な time zone も valid である必要があります。
@@ -44,6 +44,10 @@ table column は `key`、`label`、optional `type` を持ちます。type は `s
 - `bar`: string `categories[]` と同じ length の numeric-or-null `values[]` series。
 - `histogram`: `lower < upper` かつ count が non-negative の finite `[lower, upper, count]` tuple の `bins[]`。
 - `heatmap`: optional string `xCategories`/`yCategories` array と、二つの category axis 上の finite `[x, y, value]` cell。
+- `errorbar` / `band`: `[x, center, lower, upper]` の区間を持つ系列。
+- `boxplot`: カテゴリと集計済みの `[min, q1, median, q3, max]`。
+- `bubble`: `[x, y, size, color?]` の点とサイズ・色の対応指定。
+- `field`: 値軸の境界 `xEdges` / `yEdges` と行列 `values`。
 
 empty chart と equal point domain は valid です。heatmap は X/Y の category 数と heat value の範囲を示し、color scale には実際の heat value を使います。empty dataset だけは `0–1` を fallback にします。chart は textual title/caption と bounded accessible summary または equivalent table を提供します。equivalent がある場合、implementation canvas は accessibility API から隠されます。
 
@@ -84,7 +88,7 @@ bar・histogram・area の value y 軸はゼロを含み、line・scatter はデ
 
 **移行:** 時刻の目盛・tooltip・概要は、読者のローカル時刻ではなく UTC に統一されます。入力は引き続き epoch milliseconds またはタイムゾーンを明示した ISO-8601 文字列です。
 
-題は図の上に一度だけ表示します。artifact と spec の題が異なる場合は spec の題を副題にします。HTML凡例はキーボード操作可能な系列ボタンを1ページ25系列で表示し、無名の系列には既定名を付けます。長い軸名・カテゴリ名は短縮し、軸名の全文は概要、カテゴリ名・系列名の全文は tooltip で確認できます。カテゴリ目盛は回転してから必要に応じて間引きます。長いカテゴリ名が多い図は分割してください。横棒の API はまだありません。
+題は図の上に一度だけ表示します。artifact と spec の題が異なる場合は spec の題を副題にします。HTML凡例はキーボード操作可能な系列ボタンを1ページ25系列で表示し、無名の系列には既定名を付けます。長い軸名・カテゴリ名は短縮し、軸名の全文は概要、カテゴリ名・系列名の全文は tooltip で確認できます。カテゴリ目盛は回転してから必要に応じて間引きます。長いカテゴリ名が多い図は分割してください。長いカテゴリ名には `orientation: "horizontal"` を利用できます。
 
 既定の 8 色は明暗テーマで共通です。既定背景に対し、隣接色（末尾から先頭への循環を含む）は通常視で OKLab 色差 15 以上、1・2・3 型色覚の模擬で 8 以上、各色と背景のコントラスト比は 3:1 以上を満たします。すべての系列の組合せの識別を保証するものではありません。色を再使用すると線種や散布図の記号が変わりますが、8 系列を超える図は分割を推奨します。独自パレットは著者が背景コントラストと色覚による違いを確認してください。heatmap は明度が単調に変わる単色相の連続色を使います。
 
@@ -450,4 +454,44 @@ display_chart({"kind": "boxplot", "categories": ["First", "Second"],
     "series": [{"name": "Measurements", "values": [
         [-5, -3, -2, 0, 4], [1, 2, 3, 4, 8]]}]},
     caption="Whiskers show the observed minimum and maximum.")
+```
+
+## バブル図
+
+`bubble` の点は `[x, y, size]` または `[x, y, size, color]` です。サイズは有限の非負値で、既定では面積比例、直径0–40pxに対応します。0は表示しません。`sizeMapping` の `maxValue`、`minPixels`、`maxPixels`、`scale`（area/radius）で対応を指定できます。色値がある場合は `colorMapping: { min, max, palette? }` が必要で、色の欠損は系列色になります。
+
+```python
+#| id: bubble-charts
+display_chart({"kind": "bubble", "sizeMapping": {"maxValue": 100},
+    "colorMapping": {"min": 0, "max": 10},
+    "series": [{"name": "Observations", "points": [
+        [0, 2, 25, 2], [1, 3, 100, 8], [2, 1, 50, None]]}]})
+```
+
+## 値軸の格子場
+
+`field` は有限で単調増加する `xEdges` と `yEdges`、行が y、列が x の `values` を持ちます。行列の寸法は `(yEdges.length - 1) × (xEdges.length - 1)` です。null は透明な欠損セル、空の格子は3配列全て空で表します。非等間隔の境界を保持し、初期範囲は格子の外周です。補間や等高線は行いません。
+
+```python
+#| id: grid-field-charts
+from math import sin, cos
+x_edges = [-3, -1, 0, 0.5, 2, 4]
+y_edges = [-2, -0.5, 0, 1, 3]
+values = [[sin((x0 + x1) / 2) * cos((y0 + y1) / 2)
+    for x0, x1 in zip(x_edges, x_edges[1:])]
+    for y0, y1 in zip(y_edges, y_edges[1:])]
+display_chart({"kind": "field", "xEdges": x_edges, "yEdges": y_edges,
+    "values": values, "xLabel": "X", "yLabel": "Y"})
+```
+
+Haskell でも同じ spec を `displayChart` に渡せます。
+
+```haskell
+--| id: haskell-grid-field
+import Oxiquill.Output
+let edges values = JsonArray (map JsonNumber values)
+displayChart (JsonObject
+  [("kind", JsonString "field"), ("xEdges", edges [-2, 0, 3]),
+   ("yEdges", edges [-1, 1]),
+   ("values", JsonArray [JsonArray [JsonNumber 2, JsonNull]])])
 ```

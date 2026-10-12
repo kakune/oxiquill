@@ -33,7 +33,7 @@ Table columns contain `key`, `label`, and optional `type`: `string`, `number`, `
 
 ## Chart Schema
 
-All chart specs accept optional `title`, `xLabel`, `yLabel`, `xType`, `yType`, `legend`, `tooltip`, and `dataZoom`. Axis types are `value`, `category`, `time`, and `log`. Unspecified axes default to `value`, except the category x axis intrinsic to bar charts. A heatmap always has category axes on both dimensions: its `xType` and `yType` may be omitted or set to `category`, while `value`, `time`, and `log` are rejected.
+All chart specs accept optional `title`, `xLabel`, `yLabel`, `xType`, `yType`, `legend`, `tooltip`, and `dataZoom`. Axis types are `value`, `category`, `time`, and `log`. Unspecified axes default to `value`, except the category axis of bar charts (x for vertical, y for horizontal) and the category x axis of box plots. A heatmap always has category axes on both dimensions: its `xType` and `yType` may be omitted or set to `category`, while `value`, `time`, and `log` are rejected.
 
 - `value` coordinates are finite numbers, and `log` coordinates are finite numbers greater than zero.
 - `time` coordinates are finite epoch milliseconds or ISO-8601 strings in `YYYY-MM-DDTHH:mm:ss[.sss]Z` or `YYYY-MM-DDTHH:mm:ss[.sss]±HH:mm` form. Calendar fields and the explicit time zone must be valid.
@@ -44,6 +44,10 @@ All chart specs accept optional `title`, `xLabel`, `yLabel`, `xType`, `yType`, `
 - `bar`: string `categories[]` plus series of numeric-or-null `values[]` with matching length.
 - `histogram`: `bins[]` as finite `[lower, upper, count]` tuples, where `lower < upper` and count is non-negative.
 - `heatmap`: optional string `xCategories`/`yCategories` arrays and finite `[x, y, value]` cells on two category axes.
+- `errorbar` / `band`: series of `[x, center, lower, upper]` intervals.
+- `boxplot`: categories and precomputed `[min, q1, median, q3, max]` summaries.
+- `bubble`: `[x, y, size, color?]` points with size and color mappings.
+- `field`: value-axis `xEdges`/`yEdges` and a `values` matrix.
 
 Empty charts and equal point domains are valid. Heatmaps report X- and Y-category counts plus the heat-value range; their color scale uses the actual heat values, with a `0–1` fallback only for an empty dataset. Charts expose a textual title/caption and bounded accessible summary or equivalent table. The implementation canvas is hidden from accessibility APIs when that equivalent is present.
 
@@ -271,7 +275,7 @@ Each cell resets style settings before applying these defaults, so a previous ce
 
 Figure titles and axis labels supply image alternative text. SVG text uses browser fonts (`svg.fonttype: 'none'`), including Japanese fallback fonts installed on the reader's device. SVG larger than 10 MiB falls back to PNG at 150 DPI with a stderr diagnostic. PNG rendering needs fonts in the Python environment to draw Japanese glyphs. Image and cumulative run budgets still apply; oversized PNG output produces an artifact error.
 
-`display_chart(spec, *, id=None, title=None, caption=None)` emits any of the six interactive chart kinds using only dict/list data, without pandas. Pass style inside the spec and artifact metadata separately.
+`display_chart(spec, *, id=None, title=None, caption=None)` emits any of the supported interactive chart kinds using only dict/list data, without pandas. Pass style inside the spec and artifact metadata separately.
 
 `display_line(df, *, x, y, id=None, title=None, caption=None, style=None)` builds a line chart from DataFrame columns. `y` is a column name or a nonempty list of distinct column names. Row and column order are preserved, with at most 100,000 points across all series. X values may be numbers, string categories, or timezone-aware datetimes; Y values must be finite numbers. Datetimes become UTC epoch milliseconds. Missing values, NaN, infinity, NaT, and naive datetimes produce a local error identifying the row position and column. Valid neighboring outputs remain visible; missing values are never silently connected.
 
@@ -321,7 +325,7 @@ Rust cells use explicit `emit_*` macros. Supported macros include:
 - `emit_chart!`, `emit_area_chart!`, `emit_line_chart!`, `emit_scatter_chart!`, `emit_bar_chart!`, `emit_histogram!`, and `emit_heatmap!`
 - `emit_line_plot!` for compatibility with the original line-plot helper; new code should convert coordinates explicitly and use `emit_line_chart!`.
 
-`emit_chart!(spec)` accepts all six chart kinds. Optional `metadata = ...` supplies artifact `id/title/caption`, separately from spec `title/xLabel/yLabel`; the artifact title takes display precedence. Null metadata fields are omitted, and other metadata fields produce a local diagnostic. `emit_area_chart!` accepts the same points/series, axis labels, trailing style, and `options = ...` forms as line charts. Existing macro argument forms remain supported. An invalid spec produces a local diagnostic while valid neighboring outputs remain visible.
+`emit_chart!(spec)` accepts all supported chart kinds. Optional `metadata = ...` supplies artifact `id/title/caption`, separately from spec `title/xLabel/yLabel`; the artifact title takes display precedence. Null metadata fields are omitted, and other metadata fields produce a local diagnostic. `emit_area_chart!` accepts the same points/series, axis labels, trailing style, and `options = ...` forms as line charts. Existing macro argument forms remain supported. An invalid spec produces a local diagnostic while valid neighboring outputs remain visible.
 
 ```rust
 emit_chart!(serde_json::json!({
@@ -450,4 +454,44 @@ display_chart({"kind": "boxplot", "categories": ["First", "Second"],
     "series": [{"name": "Measurements", "values": [
         [-5, -3, -2, 0, 4], [1, 2, 3, 4, 8]]}]},
     caption="Whiskers show the observed minimum and maximum.")
+```
+
+## Bubble charts
+
+Bubble points are `[x, y, size]` or `[x, y, size, color]`. Sizes are finite and nonnegative; the default maps area proportionally, with diameter 0–40px and the largest supplied size as the upper domain. Zero is invisible. `sizeMapping` accepts positive `maxValue`, `minPixels`, `maxPixels` (`0 <= min < max <= 100`), and `scale: "area" | "radius"`. Positive values are clamped to the requested pixel range; a positive constant domain uses the maximum diameter. Color values require explicit `colorMapping: { min, max, palette? }`; values outside the range saturate. Missing/null color uses the series color. `style.palette` colors series; `colorMapping.palette` owns the continuous color gradient. Large mode is disabled to preserve point-level mappings.
+
+```python
+#| id: bubble-charts
+display_chart({"kind": "bubble", "sizeMapping": {"maxValue": 100},
+    "colorMapping": {"min": 0, "max": 10},
+    "series": [{"name": "Observations", "points": [
+        [0, 2, 25, 2], [1, 3, 100, 8], [2, 1, 50, None]]}]})
+```
+
+## Grid fields on value axes
+
+A `field` uses strictly increasing finite `xEdges` and `yEdges` and a row-major `values` matrix: rows index Y intervals, columns index X intervals. Its shape is `(yEdges.length - 1) × (xEdges.length - 1)`. Null cells remain transparent and count toward the 100,000-cell limit. Empty fields use three empty arrays. Both axes are value axes; the default domain is the outer grid boundary, and zoom clips the exact cell rectangles. Nonuniform spacing is preserved. Colors use a sequential scale; tables retain boundaries and original cell values. There is no interpolation, contouring, or arbitrary mesh support. The categorical `heatmap` contract is unchanged.
+
+```python
+#| id: grid-field-charts
+from math import sin, cos
+x_edges = [-3, -1, 0, 0.5, 2, 4]
+y_edges = [-2, -0.5, 0, 1, 3]
+values = [[sin((x0 + x1) / 2) * cos((y0 + y1) / 2)
+    for x0, x1 in zip(x_edges, x_edges[1:])]
+    for y0, y1 in zip(y_edges, y_edges[1:])]
+display_chart({"kind": "field", "xEdges": x_edges, "yEdges": y_edges,
+    "values": values, "xLabel": "X", "yLabel": "Y"})
+```
+
+Haskell uses the same spec through `displayChart`.
+
+```haskell
+--| id: haskell-grid-field
+import Oxiquill.Output
+let edges values = JsonArray (map JsonNumber values)
+displayChart (JsonObject
+  [("kind", JsonString "field"), ("xEdges", edges [-2, 0, 3]),
+   ("yEdges", edges [-1, 1]),
+   ("values", JsonArray [JsonArray [JsonNumber 2, JsonNull]])])
 ```
