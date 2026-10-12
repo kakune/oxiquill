@@ -84,7 +84,7 @@ For a numeric range spanning zero, data values whose absolute magnitude is at mo
 
 **Migration:** time-axis ticks, tooltips, and summaries now use UTC rather than the reader's local timezone. Inputs still require epoch milliseconds or ISO-8601 strings with an explicit timezone.
 
-Titles appear once above the plot. When artifact and spec titles differ, the spec title becomes a subtitle. HTML legends use keyboard-operable series buttons, with 25 series per page. Unnamed series receive default names. Long axis and category labels are shortened; summaries retain axis names and tooltips retain category and series names. Category labels rotate before thinning. Split charts with many long category names; a horizontal bar API is not yet available.
+Titles appear once above the plot. When artifact and spec titles differ, the spec title becomes a subtitle. HTML legends use keyboard-operable series buttons, with 25 series per page. Unnamed series receive default names. Long axis and category labels are shortened; summaries retain axis names and tooltips retain category and series names. Category labels rotate before thinning. Split charts with many long category names; use `orientation: "horizontal"` for long category names.
 
 The fixed eight-color palette is shared across light and dark themes. On default backgrounds, adjacent colors (including the wrap to the first color) meet OKLab distance 15 in normal vision and 8 in protanopia, deuteranopia, and tritanopia simulations; each color meets 3:1 background contrast. This does not guarantee every pair of series is distinguishable. Palette reuse changes line patterns or scatter symbols; split charts with more than eight series when possible. Authors should check custom palettes for background contrast and color-vision differences. Heatmaps use a sequential, single-hue gradient with monotone lightness.
 
@@ -392,4 +392,15 @@ emit_bar_chart!(&["A", "B"], &serde_json::json!([
     { "name": "First", "stack": "total", "values": [2, -2] },
     { "name": "Second", "stack": "total", "values": [3, null] }
 ]));
+```
+
+## Horizontal bars
+
+Set bar `orientation: "horizontal"` to use a numeric x axis and category y axis. Labels, formats, and bounds refer to screen axes. The first category appears at the top. Missing values, multiple series, and stack groups work in either orientation.
+
+```rust
+//| id: horizontal-bars
+//| crates: []
+emit_bar_chart!(&["North America", "South America", "Europe"], &[12, -4, 8],
+    options = serde_json::json!({ "orientation": "horizontal", "xLabel": "Change", "yLabel": "Region" }));
 ```

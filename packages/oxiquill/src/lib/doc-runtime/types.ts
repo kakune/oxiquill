@@ -207,7 +207,7 @@ export interface BarChartSeries {
 
 export interface BarChartSpec extends BaseChartSpec {
   kind: 'bar';
-  yType?: 'value' | 'log';
+  orientation?: 'vertical' | 'horizontal';
   categories: readonly string[];
   series: readonly BarChartSeries[];
 }

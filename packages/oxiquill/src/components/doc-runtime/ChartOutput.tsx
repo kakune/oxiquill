@@ -130,9 +130,9 @@ export default function ChartOutput({ artifact, idPrefix, labels }: ChartOutputP
         current.symbols = undefined;
         current.indexes = undefined;
         const xAxis = options.xAxis as { data?: readonly unknown[]; axisLine: { show: boolean } };
-        const yAxis = options.yAxis as { data?: readonly unknown[] };
+        const yAxis = options.yAxis as { data?: readonly unknown[]; axisLine: { show: boolean } };
         current.counts = { x: xAxis.data?.length ?? 0, y: yAxis.data?.length ?? 0 };
-        current.baseline = current.zeroLine = xAxis.axisLine.show;
+        current.baseline = current.zeroLine = xAxis.axisLine.show || yAxis.axisLine.show;
         current.updateViewport?.();
       }
       setDisplayed(next);
@@ -203,10 +203,12 @@ export default function ChartOutput({ artifact, idPrefix, labels }: ChartOutputP
               const x = axes.x.getExtent();
               const y = axes.y.getExtent();
               const patch: Record<string, unknown> = {};
-              const zeroLine = Boolean(current.baseline && y[0] <= 0 && y[1] >= 0);
+              const horizontalBar = spec.kind === 'bar' && spec.orientation === 'horizontal';
+              const amount = horizontalBar ? x : y;
+              const zeroLine = Boolean(current.baseline && amount[0] <= 0 && amount[1] >= 0);
               if (zeroLine !== current.zeroLine) {
                 current.zeroLine = zeroLine;
-                patch.xAxis = { axisLine: { show: zeroLine } };
+                patch[horizontalBar ? 'yAxis' : 'xAxis'] = { axisLine: { show: zeroLine } };
               }
               if (spec.kind === 'line' || spec.kind === 'area') {
                 current.indexes ??= chartPointIndexes(spec, axes);

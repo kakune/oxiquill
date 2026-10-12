@@ -8,7 +8,7 @@ export function validateChartStacks(spec: ChartSpec): void {
   const groups = new Map<string, { x: readonly (number | string)[]; positive: number[]; negative: number[] }>();
   for (const series of spec.series) {
     if (!series.stack) continue;
-    if (chartAxisType(spec, 'y') !== 'value')
+    if (chartAxisType(spec, spec.kind === 'bar' && spec.orientation === 'horizontal' ? 'x' : 'y') !== 'value')
       throw new ArtifactValidationError('Stacked charts require a value axis for amounts.');
     const x =
       'points' in series

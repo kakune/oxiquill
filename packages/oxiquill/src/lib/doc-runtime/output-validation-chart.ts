@@ -49,8 +49,12 @@ export function validateChartArtifact(record: Record<string, unknown>, remaining
 function validateChartSpec(value: unknown): ChartSpec {
   const record = plainRecord(value, 'Chart spec');
   const kind = requiredString(record, 'kind', 'Chart spec');
-  const base = {
+  const orientation = kind === 'bar' ? optionalString(record, 'orientation', 'Bar chart') : undefined;
+  if (orientation !== undefined && orientation !== 'vertical' && orientation !== 'horizontal')
+    throw new ArtifactValidationError('Bar chart orientation must be vertical or horizontal.');
+  const base: BaseChartSpec & { orientation?: 'vertical' | 'horizontal' } = {
     ...validateBaseChartSpec(record),
+    ...(orientation === undefined ? {} : { orientation }),
     ...(Object.hasOwn(record, 'style')
       ? { style: validateChartStyle(requiredOwnValue(record, 'style', 'Chart spec'), kind) }
       : {})
@@ -87,8 +91,9 @@ function validateChartSpec(value: unknown): ChartSpec {
       };
     }
     case 'bar': {
-      requireEffectiveAxis(base.xType, 'category', 'Bar chart x axis');
-      const yType = numericAxisType(base.yType, 'Bar chart y axis');
+      const horizontal = orientation === 'horizontal';
+      requireEffectiveAxis(horizontal ? base.yType : base.xType, 'category', 'Bar chart category axis');
+      const valueType = numericAxisType(horizontal ? base.xType : base.yType, 'Bar chart value axis');
       const categories = stringArray(requiredOwnValue(record, 'categories', 'Bar chart'), 'Bar chart categories');
       if (categories.length > outputArtifactLimits.chartDataItems) {
         throw chartLimitError(categories.length);
@@ -108,7 +113,7 @@ function validateChartSpec(value: unknown): ChartSpec {
         }
         const validatedValues = values.map((item, valueIndex) => {
           if (item === null) return null;
-          return numericCoordinate(item, yType, `Bar chart series ${seriesIndex + 1} value ${valueIndex + 1}`);
+          return numericCoordinate(item, valueType, `Bar chart series ${seriesIndex + 1} value ${valueIndex + 1}`);
         });
         if (validatedValues.length !== categories.length) {
           throw new ArtifactValidationError(
@@ -118,8 +123,7 @@ function validateChartSpec(value: unknown): ChartSpec {
         dataItems += validatedValues.length;
         return { ...validateSeriesPresentation(seriesRecord, kind, seriesIndex, ids), values: validatedValues };
       });
-      const { yType: declaredYType, ...barBase } = base;
-      return { ...barBase, kind, ...(declaredYType == null ? {} : { yType }), categories, series };
+      return { ...base, kind, categories, series };
     }
     case 'histogram': {
       if (base.xType !== undefined && base.xType !== 'value' && base.xType !== 'category')
@@ -359,7 +363,7 @@ function validateBaseChartSpec(record: Record<string, unknown>): BaseChartSpec {
   } as Omit<ChartSpec, 'kind'>;
 }
 
-function validateChartRanges(spec: BaseChartSpec & { kind: string }): void {
+function validateChartRanges(spec: BaseChartSpec & { kind: string; orientation?: 'vertical' | 'horizontal' }): void {
   for (const axis of ['x', 'y'] as const) {
     const type = chartAxisType(spec, axis);
     const min = spec[axis === 'x' ? 'xMin' : 'yMin'];
@@ -381,12 +385,12 @@ function validateChartRanges(spec: BaseChartSpec & { kind: string }): void {
     )
       throw new ArtifactValidationError(`Chart ${axis} bounds must be valid epoch milliseconds.`);
     if (
-      axis === 'y' &&
+      axis === (spec.kind === 'bar' && spec.orientation === 'horizontal' ? 'x' : 'y') &&
       type === 'value' &&
       ['bar', 'histogram', 'area'].includes(spec.kind) &&
       (zero === false || (min !== undefined && min > 0) || (max !== undefined && max < 0))
     )
-      throw new ArtifactValidationError(`Chart ${spec.kind} value y range must include zero.`);
+      throw new ArtifactValidationError(`Chart ${spec.kind} value ${axis} range must include zero.`);
   }
 }
 

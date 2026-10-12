@@ -1,6 +1,7 @@
 import type { ChartSpec, TableArtifact, TableColumn } from './types.js';
 import type { RuntimeLabels } from './runtime-localization.js';
 import { outputArtifactLimits } from './output-limits.mjs';
+import { chartAxisType } from './chart-axes.js';
 import { histogramHeight } from './chart-histogram.js';
 
 export function chartToTable(spec: ChartSpec, labels: RuntimeLabels): TableArtifact {
@@ -43,12 +44,12 @@ export function chartToTable(spec: ChartSpec, labels: RuntimeLabels): TableArtif
       column(
         'x',
         spec.xLabel ?? 'X',
-        spec.kind === 'bar' || spec.xType === 'category' ? 'string' : spec.xType === 'time' ? 'datetime' : 'number'
+        chartAxisType(spec, 'x') === 'category' ? 'string' : spec.xType === 'time' ? 'datetime' : 'number'
       ),
       column(
         'y',
         spec.yLabel ?? 'Y',
-        spec.yType === 'category' ? 'string' : spec.yType === 'time' ? 'datetime' : 'number'
+        chartAxisType(spec, 'y') === 'category' ? 'string' : spec.yType === 'time' ? 'datetime' : 'number'
       )
     ];
     const x = spec.kind !== 'bar' && spec.xType === 'time' ? timeCoordinate : sameCoordinate;
@@ -58,7 +59,11 @@ export function chartToTable(spec: ChartSpec, labels: RuntimeLabels): TableArtif
       if ('values' in series && spec.kind === 'bar') {
         rowCount += series.values.length;
         for (let i = 0; i < series.values.length && rows.length < limit; i++)
-          rows.push([name, spec.categories[i], series.values[i]]);
+          rows.push(
+            spec.orientation === 'horizontal'
+              ? [name, series.values[i], spec.categories[i]]
+              : [name, spec.categories[i], series.values[i]]
+          );
       } else if ('points' in series) {
         rowCount += series.points.length;
         for (let i = 0; i < series.points.length && rows.length < limit; i++) {

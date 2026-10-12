@@ -393,3 +393,14 @@ emit_bar_chart!(&["A", "B"], &serde_json::json!([
     { "name": "Second", "stack": "total", "values": [3, null] }
 ]));
 ```
+
+## 横向きの棒グラフ
+
+bar の `orientation: "horizontal"` は x を数値軸、y をカテゴリ軸にします。ラベル、書式、範囲指定は画面上の x/y に対応し、先頭カテゴリを上に表示します。
+
+```rust
+//| id: horizontal-bars
+//| crates: []
+emit_bar_chart!(&["North America", "South America", "Europe"], &[12, -4, 8],
+    options = serde_json::json!({ "orientation": "horizontal", "xLabel": "Change", "yLabel": "Region" }));
+```

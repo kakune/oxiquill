@@ -21,7 +21,9 @@ export function chartCoordinates(spec: ChartSpec): {
 } {
   switch (spec.kind) {
     case 'bar':
-      return { x: spec.categories, y: spec.series.flatMap((series) => series.values), value: [] };
+      return spec.orientation === 'horizontal'
+        ? { x: spec.series.flatMap((series) => series.values), y: spec.categories, value: [] }
+        : { x: spec.categories, y: spec.series.flatMap((series) => series.values), value: [] };
     case 'histogram':
       return {
         x: spec.bins.flatMap((bin) => [bin[0], bin[1]]),

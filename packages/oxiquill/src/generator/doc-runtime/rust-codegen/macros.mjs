@@ -301,7 +301,8 @@ function generateChartOptions() {
                 if !matches!(key.as_str(), "title" | "xLabel" | "yLabel" | "xType" | "yType" |
                     "legend" | "tooltip" | "dataZoom" | "style" | "xMin" | "xMax" | "yMin" |
                     "yMax" | "xIncludeZero" | "yIncludeZero") &&
-                    !(key == "mode" && spec["kind"] == "histogram") {
+                    !(key == "mode" && spec["kind"] == "histogram") &&
+                    !(key == "orientation" && spec["kind"] == "bar") {
                     return Err(format!("unsupported chart option: {key}"));
                 }
                 spec[key] = value;

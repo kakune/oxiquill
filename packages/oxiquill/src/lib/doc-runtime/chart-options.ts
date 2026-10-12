@@ -133,6 +133,7 @@ export function chartSpecToEChartsOptions(
   const names = seriesNames(spec, locale);
   const nameById = seriesLabels(spec, names);
   const heatmap = spec.kind === 'heatmap' ? normalizeHeatmapSpec(spec) : undefined;
+  const horizontalBar = spec.kind === 'bar' && spec.orientation === 'horizontal';
   const xType = chartAxisType(spec, 'x');
   const yType = chartAxisType(spec, 'y');
   const xData = values.x;
@@ -143,6 +144,7 @@ export function chartSpecToEChartsOptions(
     const pointerFormat = chartCoordinateFormatter(coordinates, type, locale, false, format);
     return {
       type,
+      inverse: !horizontal && horizontalBar,
       name: horizontal ? spec.xLabel : spec.kind === 'histogram' ? histogramLabel(spec, labels) : spec.yLabel,
       nameLocation: 'middle',
       nameGap: horizontal ? 36 : 32,
@@ -170,13 +172,18 @@ export function chartSpecToEChartsOptions(
           formatter: ({ value }: { value: unknown }) => pointerFormat(value)
         }
       },
-      axisLine: { show: Boolean(horizontal && baseline), onZero: true, lineStyle: { color: chrome.axis, width: 1.5 } },
+      axisLine: {
+        show: Boolean(horizontal !== horizontalBar && baseline),
+        onZero: true,
+        lineStyle: { color: chrome.axis, width: 1.5 }
+      },
       axisTick: { show: false },
       splitLine: { show: style?.showGrid !== false, lineStyle: { color: chrome.splitLine, opacity: 0.45 } }
     };
   };
-  const yBounds = numericBounds(values.y);
-  const baseline = yType === 'value' && yBounds && yBounds.minimum < 0 && yBounds.maximum > 0;
+  const amountBounds = numericBounds(horizontalBar ? values.x : values.y);
+  const baseline =
+    (horizontalBar ? xType : yType) === 'value' && amountBounds && amountBounds.minimum < 0 && amountBounds.maximum > 0;
   const animation = !reducedMotion && style?.animation !== false;
   const duration = animation ? (style?.animationDurationMs ?? 180) : 0;
   const options: EChartsOptions = {
@@ -231,6 +238,7 @@ export function chartSpecToEChartsOptions(
         : [
             {
               type: 'inside',
+              ...(horizontalBar ? { yAxisIndex: 0 } : { xAxisIndex: 0 }),
               filterMode: spec.kind === 'histogram' ? 'weakFilter' : 'filter',
               start: 0,
               end: 100,
@@ -295,9 +303,7 @@ export function chartResizeOptions(
   const legend = canvasLegend && showLegend(spec);
   const layout = chartLayout(spec, width, height, legend);
   const axis = (horizontal: boolean) => {
-    const category = horizontal
-      ? chartAxisType(spec, 'x') === 'category'
-      : spec.kind === 'heatmap' || spec.yType === 'category';
+    const category = horizontal ? chartAxisType(spec, 'x') === 'category' : chartAxisType(spec, 'y') === 'category';
     return {
       nameTruncate: { maxWidth: horizontal ? layout.plotWidth : layout.plotHeight, ellipsis: '…' },
       ...(category
@@ -350,8 +356,8 @@ function chartSeries(spec: ChartSpec): readonly Record<string, unknown>[] {
         stack: series.stack ?? '',
         stackStrategy: 'samesign',
         barMaxWidth: 40,
-        itemStyle: { borderRadius: series.stack ? 0 : [3, 3, 0, 0] },
-        data: series.stack ? series.values : barData(series.values)
+        itemStyle: { borderRadius: series.stack ? 0 : spec.orientation === 'horizontal' ? [0, 3, 3, 0] : [3, 3, 0, 0] },
+        data: series.stack ? series.values : barData(series.values, spec.orientation === 'horizontal')
       }));
     case 'histogram':
       return [histogramSeries(spec) as Record<string, unknown>];
@@ -362,19 +368,22 @@ function chartSeries(spec: ChartSpec): readonly Record<string, unknown>[] {
   }
 }
 
-function barData(values: readonly (number | null)[]) {
+function barData(values: readonly (number | null)[], horizontal: boolean) {
   if (!values.some((value) => value !== null && value < 0)) return values;
   return values.map((value) =>
-    value !== null && value < 0 ? { value, itemStyle: { borderRadius: [0, 0, 3, 3] } } : value
+    value !== null && value < 0
+      ? { value, itemStyle: { borderRadius: horizontal ? [3, 0, 0, 3] : [0, 0, 3, 3] } }
+      : value
   );
 }
 
 function chartTooltipFormatter(spec: ChartSpec, locale: RuntimeLocale, names: readonly string[]) {
+  const horizontalBar = spec.kind === 'bar' && spec.orientation === 'horizontal';
   const labels = labelsForLanguage(locale);
   const values = chartCoordinates(spec);
   const style = spec.style;
   const xType = chartAxisType(spec, 'x');
-  const yType = spec.kind === 'heatmap' ? 'category' : spec.yType;
+  const yType = chartAxisType(spec, 'y');
   const x = chartCoordinateFormatter(values.x, xType, locale, false, style?.xFormat);
   const y = chartCoordinateFormatter(values.y, yType, locale, false, style?.yFormat);
   const value = chartNumberFormatter(values.value, locale, false, style?.valueFormat);
@@ -397,7 +406,7 @@ function chartTooltipFormatter(spec: ChartSpec, locale: RuntimeLocale, names: re
       const name = item.seriesId === undefined ? names[item.seriesIndex ?? 0] : nameById.get(item.seriesId);
       const coordinate = tuple ? x(tuple[0]) : (item.name ?? '');
       const amount = tuple ? tuple[1] : item.value;
-      const formatted = amount == null || amount === '-' ? '-' : y(amount);
+      const formatted = amount == null || amount === '-' ? '-' : horizontalBar ? x(amount) : y(amount);
       // ECharts generates the marker; authored labels and values are always escaped.
       const marker = typeof item.marker === 'string' ? item.marker : '';
       if (spec.kind === 'histogram' && tuple) {
@@ -443,7 +452,12 @@ export function chartDataSummary(spec: ChartSpec, labels: RuntimeLabels): string
       ? format(bounds.minimum)
       : format(bounds.minimum) + '–' + format(bounds.maximum);
   };
-  const dataCount = spec.kind === 'heatmap' ? spec.data.length : values.y.length;
+  const dataCount =
+    spec.kind === 'heatmap'
+      ? spec.data.length
+      : spec.kind === 'bar'
+        ? spec.series.reduce((count, series) => count + series.values.length, 0)
+        : values.y.length;
   const summary = labels.chartSummary({
     xLabel: spec.xLabel,
     yLabel: spec.kind === 'histogram' ? histogramLabel(spec, labels) : spec.yLabel,
@@ -451,7 +465,7 @@ export function chartDataSummary(spec: ChartSpec, labels: RuntimeLabels): string
     seriesCount: 'series' in spec ? spec.series.length : 1,
     seriesNames: seriesNames(spec, labels.locale).filter(Boolean).join(', ').slice(0, 1000),
     xRange: range(values.x, chartAxisType(spec, 'x'), spec.style?.xFormat),
-    yRange: range(values.y, spec.kind === 'heatmap' ? 'category' : spec.yType, spec.style?.yFormat),
+    yRange: range(values.y, chartAxisType(spec, 'y'), spec.style?.yFormat),
     ...(spec.kind === 'heatmap'
       ? {
           xCategoryCount: values.x.length,
