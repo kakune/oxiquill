@@ -955,6 +955,11 @@ describe('doc runtime service', () => {
     expect(runtimeVersion.manifest).toBe(hashText('manifest'));
     expect(runtimeVersion.haskell).toBe(hashText(''));
     expect(runtimeVersion.rust).toBe(hashText('rust'));
+    expect(runtimeVersion.python).toEqual([]);
+    expect(JSON.parse(createRuntimeVersion({ pythonPackages: ['matplotlib', 'pandas'] })).python).toEqual([
+      'matplotlib',
+      'pandas'
+    ]);
 
     const emptyRuntimeVersion = JSON.parse(createRuntimeVersion());
     expect(emptyRuntimeVersion.manifest).toBe(hashText(''));
@@ -1245,6 +1250,12 @@ describe('doc runtime service', () => {
 
     expect(stableFingerprint({ b: 2 })).toBe('{"b":2}');
     expect(previous).toMatchObject({ cellCount: 3, haskellCellCount: 1, rustCellCount: 1 });
+    expect(
+      summarizeCells([
+        { id: 'a', language: 'python', packages: ['pandas', 'matplotlib'], source: '' },
+        { id: 'b', language: 'python', packages: ['matplotlib'], source: '' }
+      ]).pythonPackages
+    ).toEqual(['matplotlib', 'pandas']);
     expect(shouldBuildWasm({ current: previous, force: true, previous })).toBe(true);
     expect(shouldBuildWasm({ current: previous })).toBe(true);
     expect(shouldBuildWasm({ changeKinds: new Set(['crate']), current: previous, previous })).toBe(true);

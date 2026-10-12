@@ -243,6 +243,7 @@ export interface RuntimeWorkerRequest {
   inputs: InputValues;
   source?: string;
   packages?: readonly string[];
+  shippedPackages?: readonly string[];
 }
 
 export type RuntimeExecutionPhase = 'preparing' | 'executing';

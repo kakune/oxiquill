@@ -234,6 +234,27 @@ describe('InteractiveCell', () => {
     expect(screen.queryByLabelText('Python draft')).not.toBeInTheDocument();
   });
 
+  it('clears draft output when editing ends but keeps output from the original code', async () => {
+    const cell = makeCell({ language: 'python', source: 'print("original")' });
+    setManifestCells([cell]);
+    render(<InteractiveCell cellId={cell.id} />);
+    mocks.runInteractiveCell.mockResolvedValue({ outputs: [{ kind: 'text', stream: 'stdout', content: 'original' }] });
+    fireEvent.click(screen.getByRole('button', { name: 'Run' }));
+    expect(await screen.findByText('original')).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'Edit Python' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Finish editing' }));
+    expect(screen.getByText('original')).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Edit Python' }));
+    fireEvent.input(screen.getByLabelText('Python draft'), { target: { value: 'print("draft")' } });
+    mocks.runInteractiveCell.mockResolvedValue({ outputs: [{ kind: 'text', stream: 'stdout', content: 'draft' }] });
+    fireEvent.click(screen.getByRole('button', { name: 'Run' }));
+    expect(await screen.findByText('draft')).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'Finish editing' }));
+    await waitFor(() => expect(screen.queryByText('draft')).not.toBeInTheDocument());
+    expect(mocks.runInteractiveCell).toHaveBeenCalledTimes(2);
+  });
+
   it('runs Python drafts explicitly and restores the original reactive behavior', async () => {
     mocks.runInteractiveCell.mockResolvedValue({ outputs: [] });
     const cell = makeCell({ language: 'python', run: 'reactive', source: 'print(count)' });

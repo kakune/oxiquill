@@ -21,6 +21,7 @@ type ExecutionState = {
   phase?: RuntimeExecutionPhase;
   status: 'idle' | 'running' | 'success' | 'error';
   result?: NormalizedCellExecutionResult;
+  resultFromDraft?: boolean;
   error?: string;
 };
 
@@ -38,6 +39,8 @@ export function useInteractiveCellRun(cell: CellManifest, runtimeVersion: string
     if (draft && draft.original !== cell.source) setDraft(undefined);
   }, [cell.source]);
   const invalidInputsRef = useRef(new Set<string>());
+  // The scheduler reports only the latest request, so this describes any result it delivers.
+  const latestRequestIsDraftRef = useRef(false);
   const valuesRef = useRef(values);
   const schedulerRef =
     useRef<ReturnType<typeof createLatestRequestScheduler<CellRunRequest, NormalizedCellExecutionResult>>>();
@@ -70,7 +73,7 @@ export function useInteractiveCellRun(cell: CellManifest, runtimeVersion: string
       setExecution((previous) => ({ ...previous, error: boundedErrorMessage(caught), status: 'error' }));
     },
     onResult: (result) => {
-      setExecution({ result, status: 'success' });
+      setExecution({ result, resultFromDraft: latestRequestIsDraftRef.current, status: 'success' });
     },
     onScheduled: () => {
       setExecution((previous) => ({
@@ -117,10 +120,9 @@ export function useInteractiveCellRun(cell: CellManifest, runtimeVersion: string
   }, [cell, isEditing]);
 
   function schedule(nextValues: InputValues, delayMs = 0, autorunKey?: string): void {
-    schedulerRef.current?.schedule(
-      { autorunKey, cell, runtimeVersion, values: nextValues, source: isEditing ? draft?.source : undefined },
-      delayMs
-    );
+    const source = isEditing ? draft?.source : undefined;
+    latestRequestIsDraftRef.current = source !== undefined;
+    schedulerRef.current?.schedule({ autorunKey, cell, runtimeVersion, values: nextValues, source }, delayMs);
   }
 
   function run(): void {
@@ -167,6 +169,8 @@ export function useInteractiveCellRun(cell: CellManifest, runtimeVersion: string
 
   function finishEditing(): void {
     stopExecution();
+    // Output from discarded code must not appear beside the original source.
+    setExecution((previous) => (previous.resultFromDraft ? { status: 'idle' } : previous));
     setDraft(undefined);
   }
 

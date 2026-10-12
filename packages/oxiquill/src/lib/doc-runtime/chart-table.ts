@@ -43,14 +43,16 @@ export function chartToTable(spec: ChartSpec, labels: RuntimeLabels): TableArtif
       column(
         'x',
         spec.xLabel ?? 'X',
-        spec.kind === 'bar' || spec.xType === 'category' ? 'string' : spec.xType === 'time' ? 'unknown' : 'number'
+        spec.kind === 'bar' || spec.xType === 'category' ? 'string' : spec.xType === 'time' ? 'datetime' : 'number'
       ),
       column(
         'y',
         spec.yLabel ?? 'Y',
-        spec.yType === 'category' ? 'string' : spec.yType === 'time' ? 'unknown' : 'number'
+        spec.yType === 'category' ? 'string' : spec.yType === 'time' ? 'datetime' : 'number'
       )
     ];
+    const x = spec.kind !== 'bar' && spec.xType === 'time' ? timeCoordinate : sameCoordinate;
+    const y = spec.yType === 'time' ? timeCoordinate : sameCoordinate;
     spec.series.forEach((series, index) => {
       const name = series.name?.trim() ? series.name : labels.chartSeriesName(index + 1);
       if ('values' in series && spec.kind === 'bar') {
@@ -59,9 +61,23 @@ export function chartToTable(spec: ChartSpec, labels: RuntimeLabels): TableArtif
           rows.push([name, spec.categories[i], series.values[i]]);
       } else if ('points' in series) {
         rowCount += series.points.length;
-        for (let i = 0; i < series.points.length && rows.length < limit; i++) rows.push([name, ...series.points[i]]);
+        for (let i = 0; i < series.points.length && rows.length < limit; i++) {
+          const [pointX, pointY] = series.points[i];
+          rows.push([name, x(pointX), y(pointY)]);
+        }
       }
     });
   }
   return { kind: 'table', title: labels.chartData, columns, rows, rowCount, truncated: rowCount > rows.length };
+}
+
+function sameCoordinate(value: unknown): unknown {
+  return value;
+}
+
+/** Shows whole epoch milliseconds as the UTC instants the chart displays; authored ISO strings stay as written. */
+function timeCoordinate(value: unknown): unknown {
+  if (typeof value !== 'number' || !Number.isInteger(value)) return value;
+  const date = new Date(value);
+  return Number.isNaN(date.getTime()) ? value : date.toISOString();
 }

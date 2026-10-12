@@ -77,8 +77,17 @@ describe('interactive cell model', () => {
     expect(labelsForLanguage('ja').diagnosticDetail('Artifact data exceeds the remaining 16 MiB run limit.')).toBe(
       '実行あたり 16 MiB の残り上限を超えています。'
     );
-    expect(labelsForLanguage('ja').diagnosticDetail('Chart data item limit exceeded: received 21, maximum 20.')).toBe(
+    expect(labelsForLanguage('ja').diagnosticDetail('Chart contains 21 data items; maximum is 20.')).toBe(
       'グラフデータの上限を超えました。21 件を受け取りましたが、上限は 20 件です。'
+    );
+    expect(labelsForLanguage('ja').copyLinkError('Complete invalid inputs before copying a link.')).toBe(
+      '入力のリンクをコピーできませんでした: 入力の誤りを修正してからリンクをコピーしてください。'
+    );
+    expect(labelsForLanguage('ja').copyLinkError('The input sharing link exceeds 8192 characters.')).toBe(
+      '入力のリンクをコピーできませんでした: 入力の共有リンクが 8192 文字を超えています。'
+    );
+    expect(labelsForLanguage('ja').diagnosticDetail('Python package pandas is not shipped with this site.')).toBe(
+      'Python パッケージ pandas はこのサイトで配布されていません。'
     );
     expect(labelsForLanguage('ja').executionError('unknown failure')).toBe('セルの実行に失敗しました: unknown failure');
     expect(labelsForLanguage('ja').copyCsvError('unknown failure')).toBe(
