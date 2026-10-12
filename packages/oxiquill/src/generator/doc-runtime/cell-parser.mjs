@@ -4,6 +4,7 @@ import remarkMdx from 'remark-mdx';
 import remarkParse from 'remark-parse';
 import {
   parseInteractiveCellNode,
+  resolvePythonSetups,
   throwInteractiveCellDiagnostics,
   validateCellDependencies
 } from '../../lib/doc-runtime/cell-authoring.mjs';
@@ -37,7 +38,7 @@ export async function extractCellsFromMarkdown(source, pagePath, context) {
   ];
   throwInteractiveCellDiagnostics(diagnostics);
   assertUniqueCellIds(parsed.cells);
-  return Promise.all(parsed.cells.map((cell) => createCellManifest(cell, context.highlighter)));
+  return Promise.all(resolvePythonSetups(parsed.cells).map((cell) => createCellManifest(cell, context.highlighter)));
 }
 
 export async function createCellManifest(cell, highlighter) {
@@ -47,6 +48,7 @@ export async function createCellManifest(cell, highlighter) {
     title: cell.title,
     run: cell.run,
     source: cell.source,
+    ...(cell.setup ? { setup: cell.setup } : {}),
     sourceHtml: await highlighter.codeToHtml(cell.source, {
       lang: cell.language,
       themes: sourceThemes

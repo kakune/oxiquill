@@ -530,7 +530,10 @@ def display_table(value, *, title=None, caption=None):
     failure = None
     try:
         if type(value) in (list, tuple, range):
-            row_count = len(value)
+            try:
+                row_count = len(value)
+            except OverflowError:
+                pass
         iterator = iter(value)
         sentinel = object()
         for index in range(__oxiquill_table_limit + 1):

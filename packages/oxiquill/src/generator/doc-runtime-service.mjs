@@ -16,7 +16,11 @@ import {
   parseCellsFromMarkdown,
   sourceThemes
 } from './doc-runtime-core.mjs';
-import { throwInteractiveCellDiagnostics, validateCellDependencies } from '../lib/doc-runtime/cell-authoring.mjs';
+import {
+  resolvePythonSetups,
+  throwInteractiveCellDiagnostics,
+  validateCellDependencies
+} from '../lib/doc-runtime/cell-authoring.mjs';
 import { defaultFileSystem, listFiles, writeIfChanged } from './doc-runtime/file-system.mjs';
 import { listAuthoredHelperInputFiles } from './doc-runtime/helper-inputs.mjs';
 import { listHelperCrates } from './doc-runtime/helper-crate-service.mjs';
@@ -617,7 +621,7 @@ export async function collectCells({
   assertUniqueRustFunctionNames(rustCells);
   assertUniqueRustInputBindings(rustCells);
 
-  return Promise.all(authoringCells.map((cell) => createCellManifest(cell, highlighter)));
+  return Promise.all(resolvePythonSetups(authoringCells).map((cell) => createCellManifest(cell, highlighter)));
 }
 
 export async function markRuntimeReady({

@@ -24,6 +24,7 @@ export interface InputSpec {
 }
 
 export interface CellManifest {
+  setup?: readonly PythonSetupStep[];
   id: string;
   language: CellLanguage;
   title: string;
@@ -36,6 +37,13 @@ export interface CellManifest {
   timeoutMs: number;
   showSource: boolean;
   pagePath: string;
+}
+
+export interface PythonSetupStep {
+  id: string;
+  source: string;
+  packages: readonly string[];
+  timeoutMs: number;
 }
 
 export type InputValues = Record<string, string | number | boolean>;
@@ -235,6 +243,7 @@ export interface CellExecutionResult {
 }
 
 export interface RuntimeWorkerRequest {
+  setup?: readonly PythonSetupStep[];
   requestId: number;
   cellId: string;
   haskellFingerprintHash?: string;

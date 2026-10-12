@@ -106,6 +106,7 @@ export interface OxiquillFrameworkOptions<StarlightOptions extends object = obje
 }
 
 export interface OxiquillPythonOptions {
+  experimentalSetup?: boolean;
   preload?: boolean;
   offline?: boolean;
   packageMirror?: string | URL;

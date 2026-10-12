@@ -53,8 +53,9 @@ export function createPythonWorkerRequestHandler({
   return async (request) => {
     let initializedRuntime: PyodideRuntime | undefined;
     let prepared = false;
-    const stdout = createBoundedTextAccumulator(outputArtifactLimits.bytesPerStream, '\n');
-    const stderr = createBoundedTextAccumulator(outputArtifactLimits.bytesPerStream, '\n');
+    let stdout = createBoundedTextAccumulator(outputArtifactLimits.bytesPerStream, '\n');
+    let stderr = createBoundedTextAccumulator(outputArtifactLimits.bytesPerStream, '\n');
+    let currentSetupId: string | undefined;
     const collectResult = (value: unknown = null) => {
       const displayOutputs = initializedRuntime ? collectPythonOutputs(initializedRuntime) : [];
       const stdoutResult = stdout.take();
@@ -84,29 +85,49 @@ export function createPythonWorkerRequestHandler({
         postMessage({ type: 'ready', requestId: request.requestId, ok: true });
         return;
       }
-      pyodide.setStdout({ batched: stdout.append });
-      pyodide.setStderr({ batched: stderr.append });
+      pyodide.setStdout({ batched: (text) => stdout.append(text) });
+      pyodide.setStderr({ batched: (text) => stderr.append(text) });
       await measureRuntimePhase('display-prepare', request.cellId, () =>
         pyodide.runPython(
           `__oxiquill_prepare_cell(${Object.hasOwn(pyodide.loadedPackages ?? {}, 'matplotlib') ? 'True' : 'False'})`
         )
       );
       prepared = true;
-      if (request.source) {
-        assertSupportedPythonImports(pyodide, request.source, request.shippedPackages);
-        await measureRuntimePhase('imports', request.cellId, () =>
-          pyodide.loadPackagesFromImports(request.source ?? '')
-        );
+      for (const step of [...(request.setup ?? []), { id: undefined, source: request.source }]) {
+        currentSetupId = step.id;
+        if (!step.source) continue;
+        assertSupportedPythonImports(pyodide, step.source, request.shippedPackages);
+        await measureRuntimePhase('imports', request.cellId, () => pyodide.loadPackagesFromImports(step.source ?? ''));
         pyodide.runPython(
           `__oxiquill_configure_matplotlib(${Object.hasOwn(pyodide.loadedPackages ?? {}, 'matplotlib') ? 'True' : 'False'})`
         );
       }
       postMessage({ type: 'progress', requestId: request.requestId, phase: 'executing' });
 
-      const globals = pyodide.toPy(request.inputs);
+      const globals = pyodide.toPy(request.setup?.length ? {} : request.inputs);
       let value: unknown = null;
 
       try {
+        for (const step of request.setup ?? []) {
+          currentSetupId = step.id;
+          const ignoredValue: unknown = await measureRuntimePhase('setup', step.id, () =>
+            pyodide.runPythonAsync(step.source, { globals, filename: step.id })
+          );
+          if (
+            ignoredValue &&
+            typeof ignoredValue === 'object' &&
+            'destroy' in ignoredValue &&
+            typeof ignoredValue.destroy === 'function'
+          )
+            ignoredValue.destroy();
+          pyodide.runPython('__oxiquill_close_figures(); __oxiquill_reset_outputs()');
+          stdout = createBoundedTextAccumulator(outputArtifactLimits.bytesPerStream, '\n');
+          stderr = createBoundedTextAccumulator(outputArtifactLimits.bytesPerStream, '\n');
+        }
+        currentSetupId = undefined;
+        if (request.setup?.length) {
+          for (const [name, input] of Object.entries(request.inputs)) globals.set(name, input);
+        }
         for (const inputName of request.integerInputNames ?? []) {
           pyodide.runPython(pythonIntegerConversionCode(inputName), { globals });
         }
@@ -130,7 +151,9 @@ export function createPythonWorkerRequestHandler({
       postMessage({
         requestId: request.requestId,
         ok: false,
-        error: boundedErrorMessage(error),
+        error: boundedErrorMessage(
+          currentSetupId ? `Python setup "${currentSetupId}" failed: ${boundedErrorMessage(error)}` : error
+        ),
         ...(partialResult?.outputs.length ? { partialResult } : {})
       });
     } finally {

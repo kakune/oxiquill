@@ -1,18 +1,85 @@
 // @vitest-environment node
 import { createRequire } from 'node:module';
-import { beforeAll, beforeEach, it } from 'vitest';
+import { afterAll, beforeAll, beforeEach, expect, it, vi } from 'vitest';
 import { pythonDisplaySupportCode } from '../../packages/oxiquill/src/lib/doc-runtime/python-display-support.ts';
 
 const require = createRequire(new URL('../../packages/oxiquill/package.json', import.meta.url));
 const { loadPyodide } = require('pyodide');
 let python;
+let createPythonWorkerRequestHandler;
 
 beforeAll(async () => {
   python = await loadPyodide();
   python.runPython(pythonDisplaySupportCode);
+  vi.stubGlobal('self', { addEventListener() {}, postMessage() {} });
+  ({ createPythonWorkerRequestHandler } = await import('../../packages/oxiquill/src/lib/doc-runtime/python-worker.ts'));
 }, 30_000);
 
+afterAll(() => vi.unstubAllGlobals());
+
 beforeEach(() => python.runPython('__oxiquill_prepare_cell()'));
+
+it('reexecutes setup in fresh globals, hides setup output, and injects reader inputs last', async () => {
+  const postMessage = vi.fn();
+  const handle = createPythonWorkerRequestHandler({ ensurePyodide: async () => python, postMessage });
+  const request = {
+    requestId: 1,
+    cellId: 'body',
+    inputs: { factor: 3 },
+    packages: [],
+    setup: [
+      {
+        id: 'common',
+        packages: [],
+        timeoutMs: 1000,
+        source: 'values = [1, 2]\nfactor = 999\nprint("hidden")\ndisplay_json({"hidden": True})\nvalues'
+      }
+    ],
+    source: 'assert "leaked" not in globals()\nleaked = True\nvalues.append(factor)\nprint(values)\nsum(values)'
+  };
+  for (const requestId of [1, 2]) {
+    await handle({ ...request, requestId });
+    expect(postMessage.mock.lastCall[0]).toEqual({
+      requestId,
+      ok: true,
+      result: {
+        outputs: [
+          { kind: 'text', stream: 'stdout', content: '[1, 2, 3]' },
+          { kind: 'json', value: 6 }
+        ]
+      }
+    });
+  }
+  await handle({
+    ...request,
+    setup: [
+      {
+        ...request.setup[0],
+        source: 'print("failed setup")\ndisplay_json({"stage": "setup"})\nraise ValueError("setup failed")'
+      }
+    ]
+  });
+  expect(postMessage.mock.lastCall[0]).toMatchObject({
+    ok: false,
+    error: expect.stringContaining('Python setup "common" failed:'),
+    partialResult: {
+      outputs: [
+        { kind: 'text', stream: 'stdout', content: 'failed setup' },
+        { kind: 'json', value: { stage: 'setup' } }
+      ]
+    }
+  });
+  await handle({ ...request, setup: [{ ...request.setup[0], source: 'values = [10]\nfactor = 999' }] });
+  expect(postMessage.mock.lastCall[0]).toMatchObject({
+    ok: true,
+    result: {
+      outputs: [
+        { kind: 'text', stream: 'stdout', content: '[10, 3]' },
+        { kind: 'json', value: 13 }
+      ]
+    }
+  });
+});
 
 it('closes leftover figures before clearing display state without importing pyplot', () => {
   python.runPython(`
@@ -74,6 +141,10 @@ class UnsafeLength:
         yield [1]
 display_table(UnsafeLength())
 assert __oxiquill_take_outputs()[0]["rowCount"] == 1
+display_table(range(10 ** 100))
+table = __oxiquill_take_outputs()[0]
+assert len(table["rows"]) == __oxiquill_table_limit
+assert "rowCount" not in table
 `);
 });
 

@@ -8,6 +8,7 @@ import type {
 } from './types.js';
 import { ExecutionCancellationError } from './execution-cancellation.js';
 import { CellExecutionError } from './execution-error.js';
+import { cellExecutionTimeoutMs } from './interactive-cell-model.js';
 import { assertValidInputValues, completeInputValues } from './interactive-input-validation.js';
 import { normalizeCellExecutionResult, type NormalizedCellExecutionResult } from './output-artifacts.js';
 import { boundedErrorMessage } from './output-limits.mjs';
@@ -150,6 +151,7 @@ export function createInteractiveCellRunner(dependencies: RuntimeClientDependenc
 
     const requestId = nextRequestId++;
     const request = createWorkerRequest(requestId, cell, completeValues, runtimeVersion);
+    const timeoutMs = cellExecutionTimeoutMs(cell);
     if (overrides) request.source = overrides.source;
 
     return new Promise((resolve, reject) => {
@@ -159,8 +161,8 @@ export function createInteractiveCellRunner(dependencies: RuntimeClientDependenc
         worker = getWorker(cell.language);
         const ownedWorker = worker;
         const timeout = dependencies.setTimeout(() => {
-          failWorker(ownedWorker, new Error(`${cell.title} timed out after ${cell.timeoutMs}ms`));
-        }, cell.timeoutMs);
+          failWorker(ownedWorker, new Error(`${cell.title} timed out after ${timeoutMs}ms`));
+        }, timeoutMs);
 
         const abort = () => failWorker(ownedWorker, new ExecutionCancellationError());
         signal?.addEventListener('abort', abort, { once: true });
@@ -311,6 +313,7 @@ function createWorkerRequest(
   const shippedPackages = cell.language === 'python' ? runtimePythonPackages(runtimeVersion) : undefined;
   return {
     requestId,
+    ...(cell.language === 'python' && cell.setup ? { setup: cell.setup } : {}),
     cellId: cell.id,
     ...(cell.language === 'haskell' ? { haskellFingerprintHash: runtimeHaskellFingerprintHash(runtimeVersion) } : {}),
     inputArgs: cell.language === 'haskell' ? cell.inputs.map((input) => inputArgument(input, inputs)) : undefined,

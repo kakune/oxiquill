@@ -1,6 +1,7 @@
 import { relativePagePath } from './authoring-ids.mjs';
 import {
   parseInteractiveCellNode,
+  resolvePythonSetups,
   throwInteractiveCellDiagnostics,
   uniqueCellIdDiagnostics
 } from './cell-authoring.mjs';
@@ -25,6 +26,7 @@ export default function remarkInteractiveCells({ root = process.cwd(), pythonOpt
 
     throwInteractiveCellDiagnostics(diagnostics);
     throwInteractiveCellDiagnostics(uniqueCellIdDiagnostics(cells.map(({ cell }) => cell)));
+    resolvePythonSetups(cells.map(({ cell }) => cell));
 
     const reservedIdentifiers = collectReservedMdxIdentifiers(tree);
     const componentIdentifier = allocateMdxIdentifier(reservedIdentifiers, '__OxiquillInteractiveCell');

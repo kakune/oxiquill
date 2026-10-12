@@ -141,3 +141,5 @@ When you customize generated directories, update `tsconfig.json` exclusions to t
 `python.preload` defaults to `false`. Enable it to prepare Python at DOM readiness on pages containing Python cells. See [Python Runtime Assets](/guides/python-runtime/#browser-preparation).
 
 `python.additionalPackages` accepts package names mapped to `{ version, license, licenseFiles }` records. It extends the built-in allowlist using the installed Pyodide lock. Only packages required by cells are distributed. See [Additional Packages](/guides/python-runtime/#additional-packages) for dependency notices, integrity checks, and an example.
+
+`python.experimentalSetup` defaults to `false`. Enable it to allow page-local Python setup references that execute afresh before each cell. See [Experimental Setup](/guides/python-runtime/#experimental-setup).

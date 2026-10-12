@@ -114,3 +114,39 @@ The table reports a total only when it is known. A truncated iterator shows **to
 Every Python execution starts with fresh display state. Matplotlib figures are closed after execution, including failures, so a failed cell cannot contribute figures to a later cell.
 
 When execution raises an exception, bounded print, display, and figure output is shown under **Output from the failed execution**. A previous successful result remains separate. Starting another execution clears the failure diagnostics. Output recovery is best effort: collecting a figure must not replace the original error, and terminating or timing out a worker cannot recover output it has not sent.
+
+## Experimental Setup
+
+Enable `python: { experimentalSetup: true }` to reuse a page-local Python cell as setup. The default is disabled. A setup reference must name one Python cell without inputs; chained references execute in dependency order. Missing references, references outside the page, and cycles fail generation.
+
+```python
+#| id: common-data
+#| title: Common data preparation
+#| run: button
+from math import sqrt
+
+samples = [sqrt(value) for value in range(1, 101)]
+print("Setup completed")
+```
+
+```python
+#| id: setup-mean
+#| title: Mean from reproducible setup
+#| setup: common-data
+#| inputs:
+#|   scale: { type: number, value: 1, min: 1, max: 5 }
+print(f"Mean: {scale * sum(samples) / len(samples):.6f}")
+```
+
+```python
+#| id: setup-range
+#| title: Range from reproducible setup
+#| setup: common-data
+print(f"Range: {min(samples):.1f} to {max(samples):.1f}")
+```
+
+Each execution creates new globals, executes setup, injects the reader's inputs, and executes the body. Reader inputs override setup bindings with the same names. Setup runs again after retries, resets, and worker replacement; execution order does not supply state. Its declared packages are included in the consumer cell's manifest and preload set. The total request timeout is the sum of the setup and body timeouts.
+
+Successful setup logs, displays, return values, and figures are discarded. A failing setup stops the body and exposes only that failed stage's bounded diagnostics. Running the setup cell directly still displays its own output. Reader edits remain local drafts and do not change another cell's authored setup.
+
+This experiment removes duplicated preparation source; it does not reuse results from a previous cell. Modules still share the worker's interpreter, so setup must explicitly initialize state it relies on. The repository includes a warm-run timing comparison in `tests/performance/python-setup.mjs`; the feature remains opt-in while its cost is evaluated.

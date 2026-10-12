@@ -7,6 +7,7 @@ import { shouldShowInputControls, shouldShowRunButton } from '../../lib/doc-runt
 import type { RuntimeLabels } from '../../lib/doc-runtime/runtime-localization.js';
 import type { CellManifest } from '../../lib/doc-runtime/types.js';
 import { CellOutput } from './CellOutput.js';
+import { cellExecutionTimeoutMs } from '../../lib/doc-runtime/interactive-cell-model.js';
 import { InputControl } from './InputControl.js';
 import { useManifestSnapshot, useRuntimeLabels } from './manifest-hooks.js';
 import { useInteractiveCellRun } from './useInteractiveCellRun.js';
@@ -82,7 +83,7 @@ function InteractiveCellPanel({
       data-share-inputs={sharedInputMetadata(cell)}
       data-language={cell.language}
       data-python-packages={cell.language === 'python' ? JSON.stringify(cell.packages) : undefined}
-      data-python-timeout={cell.language === 'python' ? cell.timeoutMs : undefined}
+      data-python-timeout={cell.language === 'python' ? cellExecutionTimeoutMs(cell) : undefined}
       data-testid={`cell-${cell.id}`}
     >
       <div class="doc-cell__header">

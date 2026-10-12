@@ -16,7 +16,7 @@ export const supportedLanguages = new Map([
 import { supportedPyodidePackages } from './python-packages.mjs';
 export { supportedPyodidePackages };
 
-const cellFields = new Set(['id', 'title', 'run', 'inputs', 'packages', 'crates', 'timeoutMs', 'showSource']);
+const cellFields = new Set(['id', 'title', 'run', 'inputs', 'packages', 'crates', 'timeoutMs', 'showSource', 'setup']);
 const inputFields = new Set([
   'type',
   'label',
@@ -94,6 +94,17 @@ export function parseInteractiveCellNode(node, pagePath, pythonOptions = {}) {
   const inputs = normalizeInputs(metadata, context, diagnostics);
   const packages = normalizeStringArray(metadata, 'packages', context, diagnostics);
   const crates = normalizeStringArray(metadata, 'crates', context, diagnostics);
+  const setup = metadata.setup;
+  if (hasOwn(metadata, 'setup')) {
+    if (language !== 'python' || !pythonOptions.experimentalSetup) {
+      diagnostics.push(
+        diagnostic(context, 'setup', 'Setup references require a Python cell and python.experimentalSetup: true.')
+      );
+    }
+    if (typeof setup !== 'string' || !localIdPattern.test(setup)) {
+      diagnostics.push(diagnostic(context, 'setup', 'Expected a single page-local cell id.'));
+    }
+  }
 
   validateDependencyFields(metadata, language, packages, context, diagnostics, pythonOptions);
   if (run === 'autorun' && hasOwn(metadata, 'inputs')) {
@@ -113,6 +124,7 @@ export function parseInteractiveCellNode(node, pagePath, pythonOptions = {}) {
       title,
       run,
       source,
+      ...(setup !== undefined ? { setup } : {}),
       inputs,
       packages,
       crates,
@@ -122,6 +134,39 @@ export function parseInteractiveCellNode(node, pagePath, pythonOptions = {}) {
       fenceStartLine: location.fenceStartLine
     }
   };
+}
+
+export function resolvePythonSetups(cells) {
+  const byPageAndId = new Map(cells.map((cell) => [`${cell.pagePath}\0${cell.localId}`, cell]));
+  function steps(cell, ancestors = []) {
+    if (!cell.setup) return [];
+    const fail = (message) => {
+      throw new InteractiveCellValidationError([diagnostic(cell, 'setup', message)]);
+    };
+    if (ancestors.includes(cell.id)) fail(`Cyclic Python setup reference: ${[...ancestors, cell.id].join(' -> ')}.`);
+    const target = byPageAndId.get(`${cell.pagePath}\0${cell.setup}`);
+    if (!target) fail(`Python setup "${cell.setup}" does not exist on this page.`);
+    if (target.language !== 'python' || target.inputs.length > 0)
+      fail(`Python setup "${cell.setup}" must be a Python cell without inputs.`);
+    return [
+      ...steps(target, [...ancestors, cell.id]),
+      { id: target.id, source: target.source, packages: target.packages, timeoutMs: target.timeoutMs }
+    ];
+  }
+  return cells.map((cell) => {
+    const setup = steps(cell);
+    if (setup.length === 0) return cell;
+    if (setup.reduce((total, step) => total + step.timeoutMs, cell.timeoutMs) > MAX_CELL_TIMEOUT_MS) {
+      throw new InteractiveCellValidationError([
+        diagnostic(cell, 'timeoutMs', `Combined setup and cell timeout must not exceed ${MAX_CELL_TIMEOUT_MS}ms.`)
+      ]);
+    }
+    return {
+      ...cell,
+      setup,
+      packages: [...new Set([...cell.packages, ...setup.flatMap((step) => step.packages)])].sort()
+    };
+  });
 }
 
 export function splitCellSource(rawSource, language, location = { fenceStartLine: 1, pagePath: '' }) {

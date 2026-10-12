@@ -39,7 +39,7 @@ function normalizePythonOptions(options) {
     throw new TypeError('python must be an object.');
   }
   const unknownFields = Object.keys(options).filter(
-    (name) => !['offline', 'packageMirror', 'preload', 'additionalPackages'].includes(name)
+    (name) => !['offline', 'packageMirror', 'preload', 'additionalPackages', 'experimentalSetup'].includes(name)
   );
   if (unknownFields.length > 0) {
     throw new TypeError(`Unknown python option: ${unknownFields.sort().join(', ')}.`);
@@ -51,9 +51,12 @@ function normalizePythonOptions(options) {
   if (typeof offline !== 'boolean') throw new TypeError('python.offline must be a boolean.');
   const packageMirror = normalizePackageMirror(options.packageMirror);
   const additionalPackages = normalizeAdditionalPackages(options.additionalPackages);
+  const experimentalSetup = options.experimentalSetup ?? false;
+  if (typeof experimentalSetup !== 'boolean') throw new TypeError('python.experimentalSetup must be a boolean.');
   return Object.freeze({
     offline,
     preload,
+    ...(experimentalSetup ? { experimentalSetup } : {}),
     ...(packageMirror ? { packageMirror } : {}),
     ...(additionalPackages ? { additionalPackages } : {})
   });

@@ -23,6 +23,7 @@ export function summarizeCells(cells) {
       pythonCells.map((cell) => ({
         id: cell.id,
         packages: cell.packages,
+        ...(cell.setup ? { setup: cell.setup } : {}),
         source: cell.source
       }))
     ),
