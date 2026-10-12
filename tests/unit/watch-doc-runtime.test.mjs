@@ -14,6 +14,28 @@ beforeEach(() => {
 });
 
 describe('runtime watcher entrypoint', () => {
+  it('passes Python settings through rebuilds and reloads config and notice changes', async () => {
+    const { handlers, services, watcher } = createServices({ syncDocRuntime: vi.fn(async () => runtimeSummary()) });
+    vi.spyOn(console, 'log').mockImplementation(() => undefined);
+    const python = { additionalPackages: { extra: { version: '1.0', license: 'MIT', licenseFiles: ['NOTICE.txt'] } } };
+    const configFile = path.join(workspaceRoot, 'astro.config.mjs');
+    services.loadProjectConfig.mockResolvedValue({ paths, python, configFile });
+    await main([], services);
+    await waitForCallCount(services.syncDocRuntime, 1);
+    expect(services.createDocRuntimeContext).toHaveBeenLastCalledWith(
+      expect.objectContaining({ pythonOptions: python })
+    );
+    handlers.get('all')('change', path.join(workspaceRoot, 'NOTICE.txt'));
+    await waitForCallCount(services.syncDocRuntime, 2);
+    const updated = { ...python, offline: true };
+    services.loadProjectConfig.mockResolvedValue({ paths, python: updated, configFile });
+    handlers.get('all')('change', configFile);
+    await waitForCallCount(services.syncDocRuntime, 3);
+    expect(services.createDocRuntimeContext).toHaveBeenLastCalledWith(
+      expect.objectContaining({ pythonOptions: updated })
+    );
+    expect(watcher.add).toHaveBeenCalledWith([path.join(workspaceRoot, 'NOTICE.txt')]);
+  });
   it('skips synchronization until a relevant filesystem event arrives', async () => {
     const { handlers, services } = createServices({
       syncDocRuntime: vi.fn(async () =>
@@ -126,8 +148,16 @@ describe('runtime watcher entrypoint', () => {
     await flushMicrotasks();
 
     expect(services.syncDocRuntime).toHaveBeenCalledTimes(2);
-    expect(services.createDocRuntimeContext).toHaveBeenNthCalledWith(1, { highlighter: undefined, paths });
-    expect(services.createDocRuntimeContext).toHaveBeenNthCalledWith(2, { highlighter, paths });
+    expect(services.createDocRuntimeContext).toHaveBeenNthCalledWith(1, {
+      highlighter: undefined,
+      paths,
+      pythonOptions: undefined
+    });
+    expect(services.createDocRuntimeContext).toHaveBeenNthCalledWith(2, {
+      highlighter,
+      paths,
+      pythonOptions: undefined
+    });
     expect(services.syncDocRuntime).toHaveBeenNthCalledWith(
       2,
       expect.objectContaining({ forceRustBuild: true, mode: 'dev', tolerateHaskellBuildFailure: true })
@@ -166,6 +196,7 @@ describe('runtime watcher entrypoint', () => {
 function createServices({ createDocRuntimeContext, syncDocRuntime }) {
   const handlers = new Map();
   const watcher = {
+    add: vi.fn(),
     on: vi.fn((event, handler) => {
       handlers.set(event, handler);
       return watcher;

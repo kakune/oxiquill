@@ -65,6 +65,10 @@ describe('interactive cell model', () => {
     expect(labelsForLanguage('ja').run).toBe('実行');
     expect(idleOutputMessage('reactive', labelsForLanguage('ja'))).toBe('ランタイムの起動を待っています。');
     expect(labelsForLanguage('ja').unknownCell('missing')).toBe('不明な実行可能セル: missing');
+    expect(labelsForLanguage('ja').failedOutput).toBe('失敗した実行の出力');
+    expect(labelsForLanguage('ja').previousSuccessfulOutput).toBe('前回成功した実行の出力');
+    expect(labelsForLanguage('ja').rowsRange(1, 25, undefined, true)).toBe('1–25 行（総数不明・省略あり）');
+    expect(labelsForLanguage('ja').rowsRange(1, 25, 40, false)).toBe('40 行中 1–25 行');
     expect(labelsForLanguage('fr').run).toBe('Run');
     expect(labelsForLanguage('fr')).toBe(labelsForLanguage('en'));
     expect(Object.values(labelsForLanguage('unknown')).every((label) => label !== undefined)).toBe(true);

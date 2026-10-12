@@ -61,6 +61,8 @@ export type RuntimeLabels = {
   diagnosticDetail: (detail: string) => string;
   executionError: (detail: string) => string;
   executionErrorLabel: string;
+  failedOutput: string;
+  previousSuccessfulOutput: string;
   hideCode: string;
   htmlOutput: string;
   idleButton: string;
@@ -79,7 +81,7 @@ export type RuntimeLabels = {
   outputTruncated: string;
   previousPage: string;
   rowsPerPage: string;
-  rowsRange: (first: number, last: number, total: number, truncated: boolean) => string;
+  rowsRange: (first: number, last: number, total: number | undefined, truncated: boolean) => string;
   run: string;
   resetInputs: string;
   editCode: string;
@@ -203,6 +205,8 @@ const runtimeLabels = {
     diagnosticDetail: (detail) => detail,
     executionError: (detail) => `Cell execution failed: ${detail}`,
     executionErrorLabel: 'Cell execution failed:',
+    failedOutput: 'Output from the failed execution',
+    previousSuccessfulOutput: 'Previous successful output',
     hideCode: 'Hide code',
     htmlOutput: 'HTML output',
     idleButton: 'Run the cell to show its output.',
@@ -221,7 +225,10 @@ const runtimeLabels = {
     outputTruncated: 'Output truncated.',
     previousPage: 'Previous page',
     rowsPerPage: 'Rows per page',
-    rowsRange: (first, last, total, truncated) => `Rows ${first}-${last} of ${total}${truncated ? ' (truncated)' : ''}`,
+    rowsRange: (first, last, total, truncated) =>
+      total === undefined
+        ? `Rows ${first}-${last} (total unknown; truncated)`
+        : `Rows ${first}-${last} of ${total}${truncated ? ' (truncated)' : ''}`,
     run: 'Run',
     resetInputs: 'Reset inputs',
     editCode: 'Edit Python',
@@ -302,6 +309,8 @@ const runtimeLabels = {
     diagnosticDetail: translateDiagnostic,
     executionError: (detail) => `セルの実行に失敗しました: ${translateDiagnostic(detail)}`,
     executionErrorLabel: 'セルの実行に失敗しました:',
+    failedOutput: '失敗した実行の出力',
+    previousSuccessfulOutput: '前回成功した実行の出力',
     hideCode: 'コードを隠す',
     htmlOutput: 'HTML 出力',
     idleButton: 'セルを実行すると出力が表示されます。',
@@ -320,7 +329,10 @@ const runtimeLabels = {
     outputTruncated: '出力は省略されています。',
     previousPage: '前のページ',
     rowsPerPage: '1ページあたりの行数',
-    rowsRange: (first, last, total, truncated) => `${total} 行中 ${first}–${last} 行${truncated ? '（省略あり）' : ''}`,
+    rowsRange: (first, last, total, truncated) =>
+      total === undefined
+        ? `${first}–${last} 行（総数不明・省略あり）`
+        : `${total} 行中 ${first}–${last} 行${truncated ? '（省略あり）' : ''}`,
     run: '実行',
     resetInputs: '入力を初期値に戻す',
     editCode: 'Pythonを編集',

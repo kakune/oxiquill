@@ -41,3 +41,9 @@ if show_deltas
 ## 補足
 
 Haskell セルは standard library に収まる deterministic な例に向いています。短い functional transformation で結果を説明したいときに使います。
+
+## 構造化出力
+
+同梱の `Oxiquill.Output` は `JsonValue`、`displayJson`、`displayTable`、`displayChart` を提供します。依存は GHC の `base` のみで、追加パッケージのビルドは不要です。Haskell の `show` を JSON として扱わず、専用の constructor で JSON 値を組み立てます。数値は有限値、文字列は Unicode scalar value に限定します。[英語版の実行例](/samples/haskell-series/#structured-output) で JSON・表・チャートを確認できます。
+
+通常の `putStrLn` はそのまま表示されます。予約済みの record separator (`0x1e`) を文字として出力する場合は `Output.putText` を使ってください。構造化出力には version と byte 長を持つフレームを使い、不正なフレームは局所診断にします。テキストの各 1 MiB 上限と artifact の件数・容量上限は別々に適用します。

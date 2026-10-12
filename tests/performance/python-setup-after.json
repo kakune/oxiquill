@@ -1,0 +1,9 @@
+{
+  "environment": "Node 24.21.0, Pyodide 314.0.7; warm interpreter; 100 square roots",
+  "preparationCopiesBefore": 2,
+  "preparationCopiesAfter": 1,
+  "measurements": {
+    "duplicated": { "medianMs": 0.8595210000000861, "p95Ms": 1.7604890000000069, "runs": 20 },
+    "setup": { "medianMs": 1.2896189999999024, "p95Ms": 1.7333300000000236, "runs": 20 }
+  }
+}

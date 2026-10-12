@@ -33,7 +33,7 @@ export function isRuntimeWatchFileEvent(event) {
 }
 
 export function shouldSyncRuntime(changeKinds) {
-  return changeKinds.has('docs') || changeKinds.has('crate');
+  return changeKinds.has('docs') || changeKinds.has('crate') || changeKinds.has('python');
 }
 
 export function mergeChangeKinds(current, nextKind) {

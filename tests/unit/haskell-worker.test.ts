@@ -1,10 +1,8 @@
 import { describe, expect, it, vi } from 'vitest';
 import {
   assertReadyHaskellRuntimeStatus,
-  createHaskellCellResult,
   createHaskellModuleLoader,
   createHaskellWorkerRequestHandler,
-  createOutputCapture,
   fetchHaskellModule,
   fetchHaskellRuntimeStatus,
   type HaskellRuntimeStatus,
@@ -25,20 +23,6 @@ describe('haskell worker helpers', () => {
     );
   });
 
-  it('maps captured stdout and stderr to text artifacts', () => {
-    expect(
-      createHaskellCellResult({
-        stdout: 'value = 42',
-        stderr: 'warning'
-      })
-    ).toEqual({
-      outputs: [
-        { kind: 'text', stream: 'stdout', content: 'value = 42' },
-        { kind: 'text', stream: 'stderr', content: 'warning' }
-      ]
-    });
-  });
-
   it('handles successful requests and reports runtime failures', async () => {
     const module = {} as WebAssembly.Module;
     const request: RuntimeWorkerRequest = {
@@ -49,7 +33,9 @@ describe('haskell worker helpers', () => {
       inputs: {}
     };
     const responses: RuntimeWorkerResponse[] = [];
-    const runCell = vi.fn(async () => createHaskellCellResult({ stdout: 'sample: ok', stderr: '' }));
+    const runCell = vi.fn(async () => ({
+      outputs: [{ kind: 'text' as const, stream: 'stdout' as const, content: 'sample: ok' }]
+    }));
     const handleRequest = createHaskellWorkerRequestHandler({
       loadModule: vi.fn(async () => module),
       postMessage: (response) => responses.push(response),
@@ -179,34 +165,6 @@ describe('haskell worker helpers', () => {
     expect(loadModule('hash-b')).toBe(fingerprintB);
     expect(fetchStatus).toHaveBeenCalledTimes(2);
     expect(fetchModule).toHaveBeenCalledOnce();
-  });
-
-  it('bounds WASI bytes while callbacks run and flushes a split UTF-8 sequence safely', () => {
-    const exact = createOutputCapture(6);
-    exact.file.fd_write(new TextEncoder().encode('日本'));
-    expect(exact.take()).toEqual({ value: '日本', truncated: false });
-
-    const oversized = createOutputCapture(6);
-    oversized.file.fd_write(new TextEncoder().encode('日本語'));
-    expect(oversized.take()).toEqual({ value: '日本', truncated: true });
-
-    const splitSequence = createOutputCapture(4);
-    splitSequence.file.fd_write(new TextEncoder().encode('日本'));
-    expect(splitSequence.take()).toEqual({ value: '…', truncated: true });
-  });
-
-  it('marks bounded Haskell stream artifacts as truncated', () => {
-    expect(
-      createHaskellCellResult({
-        stdout: 'bounded stdout',
-        stdoutTruncated: true,
-        stderr: 'bounded stderr',
-        stderrTruncated: true
-      }).outputs
-    ).toEqual([
-      { kind: 'text', stream: 'stdout', content: 'bounded stdout', truncated: true },
-      { kind: 'text', stream: 'stderr', content: 'bounded stderr', truncated: true }
-    ]);
   });
 
   it('parses and validates generated Haskell runtime status', () => {

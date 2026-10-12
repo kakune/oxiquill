@@ -17,6 +17,7 @@ export function CellOutput({
   labels,
   outputId,
   result,
+  partialResult,
   retry,
   canRetry = true,
   runMode
@@ -29,6 +30,7 @@ export function CellOutput({
   labels: RuntimeLabels;
   outputId: string;
   result?: CellExecutionResult | NormalizedCellExecutionResult;
+  partialResult?: NormalizedCellExecutionResult;
   retry?: () => void;
   canRetry?: boolean;
   runMode: CellManifest['run'];
@@ -71,8 +73,20 @@ export function CellOutput({
           ) : null}
         </div>
       ) : null}
+      {partialResult ? (
+        <section aria-label={labels.failedOutput} data-testid="failed-output">
+          <p>{labels.failedOutput}</p>
+          <OutputRenderer
+            idPrefix={`${outputId}-failed`}
+            labels={labels}
+            outputs={partialResult.outputResults}
+            resultIdentity={partialResult}
+          />
+        </section>
+      ) : null}
       {result ? (
         <div class="doc-cell__outputs" key="outputs">
+          {error !== undefined ? <p>{labels.previousSuccessfulOutput}</p> : null}
           <OutputRenderer idPrefix={outputId} labels={labels} outputs={outputResults ?? []} resultIdentity={result} />
           {outputResults?.length ? null : <p class="empty-state">{labels.cellCompletedWithoutOutput}</p>}
         </div>

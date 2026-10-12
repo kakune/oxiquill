@@ -166,7 +166,14 @@ export default function TableOutput({
         </table>
       </div>
       <div class="doc-table-output__footer">
-        <p>{labels.rowsRange(firstRow, lastRow, table.rowCount ?? sortedRows.length, Boolean(table.truncated))}</p>
+        <p>
+          {labels.rowsRange(
+            firstRow,
+            lastRow,
+            table.rowCount ?? (table.truncated ? undefined : sortedRows.length),
+            Boolean(table.truncated)
+          )}
+        </p>
         <fieldset class="doc-table-output__controls">
           <legend class="doc-visually-hidden">{labels.tableControls}</legend>
           <label>

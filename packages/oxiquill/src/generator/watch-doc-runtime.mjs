@@ -1,10 +1,12 @@
 import chokidar from 'chokidar';
+import path from 'node:path';
 import { pathToFileURL } from 'node:url';
 import { parseArgs } from 'node:util';
 import { pathFromUrl } from '../config/paths.mjs';
 import { loadOxiquillProjectConfig } from '../config/project-config.mjs';
 import { createDocRuntimeContext, syncDocRuntime } from './doc-runtime-service.mjs';
 import { prepareCleanupOwnership } from './cleanup-ownership.mjs';
+import { pythonLicensePaths } from './doc-runtime/python-package-notices.mjs';
 import {
   classifyChangedPath,
   createRuntimeWatchPaths,
@@ -54,6 +56,9 @@ export async function watchDocRuntime({ projectConfig, serviceOverrides = {}, sk
     paths
   });
   const workspaceRoot = pathFromUrl(paths.workspaceRoot);
+  let pythonOptions = projectConfig.python;
+  let licensePaths = pythonLicensePaths(pythonOptions, paths);
+  let reloadConfig = false;
   let highlighter;
   let changeKinds = skipInitial ? new Set() : new Set(['docs']);
 
@@ -62,7 +67,14 @@ export async function watchDocRuntime({ projectConfig, serviceOverrides = {}, sk
 
     const currentKinds = changeKinds;
     changeKinds = new Set();
-    const context = await services.createDocRuntimeContext({ paths, highlighter });
+    if (reloadConfig) {
+      reloadConfig = false;
+      const updated = await services.loadProjectConfig({ cwd: workspaceRoot, configFile: projectConfig.configFile });
+      pythonOptions = updated.python;
+      licensePaths = pythonLicensePaths(pythonOptions, paths);
+      watcher.add(licensePaths);
+    }
+    const context = await services.createDocRuntimeContext({ paths, highlighter, pythonOptions });
     highlighter = context.highlighter;
 
     console.log(`[runtime] syncing after ${describeChangeKinds(currentKinds)}`);
@@ -94,16 +106,29 @@ export async function watchDocRuntime({ projectConfig, serviceOverrides = {}, sk
   });
 
   // Chokidar v4 does not expand globs, so watch stable roots and classify events ourselves.
-  const watcher = services.watch(createRuntimeWatchPaths(paths), {
-    cwd: workspaceRoot,
-    ignored: (filePath) => isExcludedCratePath(toWatchEventRelativePath(workspaceRoot, filePath), paths),
-    ignoreInitial: true
-  });
+  const watcher = services.watch(
+    [
+      ...createRuntimeWatchPaths(paths),
+      ...licensePaths,
+      ...(projectConfig.configFile ? [projectConfig.configFile] : [])
+    ],
+    {
+      cwd: workspaceRoot,
+      ignored: (filePath) => isExcludedCratePath(toWatchEventRelativePath(workspaceRoot, filePath), paths),
+      ignoreInitial: true
+    }
+  );
 
   watcher.on('all', (event, filePath) => {
     if (!isRuntimeWatchFileEvent(event)) return;
 
-    const kind = classifyChangedPath(toWatchEventRelativePath(workspaceRoot, filePath), paths);
+    const absolutePath = path.resolve(workspaceRoot, filePath);
+    const configChanged = Boolean(projectConfig.configFile && absolutePath === path.resolve(projectConfig.configFile));
+    reloadConfig ||= configChanged;
+    const kind =
+      configChanged || licensePaths.includes(absolutePath)
+        ? 'python'
+        : classifyChangedPath(toWatchEventRelativePath(workspaceRoot, filePath), paths);
     if (kind === 'other') return;
 
     changeKinds = mergeChangeKinds(changeKinds, kind);

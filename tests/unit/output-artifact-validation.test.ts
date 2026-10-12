@@ -25,6 +25,13 @@ function validationError(value: unknown): string {
 }
 
 describe('output artifact validation', () => {
+  it('preserves an unknown table total through repeated normalization', () => {
+    const table = { kind: 'table', columns: [{ key: 'v', label: 'Value' }], rows: [[1]], truncated: true };
+    const first = validArtifact(table);
+    expect(first).not.toHaveProperty('rowCount');
+    expect(validArtifact(first)).not.toHaveProperty('rowCount');
+    expect(validArtifact({ ...table, truncated: false })).toHaveProperty('rowCount', 1);
+  });
   it('exposes category-only heatmap axis declarations', () => {
     expectTypeOf<HeatmapChartSpec['xType']>().toEqualTypeOf<'category' | undefined>();
     expectTypeOf<HeatmapChartSpec['yType']>().toEqualTypeOf<'category' | undefined>();

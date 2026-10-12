@@ -25,10 +25,13 @@ Only these top-level fields are accepted; unknown fields are errors:
 | `crates`     | Unique non-empty helper package names from direct children of `cratesDir`; Rust only.                                      | `[]`     |
 | `timeoutMs`  | Integer milliseconds from `1` through `2147483647`, inclusive.                                                             | `30000`  |
 | `showSource` | Boolean controlling initial source visibility.                                                                             | `true`   |
+| `setup`      | One page-local Python cell ID without inputs; requires `python.experimentalSetup: true`.                                   | None     |
 
 The source must contain non-metadata code. Malformed YAML, a wrong scalar/collection type, duplicate normalized ID/binding/function, unknown package/crate, or language-mismatched dependency field fails before output is written. Diagnostics include page path, fence start line, cell ID when available, and the exact field path.
 
 Haskell cells use standard-library code only and accept neither `packages` nor `crates`. Rust cells without helpers should explicitly use `crates: []` in examples. Package and crate lists are deduplicated and sorted after strict validation.
+
+Python setup executes before each body in fresh globals. Successful setup output is hidden, input values are injected afterward, and setup timeouts add to the body's timeout. See [Experimental Setup](/guides/python-runtime/#experimental-setup). Haskell's bundled `Oxiquill.Output` module supports [structured output](/samples/haskell-series/#structured-output) without additional package dependencies.
 
 ## Run Modes
 

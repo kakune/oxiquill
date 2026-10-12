@@ -4,6 +4,7 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { pathFromUrl, pathInUrl } from '../config/paths.mjs';
 import { copyFileIfChanged, writeIfChanged } from './doc-runtime/file-system.mjs';
+import { resolvePythonPackageNotices } from './doc-runtime/python-package-notices.mjs';
 
 const defaultFileSystem = {
   copyFile,
@@ -123,7 +124,8 @@ export async function collectRuntimeArtifactNotices({
   fileSystem = defaultFileSystem,
   licenseDataDir = defaultLicenseDataDir,
   manifest,
-  paths
+  paths,
+  pythonOptions = {}
 }) {
   const resolvedManifest =
     manifest ?? (await readJsonFile(path.join(licenseDataDir, runtimeManifestFile), { fileSystem }));
@@ -150,7 +152,25 @@ export async function collectRuntimeArtifactNotices({
     })
   );
 
-  return mergeNotices(notices.filter(Boolean));
+  const pythonLockPath = pathInUrl(paths.pyodidePublicDir, 'pyodide-lock.json');
+  const configuredNotices = [];
+  if (fileSystem.existsSync(pythonLockPath)) {
+    const lockFile = await readJsonFile(pythonLockPath, { fileSystem });
+    const packages = Object.entries(lockFile.packages)
+      .filter(([, info]) => fileSystem.existsSync(pathInUrl(paths.pyodidePublicDir, info.file_name)))
+      .map(([name, info]) => ({ ...info, name }));
+    configuredNotices.push(
+      ...(await resolvePythonPackageNotices({
+        packages,
+        lockFile,
+        pythonOptions,
+        paths,
+        fileSystem,
+        bundledManifest: resolvedManifest
+      }))
+    );
+  }
+  return mergeNotices([...notices.filter(Boolean), ...configuredNotices]);
 }
 
 function runtimeArtifactPath(paths, filePath) {
@@ -218,7 +238,8 @@ export async function syncLicenseArtifacts({
   licenseDataDir = defaultLicenseDataDir,
   moduleGroups = new Map(),
   outputDirectory = /** @type {string | undefined} */ (undefined),
-  paths
+  paths,
+  pythonOptions = {}
 }) {
   const licensesDirectory = outputDirectory ?? pathFromUrl(paths.licensesPublicDir);
   const ownLicenseCopies = [
@@ -236,7 +257,7 @@ export async function syncLicenseArtifacts({
   }
 
   const [runtimeNotices, bundleNotices] = await Promise.all([
-    collectRuntimeArtifactNotices({ fileSystem, licenseDataDir, paths }),
+    collectRuntimeArtifactNotices({ fileSystem, licenseDataDir, paths, pythonOptions }),
     collectBundledPackageNotices(moduleGroups, {
       fileSystem,
       licenseDataDir,

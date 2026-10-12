@@ -79,3 +79,23 @@ Python runtime fingerprint は Pyodide version、lockfile hash、core-asset hash
 Python の `packages` は install 済み Pyodide release が vendor する name の non-empty unique list です。unknown name は download 前に reject されます。source import から runtime 内 package を load することもできますが、release build の deterministic preflight/cache のため non-core dependency は明示宣言してください。
 
 metadata は [実行可能セル](/ja/features/interactive-cells/)、復旧方法は [トラブルシューティング](/ja/guides/troubleshooting/) を参照してください。
+
+## 追加パッケージ
+
+`python.additionalPackages` で、固定された Pyodide lock にあるパッケージを許可リストへ追加できます。各名前に `{ version, license, licenseFiles }` を指定し、`licenseFiles` は workspace root からの相対パスとします。追加の依存先にも対応する notice が必要です。版の不一致、存在しないパッケージ、欠落・空の notice、hash 不一致は生成時にエラーになります。
+
+許可しただけでは配布されません。セルが要求するパッケージとその依存だけをコピーし、mirror、offline cache、preload、最終ライセンス report に同じ設定を適用します。任意の PyPI URL と実行時の外部配布元への fallback は対象外です。[英語版の設定例](/guides/python-runtime/#additional-packages) は SymPy と mpmath を使用します。
+
+## 表と失敗時の出力
+
+`display_table` は最大 10,001 行、各行と列名は最大 101 件まで読み、10,000 行・100 列まで保持します。無限 generator にも上限を適用し、DataFrame の index 列も列数に含めます。総件数が不明な場合は「総数不明」と表示し、CSV は取得済みの行だけを保存します。iterator が途中で例外を投げた場合も、取得済みの行と変換診断を残します。
+
+セルが失敗すると、取得可能な print・display・図を「失敗した実行の出力」に表示します。前回成功の結果とは分離し、次の実行開始時に診断を消します。図は成功・失敗の両方で閉じ、次の実行へ持ち越しません。worker 終了や timeout の場合、未送信の出力は回収できません。
+
+## 実験的な setup
+
+`python.experimentalSetup: true` を有効にすると、`#| setup: local-cell-id` で同じページにある入力なしの Python セルを参照できます。既定は無効です。参照の連鎖は依存順に解決し、循環・ページ外参照・入力を持つ参照先をビルド時に拒否します。
+
+実行ごとに新しい globals を作り、setup → 利用側の入力注入 → 本体の順に実行します。同名の変数は利用側の入力値が優先されます。成功した setup のログ・display・戻り値・図は破棄し、失敗した setup の診断だけを表示して本体を停止します。timeout は setup と本体の合計です。
+
+再試行・リセット・worker 再生成後にも setup を再実行します。読者による参照先の draft 編集は利用側へ反映しません。前セルの計算結果を引き継ぐ永続的な共有状態は提供せず、module 自体は worker の interpreter を共有します。[実行例と計測方法](/guides/python-runtime/#experimental-setup) を参照してください。
