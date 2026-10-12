@@ -3,6 +3,7 @@ import type { Page } from '@playwright/test';
 
 declare global {
   interface Window {
+    galleryFixtureCount: number;
     galleryECharts: typeof import('../../packages/oxiquill/node_modules/echarts/core');
   }
 }
@@ -14,7 +15,8 @@ for (const width of [360, 720]) {
       await page.emulateMedia({ reducedMotion: 'reduce' });
       await page.setViewportSize({ width: width + 40, height: 900 });
       await page.goto(`http://127.0.0.1:4323/?width=${width}&theme=${theme}`);
-      await expect(page.locator('.doc-plot')).toHaveCount(25);
+      await expect.poll(() => page.evaluate(() => window.galleryFixtureCount)).toBeGreaterThan(0);
+      await expect(page.locator('.doc-plot')).toHaveCount(await page.evaluate(() => window.galleryFixtureCount));
       await expect
         .poll(() =>
           page.locator('.doc-plot').evaluateAll((plots) => plots.every((plot) => plot.querySelector('canvas')))

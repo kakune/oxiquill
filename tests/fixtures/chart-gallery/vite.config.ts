@@ -16,6 +16,7 @@ export function chartGalleryConfig(baseDirectory = process.env.CHART_BASE_DIR) {
     resolve: {
       alias: {
         '@chart-source': source,
+        '@chart-fixtures': resolve(baseDirectory || repository, 'tests/fixtures/chart-specs.ts'),
         '@starlight-props': resolve(starlightStyles, 'props.css'),
         echarts: resolve(repository, 'packages/oxiquill/node_modules/echarts'),
         'preact/jsx-dev-runtime': fileURLToPath(import.meta.resolve('preact/jsx-dev-runtime')),
