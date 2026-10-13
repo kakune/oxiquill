@@ -49,9 +49,9 @@ All chart specs accept optional `title`, `xLabel`, `yLabel`, `xType`, `yType`, `
 - `bubble`: `[x, y, size, color?]` points with size and color mappings.
 - `field`: value-axis `xEdges`/`yEdges` and a `values` matrix.
 
-Empty charts and equal point domains are valid. Heatmaps report X- and Y-category counts plus the heat-value range; their color scale uses the actual heat values, with a `0–1` fallback only for an empty dataset. Charts expose a textual title/caption and bounded accessible summary or equivalent table. The implementation canvas is hidden from accessibility APIs when that equivalent is present.
+Empty charts and equal point domains are valid. Heatmaps report X- and Y-category counts plus the heat-value range. By default their color scale uses the actual heat values, with a `0–1` fallback only for an empty dataset; `colorMin`, `colorMax`, and `colorScale` override that domain (see [Heatmap color scales](#heatmap-color-scales)). Charts expose a textual title/caption and bounded accessible summary or equivalent table. The implementation canvas is hidden from accessibility APIs when that equivalent is present.
 
-Charts update their existing ECharts instance when `html[data-theme]` changes, preserving zoom, legend selections, and heatmap color-range selections and expose a retry action after a transient renderer load failure.
+Charts update their existing ECharts instance when `html[data-theme]` changes, preserving zoom, legend selections, and the color-range selections of heatmaps, grid fields, and color-mapped bubbles and expose a retry action after a transient renderer load failure.
 
 ### Axis ranges
 
@@ -59,7 +59,7 @@ Use finite `xMin/xMax/yMin/yMax` bounds, with min smaller than max. Time bounds 
 
 Data updates preserve zoom. Changing or removing authored bounds or zero inclusion resets zoom to the full domain, while retaining legend selection. Omitted bounds return to automatic scaling.
 
-Rust line, scatter, bar, and histogram macros accept `options = &serde_json::json!({...})` after their data arguments. Options accept the public chart settings, including labels and nested style; they cannot replace the kind or data. Existing positional style arguments remain supported. See the [logistic map](../../samples/logistic-map/) for a fixed 0–1 range.
+Rust line, scatter, area, bar, and histogram macros accept `options = &serde_json::json!({...})` after their data arguments; heatmaps and the other chart kinds use `emit_chart!` with a complete spec. Options accept the public chart settings, including labels and nested style; they cannot replace the kind or data. Existing positional style arguments remain supported. See the [logistic map](../../samples/logistic-map/) for a fixed 0–1 range.
 
 ### Histogram intervals
 
@@ -80,7 +80,7 @@ emit_histogram!(&bins, options = &serde_json::json!({
 
 ### Display Defaults
 
-Bar, histogram, and area charts include zero on a value y axis; line and scatter charts fit the data. Negative amounts also use zero as their baseline. A logarithmic y axis uses the lower axis boundary, so bar lengths and filled areas cannot be compared as amounts. **Migration:** bar and histogram `yType: 'time'` is now rejected; use a value axis for amounts or a line/scatter chart for timestamps.
+Bar, histogram, and area charts include zero on their value amount axis (x for horizontal bars, otherwise y); line and scatter charts fit the data. Negative amounts also use zero as their baseline. When data on a value amount axis spans zero, a zero line marks the baseline; it remains when series are hidden and is clipped while zooming. Grid fields omit it because both of their axes are coordinates; add a `line` annotation at 0 when a field needs one. A logarithmic y axis uses the lower axis boundary, so bar lengths and filled areas cannot be compared as amounts. **Migration:** bar and histogram `yType: 'time'` is now rejected; use a value axis for amounts or a line/scatter chart for timestamps.
 
 Numeric notation is selected per axis from the data range and remains stable while zooming. Four-digit years have no grouping separators. Large and tiny ranges use scientific notation; a narrow range around a large offset retains ordinary notation. Ticks retain enough digits to distinguish values. Tooltips, color scales, and summaries use six significant digits; JSON and table CSV retain original values. Negative zero displays as `0`.
 
@@ -90,7 +90,7 @@ For a numeric range spanning zero, data values whose absolute magnitude is at mo
 
 Titles appear once above the plot. When artifact and spec titles differ, the spec title becomes a subtitle. HTML legends use keyboard-operable series buttons, with 25 series per page. Unnamed series receive default names. Long axis and category labels are shortened; summaries retain axis names and tooltips retain category and series names. Category labels rotate before thinning. Split charts with many long category names; use `orientation: "horizontal"` for long category names.
 
-The fixed eight-color palette is shared across light and dark themes. On default backgrounds, adjacent colors (including the wrap to the first color) meet OKLab distance 15 in normal vision and 8 in protanopia, deuteranopia, and tritanopia simulations; each color meets 3:1 background contrast. This does not guarantee every pair of series is distinguishable. Palette reuse changes line patterns or scatter symbols; split charts with more than eight series when possible. Authors should check custom palettes for background contrast and color-vision differences. Heatmaps use a sequential, single-hue gradient with monotone lightness.
+The fixed eight-color palette is shared across light and dark themes. On default backgrounds, adjacent colors (including the wrap to the first color) meet OKLab distance 15 in normal vision and 8 in protanopia, deuteranopia, and tritanopia simulations; each color meets 3:1 background contrast. This does not guarantee every pair of series is distinguishable. Palette reuse changes line patterns or scatter symbols; split charts with more than eight series when possible. Authors should check custom palettes for background contrast and color-vision differences. Heatmaps, grid fields, and bubble color mappings use a sequential, single-hue gradient with monotone lightness by default; diverging heatmaps use a three-color gradient around their center.
 
 ## Persistent Output and Chart Styles
 
@@ -151,7 +151,7 @@ The macro serializes the argument into `spec.style`; normal chart validation enf
 
 ### Numeric formats
 
-Set `style.xFormat` or `style.yFormat` on value/log axes; heatmaps use `style.valueFormat` for their color scale. The same settings format ticks, pointers, tooltips, and summaries. Category and time axes retain their own formatting.
+Set `style.xFormat` or `style.yFormat` on value/log axes; heatmaps, grid fields, and bubbles use `style.valueFormat` for their color values. The same settings format ticks, pointers, tooltips, and summaries. Category and time axes retain their own formatting.
 
 Each format accepts `significantDigits` (integer 1–17), `fractionDigits` (integer 0–20), `unit` (text), and `notation` (`auto` or `si`). The two precision fields are mutually exclusive. Fixed decimals keep trailing zeros and may round small values to zero; negative zero displays as zero. Without overrides the default formatting remains in effect. Removing a format restores it.
 
@@ -169,9 +169,9 @@ emit_line_chart!(&points, "Time", "Voltage", &serde_json::json!({
 
 ### Series identity and style
 
-XY and bar series accept an optional non-empty, unique `id`. Give a series the same ID on each execution to preserve its identity and legend selection when reordering or renaming it. Names are display labels; even same-named series can be selected independently. Without IDs, identity follows the series index. Adding or removing series does not reset zoom. Default palette colors still follow authored order; use explicit colors when a series needs a fixed color.
+Series in every chart kind with `series[]` accept an optional non-empty, unique `id`. Give a series the same ID on each execution to preserve its identity and legend selection when reordering or renaming it. Names are display labels; even same-named series can be selected independently. Without IDs, identity follows the series index. Adding or removing series does not reset zoom. Default palette colors still follow authored order; use explicit colors when a series needs a fixed color.
 
-Set `series.style.color` to a `#RGB/#RRGGBB` string or `{ light, dark }` with at least one theme. An omitted theme uses the chart palette. Line/area series also accept `lineType` (solid/dashed/dotted), `step` (false/start/middle/end), `smooth` (boolean), `symbol`, and `showSymbol`. Scatter supports color and symbol; bar supports color. Symbols are circle/emptyCircle/rect/triangle/diamond/none.
+Set `series.style.color` to a `#RGB/#RRGGBB` string or `{ light, dark }` with at least one theme. An omitted theme uses the chart palette. Line/area series also accept `lineType` (solid/dashed/dotted), `step` (false/start/middle/end), `smooth` (boolean), `symbol`, and `showSymbol`. Scatter and bubble series support color and symbol; bar, error bar, band, and box plot series support color. Symbols are circle/emptyCircle/rect/triangle/diamond/none.
 
 Smooth and step cannot both be enabled. Lines remain unsmoothed by default. Explicit patterns and symbols override palette cycling, and explicit showSymbol overrides isolated-point detection. Removing settings restores defaults. Existing chart-level lineWidth and symbolSize continue to control sizes.
 
@@ -191,32 +191,33 @@ emit_line_chart!(&series, "Observation", "Value");
 
 Producers enforce limits inside each language worker before `postMessage`; the main thread independently validates the bounded response again. Limits are UTF-8 byte limits and are cumulative for each run where noted:
 
-| Resource                    | Limit                           | Over-limit result                                                 |
-| --------------------------- | ------------------------------- | ----------------------------------------------------------------- |
-| Artifacts                   | 100 per run                     | Additional artifacts are rejected locally.                        |
-| stdout or stderr            | 1 MiB per stream                | Captured text is retained only to the limit and marked truncated. |
-| Text, serialized JSON, HTML | 1 MiB per artifact              | Text/JSON may use `truncated: true`; HTML is rejected.            |
-| Table                       | 10,000 rows and 100 columns     | A bounded table may use `truncated: true` and `rowCount`.         |
-| Chart                       | 100,000 total points/bins/cells | Artifact-local error.                                             |
-| Image                       | 10 MiB decoded bytes            | Artifact-local error.                                             |
-| All validated output        | 16 MiB per run                  | Artifacts exceeding the remaining budget are rejected locally.    |
-| Complete worker response    | 16 MiB                          | Later artifacts are omitted before worker-to-page transfer.       |
-| Worker error                | 16 KiB                          | The UTF-8 message is truncated.                                   |
-| Artifact diagnostic         | 8 KiB each; 64 KiB per run      | Diagnostics are truncated within both limits.                     |
+| Resource                    | Limit                                          | Over-limit result                                                 |
+| --------------------------- | ---------------------------------------------- | ----------------------------------------------------------------- |
+| Artifacts                   | 100 per run                                    | Additional artifacts are rejected locally.                        |
+| stdout or stderr            | 1 MiB per stream                               | Captured text is retained only to the limit and marked truncated. |
+| Text, serialized JSON, HTML | 1 MiB per artifact                             | Text/JSON may use `truncated: true`; HTML is rejected.            |
+| Table                       | 10,000 rows and 100 columns                    | A bounded table may use `truncated: true` and `rowCount`.         |
+| Chart                       | 100,000 total points/bins/cells                | Artifact-local error.                                             |
+| Chart annotations           | 100 per chart; one-line labels up to 256 bytes | Artifact-local error.                                             |
+| Image                       | 10 MiB decoded bytes                           | Artifact-local error.                                             |
+| All validated output        | 16 MiB per run                                 | Artifacts exceeding the remaining budget are rejected locally.    |
+| Complete worker response    | 16 MiB                                         | Later artifacts are omitted before worker-to-page transfer.       |
+| Worker error                | 16 KiB                                         | The UTF-8 message is truncated.                                   |
+| Artifact diagnostic         | 8 KiB each; 64 KiB per run                     | Diagnostics are truncated within both limits.                     |
 
 `truncated: true` is valid only for text, JSON, and table artifacts. Chart, image, and HTML artifacts are never silently truncated. Invalid/cyclic/over-deep JSON, ragged tables, non-finite chart values, invalid base64/MIME pairs, or unsafe structural records cannot crash the cell component. Execution results contain only `outputs`; stream text and JSON values are artifacts rather than duplicate top-level fields.
 
 ## Chart images
 
-**Show data as a table** exposes the original values, including hidden series, histogram boundaries and counts, and heatmap coordinates. Whole epoch milliseconds on time axes appear as the UTC ISO-8601 instants the chart displays. Conversion occurs only when opened and retains at most 10,000 rows; totals and truncation are shown. The table supports keyboard sorting, paging, and CSV download. Series buttons show their selection with `aria-pressed` and use color, line pattern, and symbols. **Reset zoom** restores the authored full range without resetting series selections. These controls are usable with the keyboard; chart summaries remain available to assistive technology.
+**Show data as a table** exposes the original values, including hidden series, histogram boundaries and counts, heatmap coordinates, interval bounds, box plot statistics, bubble sizes and colors, and grid-field cell boundaries. Whole epoch milliseconds on time axes appear as the UTC ISO-8601 instants the chart displays. Conversion occurs only when opened and retains at most 10,000 rows; totals and truncation are shown. The table supports keyboard sorting, paging, and CSV download. Series buttons show their selection with `aria-pressed` and use color, line pattern, and symbols. **Reset zoom** restores the authored full range without resetting series selections. These controls are usable with the keyboard; chart summaries remain available to assistive technology.
 
-Use **Save PNG** or **Save SVG** to download the current chart with its theme, zoom, series selection, and heatmap color range. PNG uses twice the plot's width and height in pixels; SVG retains the plot's logical dimensions. Both include the plot background and legend, without animation, title, or caption. Saving uses a temporary renderer and does not replace the displayed chart.
+Use **Save PNG** or **Save SVG** to download the current chart with its theme, zoom, series selection, and color range. PNG uses twice the plot's width and height in pixels; SVG retains the plot's logical dimensions. Both include the plot background and legend, without animation, title, or caption. Saving uses a temporary renderer and does not replace the displayed chart.
 
 Authors may select `style: { renderer: "svg" }` in a chart spec, including through Rust chart style arguments and Python `display_chart`. The default remains `"canvas"`. SVG provides vector output for scaling and printing; it is not always faster for large datasets. Print output retains the chart and caption while hiding action buttons.
 
 ## CSV Copy Safety
 
-**Save all retrieved rows as CSV** downloads every retained row in the current sort order, across all pages. **Copy visible rows as CSV** copies only the current page. When a result is truncated, the download contains only the retrieved portion, not the larger reported row count. Downloads work without clipboard access and preserve original numeric values.
+**Save all retrieved rows as CSV** downloads every retained row in the current sort order, across all pages. **Copy visible rows as CSV** copies only the current page. When a result is truncated, the download contains only the retrieved portion, not the larger reported row count. Downloads work without clipboard access and preserve original numeric values. Downloaded files are UTF-8 with a byte order mark so spreadsheet applications such as Excel detect the encoding of non-ASCII text; copied CSV text has no byte order mark.
 
 Tables display every digit of integers up to ±9,007,199,254,740,991 (`Number.MAX_SAFE_INTEGER`), the largest range in which every integer is exact. Larger values and non-integers use six significant digits, with scientific notation at absolute values of at least `1e6` or below `1e-4`. Negative zero displays as `0`. Grouping separators appear only when a column contains an absolute value of at least 10,000, consistently across pages. Hover a numeric cell to inspect its original value. Sorting and CSV use original values.
 
@@ -253,7 +254,7 @@ return Ok(CellOutput {
 
 The optional `doc-rust` helper crate also removes `PlotSpec/LinePlot/line_plot`. Convert `SeriesPoint` explicitly to `[f64::from(point.n), point.x]` and pass the coordinates to `emit_line_chart!`. The compatibility macro `emit_line_plot!` remains available.
 
-Ordering is unchanged: Rust emits captured stdout followed by artifacts in emit order; Python emits stdout, stderr, display artifacts, automatically collected matplotlib figures, then the final value; Haskell emits stdout then stderr. Python omits an implicit final JSON value for None or an empty string. Explicit JSON artifacts retain null, empty strings, false, and zero. Stream capture does not interleave with display calls.
+Output order: Rust emits captured stdout followed by artifacts in emit order; Python emits stdout, stderr, display artifacts, automatically collected matplotlib figures, then the final value; Haskell emits stdout text, `Oxiquill.Output` artifacts, and stderr text in the order they are written. Python omits an implicit final JSON value for None or an empty string. Explicit JSON artifacts retain null, empty strings, false, and zero. Stream capture does not interleave with display calls.
 
 After upgrading, regenerate the runtime with `pnpm exec oxiquill docgen --wasm dev` or the production `pnpm build`. Do not edit generated files directly.
 
@@ -372,15 +373,25 @@ emit_svg!(
 emit_html!(r#"<p><strong>Sandboxed HTML</strong> emitted from Rust.</p>"#);
 ```
 
-## When to Use Rich Output
+## Haskell Output
 
-Use stdout for short explanatory text. Use JSON when readers need the exact structured value. Use tables for comparable records, charts for trends or distributions, images for generated visuals, and sandboxed HTML only when the output needs markup that cannot be represented by the other artifact types.
+Haskell cells import the bundled `Oxiquill.Output` module to emit JSON values, tables, and chart specs. It depends only on GHC's `base` package. Build values with `JsonValue` constructors, because `show` is not a JSON encoder. Structured output is interleaved with `putStrLn` text in write order. See [structured output](/samples/haskell-series/#structured-output) for the frame format and limits. This cell emits a small [grid field](#grid-fields-on-value-axes) with one missing cell:
 
-Copy, sort, pagination, validation, running, completion, and failure states are keyboard-operable and announced with localized English/Japanese labels. Sandboxed HTML intentionally has no script or same-origin permission, sends no referrer, and blocks external subresources by default; see [Support and Security](/guides/support-and-security/) for the exact policy and trust boundary.
+```haskell
+--| id: haskell-grid-field
+import Oxiquill.Output
+let edges values = JsonArray (map JsonNumber values)
+displayChart (JsonObject
+  [("kind", JsonString "field"), ("xEdges", edges [-2, 0, 3]),
+   ("yEdges", edges [-1, 1]),
+   ("values", JsonArray [JsonArray [JsonNumber 2, JsonNull]])])
+```
 
-Table interaction state is scoped to one execution result. A new result resets the page, sort, and copy status. Rerenders of the same result preserve a compatible sort and page, but row shrinkage stores the clamped page and a removed or replaced sorted column clears the sort.
+## Chart Kinds and Annotations
 
-## Stacked charts
+These kinds and options extend the [chart schema](#chart-schema). Every spec works unchanged through Rust `emit_chart!`, Python `display_chart`, and Haskell `displayChart`; the examples use whichever language keeps them short.
+
+### Stacked charts
 
 Bar and area series accept a nonempty `stack` group. Positive and negative values accumulate separately from zero on a value axis. Missing bar values do not contribute. Area series in each group must have identical, ordered X coordinates; numeric/time coordinates must increase. Tooltips and data tables retain the individual values. Percent normalization is not performed.
 
@@ -398,7 +409,7 @@ emit_bar_chart!(&["A", "B"], &serde_json::json!([
 ]));
 ```
 
-## Horizontal bars
+### Horizontal bars
 
 Set bar `orientation: "horizontal"` to use a numeric x axis and category y axis. Labels, formats, and bounds refer to screen axes. The first category appears at the top. Missing values, multiple series, and stack groups work in either orientation.
 
@@ -409,7 +420,7 @@ emit_bar_chart!(&["North America", "South America", "Europe"], &[12, -4, 8],
     options = serde_json::json!({ "orientation": "horizontal", "xLabel": "Change", "yLabel": "Region" }));
 ```
 
-## Error bars and interval bands
+### Error bars and interval bands
 
 Use `errorbar` or `band` with `[x, center, lower, upper]` points satisfying `lower <= center <= upper`. Set all three Y values to null for a gap. Bands connect adjacent valid points with straight segments and require increasing value/time/log X coordinates. Y uses value or log; log intervals must be positive. Statistical estimation belongs in the cell. A single isolated band point is shown as an interval glyph. Chart and series colors follow the existing styles; interval charts also accept chart-level `lineWidth`.
 
@@ -421,7 +432,7 @@ for kind in ("errorbar", "band"):
             [0, -3, -5, -2], [1, 0, -2, 3], [2, 4, 3, 6]]}]})
 ```
 
-## Reference lines and ranges
+### Reference lines and ranges
 
 Use `annotations` for axis-coordinate lines and ranges. Annotations do not expand axis extents and are clipped to the viewport. Empty charts can display annotations with explicit axis bounds. Categories reference an existing name or index; time coordinates use the chart time contract, and log positions must be positive. Limit: 100 annotations, each label a single line of at most 256 UTF-8 bytes. Line styles accept hex `color`, `lineType` (solid/dashed/dotted), and `width` (0.5–4); range styles accept hex `color` and `opacity` (0–1).
 
@@ -433,7 +444,7 @@ display_chart({"kind": "line", "xMin": 0, "xMax": 10, "yMin": 0, "yMax": 1,
         {"kind": "range", "axis": "x", "from": 2, "to": 4, "label": "Window"}]})
 ```
 
-## Heatmap color scales
+### Heatmap color scales
 
 Use `colorMin`/`colorMax` to fix the color domain across reruns. `colorScale: "diverging"` places `center` (default 0) at the middle color, even with asymmetric explicit bounds. Automatic bounds are symmetric about the center; each explicit bound takes precedence. The center must lie strictly inside the resulting domain. Out-of-range values saturate at endpoint colors. Empty scales use 0–1 or center ±1; constant sequential domains use the middle color. `style.palette` owns the colors; diverging palettes require an odd number of at least three colors. Changing the authored domain resets the color-range selection; theme changes preserve it.
 
@@ -444,7 +455,7 @@ display_chart({"kind": "heatmap", "colorScale": "diverging",
     "data": [[0, 0, -2], [1, 0, 0], [2, 0, 8]]})
 ```
 
-## Box plots
+### Box plots
 
 A `boxplot` accepts precomputed `[min, q1, median, q3, max]` values, one per category per series. Values must be finite and ordered; null denotes a missing box. The Y axis accepts value or log (all five statistics must then be positive). Authors compute the statistics and explain the whisker definition. No raw-sample aggregation or separate outlier collection is performed.
 
@@ -456,7 +467,7 @@ display_chart({"kind": "boxplot", "categories": ["First", "Second"],
     caption="Whiskers show the observed minimum and maximum.")
 ```
 
-## Bubble charts
+### Bubble charts
 
 Bubble points are `[x, y, size]` or `[x, y, size, color]`. Sizes are finite and nonnegative; the default maps area proportionally, with diameter 0–40px and the largest supplied size as the upper domain. Zero is invisible. `sizeMapping` accepts positive `maxValue`, `minPixels`, `maxPixels` (`0 <= min < max <= 100`), and `scale: "area" | "radius"`. Positive values are clamped to the requested pixel range; a positive constant domain uses the maximum diameter. Color values require explicit `colorMapping: { min, max, palette? }`; values outside the range saturate. Missing/null color uses the series color. `style.palette` colors series; `colorMapping.palette` owns the continuous color gradient. Large mode is disabled to preserve point-level mappings.
 
@@ -468,7 +479,7 @@ display_chart({"kind": "bubble", "sizeMapping": {"maxValue": 100},
         [0, 2, 25, 2], [1, 3, 100, 8], [2, 1, 50, None]]}]})
 ```
 
-## Grid fields on value axes
+### Grid fields on value axes
 
 A `field` uses strictly increasing finite `xEdges` and `yEdges` and a row-major `values` matrix: rows index Y intervals, columns index X intervals. Its shape is `(yEdges.length - 1) × (xEdges.length - 1)`. Null cells remain transparent and count toward the 100,000-cell limit. Empty fields use three empty arrays. Both axes are value axes; the default domain is the outer grid boundary, and zoom clips the exact cell rectangles. Nonuniform spacing is preserved. Colors use a sequential scale; tables retain boundaries and original cell values. There is no interpolation, contouring, or arbitrary mesh support. The categorical `heatmap` contract is unchanged.
 
@@ -484,14 +495,10 @@ display_chart({"kind": "field", "xEdges": x_edges, "yEdges": y_edges,
     "values": values, "xLabel": "X", "yLabel": "Y"})
 ```
 
-Haskell uses the same spec through `displayChart`.
+## When to Use Rich Output
 
-```haskell
---| id: haskell-grid-field
-import Oxiquill.Output
-let edges values = JsonArray (map JsonNumber values)
-displayChart (JsonObject
-  [("kind", JsonString "field"), ("xEdges", edges [-2, 0, 3]),
-   ("yEdges", edges [-1, 1]),
-   ("values", JsonArray [JsonArray [JsonNumber 2, JsonNull]])])
-```
+Use stdout for short explanatory text. Use JSON when readers need the exact structured value. Use tables for comparable records, charts for trends or distributions, images for generated visuals, and sandboxed HTML only when the output needs markup that cannot be represented by the other artifact types.
+
+Copy, sort, pagination, validation, running, completion, and failure states are keyboard-operable and announced with localized English/Japanese labels. Sandboxed HTML intentionally has no script or same-origin permission, sends no referrer, and blocks external subresources by default; see [Support and Security](/guides/support-and-security/) for the exact policy and trust boundary.
+
+Table interaction state is scoped to one execution result. A new result resets the page, sort, and copy status. Rerenders of the same result preserve a compatible sort and page, but row shrinkage stores the clamped page and a removed or replaced sorted column clears the sort.

@@ -16,7 +16,18 @@ export const supportedLanguages = new Map([
 import { supportedPyodidePackages } from './python-packages.mjs';
 export { supportedPyodidePackages };
 
-const cellFields = new Set(['id', 'title', 'run', 'inputs', 'packages', 'crates', 'timeoutMs', 'showSource', 'setup']);
+const cellFields = new Set([
+  'id',
+  'title',
+  'run',
+  'inputs',
+  'packages',
+  'crates',
+  'timeoutMs',
+  'showSource',
+  'editable',
+  'setup'
+]);
 const inputFields = new Set([
   'type',
   'label',
@@ -91,6 +102,10 @@ export function parseInteractiveCellNode(node, pagePath, pythonOptions = {}) {
   const run = normalizeRunMode(metadata, context, diagnostics);
   const timeoutMs = normalizeTimeout(metadata, context, diagnostics);
   const showSource = normalizeBoolean(metadata, 'showSource', true, context, diagnostics);
+  if (language !== 'python' && hasOwn(metadata, 'editable')) {
+    diagnostics.push(diagnostic(context, 'editable', 'Only Python cells support reader editing.'));
+  }
+  const editable = language === 'python' && normalizeBoolean(metadata, 'editable', true, context, diagnostics);
   const inputs = normalizeInputs(metadata, context, diagnostics);
   const packages = normalizeStringArray(metadata, 'packages', context, diagnostics);
   const crates = normalizeStringArray(metadata, 'crates', context, diagnostics);
@@ -130,6 +145,7 @@ export function parseInteractiveCellNode(node, pagePath, pythonOptions = {}) {
       crates,
       timeoutMs,
       showSource,
+      editable,
       pagePath: pagePath ?? '',
       fenceStartLine: location.fenceStartLine
     }

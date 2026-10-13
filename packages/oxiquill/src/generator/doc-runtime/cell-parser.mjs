@@ -58,6 +58,7 @@ export async function createCellManifest(cell, highlighter) {
     crates: cell.crates,
     timeoutMs: cell.timeoutMs,
     showSource: cell.showSource,
+    editable: cell.editable,
     pagePath: cell.pagePath
   };
 }

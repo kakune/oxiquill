@@ -244,6 +244,7 @@ function makeCell(id: string, sourceHtml: string): CellManifest {
     pagePath: 'page.mdx',
     run: 'button',
     showSource: true,
+    editable: false,
     source: 'println!("ok");',
     sourceHtml,
     timeoutMs: 1_000,

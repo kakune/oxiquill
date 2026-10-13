@@ -24,6 +24,8 @@ author-provided Rust、Python、Haskell source は、reader が cell を実行�
 - Rust helper crate と generated Wasm は build input で、application dependency と同様に review が必要です。
 - Pyodide と declared Python package は site origin 内で実行され、worker 内でも trusted dependency です。
 - Haskell は Oxiquill が渡した descriptor だけを持つ WASI shim で動きますが、generated module は executable content です。
+- 読者が編集した Python の draft は、著者のセルと同じ worker・origin で実行され、import はサイトが配布する package に限られます。draft は読者のページ内だけに残り、公開も共有もされませんが、読者は信頼できる code だけを実行してください。編集を提供しないセルには `editable: false` を指定します。
+- 入力のリンクには、著者が `share: true` を付けた入力の値だけが含まれます。値は実行前に各入力で宣言した型と範囲で検証され、リンクに code は含まれません。
 - worker timeout は responsiveness を守るもので、任意 code の安全性や confidentiality を証明しません。
 
 untrusted author の interactive code/generated runtime asset を review なしで公開しないでください。secret を static page、worker message、source、public asset、client に露出する build-time environment に置かないでください。

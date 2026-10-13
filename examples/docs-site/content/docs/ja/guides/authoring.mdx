@@ -104,6 +104,8 @@ standard library module だけを使います。Haskell セルでは外部 packa
 - `packages`: Pyodide package。Python のみ。
 - `timeoutMs`: `1` 以上 `2147483647` 以下の integer で指定する millisecond timeout。default は `30000`。
 - `showSource`: source の初期表示を決める boolean。default は `true`。
+- `editable`: 読者がローカルの Python draft を編集・実行できるかを決める boolean。Python のみ。default は `true`。
+- `setup`: 本体の前に実行する同じページの Python セル ID。`python.experimentalSetup: true` が必要です。
 
 top-level ではこれらの field だけを指定できます。dependency array は重複のない空でない string で構成します。対応 input type は `range`、`number`、`integer`、`text`、`textarea`、`checkbox`、`select`、`radio` です。input field、default、constraint、option schema の正確な仕様は[実行可能セル](../../features/interactive-cells/)を参照してください。
 

@@ -19,10 +19,11 @@ Oxiquill は、説明と実行結果を同じページに置きたいドキュ�
 ## 機能概要
 
 - Rust セルをビルド時に WebAssembly 化し、ブラウザで実行します。
-- Python セルは Pyodide worker で実行し、`numpy`、`pandas`、`matplotlib` などの vendored package を読み込めます。
-- Haskell セルをビルド時に WASI WebAssembly 化し、standard library code をブラウザで実行します。
+- Python セルは Pyodide worker で実行し、`numpy`、`pandas`、`matplotlib` などの vendored package を読み込めます。サイトの設定で、ライセンス表示を検証したうえで Pyodide lock の他の package も許可できます。
+- Haskell セルをビルド時に WASI WebAssembly 化し、standard library code をブラウザで実行します。同梱の `Oxiquill.Output` module で JSON、table、chart を出力できます。
 - セル metadata から入力 UI、実行方法、timeout、source 表示を生成します。
-- text、JSON、table、chart、image、sandboxed HTML のリッチ出力を表示します。
+- 読者は入力を初期値に戻し、著者が共有を許可した入力のリンクをコピーし、Python の draft をローカルで編集・実行できます。
+- text、JSON、table、chart、image、sandboxed HTML のリッチ出力を表示します。表は CSV、グラフは PNG または SVG で保存できます。
 - KaTeX でインライン数式とブロック数式を表示します。
 - fenced `mermaid` code block から Mermaid 図を表示します。
 - 静的メディアは `public/media` から配信し、`/media/...` URL で参照します。
@@ -62,7 +63,7 @@ content/docs/
 - [はじめに](./guides/getting-started/) は、install、local preview、build、static preview を説明します。
 - [執筆ガイド](./guides/authoring/) は、ページ構成、多言語化、セル metadata、メディア、図の書き方を説明します。
 - [実行可能セル](./features/interactive-cells/) は、Rust/Python/Haskell の実行、入力、run mode、helper crate、package、source 表示を説明します。
-- [リッチ出力](./features/rich-output/) は、Rust/Python セルから出せる出力 artifact をまとめます。
+- [リッチ出力](./features/rich-output/) は、Rust/Python/Haskell セルから出せる出力 artifact とグラフの種類をまとめます。
 - [テンプレート](./guides/templates/) は、よく使う MDX ノートのひな形です。
 - [ライセンス](./guides/licensing/) は、Oxiquill の dual license と各サイトに生成される notice を説明します。
 - [サンプルノート](./samples/logistic-map/) は、Oxiquill の機能を文脈のある完成ページとして示します。

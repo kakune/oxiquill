@@ -390,6 +390,7 @@ describe('doc runtime core', () => {
     ['unknown field', '//| id: bad\n//| mystery: true', 'mystery'],
     ['non-string title', '//| id: bad\n//| title: 12', 'title'],
     ['non-boolean source flag', '//| id: bad\n//| showSource: "false"', 'showSource'],
+    ['editing flag on Rust', '//| id: bad\n//| editable: false', 'editable'],
     ['hidden run mode', '//| id: bad\n//| run: hidden', 'run'],
     ['fractional timeout', '//| id: bad\n//| timeoutMs: 1.5', 'timeoutMs'],
     ['wrong crates collection', '//| id: bad\n//| crates: doc-rust', 'crates'],
@@ -557,6 +558,22 @@ describe('doc runtime core', () => {
       { localId: 'explicit-title', title: 'Example cell' },
       { localId: 'omitted-title', title: 'omitted-title' }
     ]);
+  });
+
+  it('lets Python authors disable reader editing', () => {
+    const cell = (metadata) => ['```python', '#| id: draft', ...metadata, 'print("ok")', '```'].join('\n');
+    const parse = (metadata) => parseCellsFromMarkdown(cell(metadata), 'content/docs/page.mdx');
+
+    expect(parse([]).cells[0].editable).toBe(true);
+    expect(parse(['#| editable: false']).cells[0].editable).toBe(false);
+    expect(parse(['#| editable: "no"']).diagnostics).toContainEqual(
+      expect.objectContaining({ fieldPath: 'editable', message: 'Expected a boolean.' })
+    );
+    const haskell = parseCellsFromMarkdown(
+      ['```haskell', '--| id: plain', 'main = pure ()', '```'].join('\n'),
+      'p.mdx'
+    );
+    expect(haskell.cells[0].editable).toBe(false);
   });
 
   it.each([1, 2_147_483_647])('accepts the timeout boundary %s', (timeoutMs) => {

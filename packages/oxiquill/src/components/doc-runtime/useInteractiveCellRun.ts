@@ -36,7 +36,7 @@ export function useInteractiveCellRun(cell: CellManifest, runtimeVersion: string
   const [inputsValid, setInputsValid] = useState(true);
   const [inputRevision, setInputRevision] = useState(0);
   const [draft, setDraft] = useState<{ original: string; source: string }>();
-  const isEditing = cell.language === 'python' && draft?.original === cell.source;
+  const isEditing = cell.editable && draft?.original === cell.source;
   useEffect(() => {
     if (draft && draft.original !== cell.source) setDraft(undefined);
   }, [cell.source]);
