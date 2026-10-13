@@ -32,7 +32,7 @@ unknown option、option value の欠落、unknown command、余分な positional
 | `clean`              | resolved Oxiquill-owned/generated path と設定済み Astro output だけを削除し、verified download cache は保持します。 |
 | `test-rust`          | optional helper crate を test します。                                                                              |
 | `test-rust-coverage` | helper crate を 85% coverage threshold 付きで test します。                                                         |
-| `lint-rust`          | helper crate の全 target に warning deny で Clippy を実行します。                                                   |
+| `lint-rust`          | helper crate の書式を検査し、全 target に warning deny で Clippy を実行します。                                     |
 | `doc-rust`           | dependency を除いて helper crate documentation を build します。                                                    |
 | `test-wasm`          | runtime を生成し、すべての generated Rust/Haskell cell を default input で実行します。                              |
 

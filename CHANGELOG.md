@@ -8,6 +8,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ### Added
 
+- Reproducible chart performance measurements for 1,000, 10,000, and 100,000 points, including worker transfer, validation, rendering, updates, and zoom.
 - Signed stack groups for bar and area charts, horizontal bars, bounded axis annotations, and fixed or centered diverging heatmap color scales.
 - Error bars, interval bands, five-number box plots, area-scaled bubbles, and nonuniform grid fields through the existing Rust, Python, and Haskell chart APIs. New charts support accessible summaries, original-data tables, and PNG/SVG downloads.
 - Input resets, explicit opt-in input sharing links, and local Python source editing with manual execution. Authors can disable editing for a Python cell with `editable: false`.
@@ -27,6 +28,9 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ### Changed
 
+- Monotone line series with 100,000 points use display-only LTTB sampling, and scatter series use batched rendering starting at 10,000 points per series. Original data and bounded data tables remain unchanged.
+- PR CI separates site builds from runtime tests, removes duplicate consumer checks, and skips expensive jobs for Markdown-only changes. Release PRs retain the full 12-job matrix; `ci-ok` aggregates required results. Rust lint now checks formatting.
+- **Display changes:** untitled charts hide their default headings visually while retaining the chart kind as an accessible name. Empty and whitespace-only titles fall back to the same accessible name; authored titles and captions remain visible.
 - **Display changes:** tables preserve all digits of safe integers, use scientific notation for very large or small other values, normalize negative zero, and choose grouping consistently per column. Numeric cells expose original values in their title; CSV values remain unchanged.
 - **Breaking API migration (next minor):** cell results now require `outputs`; top-level `stdout/stderr/value/plots`, legacy result conversion, and the `PlotSpec/LinePlotSpec` public types are removed. Regenerate runtime artifacts after upgrading and update explicit Rust `CellOutput` early returns to contain artifacts. JSON artifact values and input values are unchanged. See the English and Japanese rich-output migration guide.
 - **Display migration:** histograms render numeric intervals with their actual widths and gaps; legacy category x axes normalize to value. Density mode makes area represent count. Overlapping bins are rejected.

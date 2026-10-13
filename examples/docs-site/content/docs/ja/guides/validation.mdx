@@ -14,7 +14,7 @@ pnpm lint
 pnpm format:check
 ```
 
-`pnpm lint` は JavaScript、MJS、TypeScript、TSX、Astro に ESLint を warning なしで実行し、Prettier format と strict Rust lint も確認します。設定済みの source、config、Markdown/MDX、JSON、YAML format を適用するには `pnpm format` を使います。
+`pnpm lint` は JavaScript、MJS、TypeScript、TSX、Astro に ESLint を warning なしで実行し、Prettier format と Rust formatting check and strict Clippy lint も確認します。設定済みの source、config、Markdown/MDX、JSON、YAML format を適用するには `pnpm format` を使います。
 
 通常のドキュメント変更では `pnpm check` を実行します。
 
@@ -55,7 +55,7 @@ pnpm test:e2e
 
 `pnpm wasm:dev` は local development 用 runtime を再生成します。Haskell セルがある場合は `wasm32-wasi-ghc` が必要で、`pnpm build`、`pnpm check`、`pnpm wasm:build`、`pnpm test:wasm` でも同じです。`pnpm dev` と `pnpm dev:runtime` は意図的により寛容で、Haskell compiler がない、または Haskell compile に失敗しても Astro の serving を続け、browser 上の Haskell セルに error を表示します。`pnpm test:wasm` は生成 Rust cell の動作を確認し、`pnpm test:haskell` は生成 Haskell/WASI runtime を実行します。`pnpm test:e2e` は Chromium、Firefox、WebKit で full browser suite を実行します。
 
-`pnpm test:dev-hmr` はワークスペースの一時コピーで Chromium の開発スモークテストを実行します。pnpm store からのオフラインインストール、パッケージのビルド、初回 runtime 生成の後に MDX セルを編集し、ソースと reactive 出力の更新が安定することを確認します。先に `pnpm install --frozen-lockfile` で store を準備してください。Rust/Wasm、`wasm32-wasi-ghc`、Playwright Chromium が必要です。PR CI では Linux の packed-browser job で packed consumer smoke の後に1回実行します。
+`pnpm test:dev-hmr` はワークスペースの一時コピーで Chromium の開発スモークテストを実行します。pnpm store からのオフラインインストール、パッケージのビルド、初回 runtime 生成の後に MDX セルを編集し、ソースと reactive 出力の更新が安定することを確認します。先に `pnpm install --frozen-lockfile` で store を準備してください。Rust/Wasm、`wasm32-wasi-ghc`、Playwright Chromium が必要です。PR CI では Linux の consumer job で packed consumer smoke の後に1回実行します。
 
 production build は `dist/oxiquill/bundle-report.json` を生成し、出力された client または worker の JavaScript chunk が uncompressed で 650 KiB を超えると失敗します。`pnpm build` の後に `pnpm test:bundle` を実行すると、budget と ECharts/Mermaid の dynamic import boundary を検証できます。
 
@@ -108,3 +108,9 @@ pnpm doc:rust
 - Missing media: file が `public/media` 配下にあり、MDX URL が `/media/` で始まるか確認します。
 - Coverage failure: 生成物ではなく手書き source に focused test を追加します。
 - Documentation link/contract failure: exception を追加せず、referenced page、route、public contract table、canonical command を修正します。
+
+## Pull Request CI
+
+通常の CI は変更分類、JavaScript 品質、Rust 品質、サイトビルド、3ブラウザ、Linux runtime、3 OS の consumer、最終集約の `ci-ok` の12ジョブです。Markdown のみの変更では変更分類、JavaScript 品質、Rust 品質、ci-ok の4ジョブになります。それ以外は Linux のサイト・runtime・consumer を実行し、package source、package test、root package metadata、lockfile、GitHub 設定の変更では macOS/Windows の consumer も実行します。MDX は実行可能なサイト内容として扱います。`release/` で始まるブランチは全件を実行します。
+
+ブラウザはサイトビルドだけを待ちます。Chromium で bundle report を検査し、チャート関連・style・ECharts 依存が変わった場合だけ変更前の画面を撮影します。Linux は npm、ブラウザ付き pnpm、HMR、macOS は pnpm と unit、Windows は npm と unit を検証します。Rust lint は `cargo fmt --check` も含みます。最終集約は意図的なスキップを許容し、失敗・キャンセルを失敗にします。

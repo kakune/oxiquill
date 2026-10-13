@@ -77,6 +77,15 @@ describe('helper cargo runner', () => {
   it('inserts helper workspace arguments before cargo pass-through arguments', () => {
     const manifestPath = path.join('crates', 'Cargo.toml');
 
+    expect(cargoArgsForHelperWorkspace(['fmt', '--all', '--', '--check'], manifestPath)).toEqual([
+      'fmt',
+      '--all',
+      '--manifest-path',
+      manifestPath,
+      '--',
+      '--check'
+    ]);
+
     expect(cargoArgsForHelperWorkspace(['test'], manifestPath)).toEqual([
       'test',
       '--manifest-path',

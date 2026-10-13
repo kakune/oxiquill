@@ -15,6 +15,10 @@ The GitHub environment is named `npm-publish`. It has `kakune` as a required rev
 
 Never reuse, move, or replace a published tag. npm versions are immutable; recover from a bad release with deprecation and a patch release.
 
+### Required check migration
+
+After the CI restructuring pull request has a successful `ci-ok` result, a repository administrator must replace the previous individual required checks in the `main` ruleset with `ci-ok` from GitHub Actions. Make the replacement before merging that pull request, because the old job names no longer run. Keep review requirements and squash-only merging in place. Verify the ruleset with both a Markdown-only PR (four jobs) and a package or release PR (12 jobs). `ci-ok` rejects failed and cancelled dependencies while allowing intentional skips; `release/*` PRs always run the full matrix. The workflow change does not modify repository rulesets automatically.
+
 ## Prepare `release/vX.Y.Z`
 
 1. Fetch the latest `main`, verify it is clean, and create `release/vX.Y.Z` from that exact commit.
