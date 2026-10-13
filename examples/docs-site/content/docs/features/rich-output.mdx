@@ -80,7 +80,7 @@ emit_histogram!(&bins, options = &serde_json::json!({
 
 ### Display Defaults
 
-Bar, histogram, and area charts include zero on a value y axis; line and scatter charts fit the data. Negative amounts also use zero as their baseline. A logarithmic y axis uses the lower axis boundary, so bar lengths and filled areas cannot be compared as amounts. **Migration:** bar and histogram `yType: 'time'` is now rejected; use a value axis for amounts or a line/scatter chart for timestamps.
+Bar, histogram, and area charts include zero on their value amount axis (x for horizontal bars, otherwise y); line and scatter charts fit the data. Negative amounts also use zero as their baseline. When data on a value amount axis spans zero, a zero line marks the baseline; it remains when series are hidden and is clipped while zooming. Grid fields omit it because both of their axes are coordinates; add a `line` annotation at 0 when a field needs one. A logarithmic y axis uses the lower axis boundary, so bar lengths and filled areas cannot be compared as amounts. **Migration:** bar and histogram `yType: 'time'` is now rejected; use a value axis for amounts or a line/scatter chart for timestamps.
 
 Numeric notation is selected per axis from the data range and remains stable while zooming. Four-digit years have no grouping separators. Large and tiny ranges use scientific notation; a narrow range around a large offset retains ordinary notation. Ticks retain enough digits to distinguish values. Tooltips, color scales, and summaries use six significant digits; JSON and table CSV retain original values. Negative zero displays as `0`.
 
