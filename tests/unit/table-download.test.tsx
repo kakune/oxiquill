@@ -50,11 +50,14 @@ it('downloads all sorted retained rows without clipboard access', async () => {
   fireEvent.click(screen.getByRole('button', { name: 'Save all retrieved rows as CSV' }));
   expect(screen.getByText('CSV includes only the 12 retrieved rows.')).toBeVisible();
   expect(saved?.type).toBe('text/csv;charset=utf-8');
-  const csv = await new Promise<string>((resolve) => {
+  const bytes = await new Promise<Uint8Array>((resolve) => {
     const reader = new FileReader();
-    reader.onload = () => resolve(String(reader.result));
-    reader.readAsText(saved as Blob);
+    reader.onload = () => resolve(new Uint8Array(reader.result as ArrayBuffer));
+    reader.readAsArrayBuffer(saved as Blob);
   });
+  expect([...bytes.slice(0, 3)]).toEqual([0xef, 0xbb, 0xbf]);
+  const csv = new TextDecoder('utf-8', { ignoreBOM: true }).decode(bytes.slice(3));
+  expect(csv.startsWith('Number,Text\n')).toBe(true);
   expect(csv).toContain('11,"\'=日本語,""quoted""\nnext"');
   expect(csv).toContain('\n1,\n0,');
   expect(csv.indexOf('\n11,')).toBeLessThan(csv.indexOf('\n10,'));

@@ -115,8 +115,9 @@ export default function TableOutput({
     try {
       const converted = tableToCsv(table.columns, sortedRows, labels);
       if (!converted.ok) throw new Error(converted.error);
+      // The byte order mark lets spreadsheet applications detect UTF-8 instead of a legacy code page.
       downloadBlob(
-        new Blob([converted.csv], { type: 'text/csv;charset=utf-8' }),
+        new Blob(['﻿' + converted.csv], { type: 'text/csv;charset=utf-8' }),
         artifactDownloadName(table, 'csv', 'table')
       );
       setDownloadError(undefined);

@@ -216,7 +216,7 @@ Authors may select `style: { renderer: "svg" }` in a chart spec, including throu
 
 ## CSV Copy Safety
 
-**Save all retrieved rows as CSV** downloads every retained row in the current sort order, across all pages. **Copy visible rows as CSV** copies only the current page. When a result is truncated, the download contains only the retrieved portion, not the larger reported row count. Downloads work without clipboard access and preserve original numeric values.
+**Save all retrieved rows as CSV** downloads every retained row in the current sort order, across all pages. **Copy visible rows as CSV** copies only the current page. When a result is truncated, the download contains only the retrieved portion, not the larger reported row count. Downloads work without clipboard access and preserve original numeric values. Downloaded files are UTF-8 with a byte order mark so spreadsheet applications such as Excel detect the encoding of non-ASCII text; copied CSV text has no byte order mark.
 
 Tables display every digit of integers up to ±9,007,199,254,740,991 (`Number.MAX_SAFE_INTEGER`), the largest range in which every integer is exact. Larger values and non-integers use six significant digits, with scientific notation at absolute values of at least `1e6` or below `1e-4`. Negative zero displays as `0`. Grouping separators appear only when a column contains an absolute value of at least 10,000, consistently across pages. Hover a numeric cell to inspect its original value. Sorting and CSV use original values.
 
