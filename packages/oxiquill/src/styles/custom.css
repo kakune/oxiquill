@@ -312,6 +312,10 @@
   overflow-wrap: anywhere;
 }
 
+.doc-chart-output figcaption:has(> .doc-visually-hidden:only-child) {
+  position: absolute;
+}
+
 .doc-chart-output__actions {
   display: flex;
   flex-wrap: wrap;
