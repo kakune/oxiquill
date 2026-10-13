@@ -49,9 +49,9 @@ table column は `key`、`label`、optional `type` を持ちます。type は `s
 - `bubble`: `[x, y, size, color?]` の点とサイズ・色の対応指定。
 - `field`: 値軸の境界 `xEdges` / `yEdges` と行列 `values`。
 
-empty chart と equal point domain は valid です。heatmap は X/Y の category 数と heat value の範囲を示し、color scale には実際の heat value を使います。empty dataset だけは `0–1` を fallback にします。chart は textual title/caption と bounded accessible summary または equivalent table を提供します。equivalent がある場合、implementation canvas は accessibility API から隠されます。
+empty chart と equal point domain は valid です。heatmap は X/Y の category 数と heat value の範囲を示します。色尺度は既定で実際の heat value を使い、empty dataset だけは `0–1` を fallback にします。`colorMin`・`colorMax`・`colorScale` を指定するとその範囲を優先します（[ヒートマップの色尺度](#ヒートマップの色尺度)を参照）。chart は textual title/caption と bounded accessible summary または equivalent table を提供します。equivalent がある場合、implementation canvas は accessibility API から隠されます。
 
-chart は `html[data-theme]` の変更時も同じ ECharts instance を使い、ズーム・凡例・heatmap の色範囲の選択を保持します。一時的な renderer load failure の後には retry action を表示します。
+chart は `html[data-theme]` の変更時も同じ ECharts instance を使い、ズーム・凡例、および heatmap・field・色を対応付けた bubble の色範囲の選択を保持します。一時的な renderer load failure の後には retry action を表示します。
 
 ### 軸範囲
 
@@ -59,7 +59,7 @@ chart は `html[data-theme]` の変更時も同じ ECharts instance を使い、
 
 データ更新ではズームを保持します。境界やゼロ包含の変更・解除では全範囲へ戻し、凡例の選択は保持します。境界を省略すると自動範囲に戻ります。
 
-Rust の line・scatter・bar・histogram マクロでは、データ引数の後ろに `options = &serde_json::json!({...})` を指定できます。ラベルと nested style を含む公開設定を指定でき、kind やデータは上書きできません。従来の位置引数 style も利用できます。[ロジスティック写像](../../samples/logistic-map/)は 0–1 の固定範囲を使います。
+Rust の line・scatter・area・bar・histogram マクロでは、データ引数の後ろに `options = &serde_json::json!({...})` を指定できます。heatmap とその他の種類は、spec 全体を `emit_chart!` に渡します。ラベルと nested style を含む公開設定を指定でき、kind やデータは上書きできません。従来の位置引数 style も利用できます。[ロジスティック写像](../../samples/logistic-map/)は 0–1 の固定範囲を使います。
 
 ### ヒストグラムの区間
 
@@ -90,7 +90,7 @@ bar・histogram・area は量を表す value 軸（横棒では x 軸、それ�
 
 題は図の上に一度だけ表示します。artifact と spec の題が異なる場合は spec の題を副題にします。HTML凡例はキーボード操作可能な系列ボタンを1ページ25系列で表示し、無名の系列には既定名を付けます。長い軸名・カテゴリ名は短縮し、軸名の全文は概要、カテゴリ名・系列名の全文は tooltip で確認できます。カテゴリ目盛は回転してから必要に応じて間引きます。長いカテゴリ名が多い図は分割してください。長いカテゴリ名には `orientation: "horizontal"` を利用できます。
 
-既定の 8 色は明暗テーマで共通です。既定背景に対し、隣接色（末尾から先頭への循環を含む）は通常視で OKLab 色差 15 以上、1・2・3 型色覚の模擬で 8 以上、各色と背景のコントラスト比は 3:1 以上を満たします。すべての系列の組合せの識別を保証するものではありません。色を再使用すると線種や散布図の記号が変わりますが、8 系列を超える図は分割を推奨します。独自パレットは著者が背景コントラストと色覚による違いを確認してください。heatmap は明度が単調に変わる単色相の連続色を使います。
+既定の 8 色は明暗テーマで共通です。既定背景に対し、隣接色（末尾から先頭への循環を含む）は通常視で OKLab 色差 15 以上、1・2・3 型色覚の模擬で 8 以上、各色と背景のコントラスト比は 3:1 以上を満たします。すべての系列の組合せの識別を保証するものではありません。色を再使用すると線種や散布図の記号が変わりますが、8 系列を超える図は分割を推奨します。独自パレットは著者が背景コントラストと色覚による違いを確認してください。heatmap・field・bubble の色の対応付けは、既定で明度が単調に変わる単色相の連続色を使います。発散色の heatmap は中心値を中間色とする 3 色の連続色を使います。
 
 ## 出力の保持とグラフのスタイル
 
@@ -151,7 +151,7 @@ macro は `spec.style` にシリアライズし、通常のグラフ検証が同
 
 ### 数値の表示書式
 
-value/log 軸には `style.xFormat` と `style.yFormat`、heatmap の色尺度には `style.valueFormat` を指定できます。目盛、ポインター、tooltip、要約に同じ設定を使います。category と time は専用の表示書式を保ちます。
+value/log 軸には `style.xFormat` と `style.yFormat`、heatmap・field・bubble の色の値には `style.valueFormat` を指定できます。目盛、ポインター、tooltip、要約に同じ設定を使います。category と time は専用の表示書式を保ちます。
 
 各書式は `significantDigits`（整数 1–17）、`fractionDigits`（整数 0–20）、`unit`（文字列）、`notation`（`auto` または `si`）を受け付けます。2 種類の桁指定は併用できません。固定小数では末尾のゼロを保持し、小さい値がゼロに丸まる場合があります。負のゼロはゼロと表示します。未指定の書式は従来の規則に従い、設定を削除すると既定値へ戻ります。
 
@@ -169,9 +169,9 @@ emit_line_chart!(&points, "Time", "Voltage", &serde_json::json!({
 
 ### 系列の ID とスタイル
 
-XY・bar 系列には空でない一意の `id` を付けられます。実行ごとに同じ ID を使うと、並べ替えや改名後も系列の識別と凡例の選択を保持します。name は表示名であり、同名の系列も個別に選択できます。ID がなければ系列の位置で対応付けます。系列の追加・削除ではズームをリセットしません。既定の配色は記述順に従うため、系列の色を固定するには明示的に指定してください。
+`series[]` を持つすべての種類の系列には、空でない一意の `id` を付けられます。実行ごとに同じ ID を使うと、並べ替えや改名後も系列の識別と凡例の選択を保持します。name は表示名であり、同名の系列も個別に選択できます。ID がなければ系列の位置で対応付けます。系列の追加・削除ではズームをリセットしません。既定の配色は記述順に従うため、系列の色を固定するには明示的に指定してください。
 
-`series.style.color` は `#RGB/#RRGGBB` または `{ light, dark }` で指定し、少なくとも一方のテーマを含めます。未指定のテーマは chart palette を使います。line・area はさらに `lineType`（solid/dashed/dotted）、`step`（false/start/middle/end）、`smooth`（boolean）、`symbol`、`showSymbol` を使えます。scatter は色と記号、bar は色に対応します。記号は circle/emptyCircle/rect/triangle/diamond/none です。
+`series.style.color` は `#RGB/#RRGGBB` または `{ light, dark }` で指定し、少なくとも一方のテーマを含めます。未指定のテーマは chart palette を使います。line・area はさらに `lineType`（solid/dashed/dotted）、`step`（false/start/middle/end）、`smooth`（boolean）、`symbol`、`showSymbol` を使えます。scatter・bubble は色と記号、bar・errorbar・band・boxplot は色に対応します。記号は circle/emptyCircle/rect/triangle/diamond/none です。
 
 smooth と step は同時に有効化できません。既定では平滑化せず、明示した線種・記号は配色循環の自動設定より優先します。showSymbol の指定は孤立点の自動検出より優先します。設定を削除すると既定値へ戻り、従来の chart 全体の lineWidth・symbolSize は引き続きサイズを指定します。
 
@@ -187,30 +187,139 @@ let series = serde_json::json!([
 emit_line_chart!(&series, "Observation", "Value");
 ```
 
+## グラフの種類と注釈
+
+以下の種類と設定は、上の chart schema を拡張します。どの spec も Rust の `emit_chart!`、Python の `display_chart`、Haskell の `displayChart` にそのまま渡せます。例は短く書ける言語で示します。
+
+### 積み上げグラフ
+
+bar と area の系列には空でない `stack` グループを指定できます。正値と負値は value 軸のゼロから別々に積み上がり、棒の欠損は加算されません。同じグループの area は X 座標と順序を一致させ、数値・時刻は昇順にします。tooltip とデータ表は各系列の元の値を示します。百分率への正規化は行いません。
+
+```rust
+//| id: stacked-charts
+//| crates: []
+let series = serde_json::json!([
+    { "name": "First", "stack": "total", "points": [[0, 2], [1, -2]] },
+    { "name": "Second", "stack": "total", "points": [[0, 3], [1, -3]] }
+]);
+emit_area_chart!(&series, "Observation", "Amount");
+emit_bar_chart!(&["A", "B"], &serde_json::json!([
+    { "name": "First", "stack": "total", "values": [2, -2] },
+    { "name": "Second", "stack": "total", "values": [3, null] }
+]));
+```
+
+### 横向きの棒グラフ
+
+bar の `orientation: "horizontal"` は x を数値軸、y をカテゴリ軸にします。ラベル、書式、範囲指定は画面上の x/y に対応し、先頭カテゴリを上に表示します。
+
+```rust
+//| id: horizontal-bars
+//| crates: []
+emit_bar_chart!(&["North America", "South America", "Europe"], &[12, -4, 8],
+    options = serde_json::json!({ "orientation": "horizontal", "xLabel": "Change", "yLabel": "Region" }));
+```
+
+### 誤差棒と区間帯
+
+`errorbar` と `band` は `[x, center, lower, upper]` の点を持ち、`lower ≤ center ≤ upper` を満たす必要があります。全ての y 値を null にすると欠損になり、帯はそこで分断します。帯の x は昇順の数値・時刻・log 座標、y は value または log です。log の区間は全て正値にします。統計量はセル側で計算してください。
+
+```python
+#| id: interval-charts
+for kind in ("errorbar", "band"):
+    display_chart({"kind": kind, "xLabel": "Observation", "yLabel": "Estimate",
+        "series": [{"name": "Estimate and interval", "points": [
+            [0, -3, -5, -2], [1, 0, -2, 3], [2, 4, 3, 6]]}]})
+```
+
+### 基準線と範囲注釈
+
+`annotations` に軸上の線と範囲を指定できます。注釈は軸範囲を拡大せず、表示領域で切り取られます。空データでは明示した軸範囲内に表示できます。カテゴリは既存の名前またはインデックスで参照します。最大100件、ラベルは改行を含まない256 UTF-8 bytes以内のテキストです。
+
+```python
+#| id: chart-annotations
+display_chart({"kind": "line", "xMin": 0, "xMax": 10, "yMin": 0, "yMax": 1,
+    "series": [], "annotations": [
+        {"kind": "line", "axis": "y", "value": 0.5, "label": "Threshold"},
+        {"kind": "range", "axis": "x", "from": 2, "to": 4, "label": "Window"}]})
+```
+
+### ヒートマップの色尺度
+
+`colorMin` と `colorMax` で色範囲を固定できます。`colorScale: "diverging"` は既定0の `center` を中間色に置き、自動範囲を中心から対称に取ります。明示した境界は優先され、中心は範囲の内側に必要です。範囲外は端色に飽和し、元の値は表と tooltip に残ります。パレットは `style.palette` に指定し、発散色では中央色を持つ3色以上の奇数個にします。
+
+```python
+#| id: heatmap-color-scales
+display_chart({"kind": "heatmap", "colorScale": "diverging",
+    "colorMin": -2, "colorMax": 8, "center": 0,
+    "data": [[0, 0, -2], [1, 0, 0], [2, 0, 8]]})
+```
+
+### 箱ひげ図
+
+`boxplot` はカテゴリごとに `[min, q1, median, q3, max]` の集計済み五数要約を受け取ります。値は有限で昇順、系列の長さはカテゴリ数と一致させます。欠損は null にします。統計量の計算と、ひげの意味の説明は著者が行ってください。
+
+```python
+#| id: boxplot-charts
+display_chart({"kind": "boxplot", "categories": ["First", "Second"],
+    "series": [{"name": "Measurements", "values": [
+        [-5, -3, -2, 0, 4], [1, 2, 3, 4, 8]]}]},
+    caption="Whiskers show the observed minimum and maximum.")
+```
+
+### バブル図
+
+`bubble` の点は `[x, y, size]` または `[x, y, size, color]` です。サイズは有限の非負値で、既定では面積比例、直径0–40pxに対応します。0は表示しません。`sizeMapping` の `maxValue`、`minPixels`、`maxPixels`、`scale`（area/radius）で対応を指定できます。色値がある場合は `colorMapping: { min, max, palette? }` が必要で、色の欠損は系列色になります。
+
+```python
+#| id: bubble-charts
+display_chart({"kind": "bubble", "sizeMapping": {"maxValue": 100},
+    "colorMapping": {"min": 0, "max": 10},
+    "series": [{"name": "Observations", "points": [
+        [0, 2, 25, 2], [1, 3, 100, 8], [2, 1, 50, None]]}]})
+```
+
+### 値軸の格子場
+
+`field` は有限で単調増加する `xEdges` と `yEdges`、行が y、列が x の `values` を持ちます。行列の寸法は `(yEdges.length - 1) × (xEdges.length - 1)` です。null は透明な欠損セル、空の格子は3配列全て空で表します。非等間隔の境界を保持し、初期範囲は格子の外周です。補間や等高線は行いません。
+
+```python
+#| id: grid-field-charts
+from math import sin, cos
+x_edges = [-3, -1, 0, 0.5, 2, 4]
+y_edges = [-2, -0.5, 0, 1, 3]
+values = [[sin((x0 + x1) / 2) * cos((y0 + y1) / 2)
+    for x0, x1 in zip(x_edges, x_edges[1:])]
+    for y0, y1 in zip(y_edges, y_edges[1:])]
+display_chart({"kind": "field", "xEdges": x_edges, "yEdges": y_edges,
+    "values": values, "xLabel": "X", "yLabel": "Y"})
+```
+
 ## Resource limit
 
 producer は各 language worker 内で `postMessage` より前に limit を適用し、main thread でも bounded response を独立して再検証します。limit は UTF-8 byte 単位で、記載のものは run ごとに累積します。
 
-| Resource                    | Limit                      | 超過時                                                      |
-| --------------------------- | -------------------------- | ----------------------------------------------------------- |
-| Artifact                    | 1 run 100個                | 追加 artifact を local reject。                             |
-| stdout / stderr             | stream ごとに 1 MiB        | limit までだけ保持し、truncated として表示。                |
-| Text、serialized JSON、HTML | artifact ごとに 1 MiB      | Text/JSON は `truncated: true` 可、HTML は reject。         |
-| Table                       | 10,000 row、100 column     | bounded table は `truncated: true` と `rowCount` を使用可。 |
-| Chart                       | 合計100,000 point/bin/cell | artifact-local error。                                      |
-| Image                       | decoded 10 MiB             | artifact-local error。                                      |
-| 全 validated output         | 1 run 16 MiB               | remaining budget を超える artifact を local reject。        |
-| complete worker response    | 16 MiB                     | worker から page へ渡す前に後続 artifact を省略。           |
-| worker error                | 16 KiB                     | UTF-8 message を truncate。                                 |
-| artifact diagnostic         | 1件 8 KiB、1 run 64 KiB    | 各 limit 内で diagnostic を truncate。                      |
+| Resource                    | Limit                                               | 超過時                                                      |
+| --------------------------- | --------------------------------------------------- | ----------------------------------------------------------- |
+| Artifact                    | 1 run 100個                                         | 追加 artifact を local reject。                             |
+| stdout / stderr             | stream ごとに 1 MiB                                 | limit までだけ保持し、truncated として表示。                |
+| Text、serialized JSON、HTML | artifact ごとに 1 MiB                               | Text/JSON は `truncated: true` 可、HTML は reject。         |
+| Table                       | 10,000 row、100 column                              | bounded table は `truncated: true` と `rowCount` を使用可。 |
+| Chart                       | 合計100,000 point/bin/cell                          | artifact-local error。                                      |
+| Chart annotation            | 1 chart につき 100 件。label は 1 行・256 byte 以内 | artifact-local error。                                      |
+| Image                       | decoded 10 MiB                                      | artifact-local error。                                      |
+| 全 validated output         | 1 run 16 MiB                                        | remaining budget を超える artifact を local reject。        |
+| complete worker response    | 16 MiB                                              | worker から page へ渡す前に後続 artifact を省略。           |
+| worker error                | 16 KiB                                              | UTF-8 message を truncate。                                 |
+| artifact diagnostic         | 1件 8 KiB、1 run 64 KiB                             | 各 limit 内で diagnostic を truncate。                      |
 
 `truncated: true` を使えるのは text、JSON、table だけです。chart、image、HTML は黙って truncate しません。invalid/cyclic/over-deep JSON、ragged table、non-finite chart value、invalid base64/MIME pair、unsafe structural record が cell component を crash させることはありません。実行結果は `outputs` に統一され、ストリームのテキストと JSON 値を結果直下に重複して保持しません。
 
 ## グラフ画像
 
-「データを表で表示」で、非表示の系列を含む元の値、ヒストグラムの両端と度数、heatmapの座標を確認できます。時刻軸の整数のepochミリ秒は、グラフと同じUTCのISO-8601時刻で表示します。開いた時だけ変換し、最大10,000行を保持して総数と省略を表示します。表の並べ替え、ページ送り、CSV保存はキーボードで操作できます。系列ボタンは `aria-pressed` で選択状態を伝え、色・線種・記号を併用します。「ズームを戻す」は系列選択を保持して著者指定の全範囲に戻します。既存のグラフ要約も維持します。
+「データを表で表示」で、非表示の系列を含む元の値、ヒストグラムの両端と度数、heatmapの座標、区間の上下限、箱ひげ図の統計量、バブルのサイズと色、fieldのセル境界を確認できます。時刻軸の整数のepochミリ秒は、グラフと同じUTCのISO-8601時刻で表示します。開いた時だけ変換し、最大10,000行を保持して総数と省略を表示します。表の並べ替え、ページ送り、CSV保存はキーボードで操作できます。系列ボタンは `aria-pressed` で選択状態を伝え、色・線種・記号を併用します。「ズームを戻す」は系列選択を保持して著者指定の全範囲に戻します。既存のグラフ要約も維持します。
 
-「PNGを保存」「SVGを保存」は現在のテーマ、ズーム、系列の選択、heatmapの色範囲を反映します。PNGのピクセル数は描画領域の幅・高さの2倍で、SVGは同じ論理寸法です。背景と凡例を含み、animation、title、captionは含みません。一時rendererで保存するため、表示中のグラフは置き換えません。
+「PNGを保存」「SVGを保存」は現在のテーマ、ズーム、系列の選択、色範囲を反映します。PNGのピクセル数は描画領域の幅・高さの2倍で、SVGは同じ論理寸法です。背景と凡例を含み、animation、title、captionは含みません。一時rendererで保存するため、表示中のグラフは置き換えません。
 
 著者はグラフの `style: { renderer: "svg" }` を指定できます。Rustのstyle引数やPythonの `display_chart` からも使えます。既定は `"canvas"` です。SVGは拡大・印刷向けのベクター出力ですが、大量データで常に高速とは限りません。印刷時は操作ボタンを隠し、グラフとcaptionを保持します。
 
@@ -253,7 +362,7 @@ return Ok(CellOutput {
 
 任意 helper crate `doc-rust` の `PlotSpec/LinePlot/line_plot` も削除されました。`SeriesPoint` を `[f64::from(point.n), point.x]` に明示変換し、`emit_line_chart!` に渡してください。互換マクロ `emit_line_plot!` は残っています。
 
-出力順は変わりません。Rust は stdout の後に emit 順、Python は stdout・stderr・display・自動 matplotlib 図・最終値、Haskell は stdout・stderr の順です。Python の最終値が None または空文字列なら暗黙の JSON 出力はありません。明示した JSON artifact の null・空文字列・false・0 は保持します。捕捉したストリームは display 呼び出しと交互には並びません。
+出力順は、Rust は stdout の後に emit 順、Python は stdout・stderr・display・自動 matplotlib 図・最終値、Haskell は stdout のテキスト・`Oxiquill.Output` の artifact・stderr のテキストを書き込んだ順です。Python の最終値が None または空文字列なら暗黙の JSON 出力はありません。明示した JSON artifact の null・空文字列・false・0 は保持します。捕捉したストリームは display 呼び出しと交互には並びません。
 
 更新後は `pnpm exec oxiquill docgen --wasm dev` または本番の `pnpm build` で runtime を再生成してください。生成物は直接編集しないでください。
 
@@ -275,7 +384,7 @@ runtime は pandas DataFrame/Series、matplotlib figure、`_repr_mimebundle_`、
 
 図の題と軸名から画像の代替テキストを生成します。SVG は `svg.fonttype: 'none'` を使い、読者のブラウザのフォントで日本語を描きます。SVG が 10 MiB を超えると 150 DPI の PNG に切り替え、stderr に診断を出します。PNG で日本語を描くには Python 環境内のフォントが必要です。画像と実行全体の上限は維持し、PNG も大きすぎる場合は artifact エラーになります。
 
-`display_chart(spec, *, id=None, title=None, caption=None)` は dict/list だけで全 6 種類の対話的チャートを出力します。pandas は不要です。spec の style と artifact の metadata を別々に指定できます。
+`display_chart(spec, *, id=None, title=None, caption=None)` は dict/list だけで対応するすべての種類の対話的チャートを出力します。pandas は不要です。spec の style と artifact の metadata を別々に指定できます。
 
 `display_line(df, *, x, y, id=None, title=None, caption=None, style=None)` は DataFrame の列から line チャートを作ります。`y` は列名または重複のない列名リストです。行順・列順を保ち、総点数は 10 万点までです。x は数値・文字列カテゴリ・タイムゾーン付き日時、y は有限数値を扱います。日時は UTC の epoch milliseconds に変換します。欠損値、NaN、無限大、NaT、タイムゾーンなし日時は行位置と列名付きの出力エラーになり、有効な隣接出力は残ります。欠損の前後を線で接続しません。
 
@@ -325,7 +434,7 @@ Rust セルでは明示的な `emit_*` macro を使います。対応 macro:
 - `emit_chart!`、`emit_area_chart!`、`emit_line_chart!`、`emit_scatter_chart!`、`emit_bar_chart!`、`emit_histogram!`、`emit_heatmap!`
 - 互換用の `emit_line_plot!`。新規利用では座標を明示的に変換し、`emit_line_chart!` を使ってください。
 
-`emit_chart!(spec)` は全 6 種類のチャートを受け付けます。`metadata = ...` の `id/title/caption` は artifact に属し、spec の `title/xLabel/yLabel` とは別です。表示タイトルは artifact の title を優先します。metadata の null は省略として扱い、それ以外のフィールドはその出力の診断になります。`emit_area_chart!` は line と同じ点列・系列、軸ラベル、末尾 style、`options = ...` 形式を使えます。既存マクロの引数形式は維持されます。不正な spec は有効な隣接出力を残して、その出力の診断として表示されます。
+`emit_chart!(spec)` は対応するすべての種類のチャートを受け付けます。`metadata = ...` の `id/title/caption` は artifact に属し、spec の `title/xLabel/yLabel` とは別です。表示タイトルは artifact の title を優先します。metadata の null は省略として扱い、それ以外のフィールドはその出力の診断になります。`emit_area_chart!` は line と同じ点列・系列、軸ラベル、末尾 style、`options = ...` 形式を使えます。既存マクロの引数形式は維持されます。不正な spec は有効な隣接出力を残して、その出力の診断として表示されます。
 
 ```rust
 emit_chart!(serde_json::json!({
@@ -372,119 +481,9 @@ emit_svg!(
 emit_html!(r#"<p><strong>Sandboxed HTML</strong> emitted from Rust.</p>"#);
 ```
 
-## 使い分け
+## Haskell の出力
 
-短い説明文には stdout を使います。正確な構造を見せたい場合は JSON、比較可能な record には table、傾向や分布には chart、生成された視覚情報には image、他の artifact で表せない markup には sandboxed HTML を使います。
-
-copy、sort、pagination、validation、running、completion、failure state は keyboard 操作可能で、localized English/Japanese label とともに announce されます。sandboxed HTML には意図的に script/same-origin permission がなく、referrer を送らず、external subresource を default で block します。正確な policy と trust boundary は [サポートとセキュリティ](/ja/guides/support-and-security/) を参照してください。
-
-table interaction state は一つの execution result に限定されます。新しい result では page、sort、copy status を reset します。同じ result の rerender は互換性のある sort/page を維持しますが、row が減った場合は clamp 後の page を保存し、sort 対象 column が削除・置換された場合は sort を解除します。
-
-## 積み上げグラフ
-
-bar と area の系列には空でない `stack` グループを指定できます。正値と負値は value 軸のゼロから別々に積み上がり、棒の欠損は加算されません。同じグループの area は X 座標と順序を一致させ、数値・時刻は昇順にします。tooltip とデータ表は各系列の元の値を示します。百分率への正規化は行いません。
-
-```rust
-//| id: stacked-charts
-//| crates: []
-let series = serde_json::json!([
-    { "name": "First", "stack": "total", "points": [[0, 2], [1, -2]] },
-    { "name": "Second", "stack": "total", "points": [[0, 3], [1, -3]] }
-]);
-emit_area_chart!(&series, "Observation", "Amount");
-emit_bar_chart!(&["A", "B"], &serde_json::json!([
-    { "name": "First", "stack": "total", "values": [2, -2] },
-    { "name": "Second", "stack": "total", "values": [3, null] }
-]));
-```
-
-## 横向きの棒グラフ
-
-bar の `orientation: "horizontal"` は x を数値軸、y をカテゴリ軸にします。ラベル、書式、範囲指定は画面上の x/y に対応し、先頭カテゴリを上に表示します。
-
-```rust
-//| id: horizontal-bars
-//| crates: []
-emit_bar_chart!(&["North America", "South America", "Europe"], &[12, -4, 8],
-    options = serde_json::json!({ "orientation": "horizontal", "xLabel": "Change", "yLabel": "Region" }));
-```
-
-## 誤差棒と区間帯
-
-`errorbar` と `band` は `[x, center, lower, upper]` の点を持ち、`lower ≤ center ≤ upper` を満たす必要があります。全ての y 値を null にすると欠損になり、帯はそこで分断します。帯の x は昇順の数値・時刻・log 座標、y は value または log です。log の区間は全て正値にします。統計量はセル側で計算してください。
-
-```python
-#| id: interval-charts
-for kind in ("errorbar", "band"):
-    display_chart({"kind": kind, "xLabel": "Observation", "yLabel": "Estimate",
-        "series": [{"name": "Estimate and interval", "points": [
-            [0, -3, -5, -2], [1, 0, -2, 3], [2, 4, 3, 6]]}]})
-```
-
-## 基準線と範囲注釈
-
-`annotations` に軸上の線と範囲を指定できます。注釈は軸範囲を拡大せず、表示領域で切り取られます。空データでは明示した軸範囲内に表示できます。カテゴリは既存の名前またはインデックスで参照します。最大100件、ラベルは改行を含まない256 UTF-8 bytes以内のテキストです。
-
-```python
-#| id: chart-annotations
-display_chart({"kind": "line", "xMin": 0, "xMax": 10, "yMin": 0, "yMax": 1,
-    "series": [], "annotations": [
-        {"kind": "line", "axis": "y", "value": 0.5, "label": "Threshold"},
-        {"kind": "range", "axis": "x", "from": 2, "to": 4, "label": "Window"}]})
-```
-
-## ヒートマップの色尺度
-
-`colorMin` と `colorMax` で色範囲を固定できます。`colorScale: "diverging"` は既定0の `center` を中間色に置き、自動範囲を中心から対称に取ります。明示した境界は優先され、中心は範囲の内側に必要です。範囲外は端色に飽和し、元の値は表と tooltip に残ります。パレットは `style.palette` に指定し、発散色では中央色を持つ3色以上の奇数個にします。
-
-```python
-#| id: heatmap-color-scales
-display_chart({"kind": "heatmap", "colorScale": "diverging",
-    "colorMin": -2, "colorMax": 8, "center": 0,
-    "data": [[0, 0, -2], [1, 0, 0], [2, 0, 8]]})
-```
-
-## 箱ひげ図
-
-`boxplot` はカテゴリごとに `[min, q1, median, q3, max]` の集計済み五数要約を受け取ります。値は有限で昇順、系列の長さはカテゴリ数と一致させます。欠損は null にします。統計量の計算と、ひげの意味の説明は著者が行ってください。
-
-```python
-#| id: boxplot-charts
-display_chart({"kind": "boxplot", "categories": ["First", "Second"],
-    "series": [{"name": "Measurements", "values": [
-        [-5, -3, -2, 0, 4], [1, 2, 3, 4, 8]]}]},
-    caption="Whiskers show the observed minimum and maximum.")
-```
-
-## バブル図
-
-`bubble` の点は `[x, y, size]` または `[x, y, size, color]` です。サイズは有限の非負値で、既定では面積比例、直径0–40pxに対応します。0は表示しません。`sizeMapping` の `maxValue`、`minPixels`、`maxPixels`、`scale`（area/radius）で対応を指定できます。色値がある場合は `colorMapping: { min, max, palette? }` が必要で、色の欠損は系列色になります。
-
-```python
-#| id: bubble-charts
-display_chart({"kind": "bubble", "sizeMapping": {"maxValue": 100},
-    "colorMapping": {"min": 0, "max": 10},
-    "series": [{"name": "Observations", "points": [
-        [0, 2, 25, 2], [1, 3, 100, 8], [2, 1, 50, None]]}]})
-```
-
-## 値軸の格子場
-
-`field` は有限で単調増加する `xEdges` と `yEdges`、行が y、列が x の `values` を持ちます。行列の寸法は `(yEdges.length - 1) × (xEdges.length - 1)` です。null は透明な欠損セル、空の格子は3配列全て空で表します。非等間隔の境界を保持し、初期範囲は格子の外周です。補間や等高線は行いません。
-
-```python
-#| id: grid-field-charts
-from math import sin, cos
-x_edges = [-3, -1, 0, 0.5, 2, 4]
-y_edges = [-2, -0.5, 0, 1, 3]
-values = [[sin((x0 + x1) / 2) * cos((y0 + y1) / 2)
-    for x0, x1 in zip(x_edges, x_edges[1:])]
-    for y0, y1 in zip(y_edges, y_edges[1:])]
-display_chart({"kind": "field", "xEdges": x_edges, "yEdges": y_edges,
-    "values": values, "xLabel": "X", "yLabel": "Y"})
-```
-
-Haskell でも同じ spec を `displayChart` に渡せます。
+Haskell セルは同梱の `Oxiquill.Output` module を import して、JSON 値・表・グラフの spec を出力します。依存は GHC の `base` だけです。Haskell の `show` は JSON encoder ではないため、`JsonValue` の constructor で値を組み立てます。構造化出力は `putStrLn` のテキストと書き込んだ順に並びます。frame の形式と上限は[構造化出力](/ja/samples/haskell-series/#構造化出力)を参照してください。次のセルは欠損セルを一つ含む小さな[格子場](#値軸の格子場)を出力します。
 
 ```haskell
 --| id: haskell-grid-field
@@ -495,3 +494,11 @@ displayChart (JsonObject
    ("yEdges", edges [-1, 1]),
    ("values", JsonArray [JsonArray [JsonNumber 2, JsonNull]])])
 ```
+
+## 使い分け
+
+短い説明文には stdout を使います。正確な構造を見せたい場合は JSON、比較可能な record には table、傾向や分布には chart、生成された視覚情報には image、他の artifact で表せない markup には sandboxed HTML を使います。
+
+copy、sort、pagination、validation、running、completion、failure state は keyboard 操作可能で、localized English/Japanese label とともに announce されます。sandboxed HTML には意図的に script/same-origin permission がなく、referrer を送らず、external subresource を default で block します。正確な policy と trust boundary は [サポートとセキュリティ](/ja/guides/support-and-security/) を参照してください。
+
+table interaction state は一つの execution result に限定されます。新しい result では page、sort、copy status を reset します。同じ result の rerender は互換性のある sort/page を維持しますが、row が減った場合は clamp 後の page を保存し、sort 対象 column が削除・置換された場合は sort を解除します。
