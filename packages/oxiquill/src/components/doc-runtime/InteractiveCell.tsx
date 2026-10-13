@@ -127,7 +127,7 @@ function InteractiveCellPanel({
               {labels.copyLink}
             </button>
           ) : null}
-          {cell.language === 'python' ? (
+          {cell.editable ? (
             <button
               type="button"
               class="secondary-button"
