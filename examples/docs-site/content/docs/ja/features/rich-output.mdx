@@ -187,114 +187,6 @@ let series = serde_json::json!([
 emit_line_chart!(&series, "Observation", "Value");
 ```
 
-## グラフの種類と注釈
-
-以下の種類と設定は、上の chart schema を拡張します。どの spec も Rust の `emit_chart!`、Python の `display_chart`、Haskell の `displayChart` にそのまま渡せます。例は短く書ける言語で示します。
-
-### 積み上げグラフ
-
-bar と area の系列には空でない `stack` グループを指定できます。正値と負値は value 軸のゼロから別々に積み上がり、棒の欠損は加算されません。同じグループの area は X 座標と順序を一致させ、数値・時刻は昇順にします。tooltip とデータ表は各系列の元の値を示します。百分率への正規化は行いません。
-
-```rust
-//| id: stacked-charts
-//| crates: []
-let series = serde_json::json!([
-    { "name": "First", "stack": "total", "points": [[0, 2], [1, -2]] },
-    { "name": "Second", "stack": "total", "points": [[0, 3], [1, -3]] }
-]);
-emit_area_chart!(&series, "Observation", "Amount");
-emit_bar_chart!(&["A", "B"], &serde_json::json!([
-    { "name": "First", "stack": "total", "values": [2, -2] },
-    { "name": "Second", "stack": "total", "values": [3, null] }
-]));
-```
-
-### 横向きの棒グラフ
-
-bar の `orientation: "horizontal"` は x を数値軸、y をカテゴリ軸にします。ラベル、書式、範囲指定は画面上の x/y に対応し、先頭カテゴリを上に表示します。
-
-```rust
-//| id: horizontal-bars
-//| crates: []
-emit_bar_chart!(&["North America", "South America", "Europe"], &[12, -4, 8],
-    options = serde_json::json!({ "orientation": "horizontal", "xLabel": "Change", "yLabel": "Region" }));
-```
-
-### 誤差棒と区間帯
-
-`errorbar` と `band` は `[x, center, lower, upper]` の点を持ち、`lower ≤ center ≤ upper` を満たす必要があります。全ての y 値を null にすると欠損になり、帯はそこで分断します。帯の x は昇順の数値・時刻・log 座標、y は value または log です。log の区間は全て正値にします。統計量はセル側で計算してください。
-
-```python
-#| id: interval-charts
-for kind in ("errorbar", "band"):
-    display_chart({"kind": kind, "xLabel": "Observation", "yLabel": "Estimate",
-        "series": [{"name": "Estimate and interval", "points": [
-            [0, -3, -5, -2], [1, 0, -2, 3], [2, 4, 3, 6]]}]})
-```
-
-### 基準線と範囲注釈
-
-`annotations` に軸上の線と範囲を指定できます。注釈は軸範囲を拡大せず、表示領域で切り取られます。空データでは明示した軸範囲内に表示できます。カテゴリは既存の名前またはインデックスで参照します。最大100件、ラベルは改行を含まない256 UTF-8 bytes以内のテキストです。
-
-```python
-#| id: chart-annotations
-display_chart({"kind": "line", "xMin": 0, "xMax": 10, "yMin": 0, "yMax": 1,
-    "series": [], "annotations": [
-        {"kind": "line", "axis": "y", "value": 0.5, "label": "Threshold"},
-        {"kind": "range", "axis": "x", "from": 2, "to": 4, "label": "Window"}]})
-```
-
-### ヒートマップの色尺度
-
-`colorMin` と `colorMax` で色範囲を固定できます。`colorScale: "diverging"` は既定0の `center` を中間色に置き、自動範囲を中心から対称に取ります。明示した境界は優先され、中心は範囲の内側に必要です。範囲外は端色に飽和し、元の値は表と tooltip に残ります。パレットは `style.palette` に指定し、発散色では中央色を持つ3色以上の奇数個にします。
-
-```python
-#| id: heatmap-color-scales
-display_chart({"kind": "heatmap", "colorScale": "diverging",
-    "colorMin": -2, "colorMax": 8, "center": 0,
-    "data": [[0, 0, -2], [1, 0, 0], [2, 0, 8]]})
-```
-
-### 箱ひげ図
-
-`boxplot` はカテゴリごとに `[min, q1, median, q3, max]` の集計済み五数要約を受け取ります。値は有限で昇順、系列の長さはカテゴリ数と一致させます。欠損は null にします。統計量の計算と、ひげの意味の説明は著者が行ってください。
-
-```python
-#| id: boxplot-charts
-display_chart({"kind": "boxplot", "categories": ["First", "Second"],
-    "series": [{"name": "Measurements", "values": [
-        [-5, -3, -2, 0, 4], [1, 2, 3, 4, 8]]}]},
-    caption="Whiskers show the observed minimum and maximum.")
-```
-
-### バブル図
-
-`bubble` の点は `[x, y, size]` または `[x, y, size, color]` です。サイズは有限の非負値で、既定では面積比例、直径0–40pxに対応します。0は表示しません。`sizeMapping` の `maxValue`、`minPixels`、`maxPixels`、`scale`（area/radius）で対応を指定できます。色値がある場合は `colorMapping: { min, max, palette? }` が必要で、色の欠損は系列色になります。
-
-```python
-#| id: bubble-charts
-display_chart({"kind": "bubble", "sizeMapping": {"maxValue": 100},
-    "colorMapping": {"min": 0, "max": 10},
-    "series": [{"name": "Observations", "points": [
-        [0, 2, 25, 2], [1, 3, 100, 8], [2, 1, 50, None]]}]})
-```
-
-### 値軸の格子場
-
-`field` は有限で単調増加する `xEdges` と `yEdges`、行が y、列が x の `values` を持ちます。行列の寸法は `(yEdges.length - 1) × (xEdges.length - 1)` です。null は透明な欠損セル、空の格子は3配列全て空で表します。非等間隔の境界を保持し、初期範囲は格子の外周です。補間や等高線は行いません。
-
-```python
-#| id: grid-field-charts
-from math import sin, cos
-x_edges = [-3, -1, 0, 0.5, 2, 4]
-y_edges = [-2, -0.5, 0, 1, 3]
-values = [[sin((x0 + x1) / 2) * cos((y0 + y1) / 2)
-    for x0, x1 in zip(x_edges, x_edges[1:])]
-    for y0, y1 in zip(y_edges, y_edges[1:])]
-display_chart({"kind": "field", "xEdges": x_edges, "yEdges": y_edges,
-    "values": values, "xLabel": "X", "yLabel": "Y"})
-```
-
 ## Resource limit
 
 producer は各 language worker 内で `postMessage` より前に limit を適用し、main thread でも bounded response を独立して再検証します。limit は UTF-8 byte 単位で、記載のものは run ごとに累積します。
@@ -493,6 +385,114 @@ displayChart (JsonObject
   [("kind", JsonString "field"), ("xEdges", edges [-2, 0, 3]),
    ("yEdges", edges [-1, 1]),
    ("values", JsonArray [JsonArray [JsonNumber 2, JsonNull]])])
+```
+
+## グラフの種類と注釈
+
+以下の種類と設定は、[chart schema](#chart-schema) を拡張します。どの spec も Rust の `emit_chart!`、Python の `display_chart`、Haskell の `displayChart` にそのまま渡せます。例は短く書ける言語で示します。
+
+### 積み上げグラフ
+
+bar と area の系列には空でない `stack` グループを指定できます。正値と負値は value 軸のゼロから別々に積み上がり、棒の欠損は加算されません。同じグループの area は X 座標と順序を一致させ、数値・時刻は昇順にします。tooltip とデータ表は各系列の元の値を示します。百分率への正規化は行いません。
+
+```rust
+//| id: stacked-charts
+//| crates: []
+let series = serde_json::json!([
+    { "name": "First", "stack": "total", "points": [[0, 2], [1, -2]] },
+    { "name": "Second", "stack": "total", "points": [[0, 3], [1, -3]] }
+]);
+emit_area_chart!(&series, "Observation", "Amount");
+emit_bar_chart!(&["A", "B"], &serde_json::json!([
+    { "name": "First", "stack": "total", "values": [2, -2] },
+    { "name": "Second", "stack": "total", "values": [3, null] }
+]));
+```
+
+### 横向きの棒グラフ
+
+bar の `orientation: "horizontal"` は x を数値軸、y をカテゴリ軸にします。ラベル、書式、範囲指定は画面上の x/y に対応し、先頭カテゴリを上に表示します。
+
+```rust
+//| id: horizontal-bars
+//| crates: []
+emit_bar_chart!(&["North America", "South America", "Europe"], &[12, -4, 8],
+    options = serde_json::json!({ "orientation": "horizontal", "xLabel": "Change", "yLabel": "Region" }));
+```
+
+### 誤差棒と区間帯
+
+`errorbar` と `band` は `[x, center, lower, upper]` の点を持ち、`lower ≤ center ≤ upper` を満たす必要があります。全ての y 値を null にすると欠損になり、帯はそこで分断します。帯の x は昇順の数値・時刻・log 座標、y は value または log です。log の区間は全て正値にします。統計量はセル側で計算してください。
+
+```python
+#| id: interval-charts
+for kind in ("errorbar", "band"):
+    display_chart({"kind": kind, "xLabel": "Observation", "yLabel": "Estimate",
+        "series": [{"name": "Estimate and interval", "points": [
+            [0, -3, -5, -2], [1, 0, -2, 3], [2, 4, 3, 6]]}]})
+```
+
+### 基準線と範囲注釈
+
+`annotations` に軸上の線と範囲を指定できます。注釈は軸範囲を拡大せず、表示領域で切り取られます。空データでは明示した軸範囲内に表示できます。カテゴリは既存の名前またはインデックスで参照します。最大100件、ラベルは改行を含まない256 UTF-8 bytes以内のテキストです。
+
+```python
+#| id: chart-annotations
+display_chart({"kind": "line", "xMin": 0, "xMax": 10, "yMin": 0, "yMax": 1,
+    "series": [], "annotations": [
+        {"kind": "line", "axis": "y", "value": 0.5, "label": "Threshold"},
+        {"kind": "range", "axis": "x", "from": 2, "to": 4, "label": "Window"}]})
+```
+
+### ヒートマップの色尺度
+
+`colorMin` と `colorMax` で色範囲を固定できます。`colorScale: "diverging"` は既定0の `center` を中間色に置き、自動範囲を中心から対称に取ります。明示した境界は優先され、中心は範囲の内側に必要です。範囲外は端色に飽和し、元の値は表と tooltip に残ります。パレットは `style.palette` に指定し、発散色では中央色を持つ3色以上の奇数個にします。
+
+```python
+#| id: heatmap-color-scales
+display_chart({"kind": "heatmap", "colorScale": "diverging",
+    "colorMin": -2, "colorMax": 8, "center": 0,
+    "data": [[0, 0, -2], [1, 0, 0], [2, 0, 8]]})
+```
+
+### 箱ひげ図
+
+`boxplot` はカテゴリごとに `[min, q1, median, q3, max]` の集計済み五数要約を受け取ります。値は有限で昇順、系列の長さはカテゴリ数と一致させます。欠損は null にします。統計量の計算と、ひげの意味の説明は著者が行ってください。
+
+```python
+#| id: boxplot-charts
+display_chart({"kind": "boxplot", "categories": ["First", "Second"],
+    "series": [{"name": "Measurements", "values": [
+        [-5, -3, -2, 0, 4], [1, 2, 3, 4, 8]]}]},
+    caption="Whiskers show the observed minimum and maximum.")
+```
+
+### バブル図
+
+`bubble` の点は `[x, y, size]` または `[x, y, size, color]` です。サイズは有限の非負値で、既定では面積比例、直径0–40pxに対応します。0は表示しません。`sizeMapping` の `maxValue`、`minPixels`、`maxPixels`、`scale`（area/radius）で対応を指定できます。色値がある場合は `colorMapping: { min, max, palette? }` が必要で、色の欠損は系列色になります。
+
+```python
+#| id: bubble-charts
+display_chart({"kind": "bubble", "sizeMapping": {"maxValue": 100},
+    "colorMapping": {"min": 0, "max": 10},
+    "series": [{"name": "Observations", "points": [
+        [0, 2, 25, 2], [1, 3, 100, 8], [2, 1, 50, None]]}]})
+```
+
+### 値軸の格子場
+
+`field` は有限で単調増加する `xEdges` と `yEdges`、行が y、列が x の `values` を持ちます。行列の寸法は `(yEdges.length - 1) × (xEdges.length - 1)` です。null は透明な欠損セル、空の格子は3配列全て空で表します。非等間隔の境界を保持し、初期範囲は格子の外周です。補間や等高線は行いません。
+
+```python
+#| id: grid-field-charts
+from math import sin, cos
+x_edges = [-3, -1, 0, 0.5, 2, 4]
+y_edges = [-2, -0.5, 0, 1, 3]
+values = [[sin((x0 + x1) / 2) * cos((y0 + y1) / 2)
+    for x0, x1 in zip(x_edges, x_edges[1:])]
+    for y0, y1 in zip(y_edges, y_edges[1:])]
+display_chart({"kind": "field", "xEdges": x_edges, "yEdges": y_edges,
+    "values": values, "xLabel": "X", "yLabel": "Y"})
 ```
 
 ## 使い分け

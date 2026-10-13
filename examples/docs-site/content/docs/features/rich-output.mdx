@@ -187,114 +187,6 @@ let series = serde_json::json!([
 emit_line_chart!(&series, "Observation", "Value");
 ```
 
-## Chart Kinds and Annotations
-
-These kinds and options extend the chart schema above. Every spec works unchanged through Rust `emit_chart!`, Python `display_chart`, and Haskell `displayChart`; the examples use whichever language keeps them short.
-
-### Stacked charts
-
-Bar and area series accept a nonempty `stack` group. Positive and negative values accumulate separately from zero on a value axis. Missing bar values do not contribute. Area series in each group must have identical, ordered X coordinates; numeric/time coordinates must increase. Tooltips and data tables retain the individual values. Percent normalization is not performed.
-
-```rust
-//| id: stacked-charts
-//| crates: []
-let series = serde_json::json!([
-    { "name": "First", "stack": "total", "points": [[0, 2], [1, -2]] },
-    { "name": "Second", "stack": "total", "points": [[0, 3], [1, -3]] }
-]);
-emit_area_chart!(&series, "Observation", "Amount");
-emit_bar_chart!(&["A", "B"], &serde_json::json!([
-    { "name": "First", "stack": "total", "values": [2, -2] },
-    { "name": "Second", "stack": "total", "values": [3, null] }
-]));
-```
-
-### Horizontal bars
-
-Set bar `orientation: "horizontal"` to use a numeric x axis and category y axis. Labels, formats, and bounds refer to screen axes. The first category appears at the top. Missing values, multiple series, and stack groups work in either orientation.
-
-```rust
-//| id: horizontal-bars
-//| crates: []
-emit_bar_chart!(&["North America", "South America", "Europe"], &[12, -4, 8],
-    options = serde_json::json!({ "orientation": "horizontal", "xLabel": "Change", "yLabel": "Region" }));
-```
-
-### Error bars and interval bands
-
-Use `errorbar` or `band` with `[x, center, lower, upper]` points satisfying `lower <= center <= upper`. Set all three Y values to null for a gap. Bands connect adjacent valid points with straight segments and require increasing value/time/log X coordinates. Y uses value or log; log intervals must be positive. Statistical estimation belongs in the cell. A single isolated band point is shown as an interval glyph. Chart and series colors follow the existing styles; interval charts also accept chart-level `lineWidth`.
-
-```python
-#| id: interval-charts
-for kind in ("errorbar", "band"):
-    display_chart({"kind": kind, "xLabel": "Observation", "yLabel": "Estimate",
-        "series": [{"name": "Estimate and interval", "points": [
-            [0, -3, -5, -2], [1, 0, -2, 3], [2, 4, 3, 6]]}]})
-```
-
-### Reference lines and ranges
-
-Use `annotations` for axis-coordinate lines and ranges. Annotations do not expand axis extents and are clipped to the viewport. Empty charts can display annotations with explicit axis bounds. Categories reference an existing name or index; time coordinates use the chart time contract, and log positions must be positive. Limit: 100 annotations, each label a single line of at most 256 UTF-8 bytes. Line styles accept hex `color`, `lineType` (solid/dashed/dotted), and `width` (0.5–4); range styles accept hex `color` and `opacity` (0–1).
-
-```python
-#| id: chart-annotations
-display_chart({"kind": "line", "xMin": 0, "xMax": 10, "yMin": 0, "yMax": 1,
-    "series": [], "annotations": [
-        {"kind": "line", "axis": "y", "value": 0.5, "label": "Threshold"},
-        {"kind": "range", "axis": "x", "from": 2, "to": 4, "label": "Window"}]})
-```
-
-### Heatmap color scales
-
-Use `colorMin`/`colorMax` to fix the color domain across reruns. `colorScale: "diverging"` places `center` (default 0) at the middle color, even with asymmetric explicit bounds. Automatic bounds are symmetric about the center; each explicit bound takes precedence. The center must lie strictly inside the resulting domain. Out-of-range values saturate at endpoint colors. Empty scales use 0–1 or center ±1; constant sequential domains use the middle color. `style.palette` owns the colors; diverging palettes require an odd number of at least three colors. Changing the authored domain resets the color-range selection; theme changes preserve it.
-
-```python
-#| id: heatmap-color-scales
-display_chart({"kind": "heatmap", "colorScale": "diverging",
-    "colorMin": -2, "colorMax": 8, "center": 0,
-    "data": [[0, 0, -2], [1, 0, 0], [2, 0, 8]]})
-```
-
-### Box plots
-
-A `boxplot` accepts precomputed `[min, q1, median, q3, max]` values, one per category per series. Values must be finite and ordered; null denotes a missing box. The Y axis accepts value or log (all five statistics must then be positive). Authors compute the statistics and explain the whisker definition. No raw-sample aggregation or separate outlier collection is performed.
-
-```python
-#| id: boxplot-charts
-display_chart({"kind": "boxplot", "categories": ["First", "Second"],
-    "series": [{"name": "Measurements", "values": [
-        [-5, -3, -2, 0, 4], [1, 2, 3, 4, 8]]}]},
-    caption="Whiskers show the observed minimum and maximum.")
-```
-
-### Bubble charts
-
-Bubble points are `[x, y, size]` or `[x, y, size, color]`. Sizes are finite and nonnegative; the default maps area proportionally, with diameter 0–40px and the largest supplied size as the upper domain. Zero is invisible. `sizeMapping` accepts positive `maxValue`, `minPixels`, `maxPixels` (`0 <= min < max <= 100`), and `scale: "area" | "radius"`. Positive values are clamped to the requested pixel range; a positive constant domain uses the maximum diameter. Color values require explicit `colorMapping: { min, max, palette? }`; values outside the range saturate. Missing/null color uses the series color. `style.palette` colors series; `colorMapping.palette` owns the continuous color gradient. Large mode is disabled to preserve point-level mappings.
-
-```python
-#| id: bubble-charts
-display_chart({"kind": "bubble", "sizeMapping": {"maxValue": 100},
-    "colorMapping": {"min": 0, "max": 10},
-    "series": [{"name": "Observations", "points": [
-        [0, 2, 25, 2], [1, 3, 100, 8], [2, 1, 50, None]]}]})
-```
-
-### Grid fields on value axes
-
-A `field` uses strictly increasing finite `xEdges` and `yEdges` and a row-major `values` matrix: rows index Y intervals, columns index X intervals. Its shape is `(yEdges.length - 1) × (xEdges.length - 1)`. Null cells remain transparent and count toward the 100,000-cell limit. Empty fields use three empty arrays. Both axes are value axes; the default domain is the outer grid boundary, and zoom clips the exact cell rectangles. Nonuniform spacing is preserved. Colors use a sequential scale; tables retain boundaries and original cell values. There is no interpolation, contouring, or arbitrary mesh support. The categorical `heatmap` contract is unchanged.
-
-```python
-#| id: grid-field-charts
-from math import sin, cos
-x_edges = [-3, -1, 0, 0.5, 2, 4]
-y_edges = [-2, -0.5, 0, 1, 3]
-values = [[sin((x0 + x1) / 2) * cos((y0 + y1) / 2)
-    for x0, x1 in zip(x_edges, x_edges[1:])]
-    for y0, y1 in zip(y_edges, y_edges[1:])]
-display_chart({"kind": "field", "xEdges": x_edges, "yEdges": y_edges,
-    "values": values, "xLabel": "X", "yLabel": "Y"})
-```
-
 ## Resource Limits
 
 Producers enforce limits inside each language worker before `postMessage`; the main thread independently validates the bounded response again. Limits are UTF-8 byte limits and are cumulative for each run where noted:
@@ -493,6 +385,114 @@ displayChart (JsonObject
   [("kind", JsonString "field"), ("xEdges", edges [-2, 0, 3]),
    ("yEdges", edges [-1, 1]),
    ("values", JsonArray [JsonArray [JsonNumber 2, JsonNull]])])
+```
+
+## Chart Kinds and Annotations
+
+These kinds and options extend the [chart schema](#chart-schema). Every spec works unchanged through Rust `emit_chart!`, Python `display_chart`, and Haskell `displayChart`; the examples use whichever language keeps them short.
+
+### Stacked charts
+
+Bar and area series accept a nonempty `stack` group. Positive and negative values accumulate separately from zero on a value axis. Missing bar values do not contribute. Area series in each group must have identical, ordered X coordinates; numeric/time coordinates must increase. Tooltips and data tables retain the individual values. Percent normalization is not performed.
+
+```rust
+//| id: stacked-charts
+//| crates: []
+let series = serde_json::json!([
+    { "name": "First", "stack": "total", "points": [[0, 2], [1, -2]] },
+    { "name": "Second", "stack": "total", "points": [[0, 3], [1, -3]] }
+]);
+emit_area_chart!(&series, "Observation", "Amount");
+emit_bar_chart!(&["A", "B"], &serde_json::json!([
+    { "name": "First", "stack": "total", "values": [2, -2] },
+    { "name": "Second", "stack": "total", "values": [3, null] }
+]));
+```
+
+### Horizontal bars
+
+Set bar `orientation: "horizontal"` to use a numeric x axis and category y axis. Labels, formats, and bounds refer to screen axes. The first category appears at the top. Missing values, multiple series, and stack groups work in either orientation.
+
+```rust
+//| id: horizontal-bars
+//| crates: []
+emit_bar_chart!(&["North America", "South America", "Europe"], &[12, -4, 8],
+    options = serde_json::json!({ "orientation": "horizontal", "xLabel": "Change", "yLabel": "Region" }));
+```
+
+### Error bars and interval bands
+
+Use `errorbar` or `band` with `[x, center, lower, upper]` points satisfying `lower <= center <= upper`. Set all three Y values to null for a gap. Bands connect adjacent valid points with straight segments and require increasing value/time/log X coordinates. Y uses value or log; log intervals must be positive. Statistical estimation belongs in the cell. A single isolated band point is shown as an interval glyph. Chart and series colors follow the existing styles; interval charts also accept chart-level `lineWidth`.
+
+```python
+#| id: interval-charts
+for kind in ("errorbar", "band"):
+    display_chart({"kind": kind, "xLabel": "Observation", "yLabel": "Estimate",
+        "series": [{"name": "Estimate and interval", "points": [
+            [0, -3, -5, -2], [1, 0, -2, 3], [2, 4, 3, 6]]}]})
+```
+
+### Reference lines and ranges
+
+Use `annotations` for axis-coordinate lines and ranges. Annotations do not expand axis extents and are clipped to the viewport. Empty charts can display annotations with explicit axis bounds. Categories reference an existing name or index; time coordinates use the chart time contract, and log positions must be positive. Limit: 100 annotations, each label a single line of at most 256 UTF-8 bytes. Line styles accept hex `color`, `lineType` (solid/dashed/dotted), and `width` (0.5–4); range styles accept hex `color` and `opacity` (0–1).
+
+```python
+#| id: chart-annotations
+display_chart({"kind": "line", "xMin": 0, "xMax": 10, "yMin": 0, "yMax": 1,
+    "series": [], "annotations": [
+        {"kind": "line", "axis": "y", "value": 0.5, "label": "Threshold"},
+        {"kind": "range", "axis": "x", "from": 2, "to": 4, "label": "Window"}]})
+```
+
+### Heatmap color scales
+
+Use `colorMin`/`colorMax` to fix the color domain across reruns. `colorScale: "diverging"` places `center` (default 0) at the middle color, even with asymmetric explicit bounds. Automatic bounds are symmetric about the center; each explicit bound takes precedence. The center must lie strictly inside the resulting domain. Out-of-range values saturate at endpoint colors. Empty scales use 0–1 or center ±1; constant sequential domains use the middle color. `style.palette` owns the colors; diverging palettes require an odd number of at least three colors. Changing the authored domain resets the color-range selection; theme changes preserve it.
+
+```python
+#| id: heatmap-color-scales
+display_chart({"kind": "heatmap", "colorScale": "diverging",
+    "colorMin": -2, "colorMax": 8, "center": 0,
+    "data": [[0, 0, -2], [1, 0, 0], [2, 0, 8]]})
+```
+
+### Box plots
+
+A `boxplot` accepts precomputed `[min, q1, median, q3, max]` values, one per category per series. Values must be finite and ordered; null denotes a missing box. The Y axis accepts value or log (all five statistics must then be positive). Authors compute the statistics and explain the whisker definition. No raw-sample aggregation or separate outlier collection is performed.
+
+```python
+#| id: boxplot-charts
+display_chart({"kind": "boxplot", "categories": ["First", "Second"],
+    "series": [{"name": "Measurements", "values": [
+        [-5, -3, -2, 0, 4], [1, 2, 3, 4, 8]]}]},
+    caption="Whiskers show the observed minimum and maximum.")
+```
+
+### Bubble charts
+
+Bubble points are `[x, y, size]` or `[x, y, size, color]`. Sizes are finite and nonnegative; the default maps area proportionally, with diameter 0–40px and the largest supplied size as the upper domain. Zero is invisible. `sizeMapping` accepts positive `maxValue`, `minPixels`, `maxPixels` (`0 <= min < max <= 100`), and `scale: "area" | "radius"`. Positive values are clamped to the requested pixel range; a positive constant domain uses the maximum diameter. Color values require explicit `colorMapping: { min, max, palette? }`; values outside the range saturate. Missing/null color uses the series color. `style.palette` colors series; `colorMapping.palette` owns the continuous color gradient. Large mode is disabled to preserve point-level mappings.
+
+```python
+#| id: bubble-charts
+display_chart({"kind": "bubble", "sizeMapping": {"maxValue": 100},
+    "colorMapping": {"min": 0, "max": 10},
+    "series": [{"name": "Observations", "points": [
+        [0, 2, 25, 2], [1, 3, 100, 8], [2, 1, 50, None]]}]})
+```
+
+### Grid fields on value axes
+
+A `field` uses strictly increasing finite `xEdges` and `yEdges` and a row-major `values` matrix: rows index Y intervals, columns index X intervals. Its shape is `(yEdges.length - 1) × (xEdges.length - 1)`. Null cells remain transparent and count toward the 100,000-cell limit. Empty fields use three empty arrays. Both axes are value axes; the default domain is the outer grid boundary, and zoom clips the exact cell rectangles. Nonuniform spacing is preserved. Colors use a sequential scale; tables retain boundaries and original cell values. There is no interpolation, contouring, or arbitrary mesh support. The categorical `heatmap` contract is unchanged.
+
+```python
+#| id: grid-field-charts
+from math import sin, cos
+x_edges = [-3, -1, 0, 0.5, 2, 4]
+y_edges = [-2, -0.5, 0, 1, 3]
+values = [[sin((x0 + x1) / 2) * cos((y0 + y1) / 2)
+    for x0, x1 in zip(x_edges, x_edges[1:])]
+    for y0, y1 in zip(y_edges, y_edges[1:])]
+display_chart({"kind": "field", "xEdges": x_edges, "yEdges": y_edges,
+    "values": values, "xLabel": "X", "yLabel": "Y"})
 ```
 
 ## When to Use Rich Output
