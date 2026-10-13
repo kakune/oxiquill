@@ -280,11 +280,11 @@ export default function ChartOutput({ artifact, idPrefix, labels }: ChartOutputP
   const titleId = idPrefix + '-title';
   const captionId = displayed.caption ? idPrefix + '-caption' : undefined;
   const descriptionId = idPrefix + '-description';
-  const title = displayed.title ?? displayed.spec.title ?? labels.chartTitle(displayed.spec.kind);
-  const subtitle =
-    displayed.title && displayed.spec.title && displayed.title !== displayed.spec.title
-      ? displayed.spec.title
-      : undefined;
+  const artifactTitle = displayed.title?.trim() ? displayed.title : undefined;
+  const specTitle = displayed.spec.title?.trim() ? displayed.spec.title : undefined;
+  const authoredTitle = artifactTitle ?? specTitle;
+  const title = authoredTitle ?? labels.chartTitle(displayed.spec.kind);
+  const subtitle = artifactTitle && specTitle && artifactTitle !== specTitle ? specTitle : undefined;
   const legendSeries =
     'series' in displayed.spec ? displayed.spec.series : [{ name: labels.chartTitle(displayed.spec.kind) }];
   const legendPageCount = Math.max(1, Math.ceil(legendSeries.length / 25));
@@ -324,7 +324,9 @@ export default function ChartOutput({ artifact, idPrefix, labels }: ChartOutputP
       aria-describedby={[captionId, descriptionId].filter(Boolean).join(' ')}
     >
       <figcaption>
-        <strong id={titleId}>{title}</strong>
+        <strong id={titleId} class={authoredTitle ? undefined : 'doc-visually-hidden'}>
+          {title}
+        </strong>
         {subtitle ? <span>{subtitle}</span> : null}
         {displayed.caption ? <span id={captionId}>{displayed.caption}</span> : null}
       </figcaption>

@@ -45,6 +45,45 @@ afterEach(() => {
 });
 
 describe('persistent chart updates', () => {
+  it.each([
+    [undefined, undefined, 'Line chart', true, undefined],
+    ['', '  ', 'Line chart', true, undefined],
+    ['  ', '', 'Line chart', true, undefined],
+    ['Artifact', undefined, 'Artifact', false, undefined],
+    [undefined, 'Spec', 'Spec', false, undefined],
+    ['', 'Spec', 'Spec', false, undefined],
+    ['Artifact', '  ', 'Artifact', false, undefined],
+    ['Same', 'Same', 'Same', false, undefined],
+    ['Artifact', 'Spec', 'Artifact', false, 'Spec']
+  ])('keeps an accessible heading for titles %j / %j', async (title, specTitle, name, hidden, subtitle) => {
+    const view = render(
+      <ChartOutput
+        artifact={{ kind: 'chart', title, spec: { ...line, title: specTitle } }}
+        idPrefix="heading"
+        labels={labels}
+      />
+    );
+    await waitFor(() => expect(chart.setOption).toHaveBeenCalled());
+    const figure = screen.getByRole('figure', { name: String(name) });
+    const caption = figure.querySelector('figcaption');
+    const heading = caption?.querySelector('strong');
+    expect(heading?.classList.contains('doc-visually-hidden')).toBe(hidden);
+    expect(caption?.querySelector('span')?.textContent).toBe(subtitle);
+    view.rerender(
+      <ChartOutput
+        artifact={{ kind: 'chart', title: 'Updated', caption: 'Context', spec: line }}
+        idPrefix="heading"
+        labels={labels}
+      />
+    );
+    await waitFor(() =>
+      expect(screen.getByRole('figure', { name: 'Updated' })).toHaveAccessibleDescription(
+        expect.stringContaining('Context')
+      )
+    );
+    expect(heading).not.toHaveClass('doc-visually-hidden');
+  });
+
   it.each([false, true])('switches renderers while respecting a changed range (%s)', async (changedRange) => {
     const view = render(output(line));
     await waitFor(() => expect(chart.setOption).toHaveBeenCalledOnce());

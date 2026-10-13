@@ -55,6 +55,7 @@ function Gallery() {
             <ChartOutput
               artifact={{
                 kind: 'chart',
+                title: query.get('artifactTitle') ?? undefined,
                 spec: {
                   ...updatedChart(spec, revision),
                   ...(clearAnnotations ? { annotations: [] } : {}),
@@ -66,6 +67,7 @@ function Gallery() {
                     : {}),
                   ...(!formatted ? { style: undefined } : {}),
                   ...(revision ? { title: `Updated ${name}` } : {}),
+                  ...(query.has('specTitle') ? { title: query.get('specTitle') ?? '' } : {}),
                   ...(query.has('longText')
                     ? { title: 'T'.repeat(16000), xLabel: 'X'.repeat(16000), yLabel: 'Y'.repeat(16000) }
                     : {}),
@@ -79,7 +81,7 @@ function Gallery() {
                       }
                     : {})
                 },
-                caption: `Revision ${revision}`
+                caption: query.get('caption') === 'none' ? undefined : `Revision ${revision}`
               }}
               idPrefix={name}
               labels={labelsForLanguage(locale)}
