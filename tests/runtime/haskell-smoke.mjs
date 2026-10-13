@@ -21,6 +21,10 @@ const result = await testGeneratedHaskellCells({
       validateOutputArtifacts(outputs).filter((artifact) => artifact.status === 'error'),
       []
     );
+    if (options.cell.id.endsWith('__haskell-grid-field')) {
+      assert.equal(outputs.length, 1);
+      assert.deepEqual(outputs[0].spec, { kind: 'field', xEdges: [-2, 0, 3], yEdges: [-1, 1], values: [[2, null]] });
+    }
     if (options.cell.id.endsWith('__haskell-structured-output')) {
       assert.deepEqual(
         outputs.map((output) => output.kind),

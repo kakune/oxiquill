@@ -12,11 +12,14 @@ export function loadECharts(): Promise<EChartsCore> {
     .then(([echarts, charts, components, renderers]) => {
       echarts.use([
         charts.BarChart,
+        charts.BoxplotChart,
         charts.CustomChart,
         charts.HeatmapChart,
         charts.LineChart,
         charts.ScatterChart,
         components.GridComponent,
+        components.MarkLineComponent,
+        components.MarkAreaComponent,
         components.LegendComponent,
         components.TooltipComponent,
         components.VisualMapComponent,

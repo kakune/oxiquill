@@ -216,7 +216,6 @@ describe('persistent chart updates', () => {
     });
     await waitFor(() => expect(chart.setOption).toHaveBeenCalledTimes(2));
     expect(chart.setOption).toHaveBeenLastCalledWith({
-      xAxis: { axisLine: { show: false } },
       series: [{ id: 'line:0', showSymbol: true }]
     });
     act(() => {
@@ -226,7 +225,6 @@ describe('persistent chart updates', () => {
     });
     await waitFor(() => expect(chart.setOption).toHaveBeenCalledTimes(3));
     expect(chart.setOption).toHaveBeenLastCalledWith({
-      xAxis: { axisLine: { show: true } },
       series: [{ id: 'line:0', showSymbol: false }]
     });
     expect(chart.convertToPixel).not.toHaveBeenCalled();

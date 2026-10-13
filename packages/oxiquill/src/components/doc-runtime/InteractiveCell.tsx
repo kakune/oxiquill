@@ -25,7 +25,7 @@ export default function InteractiveCell({ cell: initialCell, cellId }: Interacti
 
   if (!cell) {
     return (
-      <section class="doc-cell doc-cell--error">
+      <section class="doc-cell doc-cell--error not-content">
         <p class="error-state" role="alert">
           {labels.unknownCell(cellId)}
         </p>
@@ -77,7 +77,7 @@ function InteractiveCellPanel({
   return (
     <section
       ref={section}
-      class="doc-cell"
+      class="doc-cell not-content"
       aria-labelledby={ids.title}
       data-cell-id={cell.id}
       data-share-inputs={sharedInputMetadata(cell)}

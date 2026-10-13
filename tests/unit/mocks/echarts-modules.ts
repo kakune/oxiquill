@@ -12,3 +12,7 @@ export const MarkLineComponent = {};
 export const TooltipComponent = {};
 export const VisualMapComponent = {};
 export const CustomChart = {};
+
+export const MarkAreaComponent = {};
+
+export const BoxplotChart = {};

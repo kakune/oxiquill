@@ -16,6 +16,7 @@ export function chartGalleryConfig(baseDirectory = process.env.CHART_BASE_DIR) {
     resolve: {
       alias: {
         '@chart-source': source,
+        '@chart-fixtures': resolve(baseDirectory || repository, 'tests/fixtures/chart-specs.ts'),
         '@starlight-props': resolve(starlightStyles, 'props.css'),
         echarts: resolve(repository, 'packages/oxiquill/node_modules/echarts'),
         'preact/jsx-dev-runtime': fileURLToPath(import.meta.resolve('preact/jsx-dev-runtime')),
@@ -27,7 +28,11 @@ export function chartGalleryConfig(baseDirectory = process.env.CHART_BASE_DIR) {
     },
     oxc: { jsx: { runtime: 'automatic', importSource: 'preact' } },
     optimizeDeps: { rolldownOptions: { transform: { jsx: { runtime: 'automatic', importSource: 'preact' } } } },
-    server: { port: 4323, strictPort: true, fs: { allow: [repository, source] } }
+    server: {
+      port: 4323,
+      strictPort: true,
+      fs: { allow: [repository, source, resolve(baseDirectory || repository, 'tests/fixtures')] }
+    }
   });
 }
 

@@ -21,7 +21,30 @@ export function chartCoordinates(spec: ChartSpec): {
 } {
   switch (spec.kind) {
     case 'bar':
-      return { x: spec.categories, y: spec.series.flatMap((series) => series.values), value: [] };
+      return spec.orientation === 'horizontal'
+        ? { x: spec.series.flatMap((series) => series.values), y: spec.categories, value: [] }
+        : { x: spec.categories, y: spec.series.flatMap((series) => series.values), value: [] };
+    case 'errorbar':
+    case 'band': {
+      const points = spec.series.flatMap((series) => series.points);
+      return { x: points.map((point) => point[0]), y: points.flatMap((point) => point.slice(1)), value: [] };
+    }
+    case 'field':
+      return { x: spec.xEdges, y: spec.yEdges, value: spec.values.flat() };
+    case 'bubble': {
+      const points = spec.series.flatMap((series) => series.points);
+      return {
+        x: points.map((point) => point[0]),
+        y: points.map((point) => point[1]),
+        value: points.map((point) => point[3])
+      };
+    }
+    case 'boxplot':
+      return {
+        x: spec.categories,
+        y: spec.series.flatMap((series) => series.values.flatMap((value) => value ?? [])),
+        value: []
+      };
     case 'histogram':
       return {
         x: spec.bins.flatMap((bin) => [bin[0], bin[1]]),

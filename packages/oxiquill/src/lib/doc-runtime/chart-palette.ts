@@ -15,3 +15,8 @@ export const heatmapPalette = {
   light: ['#d9f2f0', '#0f766e'],
   dark: ['#12312f', '#53d3c9']
 } as const;
+
+export const divergingPalette = {
+  light: ['#3987e5', '#e5e7eb', '#d95926'],
+  dark: ['#3987e5', '#4b5563', '#d95926']
+} as const;

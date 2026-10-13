@@ -28,6 +28,11 @@
   outline-offset: 3px;
 }
 
+/*
+ * Runtime roots rendered inside Markdown carry Starlight's `not-content` class, so content flow
+ * margins and typography do not leak into component layouts. Spacing comes from `gap`, and these
+ * rules declare every element style the components rely on.
+ */
 .doc-cell,
 .interactive-panel {
   display: grid;
@@ -42,15 +47,24 @@
 .doc-cell__header,
 .interactive-panel__header {
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
   justify-content: space-between;
   gap: 1rem;
 }
 
+.doc-cell__header > :first-child,
+.interactive-panel__header > :first-child {
+  flex: 1 1 12rem;
+  min-width: 0;
+}
+
 .doc-cell__header h3,
 .interactive-panel__header h3 {
   margin: 0.1rem 0 0;
+  color: var(--sl-color-white);
   font-size: 1.1rem;
+  font-weight: 600;
   line-height: 1.35;
 }
 
@@ -71,16 +85,18 @@
   color: white;
   font: inherit;
   font-weight: 650;
+  white-space: nowrap;
   cursor: pointer;
-  margin-top: 0;
 }
 
 .doc-cell__actions,
 .interactive-actions {
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
   justify-content: flex-end;
   gap: 0.5rem;
+  margin-inline-start: auto;
 }
 
 .secondary-button {
@@ -92,6 +108,7 @@
   color: var(--sl-color-text);
   font: inherit;
   font-weight: 650;
+  white-space: nowrap;
   cursor: pointer;
 }
 
@@ -115,10 +132,17 @@
   border-radius: 6px;
 }
 
+.doc-source .shiki,
+.run-output,
+.error-output {
+  border: 1px solid var(--sl-color-gray-5);
+}
+
 .doc-source .shiki {
   margin: 0;
   padding: 0.85rem;
   overflow: visible;
+  border-radius: 6px;
   font-size: 0.9rem;
   line-height: 1.6;
 }
@@ -149,6 +173,7 @@
   padding: 0.85rem;
   background: #111827;
   color: #f9fafb;
+  font-size: var(--sl-text-code);
 }
 
 .error-output {
@@ -158,6 +183,7 @@
   border-radius: 6px;
   background: #3f1111;
   color: #fee2e2;
+  font-size: var(--sl-text-code);
 }
 
 .doc-input-grid {
@@ -365,6 +391,7 @@
 }
 
 .doc-html-output {
+  display: block;
   width: 100%;
   min-height: 12rem;
   border: 1px solid color-mix(in srgb, var(--sl-color-gray-5), transparent 35%);
@@ -448,6 +475,8 @@
   top: 0;
   z-index: 1;
   background: var(--sl-color-bg);
+  color: var(--sl-color-white);
+  font-weight: 600;
 }
 
 .doc-table-output th button {
@@ -490,6 +519,8 @@
   justify-content: flex-start;
 }
 
+.doc-chart-output__actions button,
+.doc-chart-output__legend button,
 .doc-table-output__controls button,
 .doc-table-output__controls select {
   min-height: 2rem;
@@ -500,11 +531,15 @@
   font: inherit;
 }
 
+.doc-chart-output__actions button,
+.doc-chart-output__legend button,
 .doc-table-output__controls button {
-  padding: 0 0.65rem;
+  padding: 0.2rem 0.65rem;
   cursor: pointer;
 }
 
+.doc-chart-output__actions button:disabled,
+.doc-chart-output__legend button:disabled,
 .doc-table-output__controls button:disabled {
   cursor: not-allowed;
   opacity: 0.62;

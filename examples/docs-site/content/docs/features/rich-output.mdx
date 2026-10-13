@@ -33,7 +33,7 @@ Table columns contain `key`, `label`, and optional `type`: `string`, `number`, `
 
 ## Chart Schema
 
-All chart specs accept optional `title`, `xLabel`, `yLabel`, `xType`, `yType`, `legend`, `tooltip`, and `dataZoom`. Axis types are `value`, `category`, `time`, and `log`. Unspecified axes default to `value`, except the category x axis intrinsic to bar charts. A heatmap always has category axes on both dimensions: its `xType` and `yType` may be omitted or set to `category`, while `value`, `time`, and `log` are rejected.
+All chart specs accept optional `title`, `xLabel`, `yLabel`, `xType`, `yType`, `legend`, `tooltip`, and `dataZoom`. Axis types are `value`, `category`, `time`, and `log`. Unspecified axes default to `value`, except the category axis of bar charts (x for vertical, y for horizontal) and the category x axis of box plots. A heatmap always has category axes on both dimensions: its `xType` and `yType` may be omitted or set to `category`, while `value`, `time`, and `log` are rejected.
 
 - `value` coordinates are finite numbers, and `log` coordinates are finite numbers greater than zero.
 - `time` coordinates are finite epoch milliseconds or ISO-8601 strings in `YYYY-MM-DDTHH:mm:ss[.sss]Z` or `YYYY-MM-DDTHH:mm:ss[.sss]±HH:mm` form. Calendar fields and the explicit time zone must be valid.
@@ -44,6 +44,10 @@ All chart specs accept optional `title`, `xLabel`, `yLabel`, `xType`, `yType`, `
 - `bar`: string `categories[]` plus series of numeric-or-null `values[]` with matching length.
 - `histogram`: `bins[]` as finite `[lower, upper, count]` tuples, where `lower < upper` and count is non-negative.
 - `heatmap`: optional string `xCategories`/`yCategories` arrays and finite `[x, y, value]` cells on two category axes.
+- `errorbar` / `band`: series of `[x, center, lower, upper]` intervals.
+- `boxplot`: categories and precomputed `[min, q1, median, q3, max]` summaries.
+- `bubble`: `[x, y, size, color?]` points with size and color mappings.
+- `field`: value-axis `xEdges`/`yEdges` and a `values` matrix.
 
 Empty charts and equal point domains are valid. Heatmaps report X- and Y-category counts plus the heat-value range; their color scale uses the actual heat values, with a `0–1` fallback only for an empty dataset. Charts expose a textual title/caption and bounded accessible summary or equivalent table. The implementation canvas is hidden from accessibility APIs when that equivalent is present.
 
@@ -84,7 +88,7 @@ For a numeric range spanning zero, data values whose absolute magnitude is at mo
 
 **Migration:** time-axis ticks, tooltips, and summaries now use UTC rather than the reader's local timezone. Inputs still require epoch milliseconds or ISO-8601 strings with an explicit timezone.
 
-Titles appear once above the plot. When artifact and spec titles differ, the spec title becomes a subtitle. HTML legends use keyboard-operable series buttons, with 25 series per page. Unnamed series receive default names. Long axis and category labels are shortened; summaries retain axis names and tooltips retain category and series names. Category labels rotate before thinning. Split charts with many long category names; a horizontal bar API is not yet available.
+Titles appear once above the plot. When artifact and spec titles differ, the spec title becomes a subtitle. HTML legends use keyboard-operable series buttons, with 25 series per page. Unnamed series receive default names. Long axis and category labels are shortened; summaries retain axis names and tooltips retain category and series names. Category labels rotate before thinning. Split charts with many long category names; use `orientation: "horizontal"` for long category names.
 
 The fixed eight-color palette is shared across light and dark themes. On default backgrounds, adjacent colors (including the wrap to the first color) meet OKLab distance 15 in normal vision and 8 in protanopia, deuteranopia, and tritanopia simulations; each color meets 3:1 background contrast. This does not guarantee every pair of series is distinguishable. Palette reuse changes line patterns or scatter symbols; split charts with more than eight series when possible. Authors should check custom palettes for background contrast and color-vision differences. Heatmaps use a sequential, single-hue gradient with monotone lightness.
 
@@ -271,7 +275,7 @@ Each cell resets style settings before applying these defaults, so a previous ce
 
 Figure titles and axis labels supply image alternative text. SVG text uses browser fonts (`svg.fonttype: 'none'`), including Japanese fallback fonts installed on the reader's device. SVG larger than 10 MiB falls back to PNG at 150 DPI with a stderr diagnostic. PNG rendering needs fonts in the Python environment to draw Japanese glyphs. Image and cumulative run budgets still apply; oversized PNG output produces an artifact error.
 
-`display_chart(spec, *, id=None, title=None, caption=None)` emits any of the six interactive chart kinds using only dict/list data, without pandas. Pass style inside the spec and artifact metadata separately.
+`display_chart(spec, *, id=None, title=None, caption=None)` emits any of the supported interactive chart kinds using only dict/list data, without pandas. Pass style inside the spec and artifact metadata separately.
 
 `display_line(df, *, x, y, id=None, title=None, caption=None, style=None)` builds a line chart from DataFrame columns. `y` is a column name or a nonempty list of distinct column names. Row and column order are preserved, with at most 100,000 points across all series. X values may be numbers, string categories, or timezone-aware datetimes; Y values must be finite numbers. Datetimes become UTC epoch milliseconds. Missing values, NaN, infinity, NaT, and naive datetimes produce a local error identifying the row position and column. Valid neighboring outputs remain visible; missing values are never silently connected.
 
@@ -321,7 +325,7 @@ Rust cells use explicit `emit_*` macros. Supported macros include:
 - `emit_chart!`, `emit_area_chart!`, `emit_line_chart!`, `emit_scatter_chart!`, `emit_bar_chart!`, `emit_histogram!`, and `emit_heatmap!`
 - `emit_line_plot!` for compatibility with the original line-plot helper; new code should convert coordinates explicitly and use `emit_line_chart!`.
 
-`emit_chart!(spec)` accepts all six chart kinds. Optional `metadata = ...` supplies artifact `id/title/caption`, separately from spec `title/xLabel/yLabel`; the artifact title takes display precedence. Null metadata fields are omitted, and other metadata fields produce a local diagnostic. `emit_area_chart!` accepts the same points/series, axis labels, trailing style, and `options = ...` forms as line charts. Existing macro argument forms remain supported. An invalid spec produces a local diagnostic while valid neighboring outputs remain visible.
+`emit_chart!(spec)` accepts all supported chart kinds. Optional `metadata = ...` supplies artifact `id/title/caption`, separately from spec `title/xLabel/yLabel`; the artifact title takes display precedence. Null metadata fields are omitted, and other metadata fields produce a local diagnostic. `emit_area_chart!` accepts the same points/series, axis labels, trailing style, and `options = ...` forms as line charts. Existing macro argument forms remain supported. An invalid spec produces a local diagnostic while valid neighboring outputs remain visible.
 
 ```rust
 emit_chart!(serde_json::json!({
@@ -375,3 +379,119 @@ Use stdout for short explanatory text. Use JSON when readers need the exact stru
 Copy, sort, pagination, validation, running, completion, and failure states are keyboard-operable and announced with localized English/Japanese labels. Sandboxed HTML intentionally has no script or same-origin permission, sends no referrer, and blocks external subresources by default; see [Support and Security](/guides/support-and-security/) for the exact policy and trust boundary.
 
 Table interaction state is scoped to one execution result. A new result resets the page, sort, and copy status. Rerenders of the same result preserve a compatible sort and page, but row shrinkage stores the clamped page and a removed or replaced sorted column clears the sort.
+
+## Stacked charts
+
+Bar and area series accept a nonempty `stack` group. Positive and negative values accumulate separately from zero on a value axis. Missing bar values do not contribute. Area series in each group must have identical, ordered X coordinates; numeric/time coordinates must increase. Tooltips and data tables retain the individual values. Percent normalization is not performed.
+
+```rust
+//| id: stacked-charts
+//| crates: []
+let series = serde_json::json!([
+    { "name": "First", "stack": "total", "points": [[0, 2], [1, -2]] },
+    { "name": "Second", "stack": "total", "points": [[0, 3], [1, -3]] }
+]);
+emit_area_chart!(&series, "Observation", "Amount");
+emit_bar_chart!(&["A", "B"], &serde_json::json!([
+    { "name": "First", "stack": "total", "values": [2, -2] },
+    { "name": "Second", "stack": "total", "values": [3, null] }
+]));
+```
+
+## Horizontal bars
+
+Set bar `orientation: "horizontal"` to use a numeric x axis and category y axis. Labels, formats, and bounds refer to screen axes. The first category appears at the top. Missing values, multiple series, and stack groups work in either orientation.
+
+```rust
+//| id: horizontal-bars
+//| crates: []
+emit_bar_chart!(&["North America", "South America", "Europe"], &[12, -4, 8],
+    options = serde_json::json!({ "orientation": "horizontal", "xLabel": "Change", "yLabel": "Region" }));
+```
+
+## Error bars and interval bands
+
+Use `errorbar` or `band` with `[x, center, lower, upper]` points satisfying `lower <= center <= upper`. Set all three Y values to null for a gap. Bands connect adjacent valid points with straight segments and require increasing value/time/log X coordinates. Y uses value or log; log intervals must be positive. Statistical estimation belongs in the cell. A single isolated band point is shown as an interval glyph. Chart and series colors follow the existing styles; interval charts also accept chart-level `lineWidth`.
+
+```python
+#| id: interval-charts
+for kind in ("errorbar", "band"):
+    display_chart({"kind": kind, "xLabel": "Observation", "yLabel": "Estimate",
+        "series": [{"name": "Estimate and interval", "points": [
+            [0, -3, -5, -2], [1, 0, -2, 3], [2, 4, 3, 6]]}]})
+```
+
+## Reference lines and ranges
+
+Use `annotations` for axis-coordinate lines and ranges. Annotations do not expand axis extents and are clipped to the viewport. Empty charts can display annotations with explicit axis bounds. Categories reference an existing name or index; time coordinates use the chart time contract, and log positions must be positive. Limit: 100 annotations, each label a single line of at most 256 UTF-8 bytes. Line styles accept hex `color`, `lineType` (solid/dashed/dotted), and `width` (0.5–4); range styles accept hex `color` and `opacity` (0–1).
+
+```python
+#| id: chart-annotations
+display_chart({"kind": "line", "xMin": 0, "xMax": 10, "yMin": 0, "yMax": 1,
+    "series": [], "annotations": [
+        {"kind": "line", "axis": "y", "value": 0.5, "label": "Threshold"},
+        {"kind": "range", "axis": "x", "from": 2, "to": 4, "label": "Window"}]})
+```
+
+## Heatmap color scales
+
+Use `colorMin`/`colorMax` to fix the color domain across reruns. `colorScale: "diverging"` places `center` (default 0) at the middle color, even with asymmetric explicit bounds. Automatic bounds are symmetric about the center; each explicit bound takes precedence. The center must lie strictly inside the resulting domain. Out-of-range values saturate at endpoint colors. Empty scales use 0–1 or center ±1; constant sequential domains use the middle color. `style.palette` owns the colors; diverging palettes require an odd number of at least three colors. Changing the authored domain resets the color-range selection; theme changes preserve it.
+
+```python
+#| id: heatmap-color-scales
+display_chart({"kind": "heatmap", "colorScale": "diverging",
+    "colorMin": -2, "colorMax": 8, "center": 0,
+    "data": [[0, 0, -2], [1, 0, 0], [2, 0, 8]]})
+```
+
+## Box plots
+
+A `boxplot` accepts precomputed `[min, q1, median, q3, max]` values, one per category per series. Values must be finite and ordered; null denotes a missing box. The Y axis accepts value or log (all five statistics must then be positive). Authors compute the statistics and explain the whisker definition. No raw-sample aggregation or separate outlier collection is performed.
+
+```python
+#| id: boxplot-charts
+display_chart({"kind": "boxplot", "categories": ["First", "Second"],
+    "series": [{"name": "Measurements", "values": [
+        [-5, -3, -2, 0, 4], [1, 2, 3, 4, 8]]}]},
+    caption="Whiskers show the observed minimum and maximum.")
+```
+
+## Bubble charts
+
+Bubble points are `[x, y, size]` or `[x, y, size, color]`. Sizes are finite and nonnegative; the default maps area proportionally, with diameter 0–40px and the largest supplied size as the upper domain. Zero is invisible. `sizeMapping` accepts positive `maxValue`, `minPixels`, `maxPixels` (`0 <= min < max <= 100`), and `scale: "area" | "radius"`. Positive values are clamped to the requested pixel range; a positive constant domain uses the maximum diameter. Color values require explicit `colorMapping: { min, max, palette? }`; values outside the range saturate. Missing/null color uses the series color. `style.palette` colors series; `colorMapping.palette` owns the continuous color gradient. Large mode is disabled to preserve point-level mappings.
+
+```python
+#| id: bubble-charts
+display_chart({"kind": "bubble", "sizeMapping": {"maxValue": 100},
+    "colorMapping": {"min": 0, "max": 10},
+    "series": [{"name": "Observations", "points": [
+        [0, 2, 25, 2], [1, 3, 100, 8], [2, 1, 50, None]]}]})
+```
+
+## Grid fields on value axes
+
+A `field` uses strictly increasing finite `xEdges` and `yEdges` and a row-major `values` matrix: rows index Y intervals, columns index X intervals. Its shape is `(yEdges.length - 1) × (xEdges.length - 1)`. Null cells remain transparent and count toward the 100,000-cell limit. Empty fields use three empty arrays. Both axes are value axes; the default domain is the outer grid boundary, and zoom clips the exact cell rectangles. Nonuniform spacing is preserved. Colors use a sequential scale; tables retain boundaries and original cell values. There is no interpolation, contouring, or arbitrary mesh support. The categorical `heatmap` contract is unchanged.
+
+```python
+#| id: grid-field-charts
+from math import sin, cos
+x_edges = [-3, -1, 0, 0.5, 2, 4]
+y_edges = [-2, -0.5, 0, 1, 3]
+values = [[sin((x0 + x1) / 2) * cos((y0 + y1) / 2)
+    for x0, x1 in zip(x_edges, x_edges[1:])]
+    for y0, y1 in zip(y_edges, y_edges[1:])]
+display_chart({"kind": "field", "xEdges": x_edges, "yEdges": y_edges,
+    "values": values, "xLabel": "X", "yLabel": "Y"})
+```
+
+Haskell uses the same spec through `displayChart`.
+
+```haskell
+--| id: haskell-grid-field
+import Oxiquill.Output
+let edges values = JsonArray (map JsonNumber values)
+displayChart (JsonObject
+  [("kind", JsonString "field"), ("xEdges", edges [-2, 0, 3]),
+   ("yEdges", edges [-1, 1]),
+   ("values", JsonArray [JsonArray [JsonNumber 2, JsonNull]])])
+```

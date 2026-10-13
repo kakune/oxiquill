@@ -80,7 +80,9 @@ describe('chart display contracts', () => {
     expect(chartSpecToEChartsOptions(spec).series[0]).toMatchObject({
       data: [{ value: -1, itemStyle: { borderRadius: [0, 0, 3, 3] } }, 2, null]
     });
-    expect(chartSpecToEChartsOptions(spec).xAxis).toMatchObject({ axisLine: { show: true, onZero: true } });
+    expect(chartSpecToEChartsOptions(spec).series.find((series) => series.id === 'oxiquill:annotations')).toMatchObject(
+      { markLine: { data: [{ yAxis: 0 }] } }
+    );
     expect(chartSpecToEChartsOptions({ ...spec, series: [{ values: [1, 2, null] }] }).xAxis).toMatchObject({
       axisLine: { show: false }
     });
