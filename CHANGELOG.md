@@ -8,6 +8,20 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ### Added
 
+### Changed
+
+### Deprecated
+
+### Removed
+
+### Fixed
+
+### Security
+
+## [0.4.0] - 2026-10-13
+
+### Added
+
 - Reproducible chart performance measurements for 1,000, 10,000, and 100,000 points, including worker transfer, validation, rendering, updates, and zoom.
 - Signed stack groups for bar and area charts, horizontal bars, bounded axis annotations, and fixed or centered diverging heatmap color scales.
 - Error bars, interval bands, five-number box plots, area-scaled bubbles, and nonuniform grid fields through the existing Rust, Python, and Haskell chart APIs. New charts support accessible summaries, original-data tables, and PNG/SVG downloads.
@@ -32,7 +46,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 - PR CI separates site builds from runtime tests, removes duplicate consumer checks, and skips expensive jobs for Markdown-only changes. Release PRs retain the full 12-job matrix; `ci-ok` aggregates required results. Rust lint now checks formatting.
 - **Display changes:** untitled charts hide their default headings visually while retaining the chart kind as an accessible name. Empty and whitespace-only titles fall back to the same accessible name; authored titles and captions remain visible.
 - **Display changes:** tables preserve all digits of safe integers, use scientific notation for very large or small other values, normalize negative zero, and choose grouping consistently per column. Numeric cells expose original values in their title; CSV values remain unchanged.
-- **Breaking API migration (next minor):** cell results now require `outputs`; top-level `stdout/stderr/value/plots`, legacy result conversion, and the `PlotSpec/LinePlotSpec` public types are removed. Regenerate runtime artifacts after upgrading and update explicit Rust `CellOutput` early returns to contain artifacts. JSON artifact values and input values are unchanged. See the English and Japanese rich-output migration guide.
+- **Breaking API migration (0.4.0):** cell results now require `outputs`; top-level `stdout/stderr/value/plots`, legacy result conversion, and the `PlotSpec/LinePlotSpec` public types are removed. Regenerate runtime artifacts after upgrading and update explicit Rust `CellOutput` early returns to contain artifacts. JSON artifact values and input values are unchanged. See the English and Japanese rich-output migration guide.
 - **Display migration:** histograms render numeric intervals with their actual widths and gaps; legacy category x axes normalize to value. Density mode makes area represent count. Overlapping bins are rejected.
 - **Display changes:** chart titles appear above the plot, legends scroll on one line, and responsive axis labels and heatmap color scales avoid overlap. Axis numbers share consistent formatting and chart palettes now have tested contrast and color-vision distances, with line patterns and scatter symbols on color reuse.
 - **Migration:** bar and histogram charts reject time-valued y axes. Use a value axis for amounts or line/scatter for timestamps. Time-axis ticks, tooltips, and summaries now display UTC instead of the reader's local timezone.
@@ -136,7 +150,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 This release predates the maintained changelog. See the [v0.2.0 GitHub Release](https://github.com/kakune/oxiquill/releases/tag/v0.2.0) and tagged source for its complete contents.
 
-[Unreleased]: https://github.com/kakune/oxiquill/compare/v0.3.1...HEAD
+[Unreleased]: https://github.com/kakune/oxiquill/compare/v0.4.0...HEAD
+[0.4.0]: https://github.com/kakune/oxiquill/releases/tag/v0.4.0
 [0.3.1]: https://github.com/kakune/oxiquill/releases/tag/v0.3.1
 [0.3.0]: https://github.com/kakune/oxiquill/releases/tag/v0.3.0
 [0.2.0]: https://github.com/kakune/oxiquill/releases/tag/v0.2.0
