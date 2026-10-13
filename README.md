@@ -15,9 +15,12 @@ English is the root documentation language. Japanese pages are published under `
 - Python code cells run in a browser Pyodide worker.
 - Haskell code cells compiled to WASI WebAssembly at build time and run in the browser.
 - Input controls generated from cell metadata, including sliders, numbers, text fields, textareas, checkboxes, selects, and radio groups.
-- Rich output rendering for text, JSON, tables, charts, images, and sandboxed HTML.
-- Python display helpers for pandas tables, matplotlib figures, MIME bundles, JSON, HTML, images, and generic values.
-- Rust `emit_*` macros for text, JSON, tables, line/scatter/bar/histogram/heatmap charts, SVG/PNG images, and sandboxed HTML.
+- Reader controls for resetting inputs, copying opt-in input links, and editing and running local Python drafts.
+- Rich output rendering for text, JSON, tables, charts, images, and sandboxed HTML, with CSV table downloads and PNG/SVG chart downloads.
+- Interactive charts for lines, scatter points, areas, bars, histograms, heatmaps, error bars, interval bands, box plots, bubbles, and grid fields, with stacks, annotations, and keyboard-operable legends.
+- Python display helpers for pandas tables, matplotlib figures, declarative charts, MIME bundles, JSON, HTML, images, and generic values.
+- Rust `emit_*` macros for text, JSON, tables, every chart kind, SVG/PNG images, and sandboxed HTML.
+- Haskell JSON, table, and chart output through the bundled `Oxiquill.Output` module.
 - Inline and block math rendered with KaTeX.
 - Mermaid diagrams rendered from fenced code blocks.
 - Static media served from `examples/docs-site/public/media`.
@@ -332,9 +335,12 @@ Oxiquill は、MDX で書いた技術ノートを静的サイトとして公開�
 - Python コードセルをブラウザの Pyodide worker で実行する。
 - Haskell コードセルをビルド時に WASI WebAssembly 化し、ブラウザで実行する。
 - セル metadata から slider、number、text、textarea、checkbox、select、radio の入力 UI を生成する。
-- text、JSON、table、chart、image、sandboxed HTML のリッチ出力を表示する。
-- pandas table、matplotlib figure、MIME bundle、JSON、HTML、image、通常の値を Python display helper で表示する。
-- Rust の `emit_*` macro で text、JSON、table、line/scatter/bar/histogram/heatmap chart、SVG/PNG image、sandboxed HTML を出力する。
+- 読者が入力を初期値に戻し、共有を許可した入力のリンクをコピーし、Python の draft をローカルで編集・実行できる。
+- text、JSON、table、chart、image、sandboxed HTML のリッチ出力を表示し、表は CSV、グラフは PNG/SVG で保存できる。
+- 折れ線・散布図・面・棒・ヒストグラム・ヒートマップ・誤差棒・区間帯・箱ひげ図・バブル図・格子場の対話的グラフを、積み上げ・注釈・キーボード操作できる凡例とともに表示する。
+- pandas table、matplotlib figure、宣言的なグラフ、MIME bundle、JSON、HTML、image、通常の値を Python display helper で表示する。
+- Rust の `emit_*` macro で text、JSON、table、全種類の chart、SVG/PNG image、sandboxed HTML を出力する。
+- 同梱の `Oxiquill.Output` module で Haskell から JSON、table、chart を出力する。
 - KaTeX でインライン数式とブロック数式を表示する。
 - fenced code block から Mermaid 図を表示する。
 - `examples/docs-site/public/media` から静的メディアを配信する。

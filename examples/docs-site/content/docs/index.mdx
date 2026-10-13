@@ -19,10 +19,11 @@ Oxiquill is useful when documentation needs to explain a concept and show a runn
 ## Feature Overview
 
 - Rust cells are compiled to WebAssembly at build time and executed in the browser.
-- Python cells run in a Pyodide worker and can load vendored packages such as `numpy`, `pandas`, and `matplotlib`.
-- Haskell cells are compiled to WASI WebAssembly at build time and run in the browser with standard-library code.
+- Python cells run in a Pyodide worker and can load vendored packages such as `numpy`, `pandas`, and `matplotlib`; sites can allow more packages from the Pyodide lock with verified license notices.
+- Haskell cells are compiled to WASI WebAssembly at build time and run in the browser with standard-library code, emitting JSON, tables, and charts through the bundled `Oxiquill.Output` module.
 - Cell metadata generates input controls, run behavior, timeouts, and source visibility.
-- Rich output artifacts render text, JSON, tables, charts, images, and sandboxed HTML.
+- Readers can reset inputs, copy links for inputs the author opts in to sharing, and edit and run local Python drafts.
+- Rich output artifacts render text, JSON, tables, charts, images, and sandboxed HTML. Tables download as CSV, and charts download as PNG or SVG.
 - KaTeX renders inline and block math.
 - Mermaid renders diagrams from fenced `mermaid` code blocks.
 - Static media is served from `public/media` and referenced with `/media/...` URLs.
@@ -62,7 +63,7 @@ Generated runtime output is written under `.oxiquill/generated`, `.oxiquill/rust
 - [Getting Started](./guides/getting-started/) covers install, local preview, build, and static preview.
 - [Authoring Guide](./guides/authoring/) explains page structure, localization, cell metadata, media, and diagrams.
 - [Interactive Cells](./features/interactive-cells/) describes Rust, Python, and Haskell execution, inputs, run modes, helper crates, packages, and source display.
-- [Rich Output](./features/rich-output/) lists the output artifacts available from Rust and Python cells.
+- [Rich Output](./features/rich-output/) lists the output artifacts and chart kinds available from Rust, Python, and Haskell cells.
 - [Templates](./guides/templates/) gives starter MDX patterns for common note shapes.
 - [Licensing](./guides/licensing/) explains Oxiquill's dual license and the notices generated with every site.
 - [Sample Notes](./samples/logistic-map/) show complete prose-first pages that use Oxiquill features in context.
