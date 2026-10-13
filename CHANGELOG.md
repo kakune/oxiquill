@@ -10,34 +10,32 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 - Signed stack groups for bar and area charts, horizontal bars, bounded axis annotations, and fixed or centered diverging heatmap color scales.
 - Error bars, interval bands, five-number box plots, area-scaled bubbles, and nonuniform grid fields through the existing Rust, Python, and Haskell chart APIs. New charts support accessible summaries, original-data tables, and PNG/SVG downloads.
-- Input resets, explicit opt-in input sharing links, and local Python source editing with manual execution.
+- Input resets, explicit opt-in input sharing links, and local Python source editing with manual execution. Authors can disable editing for a Python cell with `editable: false`.
 - CSV downloads for all retrieved table rows, PNG/SVG chart downloads, and authored Canvas/SVG renderer selection.
 - Keyboard chart series controls, zoom reset, and bounded, paginated tables of original chart data.
-
 - Python `display_chart` for declarative interactive charts and bounded `display_line` for pandas columns, with explicit missing-value and timezone diagnostics.
-
 - Generic Rust `emit_chart!` with artifact metadata and `emit_area_chart!`, sharing bounded chart output helpers.
-
+- Haskell JSON, table, and chart output through the bundled `Oxiquill.Output` module, using length-prefixed stdout frames within the shared artifact limits.
+- `python.additionalPackages` for packages from the installed Pyodide lock, with pinned versions, verified hashes, and required license notices in the third-party report.
+- Experimental Python setup references behind `python.experimentalSetup`, which rerun a page-local setup cell before each execution in fresh globals.
+- Bounded print, display, and figure output from failed Python executions, shown separately from the previous successful result.
 - Stable chart series IDs and per-series colors, line patterns, steps, smoothing, and symbols; same-named legend entries remain independently selectable.
-
-- Numeric chart formats for significant digits, fixed decimals, units, and SI prefixes, shared by axes, tooltips, summaries, and heatmap scales.
-
+- Numeric chart formats for significant digits, fixed decimals, units, and SI prefixes, shared by axes, tooltips, summaries, and color scales.
 - Authored chart axis bounds and zero inclusion, with Rust chart options and a fixed-range logistic map example.
-
 - Chart height control through `spec.style.height` (200–800 pixels), with automatic heatmap sizing.
 - Real ECharts SVG layout checks and Chromium chart galleries for visual review in CI.
 
 ### Changed
 
 - **Display changes:** tables preserve all digits of safe integers, use scientific notation for very large or small other values, normalize negative zero, and choose grouping consistently per column. Numeric cells expose original values in their title; CSV values remain unchanged.
-
 - **Breaking API migration (next minor):** cell results now require `outputs`; top-level `stdout/stderr/value/plots`, legacy result conversion, and the `PlotSpec/LinePlotSpec` public types are removed. Regenerate runtime artifacts after upgrading and update explicit Rust `CellOutput` early returns to contain artifacts. JSON artifact values and input values are unchanged. See the English and Japanese rich-output migration guide.
-
 - **Display migration:** histograms render numeric intervals with their actual widths and gaps; legacy category x axes normalize to value. Density mode makes area represent count. Overlapping bins are rejected.
-
 - **Display changes:** chart titles appear above the plot, legends scroll on one line, and responsive axis labels and heatmap color scales avoid overlap. Axis numbers share consistent formatting and chart palettes now have tested contrast and color-vision distances, with line patterns and scatter symbols on color reuse.
 - **Migration:** bar and histogram charts reject time-valued y axes. Use a value axis for amounts or line/scatter for timestamps. Time-axis ticks, tooltips, and summaries now display UTC instead of the reader's local timezone.
 - **Display migration:** matplotlib uses the chart palette, browser-rendered SVG text, light grids, and white paper by default. Override rcParams or call `matplotlib.rcdefaults()` inside the cell to restore upstream defaults. Oversized SVG figures fall back to 150 DPI PNG with a diagnostic.
+- Downloaded table CSV files start with a UTF-8 byte order mark so spreadsheet applications detect the encoding; copied CSV text is unchanged.
+- Python `display_table` stops reading rows and columns at the table limits before conversion, including from infinite iterators, and reports unknown totals.
+- Haskell cells line-buffer standard output, reducing WASI writes for large output while keeping text and structured output in order.
 - Oxiquill now requires Astro 7.3.8 and Starlight 0.42.6; the starter, examples, and installation commands use these versions. Starlight 0.42 supports Chromium 116, Safari 17.0, and Firefox 125 or newer, and its mobile sidebar is now a popover.
 - Math renders with Oxiquill's pinned KaTeX 0.19.0 instead of rehype-katex. KaTeX 0.18 and later prefix internal class names such as `katex-sizing`, so custom CSS targeting KaTeX internals may need updates.
 - The generated starter pins pnpm 12.10.1. Contributor and CI tooling now uses Node.js 24.21.0, pnpm 12.10.1, npm 12.2.0 for publishing, and Rust 1.99.0; the published package and generated starter continue to support Node.js 24.0.0 or newer.
@@ -51,16 +49,15 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 ### Removed
 
 - The unused `doc-rust` legacy `PlotSpec`, `LinePlot`, and `line_plot` helpers; convert series coordinates explicitly and use `emit_line_chart!`.
-
 - Dependabot version and security update pull requests; dependency updates are made manually and Dependabot alerts still gate releases.
 
 ### Fixed
 
+- Runtime cells and Mermaid diagrams opt out of Starlight content styles, so Markdown spacing no longer offsets header actions such as Reset inputs and Edit Python, chart controls, or table controls.
+- Matplotlib figures from a failed Python execution are closed and no longer appear in later executions.
 - SI chart tick labels no longer expose floating-point division artifacts.
 - Histogram count and density labels now follow the page language in axes, tooltips, and summaries.
-
 - Theme changes preserve the chart instance, zoom, legend selection, and heatmap color-range selection.
-
 - Zero baselines for value-axis bars, histograms, and areas; isolated line/area points; negative bar rounding; and heatmap cell boundaries.
 - Matplotlib image alternatives now describe figure titles and axis labels.
 - Long chart captions stay within narrow figures in WebKit. UTC ticks retain calendar context and zoom precision; tooltips retain color markers and display missing values as `-`.
