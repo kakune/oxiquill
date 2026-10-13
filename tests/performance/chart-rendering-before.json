@@ -1,0 +1,1234 @@
+{
+  "revision": "3970e62f7c1d441536150c0ca0d6c3a88b64c355",
+  "label": "before",
+  "date": "2026-10-13T15:12:32.451Z",
+  "node": "v24.21.0",
+  "browser": "153.0.8010.12",
+  "cpu": "12th Gen Intel(R) Core(TM) i7-12700F",
+  "cpus": 20,
+  "memoryBytes": 25197961216,
+  "platform": "linux x64",
+  "viewport": [900, 700],
+  "chart": [720, 360],
+  "deviceScaleFactor": 1,
+  "throttling": "none",
+  "warmups": 1,
+  "runs": 5,
+  "measurements": [
+    {
+      "kind": "line",
+      "count": 1000,
+      "progressiveDisabled": false,
+      "samples": [
+        {
+          "initial": {
+            "bytes": 25608,
+            "legacyBytes": 51189,
+            "preparationMs": 0.20000000298023224,
+            "boundingMs": 2.7000000029802322,
+            "cloneMs": 0.20000000298023224,
+            "legacyCloneMs": 0.20000000298023224,
+            "workerRoundTripMs": 4,
+            "transferMs": 0.10009765625,
+            "normalizationMs": 2.199999988079071,
+            "optionMs": 4,
+            "renderMs": 47.400000005960464,
+            "setOptionMs": 35.8999999910593
+          },
+          "updated": {
+            "bytes": 25560,
+            "legacyBytes": 51093,
+            "preparationMs": 0.20000000298023224,
+            "boundingMs": 1.1000000089406967,
+            "cloneMs": 0.09999999403953552,
+            "legacyCloneMs": 0.20000000298023224,
+            "workerRoundTripMs": 4.0999999940395355,
+            "transferMs": 2,
+            "normalizationMs": 0.6000000089406967,
+            "optionMs": 0.29999999701976776,
+            "renderMs": 22.299999997019768,
+            "setOptionMs": 2.3999999910593033
+          },
+          "zoomMs": 10.200000002980232,
+          "mainThreadMs": 83.972
+        },
+        {
+          "initial": {
+            "bytes": 25608,
+            "legacyBytes": 51189,
+            "preparationMs": 0.19999998807907104,
+            "boundingMs": 2.5,
+            "cloneMs": 0.19999998807907104,
+            "legacyCloneMs": 0,
+            "workerRoundTripMs": 3.7000000029802322,
+            "transferMs": 0.2998046875,
+            "normalizationMs": 1.7999999970197678,
+            "optionMs": 3.0999999940395355,
+            "renderMs": 40.900000005960464,
+            "setOptionMs": 29.100000008940697
+          },
+          "updated": {
+            "bytes": 25560,
+            "legacyBytes": 51093,
+            "preparationMs": 0.10000000894069672,
+            "boundingMs": 1.0999999940395355,
+            "cloneMs": 0.20000000298023224,
+            "legacyCloneMs": 0.19999998807907104,
+            "workerRoundTripMs": 3.5999999940395355,
+            "transferMs": 1.699951171875,
+            "normalizationMs": 0.5,
+            "optionMs": 0.29999999701976776,
+            "renderMs": 15.200000002980232,
+            "setOptionMs": 2.3999999910593033
+          },
+          "zoomMs": 11.299999997019768,
+          "mainThreadMs": 70.491
+        },
+        {
+          "initial": {
+            "bytes": 25608,
+            "legacyBytes": 51189,
+            "preparationMs": 0.30000001192092896,
+            "boundingMs": 2.2999999970197678,
+            "cloneMs": 0.20000000298023224,
+            "legacyCloneMs": 0.20000000298023224,
+            "workerRoundTripMs": 3.5999999940395355,
+            "transferMs": 0.10009765625,
+            "normalizationMs": 1.7999999970197678,
+            "optionMs": 3.1000000089406967,
+            "renderMs": 39.3999999910593,
+            "setOptionMs": 28.399999991059303
+          },
+          "updated": {
+            "bytes": 25560,
+            "legacyBytes": 51093,
+            "preparationMs": 0.19999998807907104,
+            "boundingMs": 0.800000011920929,
+            "cloneMs": 0.09999999403953552,
+            "legacyCloneMs": 0.20000000298023224,
+            "workerRoundTripMs": 3.1000000089406967,
+            "transferMs": 1.39990234375,
+            "normalizationMs": 0.5,
+            "optionMs": 0.5999999940395355,
+            "renderMs": 16.099999994039536,
+            "setOptionMs": 2.1000000089406967
+          },
+          "zoomMs": 11.600000008940697,
+          "mainThreadMs": 67.701
+        },
+        {
+          "initial": {
+            "bytes": 25608,
+            "legacyBytes": 51189,
+            "preparationMs": 0.29999999701976776,
+            "boundingMs": 2.2999999970197678,
+            "cloneMs": 0.19999998807907104,
+            "legacyCloneMs": 0.10000000894069672,
+            "workerRoundTripMs": 3.5,
+            "transferMs": 0.10009765625,
+            "normalizationMs": 1.9000000059604645,
+            "optionMs": 2.8999999910593033,
+            "renderMs": 41.70000000298023,
+            "setOptionMs": 29.299999997019768
+          },
+          "updated": {
+            "bytes": 25560,
+            "legacyBytes": 51093,
+            "preparationMs": 0.19999998807907104,
+            "boundingMs": 1,
+            "cloneMs": 0.10000000894069672,
+            "legacyCloneMs": 0.19999998807907104,
+            "workerRoundTripMs": 3.9000000059604645,
+            "transferMs": 2.10009765625,
+            "normalizationMs": 0.5,
+            "optionMs": 0.3999999910593033,
+            "renderMs": 14.5,
+            "setOptionMs": 2.5
+          },
+          "zoomMs": 11.700000002980232,
+          "mainThreadMs": 68.717
+        },
+        {
+          "initial": {
+            "bytes": 25608,
+            "legacyBytes": 51189,
+            "preparationMs": 0.20000000298023224,
+            "boundingMs": 2.2999999970197678,
+            "cloneMs": 0.09999999403953552,
+            "legacyCloneMs": 0.10000000894069672,
+            "workerRoundTripMs": 3.5,
+            "transferMs": 0.10009765625,
+            "normalizationMs": 1.7999999970197678,
+            "optionMs": 2.8999999910593033,
+            "renderMs": 39.30000001192093,
+            "setOptionMs": 27.399999991059303
+          },
+          "updated": {
+            "bytes": 25560,
+            "legacyBytes": 51093,
+            "preparationMs": 0.09999999403953552,
+            "boundingMs": 0.9000000059604645,
+            "cloneMs": 0.10000000894069672,
+            "legacyCloneMs": 0.09999999403953552,
+            "workerRoundTripMs": 3.0999999940395355,
+            "transferMs": 1.5,
+            "normalizationMs": 0.5,
+            "optionMs": 0.29999999701976776,
+            "renderMs": 17.799999997019768,
+            "setOptionMs": 2.3999999910593033
+          },
+          "zoomMs": 11.300000011920929,
+          "mainThreadMs": 66.687
+        }
+      ]
+    },
+    {
+      "kind": "line",
+      "count": 10000,
+      "progressiveDisabled": false,
+      "samples": [
+        {
+          "initial": {
+            "bytes": 265299,
+            "legacyBytes": 530571,
+            "preparationMs": 0.7000000029802322,
+            "boundingMs": 9.700000002980232,
+            "cloneMs": 1.2000000029802322,
+            "legacyCloneMs": 0.8999999910593033,
+            "workerRoundTripMs": 17.200000002980232,
+            "transferMs": 0.900146484375,
+            "normalizationMs": 7.799999997019768,
+            "optionMs": 6.4000000059604645,
+            "renderMs": 62.8999999910593,
+            "setOptionMs": 34.8999999910593
+          },
+          "updated": {
+            "bytes": 264846,
+            "legacyBytes": 529665,
+            "preparationMs": 1,
+            "boundingMs": 6,
+            "cloneMs": 1.2000000029802322,
+            "legacyCloneMs": 1.2000000029802322,
+            "workerRoundTripMs": 13.600000008940697,
+            "transferMs": 1,
+            "normalizationMs": 3.5999999940395355,
+            "optionMs": 3.0999999940395355,
+            "renderMs": 22.5,
+            "setOptionMs": 5.700000002980232
+          },
+          "zoomMs": 14.300000011920929,
+          "mainThreadMs": 111.104
+        },
+        {
+          "initial": {
+            "bytes": 265299,
+            "legacyBytes": 530571,
+            "preparationMs": 0.7000000029802322,
+            "boundingMs": 10,
+            "cloneMs": 1.0999999940395355,
+            "legacyCloneMs": 1,
+            "workerRoundTripMs": 17.799999997019768,
+            "transferMs": 1.10009765625,
+            "normalizationMs": 7.5999999940395355,
+            "optionMs": 5.700000002980232,
+            "renderMs": 64.70000000298023,
+            "setOptionMs": 35.6000000089407
+          },
+          "updated": {
+            "bytes": 264846,
+            "legacyBytes": 529665,
+            "preparationMs": 0.7999999970197678,
+            "boundingMs": 6.799999997019768,
+            "cloneMs": 1.3999999910593033,
+            "legacyCloneMs": 1.300000011920929,
+            "workerRoundTripMs": 15.399999991059303,
+            "transferMs": 1.2001953125,
+            "normalizationMs": 4.700000002980232,
+            "optionMs": 3.7999999970197678,
+            "renderMs": 18,
+            "setOptionMs": 6.200000002980232
+          },
+          "zoomMs": 15.100000008940697,
+          "mainThreadMs": 117.465
+        },
+        {
+          "initial": {
+            "bytes": 265299,
+            "legacyBytes": 530571,
+            "preparationMs": 0.800000011920929,
+            "boundingMs": 12.399999991059303,
+            "cloneMs": 1.2000000029802322,
+            "legacyCloneMs": 0.8999999910593033,
+            "workerRoundTripMs": 20,
+            "transferMs": 1,
+            "normalizationMs": 7.0999999940395355,
+            "optionMs": 5.4000000059604645,
+            "renderMs": 60.8999999910593,
+            "setOptionMs": 34.1000000089407
+          },
+          "updated": {
+            "bytes": 264846,
+            "legacyBytes": 529665,
+            "preparationMs": 0.7999999970197678,
+            "boundingMs": 5.799999997019768,
+            "cloneMs": 1.2000000029802322,
+            "legacyCloneMs": 1.0999999940395355,
+            "workerRoundTripMs": 13.200000002980232,
+            "transferMs": 1.000244140625,
+            "normalizationMs": 3.5999999940395355,
+            "optionMs": 3.300000011920929,
+            "renderMs": 23.5,
+            "setOptionMs": 5.9000000059604645
+          },
+          "zoomMs": 14.399999991059303,
+          "mainThreadMs": 108.83500000000001
+        },
+        {
+          "initial": {
+            "bytes": 265299,
+            "legacyBytes": 530571,
+            "preparationMs": 0.699999988079071,
+            "boundingMs": 9.600000008940697,
+            "cloneMs": 1.2999999970197678,
+            "legacyCloneMs": 1,
+            "workerRoundTripMs": 16.899999991059303,
+            "transferMs": 1.099853515625,
+            "normalizationMs": 6.9000000059604645,
+            "optionMs": 5.5,
+            "renderMs": 64.29999999701977,
+            "setOptionMs": 34
+          },
+          "updated": {
+            "bytes": 264846,
+            "legacyBytes": 529665,
+            "preparationMs": 0.7999999970197678,
+            "boundingMs": 6.0999999940395355,
+            "cloneMs": 1.199999988079071,
+            "legacyCloneMs": 1.2000000029802322,
+            "workerRoundTripMs": 13.600000008940697,
+            "transferMs": 1.199951171875,
+            "normalizationMs": 3.5999999940395355,
+            "optionMs": 3.7000000029802322,
+            "renderMs": 23,
+            "setOptionMs": 5.5
+          },
+          "zoomMs": 13.899999991059303,
+          "mainThreadMs": 107.559
+        },
+        {
+          "initial": {
+            "bytes": 265299,
+            "legacyBytes": 530571,
+            "preparationMs": 0.7999999970197678,
+            "boundingMs": 12.5,
+            "cloneMs": 1.2999999970197678,
+            "legacyCloneMs": 1.1000000089406967,
+            "workerRoundTripMs": 20.200000002980232,
+            "transferMs": 1,
+            "normalizationMs": 7,
+            "optionMs": 5.5,
+            "renderMs": 59.5,
+            "setOptionMs": 33.099999994039536
+          },
+          "updated": {
+            "bytes": 264846,
+            "legacyBytes": 529665,
+            "preparationMs": 0.8999999910593033,
+            "boundingMs": 6.200000002980232,
+            "cloneMs": 1.2999999970197678,
+            "legacyCloneMs": 1.4000000059604645,
+            "workerRoundTripMs": 14,
+            "transferMs": 1,
+            "normalizationMs": 3.7999999970197678,
+            "optionMs": 3.1000000089406967,
+            "renderMs": 24.299999997019768,
+            "setOptionMs": 5.5999999940395355
+          },
+          "zoomMs": 14.400000005960464,
+          "mainThreadMs": 107.10300000000001
+        }
+      ]
+    },
+    {
+      "kind": "line",
+      "count": 100000,
+      "progressiveDisabled": false,
+      "samples": [
+        {
+          "initial": {
+            "bytes": 2752497,
+            "legacyBytes": 5504967,
+            "preparationMs": 9.299999997019768,
+            "boundingMs": 58.70000000298023,
+            "cloneMs": 12.900000005960464,
+            "legacyCloneMs": 15.799999997019768,
+            "workerRoundTripMs": 154.40000000596046,
+            "transferMs": 18.199951171875,
+            "normalizationMs": 42.5,
+            "optionMs": 16.399999991059303,
+            "renderMs": 151.40000000596046,
+            "setOptionMs": 69.5
+          },
+          "updated": {
+            "bytes": 2747703,
+            "legacyBytes": 5495379,
+            "preparationMs": 8.299999997019768,
+            "boundingMs": 54.70000000298023,
+            "cloneMs": 14.299999997019768,
+            "legacyCloneMs": 12.899999991059303,
+            "workerRoundTripMs": 146.70000000298023,
+            "transferMs": 12.999755859375,
+            "normalizationMs": 33.900000005960464,
+            "optionMs": 20.899999991059303,
+            "renderMs": 93.1000000089407,
+            "setOptionMs": 31.399999991059303
+          },
+          "zoomMs": 71,
+          "mainThreadMs": 455.04699999999997
+        },
+        {
+          "initial": {
+            "bytes": 2752497,
+            "legacyBytes": 5504967,
+            "preparationMs": 9.799999997019768,
+            "boundingMs": 61.5,
+            "cloneMs": 12.899999991059303,
+            "legacyCloneMs": 15.300000011920929,
+            "workerRoundTripMs": 158.6000000089407,
+            "transferMs": 17.5,
+            "normalizationMs": 42.79999999701977,
+            "optionMs": 19.700000002980232,
+            "renderMs": 160,
+            "setOptionMs": 74.70000000298023
+          },
+          "updated": {
+            "bytes": 2747703,
+            "legacyBytes": 5495379,
+            "preparationMs": 8.400000005960464,
+            "boundingMs": 59.19999998807907,
+            "cloneMs": 14.600000008940697,
+            "legacyCloneMs": 16.799999997019768,
+            "workerRoundTripMs": 174.29999999701977,
+            "transferMs": 13,
+            "normalizationMs": 37.29999999701977,
+            "optionMs": 23.599999994039536,
+            "renderMs": 98.40000000596046,
+            "setOptionMs": 33.5
+          },
+          "zoomMs": 8.400000005960464,
+          "mainThreadMs": 431.664
+        },
+        {
+          "initial": {
+            "bytes": 2752497,
+            "legacyBytes": 5504967,
+            "preparationMs": 12.799999997019768,
+            "boundingMs": 58.20000000298023,
+            "cloneMs": 13.299999997019768,
+            "legacyCloneMs": 16,
+            "workerRoundTripMs": 159.40000000596046,
+            "transferMs": 17.5,
+            "normalizationMs": 43.5,
+            "optionMs": 20.19999998807907,
+            "renderMs": 157.6000000089407,
+            "setOptionMs": 75.29999999701977
+          },
+          "updated": {
+            "bytes": 2747703,
+            "legacyBytes": 5495379,
+            "preparationMs": 10.799999997019768,
+            "boundingMs": 53.20000000298023,
+            "cloneMs": 17,
+            "legacyCloneMs": 13.200000002980232,
+            "workerRoundTripMs": 148.09999999403954,
+            "transferMs": 12.900146484375,
+            "normalizationMs": 34.5,
+            "optionMs": 22.900000005960464,
+            "renderMs": 97,
+            "setOptionMs": 25.900000005960464
+          },
+          "zoomMs": 69.70000000298023,
+          "mainThreadMs": 470.161
+        },
+        {
+          "initial": {
+            "bytes": 2752497,
+            "legacyBytes": 5504967,
+            "preparationMs": 9.199999988079071,
+            "boundingMs": 58.80000001192093,
+            "cloneMs": 13.200000002980232,
+            "legacyCloneMs": 15.799999997019768,
+            "workerRoundTripMs": 156.70000000298023,
+            "transferMs": 18,
+            "normalizationMs": 43.79999999701977,
+            "optionMs": 17.299999997019768,
+            "renderMs": 159.5,
+            "setOptionMs": 73
+          },
+          "updated": {
+            "bytes": 2747703,
+            "legacyBytes": 5495379,
+            "preparationMs": 8.900000005960464,
+            "boundingMs": 53.400000005960464,
+            "cloneMs": 14.100000008940697,
+            "legacyCloneMs": 12.299999997019768,
+            "workerRoundTripMs": 145.29999999701977,
+            "transferMs": 13.099853515625,
+            "normalizationMs": 34.79999999701977,
+            "optionMs": 26.200000002980232,
+            "renderMs": 96,
+            "setOptionMs": 28.30000001192093
+          },
+          "zoomMs": 69.20000000298023,
+          "mainThreadMs": 470.875
+        },
+        {
+          "initial": {
+            "bytes": 2752497,
+            "legacyBytes": 5504967,
+            "preparationMs": 9.300000011920929,
+            "boundingMs": 56.29999999701977,
+            "cloneMs": 13,
+            "legacyCloneMs": 15.5,
+            "workerRoundTripMs": 155,
+            "transferMs": 19.2001953125,
+            "normalizationMs": 43.19999998807907,
+            "optionMs": 18,
+            "renderMs": 153,
+            "setOptionMs": 70.79999999701977
+          },
+          "updated": {
+            "bytes": 2747703,
+            "legacyBytes": 5495379,
+            "preparationMs": 8.900000005960464,
+            "boundingMs": 52.3999999910593,
+            "cloneMs": 15.400000005960464,
+            "legacyCloneMs": 13,
+            "workerRoundTripMs": 142.5,
+            "transferMs": 12.7001953125,
+            "normalizationMs": 32.6000000089407,
+            "optionMs": 18.200000002980232,
+            "renderMs": 93.59999999403954,
+            "setOptionMs": 29.400000005960464
+          },
+          "zoomMs": 72,
+          "mainThreadMs": 453.954
+        }
+      ]
+    },
+    {
+      "kind": "scatter",
+      "count": 1000,
+      "progressiveDisabled": false,
+      "samples": [
+        {
+          "initial": {
+            "bytes": 25611,
+            "legacyBytes": 51195,
+            "preparationMs": 0.20000000298023224,
+            "boundingMs": 2.2999999970197678,
+            "cloneMs": 0.20000000298023224,
+            "legacyCloneMs": 0,
+            "workerRoundTripMs": 3.6000000089406967,
+            "transferMs": 0.199951171875,
+            "normalizationMs": 1.7999999970197678,
+            "optionMs": 2.9000000059604645,
+            "renderMs": 60.69999998807907,
+            "setOptionMs": 47.599999994039536
+          },
+          "updated": {
+            "bytes": 25563,
+            "legacyBytes": 51099,
+            "preparationMs": 0.20000000298023224,
+            "boundingMs": 0.7999999970197678,
+            "cloneMs": 0.09999999403953552,
+            "legacyCloneMs": 0.10000000894069672,
+            "workerRoundTripMs": 2.300000011920929,
+            "transferMs": 0.699951171875,
+            "normalizationMs": 0.5,
+            "optionMs": 0.5999999940395355,
+            "renderMs": 25.099999994039536,
+            "setOptionMs": 1.7000000029802322
+          },
+          "zoomMs": 11.100000008940697,
+          "mainThreadMs": 102.188
+        },
+        {
+          "initial": {
+            "bytes": 25611,
+            "legacyBytes": 51195,
+            "preparationMs": 0.10000000894069672,
+            "boundingMs": 2.3999999910593033,
+            "cloneMs": 0.19999998807907104,
+            "legacyCloneMs": 0.10000000894069672,
+            "workerRoundTripMs": 3.5,
+            "transferMs": 0.10009765625,
+            "normalizationMs": 1.8999999910593033,
+            "optionMs": 3.2000000029802322,
+            "renderMs": 62.900000005960464,
+            "setOptionMs": 48.3999999910593
+          },
+          "updated": {
+            "bytes": 25563,
+            "legacyBytes": 51099,
+            "preparationMs": 0.09999999403953552,
+            "boundingMs": 0.9000000059604645,
+            "cloneMs": 0.20000000298023224,
+            "legacyCloneMs": 0.19999998807907104,
+            "workerRoundTripMs": 2.5999999940395355,
+            "transferMs": 0.800048828125,
+            "normalizationMs": 0.7999999970197678,
+            "optionMs": 0.5,
+            "renderMs": 22.799999997019768,
+            "setOptionMs": 2.199999988079071
+          },
+          "zoomMs": 11.100000008940697,
+          "mainThreadMs": 105.01200000000001
+        },
+        {
+          "initial": {
+            "bytes": 25611,
+            "legacyBytes": 51195,
+            "preparationMs": 0.20000000298023224,
+            "boundingMs": 2.2999999970197678,
+            "cloneMs": 0.09999999403953552,
+            "legacyCloneMs": 0.09999999403953552,
+            "workerRoundTripMs": 3.5,
+            "transferMs": 0.10009765625,
+            "normalizationMs": 1.7999999970197678,
+            "optionMs": 3,
+            "renderMs": 61.1000000089407,
+            "setOptionMs": 46.099999994039536
+          },
+          "updated": {
+            "bytes": 25563,
+            "legacyBytes": 51099,
+            "preparationMs": 0.20000000298023224,
+            "boundingMs": 0.9000000059604645,
+            "cloneMs": 0.09999999403953552,
+            "legacyCloneMs": 0.10000000894069672,
+            "workerRoundTripMs": 2.5,
+            "transferMs": 0.7001953125,
+            "normalizationMs": 0.5999999940395355,
+            "optionMs": 0.4000000059604645,
+            "renderMs": 25.200000002980232,
+            "setOptionMs": 2
+          },
+          "zoomMs": 10.799999997019768,
+          "mainThreadMs": 102.20700000000001
+        },
+        {
+          "initial": {
+            "bytes": 25611,
+            "legacyBytes": 51195,
+            "preparationMs": 0.20000000298023224,
+            "boundingMs": 2.3999999910593033,
+            "cloneMs": 0.20000000298023224,
+            "legacyCloneMs": 0.09999999403953552,
+            "workerRoundTripMs": 3.7000000029802322,
+            "transferMs": 0.199951171875,
+            "normalizationMs": 1.7999999970197678,
+            "optionMs": 3.2999999970197678,
+            "renderMs": 61.5,
+            "setOptionMs": 48.19999998807907
+          },
+          "updated": {
+            "bytes": 25563,
+            "legacyBytes": 51099,
+            "preparationMs": 0.09999999403953552,
+            "boundingMs": 0.9000000059604645,
+            "cloneMs": 0,
+            "legacyCloneMs": 0.20000000298023224,
+            "workerRoundTripMs": 2.2000000029802322,
+            "transferMs": 0.599853515625,
+            "normalizationMs": 0.5,
+            "optionMs": 0.5,
+            "renderMs": 25.200000002980232,
+            "setOptionMs": 1.7000000029802322
+          },
+          "zoomMs": 10.900000005960464,
+          "mainThreadMs": 103.975
+        },
+        {
+          "initial": {
+            "bytes": 25611,
+            "legacyBytes": 51195,
+            "preparationMs": 0.29999999701976776,
+            "boundingMs": 2.2000000029802322,
+            "cloneMs": 0.10000000894069672,
+            "legacyCloneMs": 0.09999999403953552,
+            "workerRoundTripMs": 3.5,
+            "transferMs": 0.300048828125,
+            "normalizationMs": 1.7999999970197678,
+            "optionMs": 2.9000000059604645,
+            "renderMs": 62.8999999910593,
+            "setOptionMs": 47.79999999701977
+          },
+          "updated": {
+            "bytes": 25563,
+            "legacyBytes": 51099,
+            "preparationMs": 0.19999998807907104,
+            "boundingMs": 0.9000000059604645,
+            "cloneMs": 0.10000000894069672,
+            "legacyCloneMs": 0.09999999403953552,
+            "workerRoundTripMs": 2.7999999970197678,
+            "transferMs": 1.2001953125,
+            "normalizationMs": 0.7000000029802322,
+            "optionMs": 0.6000000089406967,
+            "renderMs": 23.099999994039536,
+            "setOptionMs": 1.8999999910593033
+          },
+          "zoomMs": 10.700000002980232,
+          "mainThreadMs": 104.31700000000001
+        }
+      ]
+    },
+    {
+      "kind": "scatter",
+      "count": 10000,
+      "progressiveDisabled": false,
+      "samples": [
+        {
+          "initial": {
+            "bytes": 265302,
+            "legacyBytes": 530577,
+            "preparationMs": 0.7000000029802322,
+            "boundingMs": 9.200000002980232,
+            "cloneMs": 1.3999999910593033,
+            "legacyCloneMs": 0.9000000059604645,
+            "workerRoundTripMs": 16.799999997019768,
+            "transferMs": 1.10009765625,
+            "normalizationMs": 7.4000000059604645,
+            "optionMs": 5.799999997019768,
+            "renderMs": 467,
+            "setOptionMs": 42.8999999910593
+          },
+          "updated": {
+            "bytes": 264849,
+            "legacyBytes": 529671,
+            "preparationMs": 0.5999999940395355,
+            "boundingMs": 5.799999997019768,
+            "cloneMs": 1.2999999970197678,
+            "legacyCloneMs": 1.2000000029802322,
+            "workerRoundTripMs": 13,
+            "transferMs": 1.400146484375,
+            "normalizationMs": 6.0999999940395355,
+            "optionMs": 1.6000000089406967,
+            "renderMs": 420.69999998807907,
+            "setOptionMs": 7.0999999940395355
+          },
+          "zoomMs": 16.900000005960464,
+          "mainThreadMs": 503.311
+        },
+        {
+          "initial": {
+            "bytes": 265302,
+            "legacyBytes": 530577,
+            "preparationMs": 0.800000011920929,
+            "boundingMs": 9.399999991059303,
+            "cloneMs": 1.300000011920929,
+            "legacyCloneMs": 0.8999999910593033,
+            "workerRoundTripMs": 17,
+            "transferMs": 1.099853515625,
+            "normalizationMs": 7.5999999940395355,
+            "optionMs": 5.799999997019768,
+            "renderMs": 466.20000000298023,
+            "setOptionMs": 45.599999994039536
+          },
+          "updated": {
+            "bytes": 264849,
+            "legacyBytes": 529671,
+            "preparationMs": 1,
+            "boundingMs": 5.600000008940697,
+            "cloneMs": 1.2999999970197678,
+            "legacyCloneMs": 1.1000000089406967,
+            "workerRoundTripMs": 13,
+            "transferMs": 1.099853515625,
+            "normalizationMs": 5.5,
+            "optionMs": 1.7000000029802322,
+            "renderMs": 421,
+            "setOptionMs": 5.4000000059604645
+          },
+          "zoomMs": 17.200000002980232,
+          "mainThreadMs": 510.903
+        },
+        {
+          "initial": {
+            "bytes": 265302,
+            "legacyBytes": 530577,
+            "preparationMs": 0.7999999970197678,
+            "boundingMs": 9.299999997019768,
+            "cloneMs": 1.300000011920929,
+            "legacyCloneMs": 1,
+            "workerRoundTripMs": 16.900000005960464,
+            "transferMs": 1,
+            "normalizationMs": 7.399999991059303,
+            "optionMs": 5.299999997019768,
+            "renderMs": 467.20000000298023,
+            "setOptionMs": 42.599999994039536
+          },
+          "updated": {
+            "bytes": 264849,
+            "legacyBytes": 529671,
+            "preparationMs": 0.5,
+            "boundingMs": 6.299999997019768,
+            "cloneMs": 1.2999999970197678,
+            "legacyCloneMs": 1,
+            "workerRoundTripMs": 13.5,
+            "transferMs": 1.099853515625,
+            "normalizationMs": 5.5,
+            "optionMs": 1.7000000029802322,
+            "renderMs": 421.59999999403954,
+            "setOptionMs": 5.4000000059604645
+          },
+          "zoomMs": 18,
+          "mainThreadMs": 525.2139999999999
+        },
+        {
+          "initial": {
+            "bytes": 265302,
+            "legacyBytes": 530577,
+            "preparationMs": 0.7999999970197678,
+            "boundingMs": 10.700000002980232,
+            "cloneMs": 1.2999999970197678,
+            "legacyCloneMs": 1,
+            "workerRoundTripMs": 18.900000005960464,
+            "transferMs": 1.300048828125,
+            "normalizationMs": 7.700000002980232,
+            "optionMs": 5.700000002980232,
+            "renderMs": 463.29999999701977,
+            "setOptionMs": 46.29999999701977
+          },
+          "updated": {
+            "bytes": 264849,
+            "legacyBytes": 529671,
+            "preparationMs": 0.5,
+            "boundingMs": 6.200000002980232,
+            "cloneMs": 1.300000011920929,
+            "legacyCloneMs": 1.199999988079071,
+            "workerRoundTripMs": 13.700000002980232,
+            "transferMs": 1.39990234375,
+            "normalizationMs": 5.899999991059303,
+            "optionMs": 1.7999999970197678,
+            "renderMs": 420.6000000089407,
+            "setOptionMs": 5.700000002980232
+          },
+          "zoomMs": 17.5,
+          "mainThreadMs": 537.664
+        },
+        {
+          "initial": {
+            "bytes": 265302,
+            "legacyBytes": 530577,
+            "preparationMs": 0.7000000029802322,
+            "boundingMs": 13.399999991059303,
+            "cloneMs": 1.3999999910593033,
+            "legacyCloneMs": 1,
+            "workerRoundTripMs": 21.299999997019768,
+            "transferMs": 1,
+            "normalizationMs": 8,
+            "optionMs": 6.299999997019768,
+            "renderMs": 460.59999999403954,
+            "setOptionMs": 43.6000000089407
+          },
+          "updated": {
+            "bytes": 264849,
+            "legacyBytes": 529671,
+            "preparationMs": 0.4000000059604645,
+            "boundingMs": 6.200000002980232,
+            "cloneMs": 1.199999988079071,
+            "legacyCloneMs": 1.2000000029802322,
+            "workerRoundTripMs": 13.400000005960464,
+            "transferMs": 1.10009765625,
+            "normalizationMs": 5.5999999940395355,
+            "optionMs": 1.6000000089406967,
+            "renderMs": 421.3999999910593,
+            "setOptionMs": 5.799999997019768
+          },
+          "zoomMs": 17.399999991059303,
+          "mainThreadMs": 533.043
+        }
+      ]
+    },
+    {
+      "kind": "scatter",
+      "count": 100000,
+      "progressiveDisabled": false,
+      "samples": [
+        {
+          "initial": {
+            "bytes": 2752500,
+            "legacyBytes": 5504973,
+            "preparationMs": 9.900000005960464,
+            "boundingMs": 57.400000005960464,
+            "cloneMs": 13.399999991059303,
+            "legacyCloneMs": 16.400000005960464,
+            "workerRoundTripMs": 156.69999998807907,
+            "transferMs": 17.800048828125,
+            "normalizationMs": 43.5,
+            "optionMs": 17.200000002980232,
+            "renderMs": 8712.5,
+            "setOptionMs": 69.59999999403954
+          },
+          "updated": {
+            "bytes": 2747706,
+            "legacyBytes": 5495385,
+            "preparationMs": 8.400000005960464,
+            "boundingMs": 64.59999999403954,
+            "cloneMs": 15.700000002980232,
+            "legacyCloneMs": 12.900000005960464,
+            "workerRoundTripMs": 162,
+            "transferMs": 12.900146484375,
+            "normalizationMs": 29.900000005960464,
+            "optionMs": 19.399999991059303,
+            "renderMs": 8675.90000000596,
+            "setOptionMs": 27.299999997019768
+          },
+          "zoomMs": 387.20000000298023,
+          "mainThreadMs": 17108.809
+        },
+        {
+          "initial": {
+            "bytes": 2752500,
+            "legacyBytes": 5504973,
+            "preparationMs": 9.699999988079071,
+            "boundingMs": 58.5,
+            "cloneMs": 12.700000002980232,
+            "legacyCloneMs": 15.399999991059303,
+            "workerRoundTripMs": 152.70000000298023,
+            "transferMs": 16.89990234375,
+            "normalizationMs": 41.79999999701977,
+            "optionMs": 18.399999991059303,
+            "renderMs": 8850.5,
+            "setOptionMs": 70.5
+          },
+          "updated": {
+            "bytes": 2747706,
+            "legacyBytes": 5495385,
+            "preparationMs": 8.899999991059303,
+            "boundingMs": 61.900000005960464,
+            "cloneMs": 15,
+            "legacyCloneMs": 18,
+            "workerRoundTripMs": 166.90000000596046,
+            "transferMs": 16.499755859375,
+            "normalizationMs": 31.5,
+            "optionMs": 18.5,
+            "renderMs": 8753.20000000298,
+            "setOptionMs": 28.600000008940697
+          },
+          "zoomMs": 388,
+          "mainThreadMs": 17326.565
+        },
+        {
+          "initial": {
+            "bytes": 2752500,
+            "legacyBytes": 5504973,
+            "preparationMs": 9.5,
+            "boundingMs": 58.19999998807907,
+            "cloneMs": 12.600000008940697,
+            "legacyCloneMs": 19.5,
+            "workerRoundTripMs": 157,
+            "transferMs": 18.099853515625,
+            "normalizationMs": 42.20000000298023,
+            "optionMs": 17.69999998807907,
+            "renderMs": 8779.5,
+            "setOptionMs": 69.5
+          },
+          "updated": {
+            "bytes": 2747706,
+            "legacyBytes": 5495385,
+            "preparationMs": 9.299999997019768,
+            "boundingMs": 54.900000005960464,
+            "cloneMs": 14.200000002980232,
+            "legacyCloneMs": 12.299999997019768,
+            "workerRoundTripMs": 147.40000000596046,
+            "transferMs": 12.999755859375,
+            "normalizationMs": 31.400000005960464,
+            "optionMs": 19.19999998807907,
+            "renderMs": 8799.800000011921,
+            "setOptionMs": 28.900000005960464
+          },
+          "zoomMs": 393.59999999403954,
+          "mainThreadMs": 17267.068
+        },
+        {
+          "initial": {
+            "bytes": 2752500,
+            "legacyBytes": 5504973,
+            "preparationMs": 9.399999991059303,
+            "boundingMs": 57.70000000298023,
+            "cloneMs": 12.900000005960464,
+            "legacyCloneMs": 16.399999991059303,
+            "workerRoundTripMs": 154.79999999701977,
+            "transferMs": 17.5,
+            "normalizationMs": 40.79999999701977,
+            "optionMs": 15.799999997019768,
+            "renderMs": 8685.5,
+            "setOptionMs": 75.90000000596046
+          },
+          "updated": {
+            "bytes": 2747706,
+            "legacyBytes": 5495385,
+            "preparationMs": 8.299999997019768,
+            "boundingMs": 56.5,
+            "cloneMs": 15.299999997019768,
+            "legacyCloneMs": 12.100000008940697,
+            "workerRoundTripMs": 153.90000000596046,
+            "transferMs": 12.699951171875,
+            "normalizationMs": 31.400000005960464,
+            "optionMs": 20.799999997019768,
+            "renderMs": 8736.5,
+            "setOptionMs": 28.299999997019768
+          },
+          "zoomMs": 381,
+          "mainThreadMs": 17100.792
+        },
+        {
+          "initial": {
+            "bytes": 2752500,
+            "legacyBytes": 5504973,
+            "preparationMs": 11.599999994039536,
+            "boundingMs": 57.20000000298023,
+            "cloneMs": 12.400000005960464,
+            "legacyCloneMs": 14.599999994039536,
+            "workerRoundTripMs": 153.90000000596046,
+            "transferMs": 18.199951171875,
+            "normalizationMs": 41,
+            "optionMs": 16.399999991059303,
+            "renderMs": 8802.10000000894,
+            "setOptionMs": 68.80000001192093
+          },
+          "updated": {
+            "bytes": 2747706,
+            "legacyBytes": 5495385,
+            "preparationMs": 9.700000002980232,
+            "boundingMs": 65.20000000298023,
+            "cloneMs": 16.399999991059303,
+            "legacyCloneMs": 14.100000008940697,
+            "workerRoundTripMs": 173.29999999701977,
+            "transferMs": 14.699951171875,
+            "normalizationMs": 37.599999994039536,
+            "optionMs": 23,
+            "renderMs": 9039.10000000894,
+            "setOptionMs": 28.5
+          },
+          "zoomMs": 384.70000000298023,
+          "mainThreadMs": 17661.637
+        }
+      ]
+    },
+    {
+      "kind": "scatter",
+      "count": 100000,
+      "progressiveDisabled": true,
+      "samples": [
+        {
+          "initial": {
+            "bytes": 2752500,
+            "legacyBytes": 5504973,
+            "preparationMs": 9.5,
+            "boundingMs": 66.90000000596046,
+            "cloneMs": 13.400000005960464,
+            "legacyCloneMs": 16.5,
+            "workerRoundTripMs": 173.69999998807907,
+            "transferMs": 20.000244140625,
+            "normalizationMs": 42.400000005960464,
+            "optionMs": 17.900000005960464,
+            "renderMs": 916.8999999910593,
+            "setOptionMs": 865.3000000119209
+          },
+          "updated": {
+            "bytes": 2747706,
+            "legacyBytes": 5495385,
+            "preparationMs": 8.299999997019768,
+            "boundingMs": 51.20000000298023,
+            "cloneMs": 14.299999997019768,
+            "legacyCloneMs": 12.5,
+            "workerRoundTripMs": 137.90000000596046,
+            "transferMs": 12.89990234375,
+            "normalizationMs": 36.599999994039536,
+            "optionMs": 17.5,
+            "renderMs": 803.7000000029802,
+            "setOptionMs": 26.5
+          },
+          "zoomMs": 2988.2999999970198,
+          "mainThreadMs": 4857.425
+        },
+        {
+          "initial": {
+            "bytes": 2752500,
+            "legacyBytes": 5504973,
+            "preparationMs": 9.600000008940697,
+            "boundingMs": 59.8999999910593,
+            "cloneMs": 12.800000011920929,
+            "legacyCloneMs": 15,
+            "workerRoundTripMs": 156.30000001192093,
+            "transferMs": 18.39990234375,
+            "normalizationMs": 44.599999994039536,
+            "optionMs": 18.5,
+            "renderMs": 895.5,
+            "setOptionMs": 844.5999999940395
+          },
+          "updated": {
+            "bytes": 2747706,
+            "legacyBytes": 5495385,
+            "preparationMs": 9.799999997019768,
+            "boundingMs": 51.79999999701977,
+            "cloneMs": 14.700000002980232,
+            "legacyCloneMs": 12.599999994039536,
+            "workerRoundTripMs": 141.29999999701977,
+            "transferMs": 12.900146484375,
+            "normalizationMs": 34.29999999701977,
+            "optionMs": 17.900000005960464,
+            "renderMs": 804.7000000029802,
+            "setOptionMs": 29.799999997019768
+          },
+          "zoomMs": 2995.5999999940395,
+          "mainThreadMs": 4843.211
+        },
+        {
+          "initial": {
+            "bytes": 2752500,
+            "legacyBytes": 5504973,
+            "preparationMs": 12.5,
+            "boundingMs": 61,
+            "cloneMs": 13.100000008940697,
+            "legacyCloneMs": 15.200000002980232,
+            "workerRoundTripMs": 167,
+            "transferMs": 24.300048828125,
+            "normalizationMs": 41.69999998807907,
+            "optionMs": 16.700000002980232,
+            "renderMs": 911.9000000059605,
+            "setOptionMs": 860.7999999970198
+          },
+          "updated": {
+            "bytes": 2747706,
+            "legacyBytes": 5495385,
+            "preparationMs": 9.299999997019768,
+            "boundingMs": 51.1000000089407,
+            "cloneMs": 13.700000002980232,
+            "legacyCloneMs": 12.299999997019768,
+            "workerRoundTripMs": 140.8999999910593,
+            "transferMs": 12.800048828125,
+            "normalizationMs": 33.20000000298023,
+            "optionMs": 16.299999997019768,
+            "renderMs": 787.2000000029802,
+            "setOptionMs": 28.30000001192093
+          },
+          "zoomMs": 3003.7999999970198,
+          "mainThreadMs": 4845.651
+        },
+        {
+          "initial": {
+            "bytes": 2752500,
+            "legacyBytes": 5504973,
+            "preparationMs": 12.700000002980232,
+            "boundingMs": 62.70000000298023,
+            "cloneMs": 13.300000011920929,
+            "legacyCloneMs": 15.399999991059303,
+            "workerRoundTripMs": 163.3999999910593,
+            "transferMs": 18,
+            "normalizationMs": 43.5,
+            "optionMs": 17.400000005960464,
+            "renderMs": 942.5999999940395,
+            "setOptionMs": 890.5
+          },
+          "updated": {
+            "bytes": 2747706,
+            "legacyBytes": 5495385,
+            "preparationMs": 9.299999997019768,
+            "boundingMs": 53.20000000298023,
+            "cloneMs": 14.5,
+            "legacyCloneMs": 13.100000008940697,
+            "workerRoundTripMs": 145.90000000596046,
+            "transferMs": 13.900146484375,
+            "normalizationMs": 34.79999999701977,
+            "optionMs": 16.900000005960464,
+            "renderMs": 826.8999999910593,
+            "setOptionMs": 28.900000005960464
+          },
+          "zoomMs": 3029.5,
+          "mainThreadMs": 4944.703
+        },
+        {
+          "initial": {
+            "bytes": 2752500,
+            "legacyBytes": 5504973,
+            "preparationMs": 9.799999997019768,
+            "boundingMs": 56.80000001192093,
+            "cloneMs": 13.300000011920929,
+            "legacyCloneMs": 16.5,
+            "workerRoundTripMs": 157.29999999701977,
+            "transferMs": 17.900146484375,
+            "normalizationMs": 43.1000000089407,
+            "optionMs": 17.69999998807907,
+            "renderMs": 908.8000000119209,
+            "setOptionMs": 858
+          },
+          "updated": {
+            "bytes": 2747706,
+            "legacyBytes": 5495385,
+            "preparationMs": 8.5,
+            "boundingMs": 53.20000000298023,
+            "cloneMs": 14.799999997019768,
+            "legacyCloneMs": 13,
+            "workerRoundTripMs": 142.3999999910593,
+            "transferMs": 12.7001953125,
+            "normalizationMs": 34.1000000089407,
+            "optionMs": 16.399999991059303,
+            "renderMs": 798.7000000029802,
+            "setOptionMs": 28.399999991059303
+          },
+          "zoomMs": 3006.7999999970198,
+          "mainThreadMs": 4857.558
+        }
+      ]
+    }
+  ],
+  "barStyle": {
+    "positive": [
+      {
+        "ms": 6.5999999940395355,
+        "wrapped": 0
+      },
+      {
+        "ms": 6.299999997019768,
+        "wrapped": 0
+      },
+      {
+        "ms": 5.5999999940395355,
+        "wrapped": 0
+      },
+      {
+        "ms": 5.299999997019768,
+        "wrapped": 0
+      },
+      {
+        "ms": 5.5,
+        "wrapped": 0
+      }
+    ],
+    "mixed": [
+      {
+        "ms": 7.5,
+        "wrapped": 50000
+      },
+      {
+        "ms": 8.300000011920929,
+        "wrapped": 50000
+      },
+      {
+        "ms": 7.799999997019768,
+        "wrapped": 50000
+      },
+      {
+        "ms": 6.9000000059604645,
+        "wrapped": 50000
+      },
+      {
+        "ms": 6.100000008940697,
+        "wrapped": 50000
+      }
+    ]
+  }
+}
