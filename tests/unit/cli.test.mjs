@@ -442,9 +442,13 @@ describe('oxiquill CLI', () => {
     );
     expect(cliMocks.runHelperCargo).toHaveBeenNthCalledWith(
       3,
+      expect.objectContaining({ argv: ['fmt', '--all', '--', '--check'] })
+    );
+    expect(cliMocks.runHelperCargo).toHaveBeenNthCalledWith(
+      4,
       expect.objectContaining({ argv: ['clippy', '--all-targets', '--', '-D', 'warnings'] })
     );
-    expect(cliMocks.runHelperCargo).toHaveBeenNthCalledWith(4, expect.objectContaining({ argv: ['doc', '--no-deps'] }));
+    expect(cliMocks.runHelperCargo).toHaveBeenNthCalledWith(5, expect.objectContaining({ argv: ['doc', '--no-deps'] }));
   });
 
   it('cleans generated workspace output through the owned cleaner', async () => {

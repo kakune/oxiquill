@@ -10,6 +10,20 @@ const line = (values: number[], extra: Partial<ChartSpec> = {}): ChartSpec =>
   }) as ChartSpec;
 
 export const chartFixtures: Record<string, ChartSpec> = {
+  denseLine: {
+    kind: 'line',
+    style: { animation: false },
+    series: [
+      { points: Array.from({ length: 100000 }, (_, index) => [index, index === 5000 ? 100 : Math.sin(index / 40)]) }
+    ]
+  },
+  denseScatter: {
+    kind: 'scatter',
+    style: { animation: false },
+    series: [
+      { points: Array.from({ length: 10000 }, (_, index) => [index, index === 5000 ? 100 : Math.sin(index / 40)]) }
+    ]
+  },
   stackedBars: {
     kind: 'bar',
     categories: ['A', 'B', 'C'],

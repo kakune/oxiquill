@@ -5,7 +5,7 @@ import { chartAnnotationSeries, annotationDescription } from './chart-annotation
 import { intervalSeries } from './chart-intervals.js';
 import { histogramLabel, histogramSeries } from './chart-histogram.js';
 import { chartAxisType, chartIncludesZero } from './chart-axes.js';
-import type { ChartSpec, ChartNumberFormat } from './types.js';
+import type { ChartSpec, ChartNumberFormat, XyChartSeries } from './types.js';
 import { normalizeHeatmapSpec } from './heatmap-normalization.js';
 import { labelsForLanguage, type RuntimeLabels, type RuntimeLocale } from './runtime-localization.js';
 import { chartCoordinateFormatter, chartCoordinates, chartNumberFormatter, numericBounds } from './chart-format.js';
@@ -388,12 +388,38 @@ export function chartResizeOptions(
   };
 }
 
+// Measured with the component benchmark in tests/performance/chart-rendering.mjs.
+const lineSamplingThreshold = 100_000;
+const largeScatterThreshold = 10_000;
+
+function sampleLine(spec: ChartSpec, series: XyChartSeries): boolean {
+  const xType = chartAxisType(spec, 'x');
+  if (
+    spec.kind !== 'line' ||
+    series.points.length < lineSamplingThreshold ||
+    (xType !== 'value' && xType !== 'time') ||
+    chartAxisType(spec, 'y') !== 'value' ||
+    series.style?.step ||
+    series.style?.smooth ||
+    series.style?.showSymbol
+  )
+    return false;
+  let previous = -Infinity;
+  return series.points.every(([coordinate, value]) => {
+    const x = typeof coordinate === 'number' ? coordinate : xType === 'time' ? Date.parse(coordinate) : NaN;
+    if (!Number.isFinite(x) || x <= previous || typeof value !== 'number' || !Number.isFinite(value)) return false;
+    previous = x;
+    return true;
+  });
+}
+
 function chartSeries(spec: ChartSpec): readonly Record<string, unknown>[] {
   switch (spec.kind) {
     case 'line':
     case 'area':
       return spec.series.map((series) => ({
         type: 'line',
+        sampling: sampleLine(spec, series) ? 'lttb' : 'none',
         stack: 'stack' in series ? (series.stack ?? '') : '',
         stackStrategy: 'samesign',
         showSymbol: series.style?.showSymbol ?? series.points.length === 1,
@@ -407,6 +433,14 @@ function chartSeries(spec: ChartSpec): readonly Record<string, unknown>[] {
     case 'scatter':
       return spec.series.map((series) => ({
         type: 'scatter',
+        // ECharts' large path fills tiny/empty symbols differently from the normal renderer.
+        large:
+          series.points.length >= largeScatterThreshold &&
+          (spec.style?.symbolSize ?? 7) >= 4 &&
+          series.style?.symbol !== 'emptyCircle' &&
+          series.style?.symbol !== 'none',
+        // Eligibility uses the original series size; keep the renderer stable while zooming.
+        largeThreshold: 0,
         symbolSize: spec.style?.symbolSize ?? 7,
         data: series.points
       }));

@@ -75,3 +75,37 @@ pnpm exec node tests/performance/output-contract.mjs --output test-results/outpu
 ```
 
 Use `--runtime` to select a separately compiled baseline module directory and `--revision` to identify its source commit. The benchmark reports measurements without a timing-based CI threshold.
+
+## Large chart rendering
+
+P43 was measured on 2026-10-13 with 153.0.8010.12 headless Chromium, Node v24.21.0, ECharts 6.1.0, and 12th Gen Intel(R) Core(TM) i7-12700F (20 available CPUs, 25197961216 bytes RAM), linux x64. The viewport was 900 × 700, the chart 720 × 360, and device pixel ratio 1, without CPU/network throttling. The Vite-compiled harness mounts the actual ChartOutput with animations disabled and preloaded ECharts. Each condition has one discarded warmup and five fresh-page samples; no builds or test suites ran during measurement.
+
+The [before report](chart-rendering-before.json) uses source commit 3970e62f7c1d441536150c0ca0d6c3a88b64c355. The [after report](chart-rendering-after.json) identifies that same parent and explicitly labels the modified working tree; it measures the implementation included in this change. Both builds use the same installed dependencies. The source-selectable harness and raw samples remain reproducible. The threshold constants were chosen after preliminary comparisons: LTTB at 10,000 points did not give a repeatable component-level improvement, so it starts at 100,000 points. Scatter large rendering starts at 10,000 original points and stays in that mode while zooming to avoid renderer-switch overhead. Tiny (under 4px), empty, and hidden scatter symbols are excluded because ECharts' large path changes their appearance.
+
+| Chart   |  Points | Initial before / after | Update before / after | Zoom before / after | Main-thread before / after |
+| ------- | ------: | ---------------------: | --------------------: | ------------------: | -------------------------: |
+| line    |   1,000 |         40.9 / 39.8 ms |        16.1 / 16.6 ms |      11.3 / 11.6 ms |             68.7 / 66.6 ms |
+| line    |  10,000 |         62.9 / 65.0 ms |        23.0 / 20.4 ms |      14.4 / 14.8 ms |           108.8 / 111.4 ms |
+| line    | 100,000 |       157.6 / 114.1 ms |        96.0 / 70.4 ms |      69.7 / 33.5 ms |           455.0 / 397.0 ms |
+| scatter |   1,000 |         61.5 / 60.7 ms |        25.1 / 25.6 ms |      10.9 / 10.8 ms |           104.0 / 101.1 ms |
+| scatter |  10,000 |       466.2 / 100.2 ms |       421.0 / 48.9 ms |      17.4 / 15.6 ms |           525.2 / 149.1 ms |
+| scatter | 100,000 |      8779.5 / 368.9 ms |     8753.2 / 317.2 ms |     387.2 / 12.2 ms |         17267.1 / 835.4 ms |
+
+Initial and update durations start at Preact rendering and include waiting for ECharts finished events and two settled animation frames. Main-thread TaskDuration is measured by Chromium over initial output, update, zoom, and cleanup together; it is not the sum of those elapsed times. The raw reports separately record worker preparation/bounding, postMessage transfer (aligned time origins), worker round trip, normalization, option conversion, and synchronous setOption time. Worker startup and ECharts loading are excluded. Request payloads contain only kind/count/revision; point data is generated and bounded in the worker. Byte counts are UTF-8 JSON worker-result sizes, not network traffic or an estimate of browser structured-clone storage.
+
+At 100,000 scatter points, disabling progressive alone in the baseline reduced initial/update time to 911.9/803.7 ms but increased zoom to 3003.8 ms. The optimized progressive-disabled control is also recorded. Production keeps ECharts' progressive defaults: large mode improves all three operations without a blanket progressive override. Small-data paths are unchanged; sub-frame timing differences in the table are measurement noise, not a portable speed guarantee.
+
+Transfer size is unchanged by rendering optimization. The 100,000-point line is 2,752,497 bytes and its main-thread normalization remains approximately 41.9 ms. Validation is preserved on both sides of the worker boundary. Reports also include a clearly synthetic legacy duplicate (outputs plus plots) and isolated structuredClone durations. These controls measure duplication cost, not a revived legacy runtime. The actual P21 before/after migration remains recorded separately in [Output contract migration](#output-contract-migration); these chart comparisons are both post-P21.
+
+The P08 bar control converts 100,000 values without rendering. Positive-only values allocate no point wrappers; alternating signs wrap 50,000 negative points. Median option conversion before/after was 5.6/5.1 ms for positive bars and 7.5/7.7 ms for mixed bars. The existing selective wrapping remains unchanged.
+
+Correctness is checked independently of timing: real ECharts tests cover spikes, monotonicity, missing-coordinate rejection, raw-data identity, zoom detail, and compatible updates; browser tests cover pointer tooltips, theme/update state, tables, and PNG/SVG exports. Sampling never feeds summaries or statistics. Tables/CSV keep original values within the existing 10,000-row limit. No new public chart option or telemetry is introduced, and CI has no wall-clock performance threshold.
+
+Reproduce without other builds or tests running:
+
+```sh
+pnpm exec node tests/performance/chart-rendering.mjs --source /path/to/source --label before --output test-results/chart-before.json
+pnpm exec node tests/performance/chart-rendering.mjs --label after --output test-results/chart-after.json
+```
+
+The selected source tree must resolve the same installed dependencies (as the existing chart gallery baseline does). Set PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH for a system/Nix Chromium. The benchmark requires at least five measured runs and rejects browser errors; raw rendering artifacts go under test-results.

@@ -103,6 +103,7 @@ export async function runCli(commandOrArgs = [], argsOrOptions = {}, legacyOptio
       });
       return;
     case 'lint-rust':
+      await runHelperCargo({ argv: ['fmt', '--all', '--', '--check'], paths });
       await runHelperCargo({ argv: ['clippy', '--all-targets', '--', '-D', 'warnings'], paths });
       return;
     case 'doc-rust':
