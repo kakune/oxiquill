@@ -101,3 +101,10 @@ it('bounds cell allocation and renders an empty and a large known field', () => 
     chart.dispose();
   }
 });
+
+it('treats both field axes as coordinates without an automatic zero line', () => {
+  const series = (patch) => chartSpecToEChartsOptions(validate(patch).artifact.spec).series;
+  expect(series({}).map((item) => item.id)).toEqual(['field:0']);
+  const annotated = series({ annotations: [{ kind: 'line', axis: 'y', value: 0, label: 'Equator' }] });
+  expect(annotated.at(-1)).toMatchObject({ markLine: { data: [{ yAxis: 0, label: { show: true } }] } });
+});

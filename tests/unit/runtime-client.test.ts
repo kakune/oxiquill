@@ -80,6 +80,7 @@ function makeCell(language: CellLanguage, overrides: Partial<CellManifest> = {})
     crates: [],
     timeoutMs: 1_000,
     showSource: true,
+    editable: language === 'python',
     pagePath: 'page.mdx',
     ...overrides
   };

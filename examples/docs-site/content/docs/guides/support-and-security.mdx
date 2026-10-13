@@ -24,6 +24,8 @@ Author-provided Rust, Python, and Haskell source becomes code that runs in a bro
 - Rust helper crates and generated Wasm are build inputs. Review them like application dependencies.
 - Pyodide and declared Python packages execute inside the site's origin and are trusted dependencies even though Python runs in a worker.
 - Haskell runs through a WASI shim with only the descriptors supplied by Oxiquill, but the generated module remains executable content.
+- Python drafts edited by readers run in the same worker and origin as authored cells, with imports limited to packages bundled with the site. Drafts stay on the reader's page and are never published or shared, but readers should run only code they trust. Set `editable: false` on cells that should not offer editing.
+- Input links contain only values of inputs that authors mark with `share: true`. Values are validated against each input's declared type and bounds before execution; links never contain code.
 - Worker timeouts protect responsiveness; they do not prove that arbitrary code is safe or confidential.
 
 Do not publish interactive code or generated runtime assets from an untrusted author without review. Do not place secrets in static pages, worker messages, source code, public assets, or build-time environment values exposed to the client.

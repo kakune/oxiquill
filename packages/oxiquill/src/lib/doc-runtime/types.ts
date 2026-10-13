@@ -36,6 +36,7 @@ export interface CellManifest {
   crates: readonly string[];
   timeoutMs: number;
   showSource: boolean;
+  editable: boolean;
   pagePath: string;
 }
 

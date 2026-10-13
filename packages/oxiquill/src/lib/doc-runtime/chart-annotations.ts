@@ -35,7 +35,9 @@ export function chartAnnotationSeries(
   const amountAxis = spec.kind === 'bar' && spec.orientation === 'horizontal' ? 'x' : 'y';
   const bounds = numericBounds(coordinates[amountAxis]);
   const annotations = [...(spec.annotations ?? [])];
+  // Field axes are spatial coordinates rather than amounts, so zero is not a baseline there.
   if (
+    spec.kind !== 'field' &&
     chartAxisType(spec, amountAxis) === 'value' &&
     bounds &&
     bounds.minimum < 0 &&

@@ -140,6 +140,7 @@ function makeCell(overrides: Partial<CellManifest> = {}): CellManifest {
     crates: [],
     timeoutMs: 1_000,
     showSource: true,
+    editable: overrides.language === 'python',
     pagePath: 'page.mdx',
     ...overrides
   };
@@ -214,6 +215,14 @@ describe('InteractiveCell', () => {
     } finally {
       history.replaceState(null, '', previousUrl);
     }
+  });
+
+  it('omits Python draft editing when the author disables it', () => {
+    const cell = makeCell({ language: 'python', source: 'print(1)', editable: false });
+    setManifestCells([cell]);
+    render(<InteractiveCell cellId={cell.id} />);
+    expect(screen.getByRole('button', { name: 'Run' })).toBeVisible();
+    expect(screen.queryByRole('button', { name: 'Edit Python' })).not.toBeInTheDocument();
   });
 
   it('discards Python drafts after a source refresh, including a later source rollback', async () => {

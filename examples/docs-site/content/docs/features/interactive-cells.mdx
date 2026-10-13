@@ -25,6 +25,7 @@ Only these top-level fields are accepted; unknown fields are errors:
 | `crates`     | Unique non-empty helper package names from direct children of `cratesDir`; Rust only.                                      | `[]`     |
 | `timeoutMs`  | Integer milliseconds from `1` through `2147483647`, inclusive.                                                             | `30000`  |
 | `showSource` | Boolean controlling initial source visibility.                                                                             | `true`   |
+| `editable`   | Boolean allowing readers to edit and run a local draft; Python only.                                                       | `true`   |
 | `setup`      | One page-local Python cell ID without inputs; requires `python.experimentalSetup: true`.                                   | None     |
 
 The source must contain non-metadata code. Malformed YAML, a wrong scalar/collection type, duplicate normalized ID/binding/function, unknown package/crate, or language-mismatched dependency field fails before output is written. Diagnostics include page path, fence start line, cell ID when available, and the exact field path.
@@ -87,7 +88,7 @@ The visible `label` is the control's accessible name; the input key is only the 
 
 ## Reader controls
 
-Python cells offer **Edit Python** with a plain textarea. While editing, both source and input changes wait for **Run**, even in reactive cells. **Restore original code** resets the draft without running it; **Finish editing** discards the draft and its output and restores the authored run mode. Navigation and source refresh discard drafts. Editing does not change the published page or sharing link. Imports are limited to the packages bundled with the site, which are the `packages` declared by any Python cell and their dependencies; other Pyodide packages report an error instead of being downloaded. The normal cell timeout still applies.
+Python cells offer **Edit Python** with a plain textarea unless the cell sets `editable: false`. While editing, both source and input changes wait for **Run**, even in reactive cells. **Restore original code** resets the draft without running it; **Finish editing** discards the draft and its output and restores the authored run mode. Navigation and source refresh discard drafts. Editing does not change the published page or sharing link. Imports are limited to the packages bundled with the site, which are the `packages` declared by any Python cell and their dependencies; other Pyodide packages report an error instead of being downloaded. The normal cell timeout still applies.
 
 To include an input in **Copy input link**, add `share: true` to that input's metadata. Sharing is disabled by default, including for text fields. The link stores only differences from defaults for opted-in inputs on this page. Existing query parameters and heading links remain intact. Invalid or outdated input values are ignored when opening a link. Links longer than 8,192 characters cannot be copied. Code, outputs, random state, and external data are not included; identical inputs do not guarantee identical results.
 
