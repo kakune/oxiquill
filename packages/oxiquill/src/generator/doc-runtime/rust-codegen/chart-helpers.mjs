@@ -136,9 +136,12 @@ function generateHeatmapChartHelper() {
 
 function generateChartLimitHelper() {
   return `fn ensure_chart_data_limit(spec: &Value) -> Result<(), String> {
+    if spec.get("annotations").and_then(Value::as_array).is_some_and(|items| items.len() > ${outputArtifactLimits.chartAnnotations}) {
+        return Err("Chart annotations exceed the 100 item limit.".to_owned());
+    }
     let kind = spec.get("kind").and_then(Value::as_str).unwrap_or_default();
     let data_items = match kind {
-        "line" | "scatter" | "area" => spec
+        "line" | "scatter" | "area" | "errorbar" | "band" | "bubble" => spec
             .get("series")
             .and_then(Value::as_array)
             .map(|series| {
@@ -153,7 +156,7 @@ function generateChartLimitHelper() {
                     .sum()
             })
             .unwrap_or(0),
-        "bar" => spec
+        "bar" | "boxplot" => spec
             .get("series")
             .and_then(Value::as_array)
             .map(|series| {
@@ -163,10 +166,16 @@ function generateChartLimitHelper() {
                     .sum()
             })
             .unwrap_or(0),
+        "field" => spec.get("values").and_then(Value::as_array).map(|rows| rows.iter().map(|row| row.as_array().map(|items| items.len().max(1)).unwrap_or(1)).sum()).unwrap_or(0),
         "histogram" => spec.get("bins").and_then(Value::as_array).map(Vec::len).unwrap_or(0),
         "heatmap" => spec.get("data").and_then(Value::as_array).map(Vec::len).unwrap_or(0),
         _ => 0,
     };
+    for key in ["xEdges", "yEdges"] {
+        if spec.get(key).and_then(Value::as_array).is_some_and(|items| items.len() > ${outputArtifactLimits.chartDataItems} + 1) {
+            return Err("Field boundaries exceed the chart data limit.".to_owned());
+        }
+    }
     let category_items = ["categories", "xCategories", "yCategories", "series"]
         .iter()
         .filter_map(|key| spec.get(*key).and_then(Value::as_array))

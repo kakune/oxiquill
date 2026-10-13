@@ -165,3 +165,18 @@ assert len(table["columns"]) == __oxiquill_table_column_limit
 assert table["truncated"]
 `);
 });
+
+it('bounds new chart payloads before leaving Python', () => {
+  python.runPython(`
+for spec in (
+    {"kind": "boxplot", "series": [{"values": [[0, 1, 2, 3, 4]] * 100001}]},
+    {"kind": "bubble", "series": [{"points": [[0, 1, 2]] * 100001}]},
+    {"kind": "field", "xEdges": [0, 1], "yEdges": [0, 1], "values": [[0] * 100001]},
+    {"kind": "field", "xEdges": [0] * 100002, "yEdges": [], "values": []},
+    {"kind": "line", "series": [], "annotations": [{}] * 101}
+):
+    display_chart(spec)
+assert len(__oxiquill_outputs) == 5, repr(__oxiquill_outputs)
+assert all(output["kind"] == "__oxiquill_error" and any(word in output["message"].lower() for word in ("limit", "maximum")) for output in __oxiquill_outputs), repr(__oxiquill_outputs)
+`);
+});

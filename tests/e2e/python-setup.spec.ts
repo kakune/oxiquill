@@ -6,11 +6,13 @@ test('Python setup is repeatable across execution order, reset, and navigation',
   await page.goto('/guides/python-runtime/');
   const range = page.getByTestId('cell-guides__python-runtime__setup-range');
   await range.scrollIntoViewIfNeeded();
+  await expect(range.locator('xpath=ancestor::astro-island[1]')).not.toHaveAttribute('ssr', '', { timeout: 30_000 });
   await range.getByRole('button', { name: 'Run', exact: true }).click();
   await expect(range.getByTestId('run-output')).toContainText('Range: 1.0 to 10.0', { timeout: 180_000 });
   await expect(range).not.toContainText('Setup completed');
   const mean = page.getByTestId('cell-guides__python-runtime__setup-mean');
   await mean.scrollIntoViewIfNeeded();
+  await expect(mean.locator('xpath=ancestor::astro-island[1]')).not.toHaveAttribute('ssr', '', { timeout: 30_000 });
   await mean.getByRole('button', { name: 'Run', exact: true }).click();
   await expect(mean.getByTestId('run-output')).toContainText('Mean: 6.714629');
   await mean.getByLabel('scale', { exact: true }).fill('2');
@@ -22,6 +24,7 @@ test('Python setup is repeatable across execution order, reset, and navigation',
   await page.goto('/');
   await page.goto('/guides/python-runtime/');
   await range.scrollIntoViewIfNeeded();
+  await expect(range.locator('xpath=ancestor::astro-island[1]')).not.toHaveAttribute('ssr', '', { timeout: 30_000 });
   await range.getByRole('button', { name: 'Run', exact: true }).click();
   await expect(range.getByTestId('run-output')).toContainText('Range: 1.0 to 10.0', { timeout: 180_000 });
 });

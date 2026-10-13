@@ -1,10 +1,11 @@
+import type { ChartSpec } from '@chart-source/lib/doc-runtime/types';
 import { render } from 'preact';
 import { useState } from 'preact/hooks';
 import ChartOutput from '@chart-source/components/doc-runtime/ChartOutput';
 import TableOutput from '@chart-source/components/doc-runtime/TableOutput';
 import { labelsForLanguage } from '@chart-source/lib/doc-runtime/runtime-localization';
 import * as echarts from 'echarts/core';
-import { chartFixtures } from '../chart-specs';
+import { chartFixtures } from '@chart-fixtures';
 import '@starlight-props';
 import '@chart-source/styles/custom.css';
 
@@ -17,6 +18,7 @@ const width = Number(query.get('width') ?? 720);
 
 function Gallery() {
   const [revision, setRevision] = useState(0);
+  const [clearAnnotations, setClearAnnotations] = useState(false);
   const [formatted, setFormatted] = useState(true);
   const [reordered, setReordered] = useState(false);
   const [range, setRange] = useState<'fixed' | 'changed' | 'auto'>('fixed');
@@ -39,6 +41,7 @@ function Gallery() {
           }}
         />
       ) : null}
+      <button onClick={() => setClearAnnotations(true)}>Clear annotations</button>
       <button onClick={() => setRange('changed')}>Change range</button>
       <button onClick={() => setRange('auto')}>Clear range</button>
       <button onClick={() => setReordered(true)}>Reorder and rename series</button>
@@ -53,7 +56,8 @@ function Gallery() {
               artifact={{
                 kind: 'chart',
                 spec: {
-                  ...spec,
+                  ...updatedChart(spec, revision),
+                  ...(clearAnnotations ? { annotations: [] } : {}),
                   ...(query.get('renderer') === 'svg' ? { style: { ...spec.style, renderer: 'svg' as const } } : {}),
                   ...(query.has('fixedRange')
                     ? range === 'auto'
@@ -86,6 +90,79 @@ function Gallery() {
   );
 }
 
-Object.assign(window, { galleryECharts: echarts });
+Object.assign(window, { galleryECharts: echarts, galleryFixtureCount: Object.keys(chartFixtures).length });
 const app = document.getElementById('app');
 if (app) render(<Gallery />, app);
+
+function updatedChart(spec: ChartSpec, revision: number): ChartSpec {
+  if (!revision) return spec;
+  switch (spec.kind) {
+    case 'bar':
+      return {
+        ...spec,
+        series: spec.series.map((series) => ({
+          ...series,
+          values: series.values.map((value) => (value === null ? null : value * (1 + revision / 10)))
+        }))
+      };
+    case 'area':
+      return {
+        ...spec,
+        series: spec.series.map((series) => ({
+          ...series,
+          points: series.points.map(([x, y]) => [x, Number(y) + revision] as const)
+        }))
+      };
+    case 'errorbar':
+    case 'band':
+      return {
+        ...spec,
+        series: spec.series.map((series) => ({
+          ...series,
+          points: series.points.map(([x, center, lower, upper]) =>
+            center === null
+              ? ([x, null, null, null] as const)
+              : ([x, center + revision, lower + revision, upper + revision] as const)
+          )
+        }))
+      };
+    case 'boxplot':
+      return {
+        ...spec,
+        series: spec.series.map((series) => ({
+          ...series,
+          values: series.values.map((value) =>
+            value === null
+              ? null
+              : ([
+                  value[0] + revision,
+                  value[1] + revision,
+                  value[2] + revision,
+                  value[3] + revision,
+                  value[4] + revision
+                ] as const)
+          )
+        }))
+      };
+    case 'bubble':
+      return {
+        ...spec,
+        series: spec.series.map((series) => ({
+          ...series,
+          points: series.points.map(([x, y, size, color]) => [x, y, size + revision, color ?? null] as const)
+        }))
+      };
+    case 'field':
+      return {
+        ...spec,
+        values: spec.values.map((row) => row.map((value) => (value === null ? null : value + revision)))
+      };
+    case 'heatmap':
+      return {
+        ...spec,
+        data: spec.data.map(([x, y, value], index) => [x, y, index === 0 ? value + revision : value] as const)
+      };
+    default:
+      return spec;
+  }
+}

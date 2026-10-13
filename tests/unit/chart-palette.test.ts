@@ -1,5 +1,9 @@
 import { describe, expect, it } from 'vitest';
-import { chartPalette, heatmapPalette } from '../../packages/oxiquill/src/lib/doc-runtime/chart-palette';
+import {
+  chartPalette,
+  heatmapPalette,
+  divergingPalette
+} from '../../packages/oxiquill/src/lib/doc-runtime/chart-palette';
 import {
   chartSeriesPresentation,
   chartSpecToEChartsOptions
@@ -103,4 +107,15 @@ describe('fixed chart palette', () => {
       rendered.map((series) => series.symbol)
     );
   });
+});
+
+it.each(['light', 'dark'] as const)('distinguishes both arms of the %s diverging palette', (theme) => {
+  const [low, middle, high] = divergingPalette[theme].map(rgb);
+  expect(Math.hypot(...oklab(middle).slice(1))).toBeLessThan(0.04);
+  expect(delta(oklab(low), oklab(high))).toBeGreaterThanOrEqual(15);
+  for (const matrix of simulations) {
+    const transform = (color: readonly number[]) =>
+      oklab(matrix.map((row) => Math.max(0, Math.min(1, dot(row, color)))));
+    expect(delta(transform(low), transform(high))).toBeGreaterThanOrEqual(8);
+  }
 });

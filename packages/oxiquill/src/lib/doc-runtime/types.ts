@@ -52,7 +52,16 @@ export type ArtifactStream = 'stdout' | 'stderr' | 'display';
 export type TableColumnType = 'string' | 'number' | 'integer' | 'boolean' | 'date' | 'datetime' | 'null' | 'unknown';
 export type ChartAxisType = 'value' | 'category' | 'time' | 'log';
 export type ChartSpec =
-  LineChartSpec | ScatterChartSpec | BarChartSpec | HistogramChartSpec | AreaChartSpec | HeatmapChartSpec;
+  | LineChartSpec
+  | ScatterChartSpec
+  | BarChartSpec
+  | HistogramChartSpec
+  | AreaChartSpec
+  | HeatmapChartSpec
+  | IntervalChartSpec
+  | BoxplotChartSpec
+  | BubbleChartSpec
+  | FieldChartSpec;
 export type OutputArtifact = TextArtifact | JsonArtifact | TableArtifact | ChartArtifact | ImageArtifact | HtmlArtifact;
 
 export interface BaseArtifact {
@@ -139,6 +148,7 @@ export interface ScatterChartStyle extends BaseChartStyle {
 }
 
 export interface BaseChartSpec {
+  annotations?: readonly ChartAnnotation[];
   style?: BaseChartStyle;
   title?: string;
   xLabel?: string;
@@ -155,6 +165,18 @@ export interface BaseChartSpec {
   tooltip?: boolean;
   dataZoom?: boolean;
 }
+
+export type ChartAnnotation = {
+  axis: 'x' | 'y';
+  label?: string;
+} & (
+  | {
+      kind: 'line';
+      value: number | string;
+      style?: { color?: string; lineType?: 'solid' | 'dashed' | 'dotted'; width?: number };
+    }
+  | { kind: 'range'; from: number | string; to: number | string; style?: { color?: string; opacity?: number } }
+);
 
 export type ChartSymbol = 'circle' | 'emptyCircle' | 'rect' | 'triangle' | 'diamond' | 'none';
 export type ChartSeriesColor = string | { light?: string; dark?: string };
@@ -198,6 +220,7 @@ export interface ScatterChartSpec extends BaseChartSpec {
 }
 
 export interface BarChartSeries {
+  stack?: string;
   id?: string;
   style?: ChartSeriesStyle;
   name?: string;
@@ -206,7 +229,7 @@ export interface BarChartSeries {
 
 export interface BarChartSpec extends BaseChartSpec {
   kind: 'bar';
-  yType?: 'value' | 'log';
+  orientation?: 'vertical' | 'horizontal';
   categories: readonly string[];
   series: readonly BarChartSeries[];
 }
@@ -222,16 +245,41 @@ export interface HistogramChartSpec extends BaseChartSpec {
 export interface AreaChartSpec extends BaseChartSpec {
   style?: LineChartStyle;
   kind: 'area';
-  series: readonly XyChartSeries[];
+  series: readonly AreaChartSeries[];
+}
+
+export interface AreaChartSeries extends XyChartSeries {
+  stack?: string;
 }
 
 export interface HeatmapChartSpec extends BaseChartSpec {
+  colorScale?: 'sequential' | 'diverging';
+  colorMin?: number;
+  colorMax?: number;
+  center?: number;
   kind: 'heatmap';
   xType?: 'category';
   yType?: 'category';
   xCategories?: readonly string[];
   yCategories?: readonly string[];
   data: readonly (readonly [number | string, number | string, number])[];
+}
+
+export type IntervalPoint =
+  readonly [number | string, number, number, number] | readonly [number | string, null, null, null];
+
+export interface IntervalChartSeries {
+  id?: string;
+  name?: string;
+  style?: ChartSeriesStyle;
+  points: readonly IntervalPoint[];
+}
+
+export interface IntervalChartSpec extends BaseChartSpec {
+  kind: 'errorbar' | 'band';
+  style?: LineChartStyle;
+  yType?: 'value' | 'log';
+  series: readonly IntervalChartSeries[];
 }
 
 export interface RawCellExecutionResult {
@@ -281,3 +329,35 @@ export type RuntimeWorkerResponse =
       error: string;
       partialResult?: RawCellExecutionResult;
     };
+
+export type BoxplotValue = readonly [number, number, number, number, number];
+export interface BoxplotChartSpec extends BaseChartSpec {
+  kind: 'boxplot';
+  xType?: 'category';
+  yType?: 'value' | 'log';
+  categories: readonly string[];
+  series: readonly { id?: string; name?: string; style?: ChartSeriesStyle; values: readonly (BoxplotValue | null)[] }[];
+}
+
+export type BubblePoint = readonly [number | string, number | string, number, (number | null)?];
+export interface BubbleSizeMapping {
+  maxValue?: number;
+  minPixels?: number;
+  maxPixels?: number;
+  scale?: 'area' | 'radius';
+}
+export interface BubbleChartSpec extends BaseChartSpec {
+  kind: 'bubble';
+  sizeMapping?: BubbleSizeMapping;
+  colorMapping?: { min: number; max: number; palette?: ChartPalette };
+  series: readonly { id?: string; name?: string; style?: ScatterSeriesStyle; points: readonly BubblePoint[] }[];
+}
+
+export interface FieldChartSpec extends BaseChartSpec {
+  kind: 'field';
+  xType?: 'value';
+  yType?: 'value';
+  xEdges: readonly number[];
+  yEdges: readonly number[];
+  values: readonly (readonly (number | null)[])[];
+}

@@ -43,6 +43,16 @@ try {
       assert.deepEqual(actual, fixture.expected, fixture.name);
     }
   }
+  for (const spec of [
+    { kind: 'boxplot', categories: [], series: [{ values: Array.from({ length: 100001 }, () => [0, 1, 2, 3, 4]) }] },
+    { kind: 'bubble', series: [{ points: Array.from({ length: 100001 }, () => [0, 1, 2]) }] },
+    { kind: 'field', xEdges: [0, 1], yEdges: [0, 1], values: [Array(100001).fill(0)] },
+    { kind: 'field', xEdges: Array(100002).fill(0), yEdges: [], values: [] },
+    { kind: 'line', series: [], annotations: Array(101).fill({}) }
+  ]) {
+    const output = run('generic-charts', { fixture: JSON.stringify(spec), metadata: '{}' }).outputs[0];
+    assert.equal(output.kind, '__oxiquill_error', 'Producer must reject oversized charts before transfer');
+  }
   const runMetadata = (metadata) =>
     validateOutputArtifacts([
       run('generic-charts', {

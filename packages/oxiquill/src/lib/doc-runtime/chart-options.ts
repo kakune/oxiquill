@@ -1,11 +1,22 @@
+import { fieldSeries } from './chart-field.js';
+import { bubbleSizeMapping } from './chart-bubble.js';
+import { heatmapColorScale } from './chart-color-scale.js';
+import { chartAnnotationSeries, annotationDescription } from './chart-annotations.js';
+import { intervalSeries } from './chart-intervals.js';
 import { histogramLabel, histogramSeries } from './chart-histogram.js';
 import { chartAxisType, chartIncludesZero } from './chart-axes.js';
 import type { ChartSpec, ChartNumberFormat } from './types.js';
 import { normalizeHeatmapSpec } from './heatmap-normalization.js';
 import { labelsForLanguage, type RuntimeLabels, type RuntimeLocale } from './runtime-localization.js';
 import { chartCoordinateFormatter, chartCoordinates, chartNumberFormatter, numericBounds } from './chart-format.js';
-import { categoryLabelLayout, chartHeight, chartLayout, truncateChartLabel } from './chart-layout.js';
-import { chartPalette, heatmapPalette } from './chart-palette.js';
+import {
+  categoryLabelLayout,
+  chartHeight,
+  chartLayout,
+  truncateChartLabel,
+  hasChartColorScale
+} from './chart-layout.js';
+import { chartPalette, heatmapPalette, divergingPalette } from './chart-palette.js';
 
 export type ChartTheme = 'light' | 'dark';
 export type EChartsOptions = Record<string, unknown> & { series: readonly Record<string, unknown>[] };
@@ -56,7 +67,7 @@ export function chartSeriesPresentation(spec: ChartSpec, index: number, theme: C
       palette[index % palette.length],
     lineType: line?.lineType ?? (['solid', 'dashed', 'dotted'] as const)[cycle % 3],
     symbol:
-      spec.kind === 'scatter'
+      spec.kind === 'scatter' || spec.kind === 'bubble'
         ? (spec.series[index].style?.symbol ?? (['circle', 'rect', 'triangle', 'diamond'] as const)[cycle % 4])
         : (line?.symbol ?? 'emptyCircle')
   };
@@ -68,7 +79,8 @@ export function chartStructuralSignature(spec: ChartSpec): string {
     chartAxisType(spec, 'x'),
     chartAxisType(spec, 'y'),
     spec.tooltip !== false,
-    spec.kind !== 'heatmap' && spec.dataZoom !== false
+    spec.kind !== 'heatmap' && spec.dataZoom !== false,
+    hasChartColorScale(spec)
   ]);
 }
 
@@ -133,6 +145,7 @@ export function chartSpecToEChartsOptions(
   const names = seriesNames(spec, locale);
   const nameById = seriesLabels(spec, names);
   const heatmap = spec.kind === 'heatmap' ? normalizeHeatmapSpec(spec) : undefined;
+  const horizontalBar = spec.kind === 'bar' && spec.orientation === 'horizontal';
   const xType = chartAxisType(spec, 'x');
   const yType = chartAxisType(spec, 'y');
   const xData = values.x;
@@ -140,9 +153,12 @@ export function chartSpecToEChartsOptions(
     const coordinates = horizontal ? xData : values.y;
     const type = horizontal ? xType : yType;
     const format = horizontal ? style?.xFormat : style?.yFormat;
+    const edges = spec.kind === 'field' ? (horizontal ? spec.xEdges : spec.yEdges) : undefined;
+    const zero = chartIncludesZero(spec, horizontal ? 'x' : 'y');
     const pointerFormat = chartCoordinateFormatter(coordinates, type, locale, false, format);
     return {
       type,
+      inverse: !horizontal && horizontalBar,
       name: horizontal ? spec.xLabel : spec.kind === 'histogram' ? histogramLabel(spec, labels) : spec.yLabel,
       nameLocation: 'middle',
       nameGap: horizontal ? 36 : 32,
@@ -150,8 +166,10 @@ export function chartSpecToEChartsOptions(
       nameTruncate: { maxWidth: horizontal ? layout.plotWidth : layout.plotHeight, ellipsis: '…' },
       nameTextStyle: { color: chrome.text },
       ...(type === 'category' ? { data: coordinates } : {}),
-      min: (horizontal ? spec.xMin : spec.yMin) ?? null,
-      max: (horizontal ? spec.xMax : spec.yMax) ?? null,
+      min: (horizontal ? spec.xMin : spec.yMin) ?? (edges?.length ? (zero ? Math.min(0, edges[0]) : edges[0]) : null),
+      max:
+        (horizontal ? spec.xMax : spec.yMax) ??
+        (edges?.length ? (zero ? Math.max(0, edges[edges.length - 1]) : edges[edges.length - 1]) : null),
       scale: !chartIncludesZero(spec, horizontal ? 'x' : 'y'),
       axisLabel: {
         color: chrome.axis,
@@ -170,13 +188,15 @@ export function chartSpecToEChartsOptions(
           formatter: ({ value }: { value: unknown }) => pointerFormat(value)
         }
       },
-      axisLine: { show: Boolean(horizontal && baseline), onZero: true, lineStyle: { color: chrome.axis, width: 1.5 } },
+      axisLine: {
+        show: false,
+        onZero: true,
+        lineStyle: { color: chrome.axis, width: 1.5 }
+      },
       axisTick: { show: false },
       splitLine: { show: style?.showGrid !== false, lineStyle: { color: chrome.splitLine, opacity: 0.45 } }
     };
   };
-  const yBounds = numericBounds(values.y);
-  const baseline = yType === 'value' && yBounds && yBounds.minimum < 0 && yBounds.maximum > 0;
   const animation = !reducedMotion && style?.animation !== false;
   const duration = animation ? (style?.animationDurationMs ?? 180) : 0;
   const options: EChartsOptions = {
@@ -196,7 +216,10 @@ export function chartSpecToEChartsOptions(
       spec.tooltip === false
         ? undefined
         : {
-            trigger: spec.kind === 'scatter' || spec.kind === 'histogram' || heatmap ? 'item' : 'axis',
+            trigger:
+              ['scatter', 'bubble', 'histogram', 'errorbar', 'band', 'boxplot', 'field'].includes(spec.kind) || heatmap
+                ? 'item'
+                : 'axis',
             confine: true,
             padding: [10, 12],
             borderWidth: 1,
@@ -231,7 +254,8 @@ export function chartSpecToEChartsOptions(
         : [
             {
               type: 'inside',
-              filterMode: spec.kind === 'histogram' ? 'weakFilter' : 'filter',
+              ...(horizontalBar ? { yAxisIndex: 0 } : { xAxisIndex: 0 }),
+              filterMode: ['histogram', 'errorbar', 'band', 'field'].includes(spec.kind) ? 'weakFilter' : 'filter',
               start: 0,
               end: 100,
               startValue: null,
@@ -254,28 +278,72 @@ export function chartSpecToEChartsOptions(
               }
             }
           : {}),
-        ...(spec.kind === 'scatter'
+        ...(spec.kind === 'scatter' || spec.kind === 'bubble'
           ? {
               symbol,
               itemStyle: { color, borderColor: chrome.tooltipBackground, borderWidth: 1 }
             }
           : {}),
+        // Box paths include the median, so a filled box must not share the stroke color.
+        ...(spec.kind === 'boxplot'
+          ? { itemStyle: { color: chrome.background, borderColor: color, borderWidth: 1.5 } }
+          : {}),
         ...(heatmap ? { itemStyle: { borderColor: chrome.background, borderWidth: 1 } } : {})
       };
     })
   };
-  if (heatmap) {
+  if (spec.kind === 'heatmap') {
+    const scale = heatmapColorScale(spec);
+    options.visualMap = {
+      calculable: true,
+      ...layout.visualMap,
+      min: scale.visualMin,
+      max: scale.visualMax,
+      dimension: spec.colorScale === 'diverging' ? 3 : 2,
+      seriesIndex: 0,
+      formatter: (value: number) =>
+        chartNumberFormatter(values.value, locale, false, style?.valueFormat)(scale.unmap(value)),
+      textStyle: { color: chrome.text },
+      inRange: {
+        color:
+          style?.palette?.[theme] ?? (spec.colorScale === 'diverging' ? divergingPalette[theme] : heatmapPalette[theme])
+      }
+    };
+  }
+  if (spec.kind === 'field') {
     const range = numericBounds(values.value);
     options.visualMap = {
       calculable: true,
       ...layout.visualMap,
       min: range?.minimum ?? 0,
       max: range?.maximum ?? 1,
+      dimension: 4,
+      seriesIndex: 0,
       formatter: chartNumberFormatter(values.value, locale, false, style?.valueFormat),
       textStyle: { color: chrome.text },
       inRange: { color: style?.palette?.[theme] ?? heatmapPalette[theme] }
     };
+    if (spec.dataZoom !== false)
+      options.dataZoom = [
+        { type: 'inside', xAxisIndex: 0, filterMode: 'weakFilter', start: 0, end: 100 },
+        { type: 'inside', yAxisIndex: 0, filterMode: 'weakFilter', start: 0, end: 100 }
+      ];
   }
+  if (spec.kind === 'bubble' && spec.colorMapping) {
+    options.visualMap = {
+      calculable: true,
+      ...layout.visualMap,
+      min: spec.colorMapping.min,
+      max: spec.colorMapping.max,
+      dimension: 3,
+      seriesIndex: spec.series.map((_, index) => index),
+      formatter: chartNumberFormatter(values.value, locale, false, style?.valueFormat),
+      textStyle: { color: chrome.text },
+      inRange: { color: spec.colorMapping.palette?.[theme] ?? heatmapPalette[theme] }
+    };
+  }
+  const annotations = chartAnnotationSeries(spec, chrome, labels, values);
+  if (annotations) options.series = [...options.series, annotations];
   return options;
 }
 
@@ -295,9 +363,7 @@ export function chartResizeOptions(
   const legend = canvasLegend && showLegend(spec);
   const layout = chartLayout(spec, width, height, legend);
   const axis = (horizontal: boolean) => {
-    const category = horizontal
-      ? chartAxisType(spec, 'x') === 'category'
-      : spec.kind === 'heatmap' || spec.yType === 'category';
+    const category = horizontal ? chartAxisType(spec, 'x') === 'category' : chartAxisType(spec, 'y') === 'category';
     return {
       nameTruncate: { maxWidth: horizontal ? layout.plotWidth : layout.plotHeight, ellipsis: '…' },
       ...(category
@@ -318,7 +384,7 @@ export function chartResizeOptions(
     yAxis: axis(false),
     ...(legend ? { legend: { formatter: legendFormatter(spec, locale, width) } } : {}),
     ...(spec.tooltip !== false ? { tooltip: { extraCssText: tooltipCss(width) } } : {}),
-    ...(spec.kind === 'heatmap' ? { visualMap: layout.visualMap } : {})
+    ...(hasChartColorScale(spec) ? { visualMap: layout.visualMap } : {})
   };
 }
 
@@ -328,6 +394,8 @@ function chartSeries(spec: ChartSpec): readonly Record<string, unknown>[] {
     case 'area':
       return spec.series.map((series) => ({
         type: 'line',
+        stack: 'stack' in series ? (series.stack ?? '') : '',
+        stackStrategy: 'samesign',
         showSymbol: series.style?.showSymbol ?? series.points.length === 1,
         symbol: series.style?.symbol ?? 'emptyCircle',
         smooth: series.style?.smooth ?? false,
@@ -345,35 +413,73 @@ function chartSeries(spec: ChartSpec): readonly Record<string, unknown>[] {
     case 'bar':
       return spec.series.map((series) => ({
         type: 'bar',
+        stack: series.stack ?? '',
+        stackStrategy: 'samesign',
         barMaxWidth: 40,
-        itemStyle: { borderRadius: [3, 3, 0, 0] },
-        data: barData(series.values)
+        itemStyle: { borderRadius: series.stack ? 0 : spec.orientation === 'horizontal' ? [0, 3, 3, 0] : [3, 3, 0, 0] },
+        data: series.stack ? series.values : barData(series.values, spec.orientation === 'horizontal')
+      }));
+    case 'errorbar':
+    case 'band':
+      return spec.series.map((series) => intervalSeries(spec, series) as Record<string, unknown>);
+    case 'field':
+      return [fieldSeries(spec) as Record<string, unknown>];
+    case 'bubble': {
+      const mapping = bubbleSizeMapping(spec);
+      return spec.series.map((series) => ({
+        type: 'scatter',
+        large: false,
+        symbolSize: (value: readonly number[]) => mapping.diameter(value[2]),
+        data: series.points.map((point) =>
+          point[3] == null ? { value: [...point.slice(0, 3), null], visualMap: false } : point
+        )
+      }));
+    }
+    case 'boxplot':
+      return spec.series.map((series) => ({
+        type: 'boxplot',
+        data: series.values.map((value) => value ?? ['-', '-', '-', '-', '-'])
       }));
     case 'histogram':
       return [histogramSeries(spec) as Record<string, unknown>];
-    case 'heatmap':
-      return [{ type: 'heatmap', data: normalizeHeatmapSpec(spec).data }];
+    case 'heatmap': {
+      const scale = heatmapColorScale(spec);
+      const data = normalizeHeatmapSpec(spec).data;
+      return [
+        {
+          type: 'heatmap',
+          data: spec.colorScale === 'diverging' ? data.map((point) => [...point, scale.map(point[2])]) : data
+        }
+      ];
+    }
     default:
       return [];
   }
 }
 
-function barData(values: readonly (number | null)[]) {
+function barData(values: readonly (number | null)[], horizontal: boolean) {
   if (!values.some((value) => value !== null && value < 0)) return values;
   return values.map((value) =>
-    value !== null && value < 0 ? { value, itemStyle: { borderRadius: [0, 0, 3, 3] } } : value
+    value !== null && value < 0
+      ? { value, itemStyle: { borderRadius: horizontal ? [3, 0, 0, 3] : [0, 0, 3, 3] } }
+      : value
   );
 }
 
 function chartTooltipFormatter(spec: ChartSpec, locale: RuntimeLocale, names: readonly string[]) {
+  const horizontalBar = spec.kind === 'bar' && spec.orientation === 'horizontal';
   const labels = labelsForLanguage(locale);
   const values = chartCoordinates(spec);
   const style = spec.style;
   const xType = chartAxisType(spec, 'x');
-  const yType = spec.kind === 'heatmap' ? 'category' : spec.yType;
+  const yType = chartAxisType(spec, 'y');
   const x = chartCoordinateFormatter(values.x, xType, locale, false, style?.xFormat);
   const y = chartCoordinateFormatter(values.y, yType, locale, false, style?.yFormat);
   const value = chartNumberFormatter(values.value, locale, false, style?.valueFormat);
+  const size = chartNumberFormatter(
+    spec.kind === 'bubble' ? spec.series.flatMap((series) => series.points.map((point) => point[2])) : [],
+    locale
+  );
   const nameById = seriesLabels(spec, names);
   return (input: unknown): string => {
     const axisTooltip = Array.isArray(input);
@@ -393,10 +499,63 @@ function chartTooltipFormatter(spec: ChartSpec, locale: RuntimeLocale, names: re
       const name = item.seriesId === undefined ? names[item.seriesIndex ?? 0] : nameById.get(item.seriesId);
       const coordinate = tuple ? x(tuple[0]) : (item.name ?? '');
       const amount = tuple ? tuple[1] : item.value;
-      const formatted = amount == null || amount === '-' ? '-' : y(amount);
+      const formatted = amount == null || amount === '-' ? '-' : horizontalBar ? x(amount) : y(amount);
       // ECharts generates the marker; authored labels and values are always escaped.
       const marker = typeof item.marker === 'string' ? item.marker : '';
-      if (spec.kind === 'histogram' && tuple) {
+      if (spec.kind === 'field' && tuple) {
+        rows.push(
+          marker +
+            escapeChartText(
+              'X: [' +
+                x(tuple[0]) +
+                ', ' +
+                x(tuple[1]) +
+                '), Y: [' +
+                y(tuple[2]) +
+                ', ' +
+                y(tuple[3]) +
+                '): ' +
+                value(Number(tuple[4]))
+            )
+        );
+      } else if (spec.kind === 'bubble' && tuple) {
+        rows.push(
+          marker +
+            [
+              name,
+              x(tuple[0]),
+              y(tuple[1]),
+              labels.chartSize + ': ' + size(Number(tuple[2])),
+              ...(tuple[3] == null ? [] : [labels.chartValue + ': ' + value(Number(tuple[3]))])
+            ]
+              .filter(Boolean)
+              .map((part) => escapeChartText(String(part)))
+              .join(': ')
+        );
+      } else if (spec.kind === 'boxplot' && tuple) {
+        const stats = tuple.length === 6 ? tuple.slice(1) : tuple;
+        rows.push(
+          marker +
+            [name, item.name, ...stats.map((value, index) => labels.chartBoxStatistics[index] + ': ' + y(value))]
+              .filter(Boolean)
+              .map((part) => escapeChartText(String(part)))
+              .join(': ')
+        );
+      } else if ((spec.kind === 'errorbar' || spec.kind === 'band') && tuple) {
+        rows.push(
+          marker +
+            [
+              name,
+              x(tuple[0]),
+              labels.chartValue + ': ' + y(tuple[1]),
+              labels.chartBinLower + ': ' + y(tuple[2]),
+              labels.chartBinUpper + ': ' + y(tuple[3])
+            ]
+              .filter(Boolean)
+              .map((part) => escapeChartText(String(part)))
+              .join(': ')
+        );
+      } else if (spec.kind === 'histogram' && tuple) {
         rows.push(
           marker +
             escapeChartText(
@@ -439,7 +598,16 @@ export function chartDataSummary(spec: ChartSpec, labels: RuntimeLabels): string
       ? format(bounds.minimum)
       : format(bounds.minimum) + '–' + format(bounds.maximum);
   };
-  const dataCount = spec.kind === 'heatmap' ? spec.data.length : values.y.length;
+  const dataCount =
+    spec.kind === 'field'
+      ? spec.values.reduce((sum, row) => sum + row.length, 0)
+      : spec.kind === 'errorbar' || spec.kind === 'band'
+        ? spec.series.reduce((sum, series) => sum + series.points.length, 0)
+        : spec.kind === 'heatmap'
+          ? spec.data.length
+          : spec.kind === 'bar' || spec.kind === 'boxplot'
+            ? spec.series.reduce((count, series) => count + series.values.length, 0)
+            : values.y.length;
   const summary = labels.chartSummary({
     xLabel: spec.xLabel,
     yLabel: spec.kind === 'histogram' ? histogramLabel(spec, labels) : spec.yLabel,
@@ -447,7 +615,8 @@ export function chartDataSummary(spec: ChartSpec, labels: RuntimeLabels): string
     seriesCount: 'series' in spec ? spec.series.length : 1,
     seriesNames: seriesNames(spec, labels.locale).filter(Boolean).join(', ').slice(0, 1000),
     xRange: range(values.x, chartAxisType(spec, 'x'), spec.style?.xFormat),
-    yRange: range(values.y, spec.kind === 'heatmap' ? 'category' : spec.yType, spec.style?.yFormat),
+    yRange: range(values.y, chartAxisType(spec, 'y'), spec.style?.yFormat),
+    ...(spec.kind === 'field' ? { valueRange: range(values.value, 'value', spec.style?.valueFormat) } : {}),
     ...(spec.kind === 'heatmap'
       ? {
           xCategoryCount: values.x.length,
@@ -460,5 +629,18 @@ export function chartDataSummary(spec: ChartSpec, labels: RuntimeLabels): string
     dataCount === 0
       ? [spec.xLabel, spec.yLabel, labels.noChartData].filter(Boolean).join(labels.locale === 'ja' ? '。' : '. ')
       : summary;
-  return text;
+  const sizeMaximum = spec.kind === 'bubble' ? bubbleSizeMapping(spec).maximum : 0;
+  return [
+    text,
+    ...(spec.kind === 'bubble'
+      ? [
+          labels.chartSize +
+            ' (' +
+            (spec.sizeMapping?.scale ?? 'area') +
+            '): 0–' +
+            chartNumberFormatter([sizeMaximum], labels.locale)(sizeMaximum)
+        ]
+      : []),
+    ...(spec.annotations ?? []).map((item) => annotationDescription(spec, item, labels, values))
+  ].join(labels.locale === 'ja' ? '。' : '. ');
 }
