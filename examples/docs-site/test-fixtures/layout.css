@@ -1,0 +1,13 @@
+/* Test-only overrides: inert on the published site without these HTML attributes. */
+:root:where([data-test-content-width='fixed']) {
+  --sl-content-width: 80rem;
+  --sl-sidebar-width: 20rem;
+}
+
+:root:where([data-test-content-width='fluid']) {
+  --sl-content-width: 100%;
+}
+
+:root:where([data-test-source-height='bounded']) {
+  --oq-source-max-height: 12rem;
+}

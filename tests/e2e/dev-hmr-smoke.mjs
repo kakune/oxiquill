@@ -2,13 +2,13 @@ import { chromium, expect } from '@playwright/test';
 import { spawn } from 'node:child_process';
 import { createServer } from 'node:net';
 import { cpSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
-import os from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { observeProcess } from './process-output.mjs';
 
 const repoRoot = path.resolve(fileURLToPath(new URL('../..', import.meta.url)));
-const tempRoot = mkdtempSync(path.join(os.tmpdir(), 'oxiquill-dev-hmr-'));
+// Keep the offline workspace beside the checkout so pnpm reuses the populated store.
+const tempRoot = mkdtempSync(path.join(path.dirname(repoRoot), '.oxiquill-dev-hmr-'));
 const tempSiteRoot = path.join(tempRoot, 'examples/docs-site');
 const chromiumExecutablePath = process.env.PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH?.trim();
 const children = new Set();

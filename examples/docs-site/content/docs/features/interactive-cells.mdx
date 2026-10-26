@@ -94,6 +94,20 @@ To include an input in **Copy input link**, add `share: true` to that input's me
 
 Cells with inputs provide **Reset inputs**. It restores all defaults and clears incomplete edits and validation errors. Reactive cells recalculate once; button cells wait for Run. The previous successful output remains visible while the next result is pending.
 
+## Source Panes
+
+Code scrolls inside a fixed frame, and long lines never widen the page. The frame is keyboard focusable: Tab to it, then use the arrow keys to scroll. Its focus outline remains visible in both themes.
+
+Source panes have no height cap by default. To bound them on screen, add this to a stylesheet registered through `starlight.customCss`:
+
+```css
+:root {
+  --oq-source-max-height: 24rem;
+}
+```
+
+The limit applies to the highlighted source frame itself. Sites that previously bounded `.doc-source` directly should use `--oq-source-max-height` instead. Printing removes the limit and shows the full source with long lines wrapped, using light syntax colors even when the screen theme is dark.
+
 ## Rust and Plots
 
 This Rust cell uses a helper crate and redraws a plot whenever the sliders change.

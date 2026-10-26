@@ -92,13 +92,20 @@ const presentation = togglePresentation(lang, dir, 'sidebar');
 
 <style>
   :global(:root) {
-    --oq-sidebar-base-content-width: 45rem;
+    --oq-base-content-width: var(--sl-content-width);
+  }
+
+  .page {
+    --sl-content-width: calc(
+      var(--oq-base-content-width) + var(--oq-released-sidebar-width, 0rem) +
+        var(--oq-released-table-of-contents-width, 0rem)
+    );
   }
 
   @media (min-width: 50rem) {
     :global([data-has-sidebar][data-sidebar-collapsed]) {
       --sl-content-inline-start: 0rem;
-      --sl-content-width: calc(var(--oq-sidebar-base-content-width) + var(--sl-sidebar-width));
+      --oq-released-sidebar-width: var(--sl-sidebar-width);
     }
   }
 </style>

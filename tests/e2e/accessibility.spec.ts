@@ -5,6 +5,16 @@ import type { Locator, Page } from '@playwright/test';
 const wcag22AATags = ['wcag2a', 'wcag2aa', 'wcag21a', 'wcag21aa', 'wcag22a', 'wcag22aa'];
 
 test.describe('runtime accessibility', () => {
+  for (const theme of ['light', 'dark']) {
+    test(`overflowing source remains accessible on mobile (${theme})`, async ({ browserName, page }) => {
+      await page.setViewportSize({ width: 390, height: 844 });
+      await page.addInitScript((theme) => localStorage.setItem('starlight-theme', theme), theme);
+      await page.goto('/tests/source-overflow/');
+      await hydrateCell(page.getByTestId('cell-tests__source-overflow__source-overflow'));
+      await expectNoWcag22AAViolations(page, browserName);
+    });
+  }
+
   test('desktop table-of-contents control remains accessible when expanded and collapsed', async ({
     browserName,
     page

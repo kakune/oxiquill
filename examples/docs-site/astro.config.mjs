@@ -14,6 +14,7 @@ export default defineOxiquillConfig({
     description:
       'A static documentation workspace for Rust, Python, Haskell, math, diagrams, and media-rich MDX notes.',
     disable404Route: true,
+    customCss: ['./test-fixtures/layout.css'],
     defaultLocale: 'root',
     locales: {
       root: {

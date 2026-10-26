@@ -67,6 +67,23 @@ export default defineOxiquillConfig({
 
 The control is not rendered for `tableOfContents: false` or splash pages. Consumer entries in `starlight.components` take precedence over Oxiquill's defaults, including `PageFrame`, `TableOfContents`, and `TwoColumnContent` overrides.
 
+## Content Width
+
+Collapsing either desktop navigation column adds `--sl-sidebar-width` to the current `--sl-content-width`. Collapsing both adds it twice. The default reading measure stays the same when both columns are expanded.
+
+To customize the measure and column size, register a stylesheet with `starlight.customCss`, for example `starlight: { customCss: ['./styles/custom.css'] }`. It loads after Oxiquill's CSS. Set both properties on `:root`:
+
+```css
+:root {
+  --sl-content-width: 80rem;
+  --sl-sidebar-width: 20rem;
+}
+```
+
+Fluid values such as `--sl-content-width: 100%` stay fluid through every toggle state. Starlight gives pages without a sidebar, including splash pages, a separate base measure. Override that measure with `:root:not([data-has-sidebar]) { --sl-content-width: 100%; }` when needed.
+
+A custom `PageFrame` keeps table-of-contents widening through Oxiquill's `TwoColumnContent`, but sidebar widening requires Oxiquill's `PageFrame`.
+
 ## Path Fields
 
 | Field                  | Default                        | Resolution base             |

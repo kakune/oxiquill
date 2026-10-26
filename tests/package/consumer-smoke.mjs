@@ -256,6 +256,11 @@ try {
 
   const projectRoot = path.join(consumerRoot, 'site root');
   await mkdir(projectRoot);
+  await mkdir(path.join(projectRoot, 'styles'));
+  await writeFile(
+    path.join(projectRoot, 'styles/consumer.css'),
+    ':root { --sl-content-width: 80rem; --sl-sidebar-width: 20rem; --oq-source-max-height: 12rem; }\n'
+  );
   await mkdir(path.join(projectRoot, 'legal'));
   for (const name of Object.keys(additionalPythonPackages)) {
     await copyFile(
@@ -306,6 +311,8 @@ try {
       '```rust',
       '//| id: package-rust',
       '//| crates: [packed-helper]',
+      'let message = "This packed consumer source line deliberately exceeds the narrow viewport so that scrolling must move the source inside a stationary themed frame without widening the document or losing the configured source height: OXIQUILL_PACKED_SOURCE_END";',
+      'println!("{message}");',
       'println!("{}", packed_helper::message());',
       '```',
       '',
@@ -520,6 +527,7 @@ async function runInstalledBrowserSmoke({ consumerRoot, installedCliPath, projec
       assert.match(await haskellOutput.textContent(), /packed-consumer: Haskell\/WASI/u);
     }
     assertNoPageErrors(pageErrors, 'packed production preview');
+    await assertInstalledLayout(browser, `http://127.0.0.1:${port}/`, manifest);
   } finally {
     await browser?.close();
     try {
@@ -535,6 +543,64 @@ async function runInstalledBrowserSmoke({ consumerRoot, installedCliPath, projec
         ]);
       }
     }
+  }
+}
+
+async function assertInstalledLayout(browser, url, manifest) {
+  // The execution smoke above leaves the TOC collapsed; use fresh storage for all four states.
+  const context = await browser.newContext({ viewport: { width: 2400, height: 1200 } });
+  try {
+    const page = await context.newPage();
+    await page.goto(url);
+    const sidebar = page.locator('starlight-sidebar-toggle button');
+    const toc = page.locator('starlight-table-of-contents-toggle button');
+    for (const state of [
+      { sidebar: false, toc: false, width: 1280 },
+      { sidebar: true, toc: false, width: 1600 },
+      { sidebar: false, toc: true, width: 1600 },
+      { sidebar: true, toc: true, width: 1920 }
+    ]) {
+      if ((await sidebar.getAttribute('aria-expanded')) === String(state.sidebar)) await sidebar.click();
+      if ((await toc.getAttribute('aria-expanded')) === String(state.toc)) await toc.click();
+      const measure = await page
+        .locator('main .content-panel')
+        .last()
+        .evaluate((panel) => {
+          const container = panel.querySelector(':scope > .sl-container');
+          if (!container) throw new Error('Packed content container is missing');
+          const style = getComputedStyle(panel);
+          return {
+            width: container.getBoundingClientRect().width,
+            available: panel.clientWidth - parseFloat(style.paddingLeft) - parseFloat(style.paddingRight)
+          };
+        });
+      assert.ok(
+        Math.abs(measure.width - Math.min(state.width, measure.available)) <= 1,
+        `packed content width ${measure.width} did not preserve consumer measure in ${JSON.stringify(state)}`
+      );
+    }
+
+    await page.setViewportSize({ width: 390, height: 844 });
+    const rustCell = manifest.find((cell) => cell.id.endsWith('__package-rust'));
+    assert.ok(rustCell, 'Packed Rust fixture is missing');
+    const cell = page.getByTestId(`cell-${rustCell.id}`);
+    await cell.scrollIntoViewIfNeeded();
+    await page.waitForFunction((id) => {
+      const cell = document.querySelector(`[data-cell-id="${id}"]`);
+      return cell && !cell.closest('astro-island')?.hasAttribute('ssr');
+    }, rustCell.id);
+    const pre = cell.getByTestId('cell-source').locator('pre');
+    const before = await pre.boundingBox();
+    await pre.evaluate((element) => element.scrollTo({ left: 180, behavior: 'instant' }));
+    assert.deepEqual(await pre.boundingBox(), before, 'Packed source frame moved during scrolling');
+    assert.ok(await pre.evaluate((element) => element.scrollLeft > 0), 'Packed source did not scroll internally');
+    assert.equal(await pre.evaluate((element) => getComputedStyle(element).maxHeight), '192px');
+    assert.ok(
+      await page.evaluate(() => document.documentElement.scrollWidth <= document.documentElement.clientWidth + 1),
+      'Packed source widened the document'
+    );
+  } finally {
+    await context.close();
   }
 }
 
@@ -734,7 +800,7 @@ function packedAstroConfig({ offline }) {
     '  },',
     "  site: 'https://example.com',",
     "  title: 'My Docs',",
-    '  starlight: { disable404Route: true },',
+    "  starlight: { disable404Route: true, customCss: ['./styles/consumer.css'] },",
     "  sidebar: [{ label: 'Overview', items: [{ label: 'Home', slug: 'index' }] }]",
     '});',
     ''
