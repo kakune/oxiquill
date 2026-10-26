@@ -1,0 +1,33 @@
+---
+title: ソースのスクロール検証ページ
+description: 長いソースのスクロールと印刷を確認するブラウザ用フィクスチャ。
+---
+
+## 長いソース
+
+```rust
+//| id: source-overflow
+//| title: Scrollable Rust source
+//| run: button
+//| crates: []
+let message = "This deliberately long source line keeps its whitespace and syntax colors while the reader scrolls inside the code frame, including on narrow screens and in a bounded pane, and must never widen the surrounding document: OXIQUILL_SOURCE_END";
+let samples = [1, 2, 3, 4];
+let doubled: Vec<_> = samples.iter().map(|value| value * 2).collect();
+let total: i32 = doubled.iter().sum();
+
+println!("{message}");
+println!("doubled: {doubled:?}");
+println!("total: {total}");
+
+// Keep enough source to exercise vertical scrolling in a bounded pane.
+// Scrolling should leave the border and background in place.
+// The highlighted source is also the keyboard scroll target.
+// Hide and show restore a fresh source pane.
+// Printing wraps every line and reveals the complete source.
+
+let maximum = doubled.iter().max().copied();
+match maximum {
+    Some(value) => println!("maximum: {value}"),
+    None => println!("no samples"),
+}
+```
