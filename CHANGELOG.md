@@ -8,13 +8,21 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ### Added
 
+- `--oq-source-max-height` to bound interactive source panes on screen without truncating printed source.
+
 ### Changed
+
+- Sites that bounded `.doc-source` directly should use `--oq-source-max-height`. The undocumented internal `--oq-sidebar-base-content-width` and `--oq-wide-base-content-width` properties are removed.
 
 ### Deprecated
 
 ### Removed
 
 ### Fixed
+
+- Source panes keep their frame and theme background stationary while scrolling, expose visible keyboard focus, and prevent long source or output lines from widening the page.
+- Custom fixed and fluid content widths remain effective across desktop navigation toggles and restored preferences.
+- Dark-mode source prints with readable light syntax colors and complete wrapped code.
 
 ### Security
 

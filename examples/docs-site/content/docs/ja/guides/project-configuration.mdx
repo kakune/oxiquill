@@ -67,6 +67,23 @@ export default defineOxiquillConfig({
 
 `tableOfContents: false` のページと splash page には control を出力しません。`starlight.components` に consumer が指定した entry は Oxiquill の default より優先され、`PageFrame`、`TableOfContents`、`TwoColumnContent` の override も保持されます。
 
+## 本文の幅
+
+デスクトップのナビゲーション列を折りたたむと、現在の `--sl-content-width` に `--sl-sidebar-width` が加わります。両方の列を折りたたむと2列分が加わります。両方を展開したときの既定の本文幅は変わりません。
+
+本文幅と列幅を変更するには、`starlight: { customCss: ['./styles/custom.css'] }` のように `starlight.customCss` にスタイルシートを登録します。このCSSはOxiquillのCSSの後に読み込まれます。両方のプロパティを `:root` に指定してください。
+
+```css
+:root {
+  --sl-content-width: 80rem;
+  --sl-sidebar-width: 20rem;
+}
+```
+
+`--sl-content-width: 100%` のような可変幅は、どの折りたたみ状態でも可変幅のままです。Starlightは、スプラッシュページを含むサイドバーのないページに別の基準幅を指定します。必要に応じて `:root:not([data-has-sidebar]) { --sl-content-width: 100%; }` で上書きしてください。
+
+独自の `PageFrame` を使っても、Oxiquillの `TwoColumnContent` による目次の折りたたみ時の拡幅は有効です。サイドバーの折りたたみ時の拡幅にはOxiquillの `PageFrame` が必要です。
+
 ## Path field
 
 | Field                  | Default                         | 解決基準                    |
