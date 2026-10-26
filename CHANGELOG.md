@@ -26,6 +26,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ### Security
 
+- Updated DOMPurify, fast-uri, undici, and Zod transitive dependencies to patched releases to clear the production dependency audit.
+
 ## [0.4.0] - 2026-10-13
 
 ### Added
