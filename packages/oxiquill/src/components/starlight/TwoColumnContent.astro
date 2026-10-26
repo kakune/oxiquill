@@ -64,21 +64,19 @@ const hasTableOfContents = Boolean(toc);
 
 <style>
   :global(:root) {
-    --oq-sidebar-base-content-width: 45rem;
-    --oq-wide-base-content-width: 67.5rem;
+    --oq-base-content-width: var(--sl-content-width);
+  }
+
+  .two-column-content {
+    --sl-content-width: calc(
+      var(--oq-base-content-width) + var(--oq-released-sidebar-width, 0rem) +
+        var(--oq-released-table-of-contents-width, 0rem)
+    );
   }
 
   @media (min-width: 72rem) {
-    :global([data-has-sidebar][data-table-of-contents-collapsed]) {
-      --sl-content-width: calc(var(--oq-sidebar-base-content-width) + var(--sl-sidebar-width));
-    }
-
-    :global([data-has-sidebar][data-sidebar-collapsed][data-table-of-contents-collapsed]) {
-      --sl-content-width: calc(var(--oq-sidebar-base-content-width) + 2 * var(--sl-sidebar-width));
-    }
-
-    :global(:not([data-has-sidebar])[data-table-of-contents-collapsed]) {
-      --sl-content-width: calc(var(--oq-wide-base-content-width) + var(--sl-sidebar-width));
+    :global([data-has-toc][data-table-of-contents-collapsed]) {
+      --oq-released-table-of-contents-width: var(--sl-sidebar-width);
     }
   }
 </style>

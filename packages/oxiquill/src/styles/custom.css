@@ -22,6 +22,7 @@
 .doc-cell input:focus-visible,
 .doc-cell select:focus-visible,
 .doc-cell textarea:focus-visible,
+.doc-source .shiki:focus-visible,
 .doc-table-output button:focus-visible,
 .doc-table-output select:focus-visible {
   outline: 3px solid var(--rn-focus);
@@ -36,6 +37,8 @@
 .doc-cell,
 .interactive-panel {
   display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  min-width: 0;
   gap: 1rem;
   margin: 1.25rem 0;
   padding: 1rem;
@@ -124,8 +127,6 @@
   opacity: 0.72;
 }
 
-.doc-source,
-.rust-source,
 .run-output {
   overflow: auto;
   margin: 0;
@@ -139,9 +140,10 @@
 }
 
 .doc-source .shiki {
+  max-height: var(--oq-source-max-height, none);
   margin: 0;
   padding: 0.85rem;
-  overflow: visible;
+  overflow: auto;
   border-radius: 6px;
   font-size: 0.9rem;
   line-height: 1.6;
@@ -149,6 +151,7 @@
 
 .doc-source-editor {
   display: grid;
+  grid-template-columns: minmax(0, 1fr);
   gap: 0.5rem;
 }
 
@@ -160,13 +163,15 @@
   tab-size: 4;
 }
 
-:root[data-theme='dark'] .doc-source .shiki,
-:root[data-theme='dark'] .doc-source .shiki span {
-  color: var(--shiki-dark) !important;
-  background-color: var(--shiki-dark-bg) !important;
-  font-style: var(--shiki-dark-font-style) !important;
-  font-weight: var(--shiki-dark-font-weight) !important;
-  text-decoration: var(--shiki-dark-text-decoration) !important;
+@media screen {
+  :root[data-theme='dark'] .doc-source .shiki,
+  :root[data-theme='dark'] .doc-source .shiki span {
+    color: var(--shiki-dark) !important;
+    background-color: var(--shiki-dark-bg) !important;
+    font-style: var(--shiki-dark-font-style) !important;
+    font-weight: var(--shiki-dark-font-weight) !important;
+    text-decoration: var(--shiki-dark-text-decoration) !important;
+  }
 }
 
 .run-output {
@@ -263,12 +268,14 @@
 
 .doc-cell__outputs {
   display: grid;
+  grid-template-columns: minmax(0, 1fr);
   gap: 0.85rem;
 }
 
 .doc-cell__output-region {
   position: relative;
   display: grid;
+  grid-template-columns: minmax(0, 1fr);
   gap: 0.85rem;
 }
 
@@ -352,6 +359,13 @@
 }
 
 @media print {
+  .doc-source .shiki {
+    max-height: none;
+    overflow: visible;
+    white-space: pre-wrap;
+    overflow-wrap: anywhere;
+  }
+
   .doc-chart-output__actions,
   .doc-table-output__controls {
     display: none;
