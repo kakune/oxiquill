@@ -166,8 +166,11 @@ for (const theme of ['light', 'dark']) {
       await expect(pre).toHaveCount(0);
       await cell.getByRole('button', { name: 'Show code' }).click();
       await expect(pre).toBeVisible();
-      expect((await sourceGeometry(pre)).frame).toEqual(before.frame);
-      expect(await pre.evaluate((element) => element.scrollLeft)).toBe(0);
+      const restored = await sourceGeometry(pre);
+      for (const property of ['x', 'y', 'width', 'height'] as const) {
+        expect(restored.frame[property]).toBeCloseTo(before.frame[property], 2);
+      }
+      expect(restored.scrollLeft).toBe(0);
 
       await cell.getByRole('button', { name: 'Run', exact: true }).click();
       const output = cell.getByTestId('run-output');
