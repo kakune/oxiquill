@@ -75,6 +75,7 @@
           packages = [
             nodejs
             pnpm
+            pkgs.python3
             rustToolchain
             pkgs.wasm-pack
             pkgs.cargo-llvm-cov
