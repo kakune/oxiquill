@@ -8,6 +8,20 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ### Added
 
+### Changed
+
+### Deprecated
+
+### Removed
+
+### Fixed
+
+### Security
+
+## [0.4.1] - 2026-10-31
+
+### Added
+
 - `--oq-source-max-height` to bound interactive source panes on screen without truncating printed source.
 
 ### Changed
@@ -26,6 +40,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ### Security
 
+- Added local commit/push guards and required CI checks to prevent accidental publication of personal email addresses in repository metadata and authored text.
 - Updated DOMPurify, fast-uri, undici, and Zod transitive dependencies to patched releases to clear the production dependency audit.
 
 ## [0.4.0] - 2026-10-13
@@ -160,7 +175,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 This release predates the maintained changelog. See the [v0.2.0 GitHub Release](https://github.com/kakune/oxiquill/releases/tag/v0.2.0) and tagged source for its complete contents.
 
-[Unreleased]: https://github.com/kakune/oxiquill/compare/v0.4.0...HEAD
+[Unreleased]: https://github.com/kakune/oxiquill/compare/v0.4.1...HEAD
+[0.4.1]: https://github.com/kakune/oxiquill/releases/tag/v0.4.1
 [0.4.0]: https://github.com/kakune/oxiquill/releases/tag/v0.4.0
 [0.3.1]: https://github.com/kakune/oxiquill/releases/tag/v0.3.1
 [0.3.0]: https://github.com/kakune/oxiquill/releases/tag/v0.3.0
