@@ -1,0 +1,24 @@
+name: Email privacy
+
+on:
+  push:
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  email-privacy:
+    name: email-privacy
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Test the privacy guard
+        run: python3 .github/scripts/test_email_privacy.py
+      - name: Check reachable history, taggers, messages, and tracked text
+        run: python3 .github/scripts/check_email_privacy.py --all
