@@ -1,4 +1,11 @@
 #!/bin/sh
 set -eu
 repo_root=$(git rev-parse --show-toplevel)
-exec python3 "$repo_root/.github/scripts/check_email_privacy.py" pre-push
+cd "$repo_root"
+
+python3 .github/scripts/check_email_privacy.py pre-push
+
+pnpm lint
+pnpm check
+pnpm test:unit
+pnpm test:rust
