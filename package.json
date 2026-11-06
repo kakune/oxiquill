@@ -14,6 +14,7 @@
     "dev:astro": "pnpm build:package && pnpm --dir examples/docs-site dev:astro",
     "dev:runtime": "pnpm build:package && pnpm --dir examples/docs-site dev:runtime",
     "build": "pnpm build:package && pnpm --dir examples/docs-site build",
+    "build:clean": "pnpm clean && pnpm build",
     "preview": "pnpm build:package && pnpm --dir examples/docs-site preview",
     "docgen": "pnpm build:package && pnpm --dir examples/docs-site docgen",
     "wasm:dev": "pnpm build:package && pnpm --dir examples/docs-site wasm:dev",

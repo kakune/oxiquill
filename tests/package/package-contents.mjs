@@ -16,7 +16,7 @@ const temporaryRoot = await mkdtemp(path.join(tmpdir(), 'oxiquill-package-'));
 
 try {
   await assertMathDependencies(packageRoot);
-  assert.equal(packageManifest.scripts.prepack, 'pnpm run build');
+  assert.equal(packageManifest.scripts.prepack, 'pnpm run build:clean');
   for (const lifecycleHook of ['prepare', 'install', 'postinstall']) {
     assert.ok(
       !Object.hasOwn(packageManifest.scripts, lifecycleHook),
@@ -38,6 +38,8 @@ try {
   const expectedFiles = await expectedPackageFiles();
   assert.deepEqual(actualFiles, expectedFiles);
   assert.ok(!actualFiles.includes('dist/accidental.txt'), 'prepack must remove stale output');
+  assert.ok(actualFiles.every((filePath) => !filePath.endsWith('.tsbuildinfo')));
+  assert.ok(actualFiles.every((filePath) => !filePath.endsWith('package-output.json')));
   assert.ok(actualFiles.every((filePath) => path.basename(filePath) !== 'AGENTS.md'));
   assert.ok(actualFiles.every((filePath) => !filePath.startsWith('src/')));
   assert.ok(

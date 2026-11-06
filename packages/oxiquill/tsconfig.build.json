@@ -6,6 +6,8 @@
     "checkJs": false,
     "declaration": true,
     "declarationMap": false,
+    "incremental": true,
+    "tsBuildInfoFile": "node_modules/.cache/oxiquill/package.tsbuildinfo",
     "noEmit": false,
     "noEmitOnError": true,
     "outDir": "dist",

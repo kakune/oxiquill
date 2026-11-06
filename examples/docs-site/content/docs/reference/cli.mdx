@@ -45,6 +45,14 @@ pnpm dev -- --host 0.0.0.0 --port 4321
 pnpm check -- --minimumSeverity warning
 ```
 
+## Incremental and Clean Builds
+
+In the Oxiquill repository, `pnpm build` builds the reusable package incrementally and reuses unchanged runtime artifacts. Astro recreates its static output directory on every build. `pnpm build:package` incrementally builds only the package; packing always performs a clean package build.
+
+Run the repository's `pnpm build:clean` to clean and rebuild the package, generated runtimes, and site while preserving the verified download cache. In a consumer project, run `oxiquill clean` followed by `oxiquill build` for a clean runtime/site rebuild.
+
+`oxiquill build --force` only clears Astro's content cache. It does not force a package rebuild or discard Oxiquill runtime fingerprints.
+
 ## Safe Project Creation
 
 ```sh

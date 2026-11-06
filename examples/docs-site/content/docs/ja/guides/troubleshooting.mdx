@@ -59,6 +59,8 @@ browser failure では site rebuild、`public/oxiquill` 下の expected file、d
 
 ## Stale output
 
-source と public output が一致しない場合は `pnpm clean` 後に必要な generation/build command を実行します。generated ownership data は最後の cell が消えた language の stale output を除去します。manifest、ownership marker、Wasm、Pyodide file、license、`dist` を手動修正しないでください。
+Oxiquill repository の `pnpm build` は変更のない package output と runtime artifact を再利用し、Astro は static site output を作り直します。source と generated output が一致しない場合は `pnpm build:clean` を実行すると、verified download cache を保持しながら package、runtime、site を最初から再生成できます。consumer project では `oxiquill clean` 後に `oxiquill build` を実行します。特定の生成物だけが必要なら clean 後に対応する generation command を実行してください。
+
+`oxiquill build --force` が消去するのは Astro の content cache だけで、package や runtime の再ビルドを強制しません。generated ownership data は最後の cell が消えた language の stale output を除去します。manifest、ownership marker、Wasm、Pyodide file、license、`dist` を手動修正しないでください。
 
 解決しない場合は [GitHub issue](https://github.com/kakune/oxiquill/issues) に Oxiquill/Node/tool version、OS、command、完全で簡潔な diagnostic、minimal reproducer を添えてください。security-sensitive detail は private vulnerability reporting を使います。
