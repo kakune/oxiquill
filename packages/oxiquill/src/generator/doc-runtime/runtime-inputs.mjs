@@ -3,6 +3,7 @@ import { fileURLToPath } from 'node:url';
 import { pathInUrl } from '../../config/paths.mjs';
 import { defaultFileSystem } from './file-system.mjs';
 import { hashBytes } from './hashing.mjs';
+import { parseVersion } from './toolchain-versions.mjs';
 
 const runtimeInputsUrl = new URL('../runtime-data/runtime-inputs.json', import.meta.url);
 const rustLockUrl = new URL('../license-data/rust/runtime-Cargo.lock', import.meta.url);
@@ -86,14 +87,22 @@ function normalizeRustInputs(value) {
   );
 
   return Object.freeze({
-    cargoVersion: requiredText(value.cargoVersion, 'Rust runtime inputs are missing cargoVersion.'),
     dependencies: normalizedDependencies,
     edition: requiredText(value.edition, 'Rust runtime inputs are missing edition.'),
-    rustVersion: requiredText(value.rustVersion, 'Rust runtime inputs are missing rustVersion.'),
-    rustcVersion: requiredText(value.rustcVersion, 'Rust runtime inputs are missing rustcVersion.'),
+    minimumVersion: requiredVersion(value.minimumVersion, 'minimumVersion'),
+    testedVersion: requiredVersion(value.testedVersion, 'testedVersion'),
     target: requiredText(value.target, 'Rust runtime inputs are missing target.'),
-    wasmPackVersion: requiredText(value.wasmPackVersion, 'Rust runtime inputs are missing wasmPackVersion.')
+    wasmPackMinimumVersion: requiredVersion(value.wasmPackMinimumVersion, 'wasmPackMinimumVersion'),
+    wasmPackMaximumVersionExclusive: requiredVersion(
+      value.wasmPackMaximumVersionExclusive,
+      'wasmPackMaximumVersionExclusive'
+    )
   });
+}
+
+function requiredVersion(value, field) {
+  if (!parseVersion(value)) throw new Error(`Rust runtime inputs require a major.minor.patch version for ${field}.`);
+  return value;
 }
 
 function normalizeHaskellInputs(value) {

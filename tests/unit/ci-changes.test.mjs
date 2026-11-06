@@ -76,13 +76,13 @@ describe('CI change selection', () => {
 });
 
 describe('CI job graph and aggregation', () => {
-  it('expands to twelve jobs and only four for documentation', () => {
-    expect(Object.values(jobs).reduce((count, job) => count + (job.strategy?.matrix.include.length ?? 1), 0)).toBe(12);
+  it('expands to thirteen jobs and runs the minimum toolchain for documentation', () => {
+    expect(Object.values(jobs).reduce((count, job) => count + (job.strategy?.matrix.include.length ?? 1), 0)).toBe(13);
     expect(
       Object.entries(jobs)
         .filter(([, job]) => !job.needs || job.if === 'always()')
         .map(([name]) => name)
-    ).toEqual(['changes', 'js-quality', 'rust-quality', 'ci-ok']);
+    ).toEqual(['changes', 'js-quality', 'rust-quality', 'rust-minimum', 'ci-ok']);
     expect(jobs.browser.needs).toBe('site-build');
     expect(jobs['ci-ok'].needs.toSorted()).toEqual(
       Object.keys(jobs)

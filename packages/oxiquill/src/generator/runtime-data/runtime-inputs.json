@@ -1,7 +1,6 @@
 {
   "schemaVersion": 1,
   "rust": {
-    "cargoVersion": "1.99.0",
     "dependencies": {
       "console_error_panic_hook": "0.1.7",
       "serde": "1.0.229",
@@ -10,10 +9,11 @@
       "wasm-bindgen-test": "0.3.79"
     },
     "edition": "2024",
-    "rustVersion": "1.99",
-    "rustcVersion": "1.99.0",
+    "minimumVersion": "1.85.0",
     "target": "wasm32-unknown-unknown",
-    "wasmPackVersion": "0.15.0"
+    "testedVersion": "1.99.0",
+    "wasmPackMaximumVersionExclusive": "0.16.0",
+    "wasmPackMinimumVersion": "0.15.0"
   },
   "haskell": {
     "compiler": "wasm32-wasi-ghc",

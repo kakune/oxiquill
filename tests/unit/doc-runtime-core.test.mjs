@@ -224,7 +224,7 @@ const runtimeInputs = {
       'wasm-bindgen-test': '0.3.72'
     },
     edition: '2024',
-    rustVersion: '1.95'
+    minimumVersion: '1.85.0'
   }
 };
 
@@ -828,6 +828,7 @@ describe('doc runtime core', () => {
       runtimeInputs
     );
 
+    expect(manifest).toContain('rust-version = "1.85"');
     const dependencyLines = [
       '"ascii" = { path = "../../crates/ascii" }',
       '"hyphen-crate" = { path = "../../crates/hyphen" }',

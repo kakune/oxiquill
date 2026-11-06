@@ -16,7 +16,7 @@ version = ${JSON.stringify(packageMetadata.version)}
 description = "Generated Rust cells for the documentation runtime."
 repository = ${JSON.stringify(packageMetadata.repository)}
 edition = ${JSON.stringify(rust.edition)}
-rust-version = ${JSON.stringify(rust.rustVersion)}
+rust-version = ${JSON.stringify(rust.minimumVersion.split('.').slice(0, 2).join('.'))}
 license = "MIT OR Apache-2.0"
 publish = false
 

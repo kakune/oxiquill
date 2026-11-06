@@ -98,6 +98,7 @@
     "@astrojs/preact": "6.0.6",
     "@astrojs/starlight": "0.42.6",
     "@bjorn3/browser_wasi_shim": "0.4.2",
+    "@emnapi/runtime": "1.11.3",
     "astro": "7.3.8",
     "chokidar": "5.0.0",
     "echarts": "6.1.0",
