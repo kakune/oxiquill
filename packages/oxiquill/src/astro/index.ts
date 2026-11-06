@@ -6,7 +6,7 @@ import { defineConfig } from 'astro/config';
 import { unified } from '@astrojs/markdown-remark';
 import preact from '@astrojs/preact';
 import remarkMath from 'remark-math';
-import { mergeAlias } from 'vite';
+import { mergeAlias } from '../config/astro-vite.mjs';
 import type { AstroConfig, AstroIntegration, AstroUserConfig, FontProvider, Locales, SessionDriverConfig } from 'astro';
 import type { Options as PreactIntegrationOptions } from '@astrojs/preact';
 import type { Alias, Plugin, PluginOption, UserConfig as ViteUserConfig } from 'vite';
@@ -87,7 +87,6 @@ const viteManagedPackageNames = [
   'pyodide'
 ];
 const viteAliasedPackageNames = [
-  'astro',
   '@astrojs/preact',
   '@preact/signals',
   'preact',
@@ -140,7 +139,7 @@ export interface OxiquillConfig<StarlightOptions extends object = object> extend
   sidebar?: StarlightOption<StarlightOptions, 'sidebar', unknown>;
   starlight?: Partial<StarlightOptions>;
   title?: StarlightOption<StarlightOptions, 'title', string>;
-  vite?: ViteUserConfig;
+  vite?: BaseAstroUserConfig['vite'];
 }
 
 export interface OxiquillIntegrationOptions {
@@ -148,7 +147,7 @@ export interface OxiquillIntegrationOptions {
   markdown?: OxiquillMarkdownConfig;
   paths?: OxiquillPathOptions;
   python?: OxiquillPythonOptions;
-  vite?: ViteUserConfig;
+  vite?: BaseAstroUserConfig['vite'];
 }
 
 const createDocRuntimeContextForPaths = createDocRuntimeContext as unknown as (options: {
@@ -578,7 +577,7 @@ function oxiquillDependencyResolverPlugin(paths: OxiquillPaths): Plugin {
     enforce: 'pre',
     name: 'oxiquill-dependency-resolver',
     async resolveId(source, _importer, options) {
-      if (!isPackageManagedDependency(source)) {
+      if (packageNameFromSpecifier(source) === 'astro' || !isPackageManagedDependency(source)) {
         return undefined;
       }
       if (packageNameFromSpecifier(source) === 'preact' && workspacePreactPackage !== undefined) {

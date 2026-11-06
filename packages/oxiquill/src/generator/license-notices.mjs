@@ -2,6 +2,7 @@ import { existsSync } from 'node:fs';
 import { copyFile, mkdir, readFile, readdir, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
+import semver from 'semver';
 import { pathFromUrl, pathInUrl } from '../config/paths.mjs';
 import { copyFileIfChanged, writeIfChanged } from './doc-runtime/file-system.mjs';
 import { resolvePythonPackageNotices } from './doc-runtime/python-package-notices.mjs';
@@ -328,25 +329,39 @@ async function readPackageLicenseText(packageRoot, license, { fileSystem, licens
 }
 
 async function readBundledLicenseOverride({ fileSystem, licenseDataDir, license, name, packageRoot, version }) {
+  const missingLicense = () =>
+    new Error(
+      `Package license text is missing for ${name} ${version} at ${packageRoot}. ` +
+        'Install a release that includes its license text, or add a reviewed name/versionRange/SPDX override to ' +
+        `${bundledOverridesFile} with the upstream license text.`
+    );
   let manifest;
   try {
     manifest = await readJsonFile(path.join(licenseDataDir, bundledOverridesFile), { fileSystem });
   } catch {
-    throw new Error(`Package license text is missing for ${packageRoot}.`);
+    throw missingLicense();
   }
   if (manifest.schemaVersion !== 1 || !Array.isArray(manifest.packages)) {
     throw new Error('Bundled package license overrides must use schemaVersion 1 and contain a packages array.');
   }
 
-  const override = manifest.packages.find((entry) => entry.name === name && entry.version === version);
-  if (!override) throw new Error(`Package license text is missing for ${packageRoot}.`);
+  const candidates = manifest.packages.filter((entry) => entry.name === name);
+  for (const entry of candidates) {
+    if (typeof entry.versionRange !== 'string' || !semver.validRange(entry.versionRange)) {
+      throw new Error(`Bundled package override for ${name} has an invalid versionRange: ${entry.versionRange}.`);
+    }
+  }
+  const override = candidates.find((entry) => semver.satisfies(version, entry.versionRange));
+  if (!override) throw missingLicense();
 
   const overrideLicense = assertKnownText(
     override.license,
     `Bundled package override for ${name} has an unknown license`
   );
-  if (typeof license === 'string' && license.trim() && license.trim() !== overrideLicense) {
-    throw new Error(`Bundled package override for ${name} ${version} conflicts with package license ${license}.`);
+  if (typeof license !== 'string' || license.trim() !== overrideLicense) {
+    throw new Error(
+      `Bundled package override for ${name} ${version} conflicts with package license ${String(license)}; review the upstream license and update the override.`
+    );
   }
   const licenseFile = assertKnownText(
     override.licenseFile,

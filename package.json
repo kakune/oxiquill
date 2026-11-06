@@ -51,7 +51,9 @@
     "verify:release-version": "node .github/scripts/verify-release-version.mjs",
     "lint:rust": "pnpm build:package && pnpm --dir examples/docs-site lint:rust",
     "clean": "pnpm build:package && pnpm --dir examples/docs-site clean && pnpm --dir packages/oxiquill clean",
-    "test:dev-hmr": "node tests/e2e/dev-hmr-smoke.mjs"
+    "test:dev-hmr": "node tests/e2e/dev-hmr-smoke.mjs",
+    "test:consumer:lowest": "node tests/package/consumer-smoke.mjs --package-manager npm --profile lowest --browser && node tests/package/consumer-smoke.mjs --package-manager pnpm --profile lowest --browser",
+    "test:consumer:highest": "node tests/package/consumer-smoke.mjs --package-manager npm --profile highest --browser && node tests/package/consumer-smoke.mjs --package-manager pnpm --profile highest --browser"
   },
   "devDependencies": {
     "@arethetypeswrong/cli": "0.18.5",
@@ -71,6 +73,7 @@
     "prettier": "3.9.9",
     "prettier-plugin-astro": "1.1.1",
     "publint": "0.3.25",
+    "semver": "7.8.6",
     "typescript": "6.0.3",
     "typescript-eslint": "8.71.1",
     "vite": "8.3.4",

@@ -4,6 +4,7 @@ import { createRequire } from 'node:module';
 import path from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import { pathFromUrl, pathInUrl } from '../config/paths.mjs';
+import { resolveAstroVite } from '../config/astro-vite.mjs';
 import { loadOxiquillProjectConfig } from '../config/project-config.mjs';
 import { createDocRuntimeContext, syncDocRuntime } from '../generator/doc-runtime-service.mjs';
 import { cleanOxiquillWorkspace } from '../generator/clean.mjs';
@@ -246,7 +247,7 @@ export function selectFrameworkNode(
   paths,
   { env = process.env, execPath = process.execPath, exists = existsSync, spawn = spawnSync, warn = console.warn } = {}
 ) {
-  const vitePath = resolveFromFramework(paths, 'vite');
+  const vitePath = resolveAstroVite(pathInUrl(paths.frameworkRoot, 'package.json'));
   const probeEnv = frameworkEnv(paths, { env });
   const overridePath = env.OXIQUILL_NODE;
   const candidates = overridePath

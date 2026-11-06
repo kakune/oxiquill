@@ -221,6 +221,9 @@ importers:
       publint:
         specifier: 0.3.25
         version: 0.3.25
+      semver:
+        specifier: 7.8.6
+        version: 7.8.6
       typescript:
         specifier: 6.0.3
         version: 6.0.3
@@ -249,74 +252,78 @@ importers:
   packages/oxiquill:
     dependencies:
       '@astrojs/check':
-        specifier: 0.9.10
+        specifier: ^0.9.10
         version: 0.9.10(@emnapi/runtime@1.11.3)(prettier-plugin-astro@1.1.1(@emnapi/core@1.11.3)(@emnapi/runtime@1.11.3)(prettier@3.9.9))(prettier@3.9.9)(typescript@6.0.3)
       '@astrojs/markdown-remark':
-        specifier: 7.3.2
+        specifier: ^7.3.2
         version: 7.3.2(supports-color@7.2.0)
       '@astrojs/preact':
-        specifier: 6.0.6
+        specifier: ^6.0.6
         version: 6.0.6(@babel/core@7.29.7(supports-color@7.2.0))(@types/node@24.19.1)(preact@10.29.8)(supports-color@7.2.0)(yaml@2.9.1)
-      '@astrojs/starlight':
-        specifier: 0.42.6
-        version: 0.42.6(@astrojs/markdown-remark@7.3.2(supports-color@7.2.0))(astro@7.3.8(@astrojs/markdown-remark@7.3.2(supports-color@7.2.0))(@types/node@24.19.1)(yaml@2.9.1))(supports-color@7.2.0)(typescript@6.0.3)
       '@bjorn3/browser_wasi_shim':
-        specifier: 0.4.2
+        specifier: ~0.4.2
         version: 0.4.2
       '@emnapi/runtime':
-        specifier: 1.11.3
+        specifier: ^1.11.3
         version: 1.11.3
-      astro:
-        specifier: 7.3.8
-        version: 7.3.8(@astrojs/markdown-remark@7.3.2(supports-color@7.2.0))(@types/node@24.19.1)(yaml@2.9.1)
       chokidar:
-        specifier: 5.0.0
+        specifier: ^5.0.0
         version: 5.0.0
       echarts:
-        specifier: 6.1.0
+        specifier: ^6.1.0
         version: 6.1.0
       hast-util-from-html-isomorphic:
-        specifier: 2.0.0
+        specifier: ^2.0.0
         version: 2.0.0
       katex:
         specifier: 0.19.0
         version: 0.19.0
       mermaid:
-        specifier: 11.17.2
+        specifier: ~11.17.2
         version: 11.17.2
       preact:
-        specifier: 10.29.8
+        specifier: ^10.29.8
         version: 10.29.8(preact-render-to-string@6.8.0)
       pyodide:
         specifier: 314.0.7
         version: 314.0.7
       remark-math:
-        specifier: 6.0.0
+        specifier: ^6.0.0
         version: 6.0.0(supports-color@7.2.0)
       remark-mdx:
-        specifier: 3.1.1
+        specifier: ^3.1.1
         version: 3.1.1(supports-color@7.2.0)
       remark-parse:
-        specifier: 11.0.0
+        specifier: ^11.0.0
         version: 11.0.0(supports-color@7.2.0)
+      semver:
+        specifier: ^7.8.6
+        version: 7.8.6
       shiki:
-        specifier: 4.5.0
+        specifier: ^4.5.0
         version: 4.5.0
       smol-toml:
-        specifier: 1.9.1
+        specifier: ^1.9.1
         version: 1.9.1
       typescript:
-        specifier: 6.0.3
+        specifier: ^6.0.3
         version: 6.0.3
       unified:
-        specifier: 11.0.5
+        specifier: ^11.0.5
         version: 11.0.5
+      yaml:
+        specifier: ^2.9.1
+        version: 2.9.1
+    devDependencies:
+      '@astrojs/starlight':
+        specifier: 0.42.6
+        version: 0.42.6(@astrojs/markdown-remark@7.3.2(supports-color@7.2.0))(astro@7.3.8(@astrojs/markdown-remark@7.3.2(supports-color@7.2.0))(@types/node@24.19.1)(yaml@2.9.1))(supports-color@7.2.0)(typescript@6.0.3)
+      astro:
+        specifier: 7.3.8
+        version: 7.3.8(@astrojs/markdown-remark@7.3.2(supports-color@7.2.0))(@types/node@24.19.1)(yaml@2.9.1)
       vite:
         specifier: 8.3.4
         version: 8.3.4(@types/node@24.19.1)(yaml@2.9.1)
-      yaml:
-        specifier: 2.9.1
-        version: 2.9.1
 
 packages:
 
@@ -3682,6 +3689,11 @@ packages:
 
   semver@7.8.5:
     resolution: {integrity: sha512-Y7/KDsb8LjooZpwaqGyulO6DQlksgCncchHGk+sZIY4SBvUocMBEFH5Ur1fI4dV+Jvl0w6cjvucaIi40puRioA==}
+    engines: {node: '>=10'}
+    hasBin: true
+
+  semver@7.8.6:
+    resolution: {integrity: sha512-9lpSSU4Mly3mrtruwLs1eLK6+gzbzqeBFwRNjIjE+9LuDpWdYctrQlQ3ej1Ilgi7gknpsTRnPoLP8DpCHqHIJw==}
     engines: {node: '>=10'}
     hasBin: true
 
@@ -8543,6 +8555,8 @@ snapshots:
 
   semver@7.8.5: {}
 
+  semver@7.8.6: {}
+
   set-function-length@1.2.2:
     dependencies:
       define-data-property: 1.1.4
@@ -8806,7 +8820,7 @@ snapshots:
 
   typescript-auto-import-cache@0.3.6:
     dependencies:
-      semver: 7.8.5
+      semver: 7.8.6
 
   typescript-eslint@8.71.1(eslint@10.12.0(supports-color@7.2.0))(supports-color@7.2.0)(typescript@6.0.3):
     dependencies:
@@ -9034,7 +9048,7 @@ snapshots:
   volar-service-typescript@0.0.71(@volar/language-service@2.4.28(typescript@6.0.3))(typescript@6.0.3):
     dependencies:
       path-browserify: 1.0.1
-      semver: 7.8.5
+      semver: 7.8.6
       typescript-auto-import-cache: 0.3.6
       vscode-languageserver-textdocument: 1.0.15
       vscode-nls: 5.2.0

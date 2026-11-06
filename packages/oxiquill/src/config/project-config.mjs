@@ -1,7 +1,7 @@
 import { existsSync } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { loadConfigFromFile } from 'vite';
+import { loadConfigFromFile } from './astro-vite.mjs';
 import { arePathsEqual, canonicalPath, createOxiquillPaths, directoryPath } from './paths.mjs';
 import { astroDirectoryOptionNames, readOxiquillMetadata } from './metadata.mjs';
 import { validateProjectPathSafety } from './path-safety.mjs';
