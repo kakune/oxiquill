@@ -519,7 +519,6 @@ try {
   await assertFile(path.join(projectRoot, 'content/docs/index.mdx'));
   await assertBuildIdentities(consumerRoot);
   if (profile === 'lowest') await assertPeerMismatch(packageSource, packageMetadata);
-  console.log(`Packed consumer smoke test passed with ${packageManager} in ${consumerRoot}.`);
 } finally {
   if (artifactsDirectory) {
     const destination = path.resolve(artifactsDirectory, `${packageManager}-${profile}-${process.versions.node}`);
@@ -535,8 +534,10 @@ try {
       if (await stat(source).catch(() => undefined)) await cp(source, path.join(destination, file));
     }
   }
+  console.log(`Removing packed consumer fixture ${temporaryRoot}.`);
   await rm(temporaryRoot, { force: true, maxRetries: 10, recursive: true, retryDelay: 250 });
 }
+console.log(`Packed consumer smoke test passed with ${packageManager} in ${consumerRoot}.`);
 
 async function runInstalledBrowserSmoke({ consumerRoot, installedCliPath, projectRoot }) {
   const port = consumerPort + 1;
@@ -967,11 +968,21 @@ async function assertFrameworkIdentities(root, metadata, selectedProfile) {
   const starlightRequire = createRequire(consumerRequire.resolve('@astrojs/starlight/components'));
   assert.equal(await realpath(starlightRequire.resolve('astro/package.json')), astroPath);
   const astroRequire = createRequire(astroPath);
-  const { resolveAstroVite } = await import(
-    pathToFileURL(path.join(root, 'node_modules/oxiquill/dist/config/astro-vite.mjs')).href
+  const adapterUrl = pathToFileURL(path.join(root, 'node_modules/oxiquill/dist/config/astro-vite.mjs')).href;
+  // Native Vite addons must be unloaded before deleting the consumer on Windows.
+  const probe = run(
+    process.execPath,
+    [
+      '--input-type=module',
+      '--eval',
+      `const { resolveAstroVite } = await import(${JSON.stringify(adapterUrl)}); ` +
+        `process.stdout.write(JSON.stringify(resolveAstroVite(${JSON.stringify(oxiquillRequire.resolve('oxiquill'))})));`
+    ],
+    root,
+    true
   );
   const vitePath = await realpath(astroRequire.resolve('vite'));
-  assert.equal(await realpath(resolveAstroVite(oxiquillRequire.resolve('oxiquill'))), vitePath);
+  assert.equal(await realpath(JSON.parse(probe.stdout)), vitePath);
   const versions = {};
   for (const [name, range] of Object.entries({ ...metadata.dependencies, ...metadata.peerDependencies })) {
     // Starlight deliberately does not export its package.json.
