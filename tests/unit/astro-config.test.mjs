@@ -466,6 +466,17 @@ flowchart LR
     expect(normalizedAllow.some((entry) => entry.includes('node_modules/.pnpm/aria-query'))).toBe(true);
   });
 
+  it('leaves consumer Astro imports to the host resolver', async () => {
+    const update = runConfigSetup(defineOxiquillConfig({ sidebar: [], title: 'Docs' }));
+    const resolver = update.vite.plugins.find((plugin) => plugin.name === 'oxiquill-dependency-resolver');
+    const resolve = vi.fn();
+    for (const id of ['astro', 'astro/runtime/server/index.js', 'astro/components']) {
+      expect(aliasReplacementFor(update.vite.resolve.alias, id)).toBeUndefined();
+      await expect(resolver.resolveId.call({ resolve }, id, undefined, {})).resolves.toBeUndefined();
+    }
+    expect(resolve).not.toHaveBeenCalled();
+  });
+
   it('aliases the Preact runtime when the workspace does not expose a direct install', () => {
     const config = defineOxiquillConfig({
       sidebar: [],
@@ -628,13 +639,7 @@ flowchart LR
       '@bjorn3/browser_wasi_shim',
       'aria-query',
       'html-escaper',
-      'mermaid',
-      'astro/app',
-      'astro/content/runtime',
-      'astro/jsx-runtime',
-      'astro/loaders',
-      'astro/runtime/client/dev-toolbar/entrypoint.js',
-      'astro/runtime/server/index.js'
+      'mermaid'
     ]);
 
     for (const id of preactExportSpecifiers) {
@@ -649,12 +654,6 @@ flowchart LR
     expect(resolved['aria-query']).toEqual(expect.any(String));
     expect(resolved['html-escaper']).toEqual(expect.any(String));
     expect(resolved.mermaid).toEqual(expect.any(String));
-    expect(resolved['astro/app']).toEqual(expect.any(String));
-    expect(resolved['astro/content/runtime']).toEqual(expect.any(String));
-    expect(resolved['astro/jsx-runtime']).toEqual(expect.any(String));
-    expect(resolved['astro/loaders']).toEqual(expect.any(String));
-    expect(resolved['astro/runtime/client/dev-toolbar/entrypoint.js']).toEqual(expect.any(String));
-    expect(resolved['astro/runtime/server/index.js']).toEqual(expect.any(String));
   });
 });
 

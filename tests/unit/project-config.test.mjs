@@ -307,7 +307,7 @@ describe('Oxiquill project configuration', () => {
       generatedDir: path.join(root, 'custom cache/generated runtime')
     });
     expect(projectConfig.astroConfigArgs).toEqual(['--root', root, '--config', 'custom config.mts']);
-  });
+  }, 15_000);
 
   it.each([undefined, '', 'caller-value', 'development', 'production'])(
     'restores NODE_ENV=%j after successful and failed discovery',
@@ -338,7 +338,9 @@ describe('Oxiquill project configuration', () => {
         if (hadOriginal) process.env.NODE_ENV = original;
         else delete process.env.NODE_ENV;
       }
-    }
+    },
+    // Each case starts two Vite config runners, including the cold-load case.
+    15_000
   );
 
   it('fails clearly for missing, invalid, absent, and duplicate integrations', async () => {

@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict';
+import semver from 'semver';
 import { spawnSync } from 'node:child_process';
 import { mkdtemp, mkdir, readFile, readdir, rm, stat, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
@@ -11,11 +12,17 @@ const repositoryRoot = fileURLToPath(new URL('../../', import.meta.url));
 const packageRoot = path.join(repositoryRoot, 'packages/oxiquill');
 const packageReadme = await readFile(path.join(packageRoot, 'README.md'), 'utf8');
 const packageManifest = JSON.parse(await readFile(path.join(packageRoot, 'package.json'), 'utf8'));
-const starterManifest = JSON.parse(await readFile(path.join(repositoryRoot, 'templates/basic/package.json'), 'utf8'));
 const temporaryRoot = await mkdtemp(path.join(tmpdir(), 'oxiquill-package-'));
 
 try {
   await assertMathDependencies(packageRoot);
+  const starterManifest = JSON.parse(await readFile(path.join(repositoryRoot, 'templates/basic/package.json'), 'utf8'));
+  for (const name of ['astro', '@astrojs/starlight']) {
+    assert.equal(packageManifest.dependencies[name], undefined, `${name} must be consumer owned`);
+    assert.ok(semver.satisfies(starterManifest.dependencies[name], packageManifest.peerDependencies[name]));
+  }
+  assert.equal(packageManifest.dependencies.vite, undefined, 'Vite must be loaded from Astro');
+  assert.ok(semver.valid(packageManifest.dependencies.pyodide), 'Pyodide must remain exact');
   assert.equal(packageManifest.scripts.prepack, 'pnpm run build:clean');
   for (const lifecycleHook of ['prepare', 'install', 'postinstall']) {
     assert.ok(
@@ -56,7 +63,7 @@ try {
     assert.ok(!actualFiles.includes(unusedOutput), `${unusedOutput} must not be published`);
   }
 
-  const supportedInstall = `oxiquill@${packageManifest.version} astro@${starterManifest.dependencies.astro} @astrojs/starlight@${starterManifest.dependencies['@astrojs/starlight']}`;
+  const supportedInstall = `oxiquill@${packageManifest.version} "astro@${packageManifest.peerDependencies.astro}" "@astrojs/starlight@${packageManifest.peerDependencies['@astrojs/starlight']}"`;
   for (const requiredText of [
     'pnpm dlx oxiquill init',
     `pnpm add ${supportedInstall}`,

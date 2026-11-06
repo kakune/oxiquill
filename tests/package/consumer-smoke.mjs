@@ -4,6 +4,7 @@ import { createHash } from 'node:crypto';
 import {
   appendFile,
   copyFile,
+  cp,
   mkdir,
   mkdtemp,
   readFile,
@@ -18,6 +19,9 @@ import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import { chromium } from '@playwright/test';
+import semver from 'semver';
+
+import { compatibilityManifest, compatibilityWorkspace, minimumDependencies } from './compatibility.mjs';
 import { packRecords } from '../../.github/scripts/release-archive.mjs';
 import { loadDocumentedConsumerConfig } from '../docs/documented-config.mjs';
 import { assertMathDependencies } from './math-contract.mjs';
@@ -45,6 +49,12 @@ const additionalPythonPackages = {
 
 const packageManagerArgument = process.argv.indexOf('--package-manager');
 const packageManager = process.argv[packageManagerArgument + 1];
+const argumentValue = (name, fallback) =>
+  process.argv.includes(name) ? process.argv[process.argv.indexOf(name) + 1] : fallback;
+const profile = argumentValue('--profile', 'starter');
+const tarball = argumentValue('--tarball');
+const artifactsDirectory = process.env.OXIQUILL_CONSUMER_ARTIFACTS;
+const consumerPort = Number(process.env.OXIQUILL_CONSUMER_PORT ?? 4386);
 const browserSmoke = process.argv.includes('--browser');
 const consumerEnvironment = { ...process.env, ASTRO_TELEMETRY_DISABLED: '1' };
 delete consumerEnvironment.NODE_ENV;
@@ -140,7 +150,8 @@ try {
   const packageMetadata = JSON.parse(await readFile(path.join(packageRoot, 'package.json'), 'utf8'));
   const expectedVersion = packageMetadata.version;
   let packageSource = `oxiquill@${expectedVersion}`;
-  if (!registryMode) {
+  if (tarball) packageSource = path.resolve(tarball);
+  else if (!registryMode) {
     const packResult = run(
       'npm',
       ['pack', '--json', '--silent', '--pack-destination', temporaryRoot],
@@ -153,11 +164,16 @@ try {
 
   initializeConsumer(packageManager, packageSource, consumerRoot, temporaryRoot);
   const starterConfig = {
-    astro: await readFile(path.join(consumerRoot, 'astro.config.mjs'), 'utf8'),
+    astro: withCompatibilityProbe(await readFile(path.join(consumerRoot, 'astro.config.mjs'), 'utf8')),
     content: await readFile(path.join(consumerRoot, 'content.config.ts'), 'utf8')
   };
   const packageJsonPath = path.join(consumerRoot, 'package.json');
-  const packageJson = JSON.parse(await readFile(packageJsonPath, 'utf8'));
+  const packageJson = compatibilityManifest(
+    JSON.parse(await readFile(packageJsonPath, 'utf8')),
+    packageMetadata,
+    profile,
+    packageManager
+  );
   assert.equal(packageJson.dependencies.oxiquill, `^${expectedVersion}`, 'starter Oxiquill version is stale');
   assert.equal(packageJson.dependencies.preact, undefined, 'starter must not declare Preact directly');
   packageJson.dependencies.oxiquill = registryMode
@@ -167,8 +183,19 @@ try {
   packageJson.scripts['test:wasm'] = 'oxiquill test-wasm';
   await writeFile(packageJsonPath, `${JSON.stringify(packageJson, null, 2)}\n`);
 
+  if (packageManager === 'pnpm' && profile !== 'starter') {
+    const workspacePath = path.join(consumerRoot, 'pnpm-workspace.yaml');
+    // JSON is valid YAML; the starter only contains allowBuilds.
+    const starterWorkspace = { allowBuilds: { esbuild: true, sharp: true } };
+    await writeFile(
+      workspacePath,
+      JSON.stringify({ ...starterWorkspace, ...compatibilityWorkspace(packageMetadata, profile) })
+    );
+  }
+  await copyFile(new URL('./bundle-probe.mjs', import.meta.url), path.join(consumerRoot, 'compatibility-probe.mjs'));
   run(packageManager, ['install'], consumerRoot);
-  await writeFile(path.join(consumerRoot, 'astro.config.mjs'), documentedConfig.astro);
+  await assertFrameworkIdentities(consumerRoot, packageMetadata, profile);
+  await writeFile(path.join(consumerRoot, 'astro.config.mjs'), withCompatibilityProbe(documentedConfig.astro));
   await writeFile(path.join(consumerRoot, 'content.config.ts'), documentedConfig.content);
   const installedManifest = JSON.parse(
     await readFile(path.join(consumerRoot, 'node_modules/oxiquill/package.json'), 'utf8')
@@ -207,7 +234,7 @@ try {
     consumerRoot
   );
 
-  if (packageManager === 'pnpm') {
+  {
     await appendFile(
       path.join(consumerRoot, 'content/docs/index.mdx'),
       [
@@ -249,7 +276,11 @@ try {
   assert.match(productionHtml, /class="katex-html"/u);
   assert.match(productionHtml, /katex-sizing reset-size6 size3/u);
   assert.doesNotMatch(productionHtml, /search\.devWarning|Search is only available in production builds/u);
-  run(packageManager, ['run', 'preview', '--', '--background', '--host', '127.0.0.1', '--port', '4321'], consumerRoot);
+  run(
+    packageManager,
+    ['run', 'preview', '--', '--background', '--host', '127.0.0.1', '--port', String(consumerPort + 2)],
+    consumerRoot
+  );
   await assertFile(path.join(consumerRoot, '.astro/preview.json'));
   stopAstroPreview(packageManager, consumerRoot);
   run(packageManager, ['run', 'clean'], consumerRoot);
@@ -486,13 +517,29 @@ try {
   }
   await assertFile(path.join(projectRoot, 'static files/favicon.svg'));
   await assertFile(path.join(projectRoot, 'content/docs/index.mdx'));
+  await assertBuildIdentities(consumerRoot);
+  if (profile === 'lowest') await assertPeerMismatch(packageSource, packageMetadata);
   console.log(`Packed consumer smoke test passed with ${packageManager} in ${consumerRoot}.`);
 } finally {
+  if (artifactsDirectory) {
+    const destination = path.resolve(artifactsDirectory, `${packageManager}-${profile}-${process.versions.node}`);
+    await mkdir(destination, { recursive: true });
+    for (const file of [
+      'package.json',
+      'package-lock.json',
+      'pnpm-lock.yaml',
+      'framework-versions.json',
+      'framework-modules.jsonl'
+    ]) {
+      const source = path.join(consumerRoot, file);
+      if (await stat(source).catch(() => undefined)) await cp(source, path.join(destination, file));
+    }
+  }
   await rm(temporaryRoot, { force: true, maxRetries: 10, recursive: true, retryDelay: 250 });
 }
 
 async function runInstalledBrowserSmoke({ consumerRoot, installedCliPath, projectRoot }) {
-  const port = 4_387;
+  const port = consumerPort + 1;
   const server = spawn(
     process.execPath,
     [installedCliPath, 'preview', '--background', '--host', '127.0.0.1', '--port', String(port)],
@@ -640,7 +687,7 @@ async function assertInstalledLayout(browser, url, manifest) {
 }
 
 async function runInstalledDevSmoke({ browserEnabled, consumerRoot }) {
-  const port = 4_386;
+  const port = consumerPort;
   let browser;
   let serverPid;
 
@@ -809,6 +856,7 @@ async function waitForHttp(url, timeoutMs, server, output, readServerError) {
 
 function packedAstroConfig({ offline }) {
   return [
+    "import { compatibilityProbe } from './compatibility-probe.mjs';",
     "import starlight from '@astrojs/starlight';",
     "import { defineOxiquillConfig } from 'oxiquill/astro';",
     "import { fileURLToPath } from 'node:url';",
@@ -816,6 +864,7 @@ function packedAstroConfig({ offline }) {
     "const projectRoot = fileURLToPath(new URL('./site root/', import.meta.url));",
     '',
     'export default defineOxiquillConfig({',
+    '  vite: { plugins: [compatibilityProbe()] },',
     '  desktopTableOfContentsToggle: true,',
     '  framework: { starlight },',
     '  root: projectRoot,',
@@ -901,4 +950,107 @@ async function assertFile(filePath) {
 
 async function assertMissing(filePath) {
   await assert.rejects(readFile(filePath), { code: 'ENOENT' });
+}
+
+function withCompatibilityProbe(source) {
+  return (
+    "import { compatibilityProbe } from './compatibility-probe.mjs';\n" +
+    source.replace('defineOxiquillConfig({', 'defineOxiquillConfig({ vite: { plugins: [compatibilityProbe()] },')
+  );
+}
+
+async function assertFrameworkIdentities(root, metadata, selectedProfile) {
+  const consumerRequire = createRequire(path.join(root, 'package.json'));
+  const oxiquillRequire = createRequire(await realpath(consumerRequire.resolve('oxiquill')));
+  const astroPath = await realpath(consumerRequire.resolve('astro/package.json'));
+  assert.equal(await realpath(oxiquillRequire.resolve('astro/package.json')), astroPath);
+  const starlightRequire = createRequire(consumerRequire.resolve('@astrojs/starlight/components'));
+  assert.equal(await realpath(starlightRequire.resolve('astro/package.json')), astroPath);
+  const astroRequire = createRequire(astroPath);
+  const { resolveAstroVite } = await import(
+    pathToFileURL(path.join(root, 'node_modules/oxiquill/dist/config/astro-vite.mjs')).href
+  );
+  const vitePath = await realpath(astroRequire.resolve('vite'));
+  assert.equal(await realpath(resolveAstroVite(oxiquillRequire.resolve('oxiquill'))), vitePath);
+  const versions = {};
+  for (const [name, range] of Object.entries({ ...metadata.dependencies, ...metadata.peerDependencies })) {
+    // Starlight deliberately does not export its package.json.
+    const entry =
+      name === '@astrojs/starlight'
+        ? consumerRequire.resolve('@astrojs/starlight/components')
+        : oxiquillRequire.resolve(name);
+    const installed = await packageManifestFromEntry(entry, name);
+    assert.ok(semver.satisfies(installed.version, range), `${name}@${installed.version} is outside ${range}`);
+    if (selectedProfile === 'lowest') assert.equal(installed.version, minimumDependencies({ [name]: range })[name]);
+    versions[name] = installed.version;
+  }
+  versions.vite = JSON.parse(await readFile(path.join(path.dirname(vitePath), '../../package.json'), 'utf8')).version;
+  await writeFile(path.join(root, 'framework-versions.json'), JSON.stringify(versions, null, 2));
+  console.log(`Consumer versions (${packageManager}/${selectedProfile}):`, versions);
+}
+
+async function assertBuildIdentities(root) {
+  const reports = (await readFile(path.join(root, 'framework-modules.jsonl'), 'utf8'))
+    .trim()
+    .split('\n')
+    .flatMap(JSON.parse);
+  for (const name of ['astro', 'preact']) {
+    const roots = new Set(reports.filter((entry) => entry.name === name).map((entry) => entry.root));
+    assert.equal(roots.size, 1, `Expected one built ${name} root, got ${JSON.stringify([...roots])}`);
+  }
+}
+
+async function assertPeerMismatch(packageSource, metadata) {
+  const mismatchRoot = path.join(temporaryRoot, 'peer-mismatch');
+  await mkdir(mismatchRoot);
+  await writeFile(
+    path.join(mismatchRoot, 'package.json'),
+    JSON.stringify({
+      private: true,
+      dependencies: {
+        oxiquill: `file:${packageSource}`,
+        astro: '7.3.7',
+        '@astrojs/starlight': metadata.peerDependencies['@astrojs/starlight']
+      }
+    })
+  );
+  if (packageManager === 'pnpm')
+    await writeFile(path.join(mismatchRoot, 'pnpm-workspace.yaml'), 'strictPeerDependencies: false\n');
+  const result = spawnSync(packageManager, ['install', '--ignore-scripts', '--lockfile-only'], {
+    cwd: mismatchRoot,
+    env: consumerEnvironment,
+    encoding: 'utf8'
+  });
+  assert.ifError(result.error);
+  const output = `${result.stdout}\n${result.stderr}`;
+  if (packageManager === 'npm') {
+    assert.notEqual(result.status, 0, 'npm must reject the unsupported Astro peer');
+    assert.match(output, /ERESOLVE/u);
+  } else {
+    assert.equal(result.status, 0, output);
+    assert.match(output, /Issues with peer dependencies found/u);
+    const details = spawnSync(packageManager, ['peers', 'check', '--lockfile-only'], {
+      cwd: mismatchRoot,
+      env: consumerEnvironment,
+      encoding: 'utf8'
+    });
+    assert.ifError(details.error);
+    const diagnostics = `${details.stdout}\n${details.stderr}`;
+    assert.match(diagnostics, /astro/u);
+    assert.ok(diagnostics.includes(metadata.peerDependencies.astro), diagnostics);
+  }
+  if (packageManager === 'npm') assert.ok(output.includes(metadata.peerDependencies.astro), output);
+}
+
+async function packageManifestFromEntry(entry, name) {
+  let directory = path.dirname(await realpath(entry));
+  while (true) {
+    const manifest = await readFile(path.join(directory, 'package.json'), 'utf8')
+      .then(JSON.parse)
+      .catch(() => undefined);
+    if (manifest?.name === name) return manifest;
+    const parent = path.dirname(directory);
+    assert.notEqual(parent, directory, `Unable to locate ${name} from ${entry}`);
+    directory = parent;
+  }
 }
