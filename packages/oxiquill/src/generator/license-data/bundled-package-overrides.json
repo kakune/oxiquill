@@ -3,25 +3,19 @@
   "packages": [
     {
       "name": "boolbase",
-      "version": "1.0.0",
+      "versionRange": "^1.0.0",
       "license": "ISC",
       "licenseFile": "javascript/boolbase-1.0.0-LICENSE.txt"
     },
     {
       "name": "@pagefind/default-ui",
-      "version": "1.5.2",
+      "versionRange": "^1.5.2",
       "license": "MIT",
       "licenseFile": "javascript/pagefind-1.5.2-LICENSE-MIT.txt"
     },
     {
-      "name": "@pagefind/default-ui",
-      "version": "1.6.0",
-      "license": "MIT",
-      "licenseFile": "javascript/pagefind-1.6.0-LICENSE-MIT.txt"
-    },
-    {
       "name": "fastdom",
-      "version": "1.0.12",
+      "versionRange": "^1.0.12",
       "license": "MIT",
       "licenseFile": "javascript/fastdom-1.0.12-LICENSE-MIT.txt"
     }

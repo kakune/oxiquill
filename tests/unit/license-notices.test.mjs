@@ -197,7 +197,7 @@ describe('license notices', () => {
     const overridden = createMemoryFileSystem({
       [path.join(packageRoot, 'package.json')]: packageFiles[path.join(packageRoot, 'package.json')],
       [licensePath('bundled-package-overrides.json')]: JSON.stringify({
-        packages: [{ license: 'MIT', licenseFile: 'example.txt', name: 'example', version: '1.2.3' }],
+        packages: [{ license: 'MIT', licenseFile: 'example.txt', name: 'example', versionRange: '^1.2.0' }],
         schemaVersion: 1
       }),
       [licensePath('example.txt')]: 'Audited fallback text'
@@ -304,6 +304,30 @@ describe('license notices', () => {
         paths
       })
     ).rejects.toThrow('unknown license');
+  });
+
+  it.each([
+    ['1.2.4', 'MIT', '^1.2.0', undefined],
+    ['2.0.0', 'MIT', '^1.2.0', 'example 2.0.0'],
+    ['1.3.0', 'Apache-2.0', '^1.2.0', 'conflicts with package license'],
+    ['1.3.0', undefined, '^1.2.0', 'conflicts with package license'],
+    ['1.3.0', 'MIT', 'invalid', 'invalid versionRange']
+  ])('checks fallback coverage for %s with SPDX %s and range %s', async (version, license, versionRange, error) => {
+    const fileSystem = createMemoryFileSystem({
+      [path.join(packageRoot, 'package.json')]: JSON.stringify({ name: 'example', version, license }),
+      [licensePath('bundled-package-overrides.json')]: JSON.stringify({
+        schemaVersion: 1,
+        packages: [{ name: 'example', versionRange, license: 'MIT', licenseFile: 'example.txt' }]
+      }),
+      [licensePath('example.txt')]: 'Reviewed license text'
+    });
+    const result = collectBundledPackageNotices(new Map([['main', [path.join(packageRoot, 'main.js')]]]), {
+      fileSystem,
+      licenseDataDir
+    });
+    if (error) await expect(result).rejects.toThrow(error);
+    else
+      await expect(result).resolves.toMatchObject([{ version, licenseText: '[example.txt]\nReviewed license text' }]);
   });
 
   it('copies own licenses and writes stable public, Cargo, and built-site reports', async () => {

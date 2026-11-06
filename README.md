@@ -114,8 +114,8 @@ pnpm preview
 For an existing project, install Oxiquill together with the Astro and Starlight packages imported by the project:
 
 ```sh
-pnpm add oxiquill@0.4.1 astro@7.3.8 @astrojs/starlight@0.42.6
-npm install oxiquill@0.4.1 astro@7.3.8 @astrojs/starlight@0.42.6
+pnpm add oxiquill@0.4.1 "astro@^7.3.8" "@astrojs/starlight@~0.42.6"
+npm install oxiquill@0.4.1 "astro@^7.3.8" "@astrojs/starlight@~0.42.6"
 ```
 
 Route project scripts through the CLI:
@@ -123,8 +123,8 @@ Route project scripts through the CLI:
 ```json
 {
   "dependencies": {
-    "@astrojs/starlight": "0.42.6",
-    "astro": "7.3.8",
+    "@astrojs/starlight": "~0.42.6",
+    "astro": "^7.3.8",
     "oxiquill": "0.4.1"
   },
   "scripts": {
@@ -142,8 +142,8 @@ For local development against this checkout, use the same API with a local packa
 ```json
 {
   "dependencies": {
-    "@astrojs/starlight": "0.42.6",
-    "astro": "7.3.8",
+    "@astrojs/starlight": "~0.42.6",
+    "astro": "^7.3.8",
     "oxiquill": "link:../oxiquill/packages/oxiquill"
   }
 }
@@ -442,8 +442,8 @@ pnpm preview
 既存 project では、project が直接 import する Astro および Starlight とともに Oxiquill を追加します。
 
 ```sh
-pnpm add oxiquill@0.4.1 astro@7.3.8 @astrojs/starlight@0.42.6
-npm install oxiquill@0.4.1 astro@7.3.8 @astrojs/starlight@0.42.6
+pnpm add oxiquill@0.4.1 "astro@^7.3.8" "@astrojs/starlight@~0.42.6"
+npm install oxiquill@0.4.1 "astro@^7.3.8" "@astrojs/starlight@~0.42.6"
 ```
 
 project script は CLI 経由にします。
@@ -451,8 +451,8 @@ project script は CLI 経由にします。
 ```json
 {
   "dependencies": {
-    "@astrojs/starlight": "0.42.6",
-    "astro": "7.3.8",
+    "@astrojs/starlight": "~0.42.6",
+    "astro": "^7.3.8",
     "oxiquill": "0.4.1"
   },
   "scripts": {
@@ -470,8 +470,8 @@ project script は CLI 経由にします。
 ```json
 {
   "dependencies": {
-    "@astrojs/starlight": "0.42.6",
-    "astro": "7.3.8",
+    "@astrojs/starlight": "~0.42.6",
+    "astro": "^7.3.8",
     "oxiquill": "link:../oxiquill/packages/oxiquill"
   }
 }

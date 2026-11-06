@@ -76,8 +76,8 @@ describe('CI change selection', () => {
 });
 
 describe('CI job graph and aggregation', () => {
-  it('expands to thirteen jobs and runs the minimum toolchain for documentation', () => {
-    expect(Object.values(jobs).reduce((count, job) => count + (job.strategy?.matrix.include.length ?? 1), 0)).toBe(13);
+  it('expands to sixteen jobs and runs the minimum toolchain for documentation', () => {
+    expect(Object.values(jobs).reduce((count, job) => count + (job.strategy?.matrix.include.length ?? 1), 0)).toBe(16);
     expect(
       Object.entries(jobs)
         .filter(([, job]) => !job.needs || job.if === 'always()')
@@ -112,6 +112,19 @@ describe('CI job graph and aggregation', () => {
       expect(jobs[name].if).toMatch(/^needs\.changes\.outputs\.\w+ == 'true'$/u);
     }
   });
+  it('requires lowest dependencies and Node 24.0.0 while keeping newest dependencies in a canary', () => {
+    const lowest = jobs['compatibility-lowest'];
+    expect(lowest.strategy.matrix.include).toContainEqual({ 'package-manager': 'pnpm', node: '24.0.0' });
+    expect(lowest.strategy.matrix.include.map((entry) => entry['package-manager'])).toContain('npm');
+    expect(lowest.steps.some((step) => step.run?.includes('--profile lowest --browser --tarball'))).toBe(true);
+    expect(jobs['ci-ok'].needs).toContain('compatibility-lowest');
+    const canary = parse(readFileSync('.github/workflows/dependency-canary.yml', 'utf8'));
+    expect(canary.on.schedule.length).toBeGreaterThan(0);
+    expect(canary.jobs.highest.strategy.matrix['package-manager']).toEqual(['npm', 'pnpm']);
+    expect(canary.jobs.highest.steps.some((step) => step.run?.includes('--profile highest --browser'))).toBe(true);
+    expect(jobs['ci-ok'].needs).not.toContain('highest');
+  });
+
   it('gates only baseline capture and forwards its decision through the site job', () => {
     expect(jobs['site-build'].outputs.charts).toBe('${{ needs.changes.outputs.charts }}');
     for (const name of ['Prepare baseline chart sources', 'Capture baseline chart gallery'])
