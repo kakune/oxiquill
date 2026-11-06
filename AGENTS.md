@@ -26,6 +26,7 @@
 
 - Do not edit generated output directly: `.oxiquill/**`, `public/oxiquill/**`, `examples/docs-site/.oxiquill/**`, `examples/docs-site/public/oxiquill/**`, `dist/**`, `examples/docs-site/dist/**`, `coverage/**`, `test-results/**`, or `target/**`.
 - Regenerate runtime artifacts with the existing CLI-backed scripts: `pnpm docgen`, `pnpm wasm:dev`, `pnpm wasm:build`, or `pnpm build`, depending on the change.
+- `pnpm build` reuses unchanged package outputs and runtime artifacts; Astro recreates the static site output. Use `pnpm build:clean` to rebuild package, runtime, and site output from scratch while preserving the verified download cache. Package packing always uses a clean package build.
 
 ## Coding Standards
 

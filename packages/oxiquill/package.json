@@ -26,8 +26,9 @@
   },
   "scripts": {
     "clean": "node ./scripts/clean-dist.mjs",
-    "build": "pnpm run clean && tsc --project tsconfig.build.json && node ./scripts/copy-package-assets.mjs",
-    "prepack": "pnpm run build"
+    "build": "node ./scripts/build-package.mjs",
+    "build:clean": "pnpm run clean && pnpm run build",
+    "prepack": "pnpm run build:clean"
   },
   "types": "./dist/index.d.ts",
   "bin": {

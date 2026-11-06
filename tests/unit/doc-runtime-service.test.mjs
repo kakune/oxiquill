@@ -1339,16 +1339,16 @@ describe('doc runtime service', () => {
         'wasm32-wasi-ghc',
         [
           '-O2',
-          `-i${repoPath('.oxiquill/haskell-cells')}`,
+          '-i.',
           '-odir',
           repoPath('.oxiquill/haskell-cells/build'),
           '-hidir',
           repoPath('.oxiquill/haskell-cells/build'),
-          repoPath('.oxiquill/haskell-cells/Main.hs'),
+          'Main.hs',
           '-o',
           repoPath('public/oxiquill/haskell-wasm/doc_haskell_cells.wasm')
         ],
-        { cwd: repoRoot }
+        { cwd: repoPath('.oxiquill/haskell-cells') }
       ]
     ]);
     expect(fileSystem.existsSync('/repo/.oxiquill/haskell-cells/build')).toBe(true);

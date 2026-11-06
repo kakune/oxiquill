@@ -84,6 +84,14 @@ Build the static site:
 pnpm build
 ```
 
+`pnpm build` incrementally builds the reusable package and reuses unchanged runtime artifacts. Astro recreates the static site output on every build. To rebuild the package, runtimes, and site from scratch while preserving the verified download cache, run:
+
+```sh
+pnpm build:clean
+```
+
+`pnpm build:package` builds only the reusable package incrementally. Package packing always performs a clean package build. `oxiquill build --force` clears only Astro's content cache; it does not force a package or runtime rebuild.
+
 Preview the built site:
 
 ```sh
@@ -403,6 +411,14 @@ pnpm dev:astro
 ```sh
 pnpm build
 ```
+
+`pnpm build` は reusable package を incremental に build し、変更のない runtime artifact を再利用します。Astro は毎回 static site output を作り直します。verified download cache を保持しながら package、runtime、site を最初から再生成するには、次を実行します。
+
+```sh
+pnpm build:clean
+```
+
+`pnpm build:package` は reusable package だけを incremental に build します。package の pack は常に clean package build を行います。`oxiquill build --force` が消去するのは Astro の content cache だけで、package や runtime の再ビルドを強制しません。
 
 ビルド済みサイトを確認します。
 

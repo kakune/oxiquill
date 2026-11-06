@@ -1,5 +1,8 @@
 import { fileURLToPath } from 'node:url';
 import assert from 'node:assert/strict';
+import { mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
+import { tmpdir } from 'node:os';
+import path from 'node:path';
 import { createHaskellOutputCapture } from '../../packages/oxiquill/dist/lib/doc-runtime/haskell-output.js';
 import { validateOutputArtifacts } from '../../packages/oxiquill/dist/lib/doc-runtime/output-artifact-validation.js';
 import { createOxiquillPaths } from '../../packages/oxiquill/dist/config/paths.mjs';
@@ -7,6 +10,7 @@ import {
   executeGeneratedHaskellCell,
   testGeneratedHaskellCells
 } from '../../packages/oxiquill/dist/generator/doc-runtime/haskell-runtime-test.mjs';
+import { buildHaskellWasm, HASKELL_WASM_FILE } from '../../packages/oxiquill/dist/generator/doc-runtime/wasm-build.mjs';
 
 const workspaceRoot = fileURLToPath(new URL('../../examples/docs-site/', import.meta.url));
 const result = await testGeneratedHaskellCells({
@@ -45,3 +49,31 @@ const result = await testGeneratedHaskellCells({
 });
 
 console.log(`Generated Haskell/WASI all-cell test passed (${result.cellCount} cells).`);
+
+// Call-stack source locations must not embed the generator's random staging path.
+const temporaryRoot = await mkdtemp(path.join(tmpdir(), 'oxiquill-haskell-determinism-'));
+try {
+  const outputs = [];
+  for (const directory of ['first staging root', 'second staging root']) {
+    const paths = createOxiquillPaths({ workspaceRoot: path.join(temporaryRoot, directory) });
+    await mkdir(paths.haskellCellsDir, { recursive: true });
+    await writeFile(
+      path.join(paths.haskellCellsDir, 'Main.hs'),
+      [
+        'module Main where',
+        'import GHC.Stack (HasCallStack, callStack, prettyCallStack)',
+        'location :: HasCallStack => IO ()',
+        'location = putStrLn (prettyCallStack callStack)',
+        'main :: IO ()',
+        'main = location',
+        ''
+      ].join('\n')
+    );
+    await buildHaskellWasm({ mode: 'build', paths });
+    outputs.push(await readFile(path.join(paths.haskellWasmPublicDir, HASKELL_WASM_FILE)));
+  }
+  assert.deepEqual(outputs[0], outputs[1], 'Haskell Wasm must be identical across staging directories');
+  console.log('Haskell/WASI builds are byte-identical across staging directories.');
+} finally {
+  await rm(temporaryRoot, { force: true, recursive: true });
+}

@@ -59,6 +59,8 @@ For browser failures, verify the site was rebuilt, the expected files exist belo
 
 ## Stale Output
 
-Run `pnpm clean` followed by the required generation/build command when source and public output disagree. Generated ownership data removes stale language output when the final cell of that language disappears. Never repair generated manifests, ownership markers, Wasm, Pyodide files, licenses, or `dist` by hand.
+In the Oxiquill repository, `pnpm build` reuses unchanged package outputs and runtime artifacts while Astro recreates static site output. Run `pnpm build:clean` when source and generated output disagree: it rebuilds the package, runtimes, and site from scratch while preserving the verified download cache. In a consumer project, run `oxiquill clean` followed by `oxiquill build`; for a narrower regeneration, run clean followed by the required generation command.
+
+`oxiquill build --force` clears only Astro's content cache and does not force package or runtime rebuilding. Generated ownership data removes stale language output when the final cell of that language disappears. Never repair generated manifests, ownership markers, Wasm, Pyodide files, licenses, or `dist` by hand.
 
 If the problem persists, open a [GitHub issue](https://github.com/kakune/oxiquill/issues) with the Oxiquill/Node/tool versions, operating system, command, complete concise diagnostic, and a minimal reproducer. Use private vulnerability reporting for security-sensitive details.
