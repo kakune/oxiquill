@@ -298,7 +298,7 @@ describe('wasm-pack integration', () => {
         'doc_rust_cells',
         '--locked'
       ],
-      { cwd: root, env: { CARGO_TARGET_DIR: paths.rustTargetDir } }
+      { cwd: paths.workspaceRoot, env: { CARGO_TARGET_DIR: paths.rustTargetDir } }
     );
   });
 
