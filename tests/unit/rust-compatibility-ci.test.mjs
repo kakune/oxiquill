@@ -10,6 +10,14 @@ const ci = parse(readFileSync('.github/workflows/ci.yml', 'utf8'));
 const canary = parse(readFileSync('.github/workflows/rust-canary.yml', 'utf8'));
 
 describe('Rust compatibility CI', () => {
+  it('provides pinned Binaryen for the real optimizer-cache smoke test', () => {
+    expect(ci.jobs.runtime.steps.some((step) => step.run === 'bash .github/scripts/install-binaryen.sh')).toBe(true);
+    const installer = readFileSync('.github/scripts/install-binaryen.sh', 'utf8');
+    expect(installer).toContain('version_117');
+    expect(installer).toContain('sha256sum --check --strict');
+    expect(installer).toContain('wasm-opt version 117 (version_117)');
+  });
+
   it('requires the deterministic minimum job and overrides the repository toolchain', () => {
     const minimum = ci.jobs['rust-minimum'];
     expect(minimum.env).toEqual({ RUST_TOOLCHAIN: '1.85.0', RUSTUP_TOOLCHAIN: '1.85.0' });
