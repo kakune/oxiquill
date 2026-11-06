@@ -33,6 +33,7 @@ describe('Oxiquill cleanup', () => {
     ];
     const removedFiles = [
       path.join(paths.cacheDir, 'generated/cells.json'),
+      path.join(paths.wasmOptCacheDir, 'cached.wasm'),
       path.join(paths.rustTargetDir, 'debug/dependency.rlib'),
       path.join(paths.haskellBuildCacheDir, 'dev-9.14.1/objects/Helper.o'),
       path.join(paths.outDir, 'index.html'),

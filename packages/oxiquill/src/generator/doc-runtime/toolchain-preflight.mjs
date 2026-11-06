@@ -1,8 +1,10 @@
 import { spawn } from 'node:child_process';
+import { resolveWasmOpt } from './wasm-opt-cache.mjs';
 import { defaultFileSystem } from './file-system.mjs';
 import { compareVersions, parseToolVersion, parseVersion } from './toolchain-versions.mjs';
 
 export async function preflightRequiredToolchains({
+  cwd = process.cwd(),
   environment = process.env,
   fileSystem = defaultFileSystem,
   haskellCellCount,
@@ -17,7 +19,14 @@ export async function preflightRequiredToolchains({
 
   const [rust, haskell] = await Promise.all([
     rustCellCount > 0
-      ? preflightRustToolchain({ fileSystem, runCommand, runtimeInputs: runtimeInputs.rust })
+      ? preflightRustToolchain({
+          cwd,
+          environment,
+          platform,
+          fileSystem,
+          runCommand,
+          runtimeInputs: runtimeInputs.rust
+        })
       : undefined,
     haskellCellCount > 0
       ? preflightHaskellToolchain({
@@ -33,7 +42,15 @@ export async function preflightRequiredToolchains({
   return Object.freeze({ ...(rust ? { rust } : {}), ...(haskell ? { haskell } : {}) });
 }
 
-export async function preflightRustToolchain({ fileSystem = defaultFileSystem, runCommand, runtimeInputs }) {
+export async function preflightRustToolchain({
+  cwd = process.cwd(),
+  environment = process.env,
+  platform = process.platform,
+  fileSystem = defaultFileSystem,
+  runCommand,
+  runtimeInputs
+}) {
+  const runVersion = (command, args) => runCommand(command, args, { env: environment, cwd });
   const commands = [
     ['rustc', runtimeInputs.minimumVersion, undefined],
     ['cargo', runtimeInputs.minimumVersion, undefined],
@@ -48,7 +65,7 @@ export async function preflightRustToolchain({ fileSystem = defaultFileSystem, r
           minimum,
           maximum,
           guidance: rustSetupGuidance(runtimeInputs),
-          runCommand
+          runCommand: runVersion
         });
         return [command, output];
       })
@@ -56,7 +73,7 @@ export async function preflightRustToolchain({ fileSystem = defaultFileSystem, r
   );
 
   const targetCommand = ['rustc', ['--print', 'target-libdir', '--target', runtimeInputs.target]];
-  const targetLibdir = await runCommand(...targetCommand).catch((error) => {
+  const targetLibdir = await runVersion(...targetCommand).catch((error) => {
     throw preflightError(
       targetCommand,
       `support for ${runtimeInputs.target}`,
@@ -85,7 +102,15 @@ export async function preflightRustToolchain({ fileSystem = defaultFileSystem, r
     );
   }
 
-  return Object.freeze({ ...versions, target: runtimeInputs.target });
+  const wasmOpt = await resolveWasmOpt({
+    cwd,
+    environment,
+    platform,
+    fileSystem,
+    runCommand,
+    memoize: fileSystem === defaultFileSystem && runCommand === runCommandWithCapturedOutput
+  });
+  return Object.freeze({ ...versions, wasmOpt, target: runtimeInputs.target });
 }
 
 export async function preflightHaskellToolchain({
@@ -150,9 +175,9 @@ function errorMessage(error) {
   return error instanceof Error && error.message ? error.message : String(error);
 }
 
-export function runCommandWithCapturedOutput(command, args, spawnProcess = spawn) {
+export function runCommandWithCapturedOutput(command, args, options = {}, spawnProcess = spawn) {
   return new Promise((resolve, reject) => {
-    const child = spawnProcess(command, args, { stdio: ['ignore', 'pipe', 'pipe'] });
+    const child = spawnProcess(command, args, { ...options, stdio: ['ignore', 'pipe', 'pipe'] });
     const stdout = [];
     const stderr = [];
     child.stdout.on('data', (chunk) => stdout.push(chunk));

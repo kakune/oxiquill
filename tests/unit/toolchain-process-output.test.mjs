@@ -13,7 +13,7 @@ describe('toolchain process output', () => {
   it('waits for stdout to finish after process exit', async () => {
     const child = processDouble();
     const spawn = vi.fn(() => child);
-    const output = runCommandWithCapturedOutput('rustc', ['--version'], spawn);
+    const output = runCommandWithCapturedOutput('rustc', ['--version'], {}, spawn);
     const settled = vi.fn();
     void output.then(settled);
 
@@ -30,7 +30,7 @@ describe('toolchain process output', () => {
 
   it('retains stderr that arrives after a failed process exits', async () => {
     const child = processDouble();
-    const output = runCommandWithCapturedOutput('rustc', ['--version'], () => child);
+    const output = runCommandWithCapturedOutput('rustc', ['--version'], {}, () => child);
     const rejected = expect(output).rejects.toThrow('toolchain unavailable');
     child.emit('exit', 1, null);
     child.stderr.emit('data', Buffer.from('toolchain '));
@@ -44,14 +44,14 @@ describe('toolchain process output', () => {
     [null, 'SIGTERM', 'SIGTERM']
   ])('reports an empty failure with code %s and signal %s', async (code, signal, detail) => {
     const child = processDouble();
-    const output = runCommandWithCapturedOutput('cargo', ['--version'], () => child);
+    const output = runCommandWithCapturedOutput('cargo', ['--version'], {}, () => child);
     child.emit('close', code, signal);
     await expect(output).rejects.toThrow(`cargo exited with ${detail}`);
   });
 
   it('rejects spawn errors', async () => {
     const child = processDouble();
-    const output = runCommandWithCapturedOutput('missing-tool', [], () => child);
+    const output = runCommandWithCapturedOutput('missing-tool', [], {}, () => child);
     child.emit('error', new Error('spawn ENOENT'));
     await expect(output).rejects.toThrow('spawn ENOENT');
   });

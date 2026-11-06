@@ -127,6 +127,7 @@ describe('toolchain preflight', () => {
 
     await expect(
       preflightRequiredToolchains({
+        environment: {},
         fileSystem,
         haskellCellCount: 0,
         mode: 'build',
@@ -139,7 +140,8 @@ describe('toolchain preflight', () => {
         cargo: 'cargo 1.95.0 (fixture)',
         rustc: 'rustc 1.95.0 (fixture)',
         target: 'wasm32-unknown-unknown',
-        'wasm-pack': 'wasm-pack 0.15.0'
+        'wasm-pack': 'wasm-pack 0.15.0',
+        wasmOpt: { identity: 'managed-by-wasm-pack' }
       }
     });
     expect(runCommand).not.toHaveBeenCalledWith('wasm32-wasi-ghc', expect.anything());
@@ -185,6 +187,7 @@ describe('toolchain preflight', () => {
 
 function rustPreflight(versions = {}, overrides = {}) {
   return preflightRustToolchain({
+    environment: {},
     fileSystem: { readdir: async () => [{ name: 'libcore-fixture.rlib' }] },
     runCommand: async (command, args) =>
       args[0] === '--print'

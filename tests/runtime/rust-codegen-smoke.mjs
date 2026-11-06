@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict';
+import { verifyWasmOptCache } from './wasm-opt-cache-smoke.mjs';
 import { cp, mkdtemp, readFile, rm, stat, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
@@ -163,6 +164,7 @@ try {
   );
   assert.ok(dependencyFiles.length > 0, 'warm build must produce cached registry artifacts');
   const dependencyTimes = await Promise.all(dependencyFiles.map(async (file) => [file, (await stat(file)).mtimeMs]));
+  await verifyWasmOptCache({ paths });
   const publishedWasm = await readFile(path.join(paths.rustWasmPublicDir, 'doc_rust_cells_bg.wasm'));
   await writeFile(
     path.join(workspaceRoot, 'content/docs/index.mdx'),

@@ -79,7 +79,7 @@ export function validateProjectPathSafety({ configFile, paths, protectedPaths = 
   assertStrictlyWithin(paths.publicDir, paths.publicAssetsDir, 'paths.publicAssetsDir', 'paths.publicDir');
 
   cacheChildren.forEach((child) => assertStrictlyWithin(paths.cacheDir, child.path, child.field, 'cacheDir'));
-  [paths.rustTargetDir, paths.haskellBuildCacheDir].forEach((child) =>
+  [paths.rustTargetDir, paths.haskellBuildCacheDir, paths.wasmOptCacheDir].forEach((child) =>
     assertStrictlyWithin(paths.buildCacheDir, child, 'compiler cache', 'buildCacheDir')
   );
   publicChildren.forEach((child) =>

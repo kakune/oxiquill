@@ -8,6 +8,7 @@ export function createRuntimeOwnedOutputs(paths) {
   return Object.freeze([
     ownedOutput('rust', 'cache', paths.cacheDir, paths.rustCellsDir),
     ownedOutput('rust', 'cache', paths.cacheDir, paths.rustTargetDir),
+    ownedOutput('rust', 'cache', paths.cacheDir, paths.wasmOptCacheDir),
     ownedOutput('rust', 'public', paths.publicAssetsDir, paths.rustWasmPublicDir),
     ownedOutput('python', 'public', paths.publicAssetsDir, paths.pyodidePublicDir),
     ownedOutput('haskell', 'cache', paths.cacheDir, paths.haskellCellsDir),

@@ -1,4 +1,5 @@
 import { spawn } from 'node:child_process';
+import { optimizeRustWasmFiles, resolveWasmOpt } from './wasm-opt-cache.mjs';
 import { createOxiquillPaths, pathFromUrl, pathInUrl } from '../../config/paths.mjs';
 import { postprocessRustWasm } from '../postprocess-rust-wasm.mjs';
 import { defaultFileSystem, writeIfChanged } from './file-system.mjs';
@@ -36,6 +37,8 @@ export class HaskellWasmBuildError extends Error {
 }
 
 export async function buildRustWasm({
+  fileSystem = defaultFileSystem,
+  wasmOpt,
   environment = process.env,
   mode,
   paths,
@@ -45,6 +48,18 @@ export async function buildRustWasm({
 }) {
   const resolvedPaths = paths ?? createOxiquillPaths({ workspaceRoot: root });
   const modeFlag = mode === 'build' ? '--release' : '--dev';
+  const env = wasmPackEnvironment({ environment, paths: resolvedPaths });
+  const optimizer =
+    mode === 'build'
+      ? (wasmOpt ??
+        (await resolveWasmOpt({
+          environment: env,
+          cwd: pathFromUrl(resolvedPaths.workspaceRoot),
+          fileSystem,
+          runCommand,
+          memoize: fileSystem === defaultFileSystem && runCommand === runCommandWithInheritedStdio
+        })))
+      : undefined;
   await runCommand(
     'wasm-pack',
     [
@@ -57,10 +72,22 @@ export async function buildRustWasm({
       pathFromUrl(resolvedPaths.rustWasmPublicDir),
       '--out-name',
       'doc_rust_cells',
+      ...(optimizer?.command ? ['--no-opt'] : []),
       '--locked'
     ],
-    { cwd: pathFromUrl(resolvedPaths.workspaceRoot), env: wasmPackEnvironment({ environment, paths: resolvedPaths }) }
+    { cwd: pathFromUrl(resolvedPaths.workspaceRoot), env }
   );
+  if (optimizer?.command) {
+    await optimizeRustWasmFiles({
+      directory: pathFromUrl(resolvedPaths.rustWasmPublicDir),
+      cacheDir: resolvedPaths.wasmOptCacheDir,
+      cwd: pathFromUrl(resolvedPaths.workspaceRoot),
+      optimizer,
+      environment: env,
+      runCommand,
+      fileSystem
+    });
+  }
   await postprocess({ rustWasmDir: pathFromUrl(resolvedPaths.rustWasmPublicDir) });
 }
 

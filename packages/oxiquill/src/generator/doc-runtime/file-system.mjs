@@ -1,5 +1,18 @@
 import { createReadStream, existsSync } from 'node:fs';
-import { copyFile, link, mkdir, open, readFile, readdir, rename, rm, writeFile } from 'node:fs/promises';
+import {
+  access,
+  copyFile,
+  link,
+  mkdir,
+  open,
+  readFile,
+  readdir,
+  rename,
+  rm,
+  stat,
+  utimes,
+  writeFile
+} from 'node:fs/promises';
 import path from 'node:path';
 import { pathFromUrl } from '../../config/paths.mjs';
 import { createSha256, hashBytes } from './hashing.mjs';
@@ -7,6 +20,7 @@ import { createSha256, hashBytes } from './hashing.mjs';
 const pendingCopies = new Map();
 
 export const defaultFileSystem = {
+  access,
   copyFile,
   createReadStream,
   existsSync,
@@ -17,6 +31,8 @@ export const defaultFileSystem = {
   readdir,
   rename,
   rm,
+  stat,
+  utimes,
   writeFile
 };
 

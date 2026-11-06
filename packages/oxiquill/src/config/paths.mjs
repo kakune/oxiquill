@@ -19,6 +19,7 @@ export function createOxiquillPaths(options = {}) {
     cratesDir: directoryPath(options.cratesDir ?? 'crates', workspaceRoot),
     cacheDir,
     buildCacheDir: directoryPath('build-cache', cacheDir),
+    wasmOptCacheDir: directoryPath('build-cache/wasm-opt', cacheDir),
     rustTargetDir: directoryPath('build-cache/rust-target', cacheDir),
     haskellBuildCacheDir: directoryPath('build-cache/haskell', cacheDir),
     downloadCacheDir: directoryPath(options.downloadCacheDir ?? '.cache/oxiquill/downloads/v1', workspaceRoot),
