@@ -1,5 +1,6 @@
 import { spawn } from 'node:child_process';
 import { defaultFileSystem } from './file-system.mjs';
+import { compareVersions, parseToolVersion, parseVersion } from './toolchain-versions.mjs';
 
 export async function preflightRequiredToolchains({
   environment = process.env,
@@ -34,21 +35,25 @@ export async function preflightRequiredToolchains({
 
 export async function preflightRustToolchain({ fileSystem = defaultFileSystem, runCommand, runtimeInputs }) {
   const commands = [
-    ['rustc', ['--version'], 'rustc', runtimeInputs.rustcVersion],
-    ['cargo', ['--version'], 'cargo', runtimeInputs.cargoVersion],
-    ['wasm-pack', ['--version'], 'wasm-pack', runtimeInputs.wasmPackVersion]
+    ['rustc', runtimeInputs.minimumVersion, undefined],
+    ['cargo', runtimeInputs.minimumVersion, undefined],
+    ['wasm-pack', runtimeInputs.wasmPackMinimumVersion, runtimeInputs.wasmPackMaximumVersionExclusive]
   ];
-  const versions = {};
-
-  for (const [command, args, label, expected] of commands) {
-    const output = await runVersionCommand(command, args, {
-      expected,
-      guidance: rustSetupGuidance(runtimeInputs),
-      label,
-      runCommand
-    });
-    versions[label] = output;
-  }
+  const versions = Object.fromEntries(
+    await Promise.all(
+      commands.map(async ([command, minimum, maximum]) => {
+        const expected = maximum ? `>=${minimum} <${maximum}` : `>=${minimum} (tested ${runtimeInputs.testedVersion})`;
+        const output = await runVersionCommand(command, ['--version'], {
+          expected: `${command} ${expected}`,
+          minimum,
+          maximum,
+          guidance: rustSetupGuidance(runtimeInputs),
+          runCommand
+        });
+        return [command, output];
+      })
+    )
+  );
 
   const targetCommand = ['rustc', ['--print', 'target-libdir', '--target', runtimeInputs.target]];
   const targetLibdir = await runCommand(...targetCommand).catch((error) => {
@@ -113,18 +118,22 @@ export async function preflightHaskellToolchain({
   }
 }
 
-async function runVersionCommand(command, args, { expected, guidance, label, runCommand }) {
+async function runVersionCommand(command, args, { expected, guidance, minimum, maximum, runCommand }) {
   let output;
   try {
-    output = String(await runCommand(command, args)).trim();
+    output = String(await runCommand(command, args));
   } catch (error) {
-    throw preflightError([command, args], `${label} ${expected}`, errorMessage(error), guidance);
+    throw preflightError([command, args], expected, errorMessage(error), guidance);
   }
-  const version = output.split(/\s+/u)[1];
-  if (version !== expected) {
-    throw preflightError([command, args], `${label} ${expected}`, output || '(empty output)', guidance);
+  const version = parseToolVersion(output, command);
+  if (
+    !version ||
+    compareVersions(version, parseVersion(minimum)) < 0 ||
+    (maximum && compareVersions(version, parseVersion(maximum)) >= 0)
+  ) {
+    throw preflightError([command, args], expected, JSON.stringify(output), guidance);
   }
-  return output;
+  return output.trim();
 }
 
 function preflightError([command, args], expected, actual, guidance) {
@@ -134,7 +143,7 @@ function preflightError([command, args], expected, actual, guidance) {
 }
 
 function rustSetupGuidance(runtimeInputs) {
-  return `Install Rust ${runtimeInputs.rustcVersion}, run "rustup target add ${runtimeInputs.target} --toolchain ${runtimeInputs.rustcVersion}", and install wasm-pack ${runtimeInputs.wasmPackVersion}.`;
+  return `Install Rust and Cargo >=${runtimeInputs.minimumVersion} (tested ${runtimeInputs.testedVersion}), run "rustup target add ${runtimeInputs.target}", and install wasm-pack >=${runtimeInputs.wasmPackMinimumVersion} <${runtimeInputs.wasmPackMaximumVersionExclusive}. Rust beta/nightly channels are accepted but untested.`;
 }
 
 function errorMessage(error) {

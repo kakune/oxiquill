@@ -18,10 +18,14 @@ description: install、config、runtime generation、download、timeout、stale 
 
 | 症状                            | 対応                                                                                                               |
 | ------------------------------- | ------------------------------------------------------------------------------------------------------------------ |
-| Rust toolchain/target がない    | `rust-toolchain.toml` の pinned toolchain と `wasm32-unknown-unknown` target を install します。                   |
-| `wasm-pack` がない              | `wasm-pack` を install し、`pnpm wasm:dev` または失敗した strict command を再実行します。                          |
+| Rust toolchain/target がない    | Rust/Cargo 1.85.0 以上を install し、`rustup target add wasm32-unknown-unknown` を実行します。                     |
+| `wasm-pack` がない              | `wasm-pack >=0.15.0 <0.16.0` を install し、`pnpm wasm:dev` または失敗した strict command を再実行します。         |
 | Unknown helper crate            | `crates: [...]` を configured `cratesDir` 直下の `package.name` と一致させます。不要なら `crates: []` を使います。 |
 | Rust cell が stale、Wasm がない | `pnpm wasm:dev` で再生成し、`.oxiquill`/`public/oxiquill` を直接編集しません。                                     |
+
+Rust/Cargo は 1.85.0 以上、`wasm-pack` は `>=0.15.0 <0.16.0` に対応します。`wasm32-unknown-unknown` target が必要です。Rust 1.85.0 と wasm-pack 0.15.0 を必須 CI で検証し、repository の開発には Rust 1.99.0 と wasm-pack 0.15.0 を使用します。Rust beta/nightly channel も数値 version が最低要件以上なら受け入れますが、未検証です。helper crate 自身がより新しい Rust を要求する場合は、その要件も満たす必要があります。
+
+generated runtime の直接依存は exact pin、bundled lockfile、`--locked` を使用します。ただし wasm-pack 0.15.x は locked compile の前に unlocked `cargo metadata` を実行し、bundled lock にない helper の registry dependency を解決する場合があります。helper 自身の workspace lockfile も generated crate の依存解決には適用されません。追加依存の再現性は bundled lock では保証しません。helper の依存は exact pin にし、最低対応 compiler で検証してください。解決に失敗した場合は helper の version constraint と表示された Cargo error を確認し、Oxiquill の exact runtime pin と互換性のある version を選んで `pnpm wasm:dev` を再実行してください。生成 `Cargo.lock` は直接編集しません。
 
 ## Haskell
 

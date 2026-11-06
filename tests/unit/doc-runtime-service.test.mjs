@@ -205,7 +205,6 @@ const runtimeInputs = Object.freeze({
   haskell: Object.freeze({ compiler: 'wasm32-wasi-ghc', supportedVersionPrefix: '9.14.' }),
   package: Object.freeze({ repository: 'https://example.com/oxiquill', version: '0.2.0' }),
   rust: Object.freeze({
-    cargoVersion: '1.95.0',
     dependencies: Object.freeze({
       console_error_panic_hook: '0.1.7',
       serde: '1.0.228',
@@ -214,10 +213,11 @@ const runtimeInputs = Object.freeze({
       'wasm-bindgen-test': '0.3.72'
     }),
     edition: '2024',
-    rustVersion: '1.95',
-    rustcVersion: '1.95.0',
+    minimumVersion: '1.85.0',
+    testedVersion: '1.99.0',
     target: 'wasm32-unknown-unknown',
-    wasmPackVersion: '0.15.0'
+    wasmPackMinimumVersion: '0.15.0',
+    wasmPackMaximumVersionExclusive: '0.16.0'
   }),
   rustLock: 'fixture lock',
   rustLockSha256: hashText('fixture lock')
@@ -1024,6 +1024,28 @@ describe('doc runtime service', () => {
     await fileSystem.writeFile('/repo/crates/doc-rust/build.rs', 'fn main() { println!("changed"); }');
     await expect(sync()).resolves.toMatchObject({ plan: { languages: { rust: { public: 'build' } } } });
     expect(buildRust).toHaveBeenCalledTimes(6);
+  });
+
+  it('rebuilds between accepted toolchains and retains full compiler details', async () => {
+    const { buildRust, fileSystem, paths, sync } = createRustRuntimeHarness();
+    const toolchain = (version) => ({
+      rust: {
+        rustc: `rustc ${version} (hash date)`,
+        cargo: `cargo ${version} (hash date)`,
+        'wasm-pack': 'wasm-pack 0.15.1',
+        target: 'wasm32-unknown-unknown'
+      }
+    });
+    await sync({ preflightToolchains: async () => toolchain('1.85.0') });
+    const first = JSON.parse(fileSystem.files.get(path.join(paths.generatedDir, 'runtime-ownership.json')).toString())
+      .languages.rust.buildFingerprint;
+    await sync({ preflightToolchains: async () => toolchain('1.100.0') });
+    const second = JSON.parse(fileSystem.files.get(path.join(paths.generatedDir, 'runtime-ownership.json')).toString())
+      .languages.rust.buildFingerprint;
+    expect(second).not.toBe(first);
+    expect(second).toContain('rustc 1.100.0 (hash date)');
+    await sync({ preflightToolchains: async () => toolchain('1.100.0') });
+    expect(buildRust).toHaveBeenCalledTimes(2);
   });
 
   it('invalidates Rust builds for generator, environment, Cargo config, and each reported tool version', async () => {

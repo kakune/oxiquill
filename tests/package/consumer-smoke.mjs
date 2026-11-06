@@ -16,7 +16,7 @@ import {
 import { createRequire } from 'node:module';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
-import { fileURLToPath } from 'node:url';
+import { fileURLToPath, pathToFileURL } from 'node:url';
 import { chromium } from '@playwright/test';
 import { packRecords } from '../../.github/scripts/release-archive.mjs';
 import { loadDocumentedConsumerConfig } from '../docs/documented-config.mjs';
@@ -273,11 +273,17 @@ try {
   await mkdir(path.join(projectRoot, 'helper crates/packed-helper/src'), { recursive: true });
   await writeFile(
     path.join(projectRoot, 'helper crates/packed-helper/Cargo.toml'),
-    ["package.name = 'packed-helper'", "package.version = '0.1.0'", "package.edition = '2024'", ''].join('\n')
+    [
+      "package.name = 'packed-helper'",
+      "package.version = '0.1.0'",
+      "package.edition = '2024'",
+      "dependencies.either = '=1.15.0'",
+      ''
+    ].join('\n')
   );
   await writeFile(
     path.join(projectRoot, 'helper crates/packed-helper/src/lib.rs'),
-    'pub fn message() -> &\'static str { "packed consumer" }\n'
+    'pub fn message() -> &\'static str { either::Either::<&str, &str>::Left("packed consumer").into_inner() }\n'
   );
   await rename(path.join(consumerRoot, 'public'), path.join(projectRoot, 'static files'));
   await rename(path.join(consumerRoot, 'content.config.ts'), path.join(projectRoot, 'content.config.ts'));
@@ -357,6 +363,35 @@ try {
   run(packageManager, ['run', 'wasm:dev'], consumerRoot);
   run(packageManager, ['run', 'test:wasm'], consumerRoot);
   run(packageManager, ['run', 'build'], consumerRoot);
+
+  const runtimeInputs = JSON.parse(
+    await readFile(path.join(packageRoot, 'src/generator/runtime-data/runtime-inputs.json'), 'utf8')
+  );
+  const bundledLock = await readFile(
+    path.join(packageRoot, 'src/generator/license-data/rust/runtime-Cargo.lock'),
+    'utf8'
+  );
+  assert.ok(!bundledLock.includes('name = "either"'), 'helper dependency must be absent from the bundled lock');
+  const generatedRustRoot = path.join(projectRoot, 'state cache/rust-cells');
+  const generatedCargo = await readFile(path.join(generatedRustRoot, 'Cargo.toml'), 'utf8');
+  assert.ok(generatedCargo.includes('rust-version = "1.85"'));
+  const generatedLock = await readFile(path.join(generatedRustRoot, 'Cargo.lock'), 'utf8');
+  for (const [name, version] of Object.entries(runtimeInputs.rust.dependencies)) {
+    assert.ok(
+      generatedLock.includes(`name = "${name}"\nversion = "${version}"`),
+      `${name} must retain its exact runtime pin`
+    );
+  }
+  const rustRuntimeRoot = path.join(projectRoot, 'static files/oxiquill assets/rust runtime');
+  const rustRuntime = await import(pathToFileURL(path.join(rustRuntimeRoot, 'doc_rust_cells.js')).href);
+  rustRuntime.initSync({ module: await readFile(path.join(rustRuntimeRoot, 'doc_rust_cells_bg.wasm')) });
+  const generatedCells = JSON.parse(
+    await readFile(path.join(projectRoot, 'state cache/generated runtime/cells.json'), 'utf8')
+  );
+  const packedRustCell = generatedCells.find((cell) => cell.id.endsWith('__package-rust'));
+  assert.ok(packedRustCell, 'packed Rust cell must be generated');
+  const rustResult = JSON.parse(rustRuntime.run_rust_cell(packedRustCell.id, '{}'));
+  assert.ok(JSON.stringify(rustResult.outputs).includes('packed consumer'), 'registry helper dependency must execute');
 
   const pyodidePublicDir = path.join(projectRoot, 'static files/oxiquill assets/python runtime');
   const pyodideBuildDir = path.join(projectRoot, 'built site/oxiquill assets/python runtime');

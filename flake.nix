@@ -162,6 +162,13 @@
               *) echo "expected rustc 1.99.0, got $rustc_version" >&2; exit 1 ;;
             esac
 
+            cargo_version="$(cargo --version)"
+            case "$cargo_version" in
+              "cargo 1.99.0 "*) ;;
+              *) echo "expected cargo 1.99.0, got $cargo_version" >&2; exit 1 ;;
+            esac
+            test "$(wasm-pack --version)" = "wasm-pack 0.15.0"
+
             cargo llvm-cov --version
             "$LLVM_COV" --version
             "$LLVM_PROFDATA" --version

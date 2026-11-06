@@ -121,14 +121,16 @@ pnpm preview
 
 ## Optional Language Prerequisites
 
-| Content                          | Author/build prerequisites                                   | Reader prerequisites                             |
-| -------------------------------- | ------------------------------------------------------------ | ------------------------------------------------ |
-| Static MDX, math, Mermaid, media | Node.js 24+ and npm/pnpm                                     | Supported browser                                |
-| Python cells                     | Network or verified offline Pyodide cache during generation  | Supported browser; assets are served by the site |
-| Rust cells                       | Pinned Rust toolchain, `wasm32-unknown-unknown`, `wasm-pack` | Supported browser                                |
-| Haskell cells                    | Linux/macOS and `wasm32-wasi-ghc` 9.14                       | Supported browser on any desktop OS              |
+| Content                          | Author/build prerequisites                                                 | Reader prerequisites                             |
+| -------------------------------- | -------------------------------------------------------------------------- | ------------------------------------------------ |
+| Static MDX, math, Mermaid, media | Node.js 24+ and npm/pnpm                                                   | Supported browser                                |
+| Python cells                     | Network or verified offline Pyodide cache during generation                | Supported browser; assets are served by the site |
+| Rust cells                       | Rust/Cargo 1.85.0+, `wasm32-unknown-unknown`, `wasm-pack >=0.15.0 <0.16.0` | Supported browser                                |
+| Haskell cells                    | Linux/macOS and `wasm32-wasi-ghc` 9.14                                     | Supported browser on any desktop OS              |
 
 Repository maintainers additionally need `cargo-llvm-cov` and Playwright browsers for the full validation suite.
+
+Rust/Cargo 1.85.0 or newer and `wasm-pack >=0.15.0 <0.16.0` are supported. Install the `wasm32-unknown-unknown` target. Required CI tests Rust 1.85.0 with wasm-pack 0.15.0; repository development uses Rust 1.99.0 and wasm-pack 0.15.0. Rust beta/nightly channels are accepted when their numeric version meets the minimum, but are untested. Helper crates can impose a higher Rust minimum of their own.
 
 ## Generated Output
 

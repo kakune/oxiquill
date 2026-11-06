@@ -118,12 +118,18 @@ jobs:
         run: |
           rustup toolchain install "$RUST_TOOLCHAIN" --profile minimal --component clippy --component rustfmt --target wasm32-unknown-unknown
           rustup default "$RUST_TOOLCHAIN"
+          test "$(rustc --version | cut -d ' ' -f 2)" = "$RUST_TOOLCHAIN"
+          test "$(cargo --version | cut -d ' ' -f 2)" = "$RUST_TOOLCHAIN"
 
       - name: Install Rust build tools
         uses: taiki-e/install-action@ab6895351a88b908e96a4697860d4ffea5e57dbe # v2.87.27
         with:
           fallback: none
           tool: cargo-llvm-cov@0.9.1,wasm-pack@0.15.0
+
+      - name: Assert pinned wasm-pack
+        shell: bash
+        run: test "$(wasm-pack --version)" = "wasm-pack 0.15.0"
 
       - name: Install ghc-wasm
         shell: bash
