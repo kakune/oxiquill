@@ -3,6 +3,7 @@ import { createOxiquillPaths, pathFromUrl, pathInUrl } from '../../config/paths.
 import { postprocessRustWasm } from '../postprocess-rust-wasm.mjs';
 import { defaultFileSystem, writeIfChanged } from './file-system.mjs';
 import { hashText } from './hashing.mjs';
+import { haskellCacheDirectory, syncHaskellCacheSources, wasmPackEnvironment } from './compiler-cache.mjs';
 
 export const HASKELL_WASI_COMPILER = 'wasm32-wasi-ghc';
 export const HASKELL_WASI_COMPILER_ENV = 'OXIQUILL_HASKELL_GHC';
@@ -35,6 +36,7 @@ export class HaskellWasmBuildError extends Error {
 }
 
 export async function buildRustWasm({
+  environment = process.env,
   mode,
   paths,
   postprocess = postprocessRustWasm,
@@ -57,12 +59,13 @@ export async function buildRustWasm({
       'doc_rust_cells',
       '--locked'
     ],
-    { cwd: pathFromUrl(resolvedPaths.workspaceRoot) }
+    { cwd: pathFromUrl(resolvedPaths.workspaceRoot), env: wasmPackEnvironment({ environment, paths: resolvedPaths }) }
   );
   await postprocess({ rustWasmDir: pathFromUrl(resolvedPaths.rustWasmPublicDir) });
 }
 
 export async function buildHaskellWasm({
+  compilerVersion,
   environment = process.env,
   fileSystem = defaultFileSystem,
   haskellFingerprint = '',
@@ -73,17 +76,21 @@ export async function buildHaskellWasm({
   tolerateFailure = false
 }) {
   const resolvedPaths = paths ?? createOxiquillPaths({ workspaceRoot: root });
-  const buildDir = pathInUrl(resolvedPaths.haskellCellsDir, 'build');
   const outputDir = pathFromUrl(resolvedPaths.haskellWasmPublicDir);
   const optimizationFlag = mode === 'build' ? '-O2' : '-O0';
   const compiler = resolveHaskellWasiCompiler(environment);
 
-  await Promise.all([
-    fileSystem.mkdir(buildDir, { recursive: true }),
-    fileSystem.mkdir(outputDir, { recursive: true })
-  ]);
+  await fileSystem.mkdir(outputDir, { recursive: true });
 
   try {
+    const version =
+      compilerVersion ??
+      String(await runCommand(compiler, ['--numeric-version'], { captureOutput: true, env: environment })).trim();
+    const cacheDir = haskellCacheDirectory({ compilerVersion: version, mode, paths: resolvedPaths });
+    const sourceDir = pathInUrl(cacheDir, 'src');
+    const buildDir = pathInUrl(cacheDir, 'objects');
+    await syncHaskellCacheSources({ fileSystem, sourceDir: resolvedPaths.haskellCellsDir, targetDir: sourceDir });
+    await fileSystem.mkdir(buildDir, { recursive: true });
     await runCommand(
       compiler,
       [
@@ -98,7 +105,7 @@ export async function buildHaskellWasm({
         pathInUrl(resolvedPaths.haskellWasmPublicDir, HASKELL_WASM_FILE)
       ],
       // GHC embeds source paths in Wasm. Keep random staging roots out of the output.
-      { cwd: pathFromUrl(resolvedPaths.haskellCellsDir) }
+      { cwd: sourceDir, env: environment }
     );
   } catch (error) {
     const buildError = normalizeHaskellBuildError(error, compiler);
@@ -183,14 +190,16 @@ function runCommandWithInheritedStdio(command, args, options) {
   return new Promise((resolve, reject) => {
     const child = spawn(command, args, {
       cwd: options.cwd,
-      env: wasmPackEnv(),
-      stdio: 'inherit'
+      env: options.env,
+      stdio: options.captureOutput ? ['ignore', 'pipe', 'inherit'] : 'inherit'
     });
 
+    const output = [];
+    child.stdout?.on('data', (chunk) => output.push(chunk));
     child.on('error', reject);
-    child.on('exit', (code, signal) => {
+    child.on('close', (code, signal) => {
       if (code === 0) {
-        resolve();
+        resolve(Buffer.concat(output).toString('utf8'));
       } else {
         reject(new Error(`${command} exited with ${signal ?? code}`));
       }
@@ -198,9 +207,4 @@ function runCommandWithInheritedStdio(command, args, options) {
   });
 }
 
-function wasmPackEnv() {
-  const env = { ...process.env };
-  delete env.NODE_PATH;
-  return env;
-}
 /* v8 ignore stop */

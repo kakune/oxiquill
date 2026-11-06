@@ -1,4 +1,6 @@
 import path from 'node:path';
+import { artifactBuildFingerprint, getGeneratorIdentity, readRustBuildInputs } from './doc-runtime/build-inputs.mjs';
+import { recordedOutputIsComplete, recordOutputIntegrity } from './doc-runtime/output-integrity.mjs';
 import { createHighlighter } from 'shiki';
 import { createOxiquillPaths, pathFromUrl, pathInUrl } from '../config/paths.mjs';
 import {
@@ -147,6 +149,8 @@ export async function createDocRuntimeContext({
 export async function syncDocRuntime({
   buildHaskell = defaultBuildHaskellWasm,
   buildRust = defaultBuildRustWasm,
+  environment = process.env,
+  generatorIdentity = getGeneratorIdentity,
   fileSystem = defaultFileSystem,
   forceRustBuild = false,
   highlighter,
@@ -175,6 +179,7 @@ export async function syncDocRuntime({
   const summary = summarizeCells(cells);
   const requestedPythonPackages = summary.pythonPackages;
   const toolchains = await preflightToolchains({
+    environment,
     fileSystem,
     haskellCellCount: haskellCells.length,
     mode,
@@ -195,6 +200,8 @@ export async function syncDocRuntime({
     rustLib: generateRustLib(rustCells)
   };
   const desired = await createDesiredRuntime({
+    generatorIdentity: await generatorIdentity(),
+    rustBuildInputs: rustCells.length > 0 ? await readRustBuildInputs({ environment, fileSystem, paths }) : undefined,
     fileSystem,
     generated,
     paths,
@@ -205,7 +212,7 @@ export async function syncDocRuntime({
     toolchains
   });
   const state = await readRuntimeOwnership({ fileSystem, paths });
-  const { outputComplete, outputPresent } = runtimeOutputState({ fileSystem, paths, state });
+  const { outputComplete, outputPresent } = await runtimeOutputState({ fileSystem, paths, state });
   const plan = createRuntimePlan({
     desired,
     forceRustBuild,
@@ -246,16 +253,24 @@ export async function syncDocRuntime({
     });
 
     if (plan.languages.rust.public === 'build') {
-      await buildRust({ mode, paths: stagedPaths });
+      await buildRust({ environment, mode, paths: stagedPaths });
     }
     if (plan.languages.haskell.public === 'build') {
       haskellBuildResult = await buildHaskell({
+        compilerVersion: toolchains.haskell?.version,
+        environment,
         fileSystem,
         haskellFingerprint: summary.haskellFingerprint,
         mode,
         paths: stagedPaths,
         tolerateFailure: tolerateHaskellBuildFailure
       });
+      if (!haskellBuildResult.ok && outputComplete.haskellPublic) {
+        // A tolerated dev failure must not replace a previously verified runtime.
+        const publicStage = stages.find((stage) => stage.targetPath === paths.haskellWasmPublicDir);
+        publicStage.type = 'failed';
+        stagedPaths.haskellWasmPublicDir = paths.haskellWasmPublicDir;
+      }
     }
 
     const nextState = await createNextRuntimeState({
@@ -296,6 +311,8 @@ export async function syncDocRuntime({
 }
 
 async function createDesiredRuntime({
+  generatorIdentity,
+  rustBuildInputs,
   fileSystem,
   generated,
   paths,
@@ -321,6 +338,9 @@ async function createDesiredRuntime({
     manifestFingerprint: summary.manifestFingerprint,
     rust: Object.freeze({
       buildFingerprint: stableFingerprint({
+        generatorIdentity,
+        package: runtimeInputs.package,
+        rustBuildInputs,
         helpers: helperFingerprint,
         source: rustSourceFingerprint,
         toolchain: toolchains.rust ?? runtimeInputs.rust
@@ -331,6 +351,8 @@ async function createDesiredRuntime({
     python: Object.freeze({ assetFingerprint: pythonAssetFingerprint, cellCount: pythonCellCount }),
     haskell: Object.freeze({
       buildFingerprint: createHaskellBuildFingerprint({
+        generatorIdentity,
+        packageIdentity: runtimeInputs.package,
         cells: summary.haskellFingerprint,
         runtimeInputs: runtimeInputs.haskell,
         source: haskellSourceFingerprint,
@@ -342,7 +364,7 @@ async function createDesiredRuntime({
   });
 }
 
-function runtimeOutputState({ fileSystem, paths, state }) {
+async function runtimeOutputState({ fileSystem, paths, state }) {
   const outputPresent = {
     generated: fileSystem.existsSync(paths.generatedDir),
     rustSource: fileSystem.existsSync(paths.rustCellsDir),
@@ -365,14 +387,14 @@ function runtimeOutputState({ fileSystem, paths, state }) {
         ['Cargo.toml', 'Cargo.lock', 'LICENSE-MIT', 'LICENSE-APACHE', 'src/lib.rs'].every((fileName) =>
           fileSystem.existsSync(pathInUrl(paths.rustCellsDir, fileName))
         ),
-      rustPublic: recordedFilesExist(state?.languages?.rust?.publicFiles, paths.rustWasmPublicDir, fileSystem),
-      pythonPublic: recordedFilesExist(state?.languages?.python?.publicFiles, paths.pyodidePublicDir, fileSystem),
+      rustPublic: await recordedOutputIsComplete(state?.languages?.rust, paths.rustWasmPublicDir, fileSystem),
+      pythonPublic: await recordedOutputIsComplete(state?.languages?.python, paths.pyodidePublicDir, fileSystem),
       haskellSource:
         outputPresent.haskellSource &&
         ['Main.hs', 'Oxiquill/Output.hs'].every((file) =>
           fileSystem.existsSync(pathInUrl(paths.haskellCellsDir, file))
         ),
-      haskellPublic: recordedFilesExist(state?.languages?.haskell?.publicFiles, paths.haskellWasmPublicDir, fileSystem)
+      haskellPublic: await recordedOutputIsComplete(state?.languages?.haskell, paths.haskellWasmPublicDir, fileSystem)
     }
   };
 }
@@ -446,6 +468,10 @@ async function createNextRuntimeState({
       mode,
       previous: state?.languages?.rust,
       publicAction: plan.languages.rust.public,
+      publicFileIntegrity:
+        plan.languages.rust.public === 'build'
+          ? await recordOutputIntegrity(stagedPaths.rustWasmPublicDir, { fileSystem })
+          : undefined,
       publicFiles:
         plan.languages.rust.public === 'build'
           ? await listRelativeFiles(stagedPaths.rustWasmPublicDir, { fileSystem })
@@ -457,6 +483,10 @@ async function createNextRuntimeState({
   if (desired.python.cellCount > 0) {
     languages.python = {
       assetFingerprint: desired.python.assetFingerprint,
+      publicFileIntegrity:
+        plan.languages.python.public === 'copy'
+          ? await recordOutputIntegrity(stagedPaths.pyodidePublicDir, { fileSystem })
+          : state?.languages?.python?.publicFileIntegrity,
       publicFiles:
         plan.languages.python.public === 'copy'
           ? await listRelativeFiles(stagedPaths.pyodidePublicDir, { fileSystem })
@@ -469,6 +499,10 @@ async function createNextRuntimeState({
       mode,
       previous: state?.languages?.haskell,
       publicAction: plan.languages.haskell.public,
+      publicFileIntegrity:
+        plan.languages.haskell.public === 'build'
+          ? await recordOutputIntegrity(stagedPaths.haskellWasmPublicDir, { fileSystem })
+          : undefined,
       publicFiles:
         plan.languages.haskell.public === 'build'
           ? await listRelativeFiles(stagedPaths.haskellWasmPublicDir, { fileSystem })
@@ -487,10 +521,26 @@ async function createNextRuntimeState({
   };
 }
 
-function languageState({ buildFingerprint, mode, previous, publicAction, publicFiles, sourceFingerprint, status }) {
+function languageState({
+  buildFingerprint,
+  mode,
+  previous,
+  publicAction,
+  publicFiles,
+  publicFileIntegrity,
+  sourceFingerprint,
+  status
+}) {
   const next = { sourceFingerprint };
   if (publicAction === 'build') {
-    return { ...next, buildFingerprint, mode, publicFiles, status };
+    return {
+      ...next,
+      buildFingerprint: artifactBuildFingerprint(buildFingerprint, mode),
+      mode,
+      publicFiles,
+      publicFileIntegrity,
+      status
+    };
   }
   if (publicAction === 'keep' && previous?.publicFiles?.length > 0) {
     return {
@@ -498,6 +548,7 @@ function languageState({ buildFingerprint, mode, previous, publicAction, publicF
       buildFingerprint: previous.buildFingerprint,
       mode: previous.mode,
       publicFiles: previous.publicFiles,
+      publicFileIntegrity: previous.publicFileIntegrity,
       status: previous.status
     };
   }
@@ -560,21 +611,6 @@ function runtimeResult({ haskellBuildResult, licensesChanged, plan, summary }) {
 async function listRelativeFiles(directory, { fileSystem }) {
   const files = await listFiles(directory, { fileSystem });
   return files.map((filePath) => normalizePath(path.relative(directory, filePath))).sort();
-}
-
-function recordedFilesExist(files, directory, fileSystem) {
-  return (
-    Array.isArray(files) &&
-    files.length > 0 &&
-    files.every(
-      (fileName) =>
-        typeof fileName === 'string' &&
-        fileName !== '' &&
-        !path.isAbsolute(fileName) &&
-        !normalizePath(fileName).split('/').includes('..') &&
-        fileSystem.existsSync(pathInUrl(directory, fileName))
-    )
-  );
 }
 
 async function fingerprintHelperSources({ fileSystem, paths }) {

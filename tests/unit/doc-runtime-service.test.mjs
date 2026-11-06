@@ -223,6 +223,8 @@ const runtimeInputs = Object.freeze({
   rustLockSha256: hashText('fixture lock')
 });
 const runtimeSyncOptions = Object.freeze({
+  generatorIdentity: async () => 'fixture-generator',
+  environment: {},
   preflightToolchains: async () => ({}),
   resolvePyodideInputs: async ({ requestedPackages }) => ({
     fingerprint: stableFingerprint({ requestedPackages })
@@ -263,7 +265,7 @@ function createRustRuntimeHarness(helperFiles) {
     syncRustSupport
   };
 
-  return { buildRust, fileSystem, paths, sync: () => syncDocRuntime(options) };
+  return { buildRust, fileSystem, paths, sync: (overrides = {}) => syncDocRuntime({ ...options, ...overrides }) };
 }
 
 function pyodidePackage(name, fileName, content, depends = []) {
@@ -1024,6 +1026,91 @@ describe('doc runtime service', () => {
     expect(buildRust).toHaveBeenCalledTimes(6);
   });
 
+  it('invalidates Rust builds for generator, environment, Cargo config, and each reported tool version', async () => {
+    const { buildRust, fileSystem, sync } = createRustRuntimeHarness();
+    await sync();
+    await sync({ environment: { UNRELATED: 'ignored' } });
+    expect(buildRust).toHaveBeenCalledOnce();
+    for (const overrides of [
+      { generatorIdentity: async () => 'updated generator' },
+      { environment: { RUSTFLAGS: '-C opt-level=1' } },
+      ...['rustc', 'cargo', 'wasm-pack'].map((name) => ({
+        preflightToolchains: async () => ({ rust: { [name]: 'changed' } })
+      }))
+    ]) {
+      const count = buildRust.mock.calls.length;
+      await sync(overrides);
+      expect(buildRust).toHaveBeenCalledTimes(count + 1);
+      await sync(overrides);
+      expect(buildRust).toHaveBeenCalledTimes(count + 1);
+    }
+    await sync();
+    const count = buildRust.mock.calls.length;
+    await fileSystem.writeFile('/repo/.cargo/config.toml', '[build]\njobs = 2');
+    await sync();
+    expect(buildRust).toHaveBeenCalledTimes(count + 1);
+  });
+
+  it('rebuilds modified published files and upgrades legacy manifests without integrity records', async () => {
+    const { buildRust, fileSystem, sync } = createRustRuntimeHarness();
+    await sync();
+    for (const content of ['truncated', 'modified wasm!']) {
+      const count = buildRust.mock.calls.length;
+      await fileSystem.writeFile('/repo/public/oxiquill/rust-wasm/doc_rust_cells_bg.wasm', content);
+      await sync();
+      expect(buildRust).toHaveBeenCalledTimes(count + 1);
+    }
+    const ownershipPath = '/repo/.oxiquill/generated/runtime-ownership.json';
+    const ownership = JSON.parse(fileSystem.files.get(ownershipPath).toString());
+    delete ownership.languages.rust.publicFileIntegrity;
+    await fileSystem.writeFile(ownershipPath, JSON.stringify(ownership));
+    await sync();
+    expect(buildRust).toHaveBeenCalledTimes(4);
+    await sync();
+    expect(buildRust).toHaveBeenCalledTimes(4);
+  });
+
+  it('reuses production artifacts for dev and records the actual mode after a changed dev build', async () => {
+    const { buildRust, fileSystem, sync } = createRustRuntimeHarness();
+    await sync();
+    await sync({ mode: 'dev' });
+    expect(buildRust).toHaveBeenCalledOnce();
+    await fileSystem.writeFile('/repo/content/docs/index.mdx', '```rust\n//| id: rust\nprintln!("changed");\n```');
+    await sync({ mode: 'dev' });
+    const state = JSON.parse(fileSystem.files.get('/repo/.oxiquill/generated/runtime-ownership.json').toString());
+    expect(state.languages.rust.mode).toBe('dev');
+    expect(JSON.parse(state.languages.rust.buildFingerprint).mode).toBe('dev');
+    await sync();
+    expect(buildRust).toHaveBeenCalledTimes(3);
+  });
+
+  it('invalidates Haskell output for generator identity, compiler version, mode and corruption', async () => {
+    const { fileSystem, sync } = createRustRuntimeHarness();
+    await fileSystem.writeFile('/repo/content/docs/index.mdx', '```haskell\n--| id: hs\nputStrLn "hi"\n```');
+    const buildHaskell = vi.fn(async ({ paths }) => {
+      await fileSystem.writeFile(path.join(paths.haskellWasmPublicDir, 'doc_haskell_cells.wasm'), 'haskell wasm');
+      return { ok: true };
+    });
+    const options = {
+      buildHaskell,
+      mode: 'dev',
+      preflightToolchains: async () => ({ haskell: { version: '9.14.1' } })
+    };
+    await sync(options);
+    await sync(options);
+    expect(buildHaskell).toHaveBeenCalledOnce();
+    await sync({ ...options, generatorIdentity: async () => 'changed generator' });
+    expect(buildHaskell).toHaveBeenCalledTimes(2);
+    const updated = { ...options, preflightToolchains: async () => ({ haskell: { version: '9.14.2' } }) };
+    await sync(updated);
+    expect(buildHaskell).toHaveBeenCalledTimes(3);
+    await sync({ ...updated, mode: 'build' });
+    expect(buildHaskell).toHaveBeenCalledTimes(4);
+    await fileSystem.writeFile('/repo/public/oxiquill/haskell-wasm/doc_haskell_cells.wasm', 'edited wasm!');
+    await sync({ ...updated, mode: 'build' });
+    expect(buildHaskell).toHaveBeenCalledTimes(5);
+  });
+
   it('regenerates a cached Rust runtime with an obsolete output contract', async () => {
     const { buildRust, fileSystem, sync } = createRustRuntimeHarness();
     await sync();
@@ -1217,6 +1304,36 @@ describe('doc runtime service', () => {
     await expect(syncDocRuntime(options)).rejects.toThrow('wasm-pack failed');
     expect(fileSystem.files.get('/repo/public/oxiquill/rust-wasm/doc_rust_cells.js').toString()).toBe('old js');
     expect(fileSystem.existsSync('/repo/.oxiquill/generated/runtime-version.ts')).toBe(false);
+    await syncDocRuntime(options);
+    expect(buildRust).toHaveBeenCalledTimes(3);
+    expect(fileSystem.existsSync('/repo/.oxiquill/generated/runtime-version.ts')).toBe(true);
+  });
+
+  it('preserves verified Haskell output across tolerated failures and recovers on retry', async () => {
+    const { fileSystem, sync } = createRustRuntimeHarness();
+    const page = '/repo/content/docs/index.mdx';
+    await fileSystem.writeFile(page, '```haskell\n--| id: hs\nputStrLn "first"\n```');
+    const buildHaskell = vi.fn(async ({ paths }) => {
+      await fileSystem.writeFile(path.join(paths.haskellWasmPublicDir, 'doc_haskell_cells.wasm'), 'verified haskell');
+      return { ok: true };
+    });
+    const options = { buildHaskell, tolerateHaskellBuildFailure: true };
+    await sync(options);
+    await fileSystem.writeFile(page, '```haskell\n--| id: hs\nputStrLn "edited"\n```');
+    for (const attempt of [1, 2]) {
+      buildHaskell.mockImplementationOnce(async ({ paths }) => {
+        await fileSystem.writeFile(path.join(paths.haskellWasmPublicDir, 'status.json'), 'unavailable');
+        return { ok: false, error: new Error(`failed attempt ${attempt}`) };
+      });
+      await sync(options);
+      expect(fileSystem.files.get('/repo/public/oxiquill/haskell-wasm/doc_haskell_cells.wasm').toString()).toBe(
+        'verified haskell'
+      );
+      expect(fileSystem.existsSync('/repo/.oxiquill/generated/runtime-version.ts')).toBe(false);
+    }
+    await sync(options);
+    expect(fileSystem.existsSync('/repo/.oxiquill/generated/runtime-version.ts')).toBe(true);
+    expect(buildHaskell).toHaveBeenCalledTimes(4);
   });
 
   it('publishes Haskell output only for Haskell cells and withholds readiness after a tolerated failure', async () => {
@@ -1281,6 +1398,7 @@ describe('doc runtime service', () => {
 
     const commands = [];
     await buildRustWasm({
+      environment: {},
       mode: 'build',
       postprocess: async (options) => {
         commands.push(['postprocess', [], options]);
@@ -1306,13 +1424,14 @@ describe('doc runtime service', () => {
           'doc_rust_cells',
           '--locked'
         ],
-        { cwd: repoRoot }
+        { cwd: repoRoot, env: { CARGO_TARGET_DIR: repoPath('.oxiquill/build-cache/rust-target') } }
       ],
       ['postprocess', [], { rustWasmDir: repoPath('public/oxiquill/rust-wasm') }]
     ]);
 
     commands.length = 0;
     await buildRustWasm({
+      environment: {},
       mode: 'dev',
       postprocess: async () => undefined,
       root: '/repo',
@@ -1325,6 +1444,7 @@ describe('doc runtime service', () => {
     commands.length = 0;
     const fileSystem = createMemoryFileSystem();
     await buildHaskellWasm({
+      compilerVersion: '9.14.1',
       environment: {},
       fileSystem,
       haskellFingerprint: previous.haskellFingerprint,
@@ -1341,17 +1461,17 @@ describe('doc runtime service', () => {
           '-O2',
           '-i.',
           '-odir',
-          repoPath('.oxiquill/haskell-cells/build'),
+          repoPath('.oxiquill/build-cache/haskell/build-9.14.1/objects'),
           '-hidir',
-          repoPath('.oxiquill/haskell-cells/build'),
+          repoPath('.oxiquill/build-cache/haskell/build-9.14.1/objects'),
           'Main.hs',
           '-o',
           repoPath('public/oxiquill/haskell-wasm/doc_haskell_cells.wasm')
         ],
-        { cwd: repoPath('.oxiquill/haskell-cells') }
+        { cwd: repoPath('.oxiquill/build-cache/haskell/build-9.14.1/src'), env: {} }
       ]
     ]);
-    expect(fileSystem.existsSync('/repo/.oxiquill/haskell-cells/build')).toBe(true);
+    expect(fileSystem.existsSync('/repo/.oxiquill/build-cache/haskell/build-9.14.1/objects')).toBe(true);
     expect(fileSystem.existsSync('/repo/public/oxiquill/haskell-wasm')).toBe(true);
     expect(JSON.parse(fileSystem.files.get('/repo/public/oxiquill/haskell-wasm/status.json').toString())).toEqual(
       createHaskellRuntimeStatus({
@@ -1405,6 +1525,7 @@ describe('doc runtime service', () => {
 
     await expect(
       buildHaskellWasm({
+        compilerVersion: '9.14.1',
         environment: {},
         fileSystem: createMemoryFileSystem(),
         mode: 'dev',
@@ -1417,6 +1538,7 @@ describe('doc runtime service', () => {
 
     await expect(
       buildHaskellWasm({
+        compilerVersion: '9.14.1',
         environment: {},
         fileSystem: createMemoryFileSystem(),
         mode: 'dev',
@@ -1436,6 +1558,7 @@ describe('doc runtime service', () => {
       [staleWasmPath]: 'stale wasm'
     });
     const result = await buildHaskellWasm({
+      compilerVersion: '9.14.1',
       environment: {},
       fileSystem,
       haskellFingerprint: 'current-haskell-fingerprint',

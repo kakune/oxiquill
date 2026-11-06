@@ -2,6 +2,7 @@
 
 import path from 'node:path';
 import { describe, expect, it } from 'vitest';
+import { artifactBuildFingerprint } from '../../packages/oxiquill/src/generator/doc-runtime/build-inputs.mjs';
 import { createOxiquillPaths } from '../../packages/oxiquill/src/config/paths.mjs';
 import {
   createRuntimeOwnedOutputs,
@@ -89,7 +90,7 @@ describe('runtime generation plan', () => {
       manifestFingerprint: 'manifest',
       languages: {
         rust: {
-          buildFingerprint: 'rust-build',
+          buildFingerprint: artifactBuildFingerprint('rust-build', 'dev'),
           mode: 'dev',
           publicFiles: ['doc_rust_cells.js'],
           sourceFingerprint: 'rust-source',

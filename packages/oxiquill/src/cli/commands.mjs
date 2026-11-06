@@ -8,6 +8,7 @@ import { loadOxiquillProjectConfig } from '../config/project-config.mjs';
 import { createDocRuntimeContext, syncDocRuntime } from '../generator/doc-runtime-service.mjs';
 import { cleanOxiquillWorkspace } from '../generator/clean.mjs';
 import { prepareCleanupOwnership } from '../generator/cleanup-ownership.mjs';
+import { wasmPackEnvironment } from '../generator/doc-runtime/compiler-cache.mjs';
 import { runHelperCargo } from '../generator/run-helper-cargo.mjs';
 import { testGeneratedHaskellCells } from '../generator/doc-runtime/haskell-runtime-test.mjs';
 import { formatCliHelp, parseCliArguments } from './arguments.mjs';
@@ -115,7 +116,8 @@ export async function runCli(commandOrArgs = [], argsOrOptions = {}, legacyOptio
         console.log('[runtime] no Rust cells; skipping wasm-pack test');
       } else {
         await runCommand('wasm-pack', ['test', '--node', pathFromUrl(paths.rustCellsDir), '--locked'], {
-          cwd: pathFromUrl(paths.workspaceRoot)
+          cwd: pathFromUrl(paths.workspaceRoot),
+          env: wasmPackEnvironment({ paths })
         });
       }
 

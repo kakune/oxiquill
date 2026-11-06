@@ -1,3 +1,5 @@
+import { artifactBuildFingerprint } from './build-inputs.mjs';
+
 export const runtimeLanguages = Object.freeze(['rust', 'python', 'haskell']);
 
 export function createRuntimePlan({ desired, forceRustBuild = false, mode, outputComplete, outputPresent, state }) {
@@ -8,7 +10,7 @@ export function createRuntimePlan({ desired, forceRustBuild = false, mode, outpu
     outputComplete.rustSource;
   const rustBuildCurrent =
     rustSourceCurrent &&
-    previous.rust?.buildFingerprint === desired.rust.buildFingerprint &&
+    previous.rust?.buildFingerprint === artifactBuildFingerprint(desired.rust.buildFingerprint, previous.rust?.mode) &&
     previous.rust?.status === 'ready' &&
     modeSatisfies(previous.rust?.mode, mode) &&
     outputComplete.rustPublic;
@@ -18,7 +20,8 @@ export function createRuntimePlan({ desired, forceRustBuild = false, mode, outpu
     outputComplete.haskellSource;
   const haskellBuildCurrent =
     haskellSourceCurrent &&
-    previous.haskell?.buildFingerprint === desired.haskell.buildFingerprint &&
+    previous.haskell?.buildFingerprint ===
+      artifactBuildFingerprint(desired.haskell.buildFingerprint, previous.haskell?.mode) &&
     previous.haskell?.status === 'ready' &&
     modeSatisfies(previous.haskell?.mode, mode) &&
     outputComplete.haskellPublic;

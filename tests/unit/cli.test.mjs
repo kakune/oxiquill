@@ -539,7 +539,10 @@ describe('oxiquill CLI', () => {
     expect(runCommand).toHaveBeenCalledWith(
       'wasm-pack',
       ['test', '--node', path.join(repoRoot, '.oxiquill', 'rust-cells'), '--locked'],
-      { cwd: repoRoot }
+      {
+        cwd: repoRoot,
+        env: expect.objectContaining({ CARGO_TARGET_DIR: path.join(repoRoot, '.oxiquill/build-cache/rust-target') })
+      }
     );
     expect(cliMocks.syncDocRuntime).toHaveBeenCalledWith(expect.objectContaining({ mode: 'dev' }));
     expect(cliMocks.testGeneratedHaskellCells).toHaveBeenCalledWith({

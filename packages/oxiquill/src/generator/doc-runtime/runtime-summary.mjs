@@ -63,12 +63,21 @@ export function createRuntimeVersion(summary) {
   });
 }
 
-export function createHaskellBuildFingerprint({ cells, runtimeInputs, source, toolchain }) {
+export function createHaskellBuildFingerprint({
+  cells,
+  generatorIdentity,
+  packageIdentity,
+  runtimeInputs,
+  source,
+  toolchain
+}) {
   const version = typeof toolchain?.version === 'string' ? toolchain.version : undefined;
   const unavailable = toolchain?.unavailable === true;
 
   return stableFingerprint({
     cells,
+    generatorIdentity,
+    package: packageIdentity,
     source,
     toolchain: {
       supportedVersionPrefix: runtimeInputs.supportedVersionPrefix,
