@@ -25,6 +25,8 @@ Start with the first Oxiquill diagnostic. Generation errors include the relevant
 
 Rust/Cargo 1.85.0 or newer and `wasm-pack >=0.15.0 <0.16.0` are supported. Install the `wasm32-unknown-unknown` target. Required CI tests Rust 1.85.0 with wasm-pack 0.15.0; repository development uses Rust 1.99.0 and wasm-pack 0.15.0. Rust beta/nightly channels are accepted when their numeric version meets the minimum, but are untested. Helper crates can impose a higher Rust minimum of their own.
 
+wasm-pack normally downloads a prebuilt CLI matching the exact wasm-bindgen pin. If that download fails and it falls back to a source build, the current wasm-bindgen-cli 0.2.129 requires Rust 1.86 or newer. On Rust 1.85, install the official matching prebuilt `wasm-bindgen` and `wasm-bindgen-test-runner` binaries on `PATH` and retry. The generated crate itself still requires only Rust 1.85.
+
 Generated runtime dependencies retain exact pins, the bundled lockfile, and `--locked`. However, wasm-pack 0.15.x runs unlocked `cargo metadata` before locked compilation and can resolve helper registry dependencies absent from the bundled lock. A helper workspace’s own lockfile does not control resolution for the generated crate. The bundled lock therefore does not guarantee reproducibility for added helper dependencies. Pin helper dependencies exactly and test them on your minimum supported compiler. If resolution fails, inspect the helper’s version constraints and the reported Cargo error, select versions compatible with Oxiquill’s exact runtime pins, and rerun `pnpm wasm:dev`. Do not edit the generated `Cargo.lock` directly.
 
 ## Haskell

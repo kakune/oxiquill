@@ -1037,11 +1037,12 @@ describe('doc runtime service', () => {
       }
     });
     await sync({ preflightToolchains: async () => toolchain('1.85.0') });
-    const first = JSON.parse(fileSystem.files.get(path.join(paths.generatedDir, 'runtime-ownership.json')).toString())
+    const first = JSON.parse(await fileSystem.readFile(path.join(paths.generatedDir, 'runtime-ownership.json'), 'utf8'))
       .languages.rust.buildFingerprint;
     await sync({ preflightToolchains: async () => toolchain('1.100.0') });
-    const second = JSON.parse(fileSystem.files.get(path.join(paths.generatedDir, 'runtime-ownership.json')).toString())
-      .languages.rust.buildFingerprint;
+    const second = JSON.parse(
+      await fileSystem.readFile(path.join(paths.generatedDir, 'runtime-ownership.json'), 'utf8')
+    ).languages.rust.buildFingerprint;
     expect(second).not.toBe(first);
     expect(second).toContain('rustc 1.100.0 (hash date)');
     await sync({ preflightToolchains: async () => toolchain('1.100.0') });

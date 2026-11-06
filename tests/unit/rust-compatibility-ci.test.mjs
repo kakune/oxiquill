@@ -24,6 +24,7 @@ describe('Rust compatibility CI', () => {
       for (const command of ['pnpm test:wasm', 'pnpm test:consumer:npm', 'pnpm test:consumer:pnpm'])
         expect(job.steps.some((step) => step.run === command)).toBe(true);
       expect(job.steps.some((step) => step.run?.includes('install-ghc-wasm.sh'))).toBe(true);
+      expect(job.steps.some((step) => step.run === 'bash .github/scripts/install-wasm-bindgen.sh')).toBe(true);
     }
     expect(canary.env.RUSTUP_TOOLCHAIN).toBe('stable');
     expect(canary.on.schedule).toEqual([{ cron: '0 3 * * 1' }]);
