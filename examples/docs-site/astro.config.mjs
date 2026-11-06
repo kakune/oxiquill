@@ -1,3 +1,4 @@
+import { readFile, writeFile } from 'node:fs/promises';
 import starlight from '@astrojs/starlight';
 import { defineOxiquillConfig } from 'oxiquill/astro';
 
@@ -7,6 +8,22 @@ export default defineOxiquillConfig({
   desktopTableOfContentsToggle: true,
   python: { preload: true, experimentalSetup: true },
   framework: { starlight },
+  integrations: [
+    {
+      name: 'oxiquill-docs-search',
+      hooks: {
+        'astro:build:done': async ({ dir }) => {
+          // Pagefind emits languages from an unordered map. Keep clean builds byte-identical.
+          const entryPath = new URL('pagefind/pagefind-entry.json', dir);
+          const entry = JSON.parse(await readFile(entryPath, 'utf8'));
+          const languages = Object.fromEntries(
+            Object.entries(entry.languages).sort(([left], [right]) => left.localeCompare(right))
+          );
+          await writeFile(entryPath, JSON.stringify({ ...entry, languages }));
+        }
+      }
+    }
+  ],
   site: process.env.SITE ?? 'https://oxiquill.local',
   ...(basePath ? { base: basePath } : {}),
   starlight: {
