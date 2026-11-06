@@ -12,6 +12,7 @@ const cleanupRootDefinitions = Object.freeze([
 ]);
 
 const cacheChildDefinitions = Object.freeze([
+  { field: 'buildCacheDir', property: 'buildCacheDir', role: 'persistent compiler cache root' },
   { field: 'paths.generatedDir', property: 'generatedDir', role: 'generated manifest root' },
   { field: 'paths.haskellCellsDir', property: 'haskellCellsDir', role: 'generated Haskell root' },
   { field: 'paths.rustCellsDir', property: 'rustCellsDir', role: 'generated Rust root' }
@@ -78,6 +79,9 @@ export function validateProjectPathSafety({ configFile, paths, protectedPaths = 
   assertStrictlyWithin(paths.publicDir, paths.publicAssetsDir, 'paths.publicAssetsDir', 'paths.publicDir');
 
   cacheChildren.forEach((child) => assertStrictlyWithin(paths.cacheDir, child.path, child.field, 'cacheDir'));
+  [paths.rustTargetDir, paths.haskellBuildCacheDir].forEach((child) =>
+    assertStrictlyWithin(paths.buildCacheDir, child, 'compiler cache', 'buildCacheDir')
+  );
   publicChildren.forEach((child) =>
     assertStrictlyWithin(paths.publicAssetsDir, child.path, child.field, 'paths.publicAssetsDir')
   );

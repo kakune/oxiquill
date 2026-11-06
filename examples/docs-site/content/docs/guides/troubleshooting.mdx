@@ -61,6 +61,8 @@ For browser failures, verify the site was rebuilt, the expected files exist belo
 
 In the Oxiquill repository, `pnpm build` reuses unchanged package outputs and runtime artifacts while Astro recreates static site output. Run `pnpm build:clean` when source and generated output disagree: it rebuilds the package, runtimes, and site from scratch while preserving the verified download cache. In a consumer project, run `oxiquill clean` followed by `oxiquill build`; for a narrower regeneration, run clean followed by the required generation command.
 
+Compiler caches in `cacheDir/build-cache` normally survive cell edits and failed builds. Rust uses a persistent Cargo target (or your explicit `CARGO_TARGET_DIR`); Haskell keeps separate mode/compiler-version caches with stable source timestamps. Edited or truncated published files regenerate automatically. For suspected compiler-cache corruption or changes to ancestor/Cargo-home configuration or other out-of-tree build inputs, use a clean rebuild. If you set an external `CARGO_TARGET_DIR`, manage that user-owned cache separately; Oxiquill clean does not delete it.
+
 `oxiquill build --force` clears only Astro's content cache and does not force package or runtime rebuilding. Generated ownership data removes stale language output when the final cell of that language disappears. Never repair generated manifests, ownership markers, Wasm, Pyodide files, licenses, or `dist` by hand.
 
 If the problem persists, open a [GitHub issue](https://github.com/kakune/oxiquill/issues) with the Oxiquill/Node/tool versions, operating system, command, complete concise diagnostic, and a minimal reproducer. Use private vulnerability reporting for security-sensitive details.

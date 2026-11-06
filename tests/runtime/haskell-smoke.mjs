@@ -1,6 +1,6 @@
 import { fileURLToPath } from 'node:url';
 import assert from 'node:assert/strict';
-import { mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
+import { mkdir, mkdtemp, readFile, rm, stat, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { createHaskellOutputCapture } from '../../packages/oxiquill/dist/lib/doc-runtime/haskell-output.js';
@@ -10,6 +10,7 @@ import {
   executeGeneratedHaskellCell,
   testGeneratedHaskellCells
 } from '../../packages/oxiquill/dist/generator/doc-runtime/haskell-runtime-test.mjs';
+import { listFiles } from '../../packages/oxiquill/dist/generator/doc-runtime/file-system.mjs';
 import { buildHaskellWasm, HASKELL_WASM_FILE } from '../../packages/oxiquill/dist/generator/doc-runtime/wasm-build.mjs';
 
 const workspaceRoot = fileURLToPath(new URL('../../examples/docs-site/', import.meta.url));
@@ -71,6 +72,28 @@ try {
     );
     await buildHaskellWasm({ mode: 'build', paths });
     outputs.push(await readFile(path.join(paths.haskellWasmPublicDir, HASKELL_WASM_FILE)));
+    if (directory === 'first staging root') {
+      const mainFile = path.join(paths.haskellCellsDir, 'Main.hs');
+      await mkdir(path.join(paths.haskellCellsDir, 'Oxiquill'), { recursive: true });
+      await writeFile(
+        path.join(paths.haskellCellsDir, 'Oxiquill/Helper.hs'),
+        'module Oxiquill.Helper where\nmessage :: String\nmessage = "cached"\n'
+      );
+      await writeFile(mainFile, 'module Main where\nimport Oxiquill.Helper\nmain :: IO ()\nmain = putStrLn message\n');
+      await buildHaskellWasm({ mode: 'build', paths });
+      const objects = (await listFiles(paths.haskellBuildCacheDir)).filter((file) =>
+        file.endsWith(`${path.sep}Helper.o`)
+      );
+      assert.equal(objects.length, 1);
+      const before = (await stat(objects[0])).mtimeMs;
+      await writeFile(
+        mainFile,
+        'module Main where\nimport Oxiquill.Helper\nmain :: IO ()\nmain = putStrLn (message ++ " edited")\n'
+      );
+      await buildHaskellWasm({ mode: 'build', paths });
+      assert.equal((await stat(objects[0])).mtimeMs, before, 'unchanged Haskell module objects must be reused');
+      console.log('Haskell/WASI incremental module reuse passed.');
+    }
   }
   assert.deepEqual(outputs[0], outputs[1], 'Haskell Wasm must be identical across staging directories');
   console.log('Haskell/WASI builds are byte-identical across staging directories.');

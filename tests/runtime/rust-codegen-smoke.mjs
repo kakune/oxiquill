@@ -1,10 +1,12 @@
 import assert from 'node:assert/strict';
-import { cp, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
+import { cp, mkdtemp, readFile, rm, stat, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { pathToFileURL } from 'node:url';
 import { runCli } from '../../packages/oxiquill/dist/cli/commands.mjs';
 import { createOxiquillPaths } from '../../packages/oxiquill/dist/config/paths.mjs';
+import { listFiles } from '../../packages/oxiquill/dist/generator/doc-runtime/file-system.mjs';
+import { wasmPackEnvironment } from '../../packages/oxiquill/dist/generator/doc-runtime/compiler-cache.mjs';
 import { validateOutputArtifacts } from '../../packages/oxiquill/dist/lib/doc-runtime/output-artifact-validation.js';
 
 const workspaceRoot = await mkdtemp(path.join(tmpdir(), 'oxiquill-rust-codegen-'));
@@ -154,6 +156,27 @@ try {
   assert.deepEqual(run('early-return', { early: true }), {
     outputs: [{ kind: 'text', stream: 'stdout', content: 'early return', truncated: false }]
   });
+  const targetDir = path.resolve(workspaceRoot, wasmPackEnvironment({ paths }).CARGO_TARGET_DIR);
+  const dependencyFiles = (await listFiles(targetDir)).filter(
+    (file) =>
+      /[/\\]deps[/\\]/u.test(file) && /\.(?:rlib|rmeta)$/u.test(file) && !path.basename(file).includes('doc_rust_cells')
+  );
+  assert.ok(dependencyFiles.length > 0, 'warm build must produce cached registry artifacts');
+  const dependencyTimes = await Promise.all(dependencyFiles.map(async (file) => [file, (await stat(file)).mtimeMs]));
+  const publishedWasm = await readFile(path.join(paths.rustWasmPublicDir, 'doc_rust_cells_bg.wasm'));
+  await writeFile(
+    path.join(workspaceRoot, 'content/docs/index.mdx'),
+    '```rust\n//| id: failure\nthis_is_not_valid_rust!();\n```\n'
+  );
+  await assert.rejects(
+    runCli(['docgen', '--wasm', 'dev'], {
+      cwd: workspaceRoot,
+      loadProjectConfig: async () => ({ astroConfigArgs: [], cwd: workspaceRoot, paths })
+    })
+  );
+  assert.deepEqual(await readFile(path.join(paths.rustWasmPublicDir, 'doc_rust_cells_bg.wasm')), publishedWasm);
+  await assert.rejects(readFile(paths.runtimeVersionPath), { code: 'ENOENT' });
+
   for (const [id, source, kind] of [
     ['area-only', 'emit_area_chart!(&[[0, 1]]);', 'chart'],
     ['generic-only', 'emit_chart!(serde_json::json!({ "kind": "line", "series": [] }));', 'chart'],
@@ -176,7 +199,15 @@ try {
     assert.equal(result.outputs[0].kind, kind, id);
     assert.equal(validateOutputArtifacts(result.outputs)[0].status, 'valid', id);
   }
-  console.log('Generated Rust/Wasm code generation regressions passed.');
+  for (const [file, before] of dependencyTimes) {
+    assert.equal(
+      (await stat(file)).mtimeMs,
+      before,
+      `registry dependency must survive cell edits and failed builds: ${file}`
+    );
+  }
+  await readFile(paths.runtimeVersionPath);
+  console.log('Generated Rust/Wasm regressions and incremental dependency reuse passed.');
 } finally {
   await rm(workspaceRoot, { recursive: true, force: true });
 }

@@ -7,9 +7,11 @@ export const RUNTIME_OWNERSHIP_SCHEMA_VERSION = 1;
 export function createRuntimeOwnedOutputs(paths) {
   return Object.freeze([
     ownedOutput('rust', 'cache', paths.cacheDir, paths.rustCellsDir),
+    ownedOutput('rust', 'cache', paths.cacheDir, paths.rustTargetDir),
     ownedOutput('rust', 'public', paths.publicAssetsDir, paths.rustWasmPublicDir),
     ownedOutput('python', 'public', paths.publicAssetsDir, paths.pyodidePublicDir),
     ownedOutput('haskell', 'cache', paths.cacheDir, paths.haskellCellsDir),
+    ownedOutput('haskell', 'cache', paths.cacheDir, paths.haskellBuildCacheDir),
     ownedOutput('haskell', 'public', paths.publicAssetsDir, paths.haskellWasmPublicDir)
   ]);
 }
@@ -80,7 +82,7 @@ function ownedOutput(language, root, rootPath, targetPath) {
 }
 
 function ownershipKey(entry) {
-  return `${entry.language}:${entry.root}`;
+  return `${entry.language}:${entry.root}:${entry.path}`;
 }
 
 function isOwnedOutput(entry) {
