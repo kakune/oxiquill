@@ -51,6 +51,8 @@ Oxiquill repository の `pnpm build` は reusable package を incremental に bu
 
 repository の `pnpm build:clean` は verified download cache を保持しながら package、generated runtime、site を clean して再生成します。consumer project では `oxiquill clean` 後に `oxiquill build` を実行すると runtime/site を最初から再生成できます。
 
+Rust と Haskell の rebuild は `cacheDir/build-cache` の compiler cache を再利用します。Haskell cache は mode と compiler version ごとに分離します。Wasm build と test の両方で明示した `CARGO_TARGET_DIR` を優先します。clean は Oxiquill-owned compiler cache を削除し、verified download と外部の user-owned Cargo target は保持します。published runtime file の再利用前には記録した size と SHA-256 hash を検証します。
+
 `oxiquill build --force` が消去するのは Astro の content cache だけです。package の再ビルドを強制したり、Oxiquill runtime fingerprint を破棄したりはしません。
 
 ## 安全な project 作成

@@ -147,6 +147,18 @@ Oxiquill canonicalizes existing paths and symlinked ancestors before comparing o
 
 Runtime fingerprints contain semantic build inputs rather than machine-local paths. Python fingerprints include the Pyodide version, lockfile SHA-256, verified core-file hashes, selected package metadata, and requested package set. Haskell build fingerprints include the cells, generated source, supported compiler-version prefix, and the compiler's exact reported version (or its unavailable state). The Haskell compiler command, executable path, and diagnostic text are excluded, so moving an equivalent toolchain does not force a rebuild; changing its reported version or supported-version policy does.
 
+Rust and Haskell build fingerprints also include the installed generator's content hash and package identity. This detects codegen, build-flag, postprocessing, staging, and runtime-data changes even when a workspace package version stays unchanged. Rust additionally hashes `RUSTFLAGS`, `CARGO_ENCODED_RUSTFLAGS`, every `CARGO_PROFILE_*`, `CARGO_BUILD_*`, and `CARGO_TARGET_*` variable, and the workspace's `.cargo/config` and `.cargo/config.toml`. Unrelated environment variables are excluded. Artifact mode is recorded: production output may satisfy a dev request, while dev output must rebuild for production.
+
+Before reusing published Rust, Haskell, or Python files, Oxiquill checks their recorded byte sizes and SHA-256 digests. Missing, edited, or truncated files trigger regeneration. Older runtime state without integrity records is regenerated automatically.
+
+## Compiler Caches
+
+Compiler caches live below the configured `cacheDir`: `build-cache/rust-target` for Cargo and `build-cache/haskell/<mode>-<ghc-version>` for Haskell. They survive runtime staging and failed compilation. Haskell uses stable cached source paths and preserves unchanged source timestamps so GHC can reuse module objects; mode and exact compiler version select separate caches. Cargo manages dependency recompilation itself.
+
+Oxiquill passes the Cargo target directory to both `wasm-pack build` and `wasm-pack test`. An explicit `CARGO_TARGET_DIR` takes precedence and remains user-owned; clean does not delete an external target directory. Compiler caches are separate from published output and the verified download cache. `oxiquill clean` removes Oxiquill-owned compiler caches but preserves verified downloads.
+
+Cargo configuration outside the workspace root, including ancestor `.cargo` files, `$CARGO_HOME/config*`, and files referenced by configuration, is not fingerprinted. After changing these inputs, run the repository's `pnpm build:clean`, or `oxiquill clean` followed by `oxiquill build` in a consumer project.
+
 ## Base Paths and Public Assets
 
 Set Astro's `base` when publishing below a subpath. Oxiquill applies it to interactive-cell manifests, language runtimes, diagrams, and `/media/...` references. Keep every authored public URL in root-relative `/media/...` form, even when `base` itself is `/media` or starts the same way. Do not add the configured base manually; the normal Markdown pass prefixes the authored URL.

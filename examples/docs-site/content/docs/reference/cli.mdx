@@ -51,6 +51,8 @@ In the Oxiquill repository, `pnpm build` builds the reusable package incremental
 
 Run the repository's `pnpm build:clean` to clean and rebuild the package, generated runtimes, and site while preserving the verified download cache. In a consumer project, run `oxiquill clean` followed by `oxiquill build` for a clean runtime/site rebuild.
 
+Rust and Haskell rebuilds reuse compiler caches under `cacheDir/build-cache`. Haskell caches are separated by mode and compiler version. An explicit `CARGO_TARGET_DIR` is respected for both Wasm builds and tests. Clean removes Oxiquill-owned compiler caches, preserves verified downloads, and leaves external user-owned Cargo targets alone. Published runtime files are checked against recorded sizes and SHA-256 hashes before reuse.
+
 `oxiquill build --force` only clears Astro's content cache. It does not force a package rebuild or discard Oxiquill runtime fingerprints.
 
 ## Safe Project Creation
