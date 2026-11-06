@@ -25,8 +25,26 @@ export function latestCompatibleWasmPack(releases) {
   return latest.join('.');
 }
 
+export function resolveWasmPackDownload(releases) {
+  const version = latestCompatibleWasmPack(releases);
+  const release = releases.find(
+    (entry) => !entry.draft && !entry.prerelease && entry.tag_name?.replace(/^v/u, '') === version
+  );
+  const asset = `wasm-pack-v${version}-x86_64-unknown-linux-musl.tar.gz`;
+  const digest = release.assets?.find((entry) => entry.name === asset)?.digest;
+  if (!/^sha256:[a-f0-9]{64}$/u.test(digest ?? '')) {
+    throw new Error(`wasm-pack ${version} is missing a SHA-256 digest for ${asset}.`);
+  }
+  return Object.freeze({ version, tag: release.tag_name, asset, digest });
+}
+
 if (import.meta.url === pathToFileURL(process.argv[1] ?? '').href) {
-  const version = latestCompatibleWasmPack(JSON.parse(readFileSync(0, 'utf8')).flat());
-  console.log(`Selected wasm-pack ${version}`);
-  appendFileSync(process.env.GITHUB_OUTPUT, `version=${version}\n`);
+  const download = resolveWasmPackDownload(JSON.parse(readFileSync(0, 'utf8')).flat());
+  console.log(`Selected wasm-pack ${download.version} (${download.digest})`);
+  appendFileSync(
+    process.env.GITHUB_OUTPUT,
+    Object.entries(download)
+      .map(([name, value]) => `${name}=${value}\n`)
+      .join('')
+  );
 }

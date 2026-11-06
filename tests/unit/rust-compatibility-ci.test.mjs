@@ -3,7 +3,7 @@ import { readFileSync } from 'node:fs';
 import { createRequire } from 'node:module';
 import { resolve } from 'node:path';
 import { describe, expect, it } from 'vitest';
-import { latestCompatibleWasmPack } from '../../.github/scripts/resolve-wasm-pack.mjs';
+import { latestCompatibleWasmPack, resolveWasmPackDownload } from '../../.github/scripts/resolve-wasm-pack.mjs';
 
 const { parse } = createRequire(resolve('packages/oxiquill/package.json'))('yaml');
 const ci = parse(readFileSync('.github/workflows/ci.yml', 'utf8'));
@@ -44,5 +44,22 @@ describe('Rust compatibility CI', () => {
       ])
     ).toBe('0.15.10');
     expect(() => latestCompatibleWasmPack([{ tag_name: 'v0.14.0' }])).toThrow('No stable wasm-pack release');
+  });
+
+  it('requires an upstream SHA-256 digest for the selected Linux binary', () => {
+    const asset = 'wasm-pack-v0.15.1-x86_64-unknown-linux-musl.tar.gz';
+    const release = { tag_name: 'v0.15.1', assets: [{ name: asset, digest: `sha256:${'a'.repeat(64)}` }] };
+    expect(resolveWasmPackDownload([release])).toEqual({
+      version: '0.15.1',
+      tag: 'v0.15.1',
+      asset,
+      digest: `sha256:${'a'.repeat(64)}`
+    });
+    expect(() => resolveWasmPackDownload([{ tag_name: 'v0.15.1' }])).toThrow('missing a SHA-256 digest');
+    expect(() => resolveWasmPackDownload([{ ...release, assets: [{ name: asset, digest: 'md5:invalid' }] }])).toThrow(
+      'missing a SHA-256 digest'
+    );
+    const install = canary.jobs['latest-stable'].steps.find((step) => step.name === 'Install wasm-pack');
+    expect(install.run).toContain('sha256sum --check --strict');
   });
 });

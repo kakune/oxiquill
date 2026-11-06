@@ -67,10 +67,20 @@ jobs:
         shell: bash
         run: gh api --paginate --slurp repos/wasm-bindgen/wasm-pack/releases | node .github/scripts/resolve-wasm-pack.mjs
       - name: Install wasm-pack
-        uses: taiki-e/install-action@ab6895351a88b908e96a4697860d4ffea5e57dbe # v2.87.27
-        with:
-          fallback: none
-          tool: wasm-pack@${{ steps.wasm-pack.outputs.version }}
+        env:
+          GH_TOKEN: ${{ github.token }}
+          WASM_PACK_VERSION: ${{ steps.wasm-pack.outputs.version }}
+          WASM_PACK_TAG: ${{ steps.wasm-pack.outputs.tag }}
+          WASM_PACK_ASSET: ${{ steps.wasm-pack.outputs.asset }}
+          WASM_PACK_DIGEST: ${{ steps.wasm-pack.outputs.digest }}
+        shell: bash
+        run: |
+          gh release download "$WASM_PACK_TAG" --repo wasm-bindgen/wasm-pack --pattern "$WASM_PACK_ASSET" --dir "$RUNNER_TEMP"
+          echo "${WASM_PACK_DIGEST#sha256:}  $RUNNER_TEMP/$WASM_PACK_ASSET" | sha256sum --check --strict
+          mkdir -p "$RUNNER_TEMP/wasm-pack"
+          tar -xzf "$RUNNER_TEMP/$WASM_PACK_ASSET" --strip-components=1 -C "$RUNNER_TEMP/wasm-pack"
+          test "$("$RUNNER_TEMP/wasm-pack/wasm-pack" --version)" = "wasm-pack $WASM_PACK_VERSION"
+          echo "$RUNNER_TEMP/wasm-pack" >> "$GITHUB_PATH"
       - name: Report selected toolchains
         run: rustc --version && cargo --version && wasm-pack --version
       - name: Cache ghc-wasm
