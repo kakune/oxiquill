@@ -14,6 +14,12 @@
       "licenseFile": "javascript/pagefind-1.5.2-LICENSE-MIT.txt"
     },
     {
+      "name": "@pagefind/default-ui",
+      "version": "1.6.0",
+      "license": "MIT",
+      "licenseFile": "javascript/pagefind-1.6.0-LICENSE-MIT.txt"
+    },
+    {
       "name": "fastdom",
       "version": "1.0.12",
       "license": "MIT",
