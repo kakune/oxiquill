@@ -88,16 +88,17 @@ export async function buildHaskellWasm({
       compiler,
       [
         optimizationFlag,
-        `-i${pathFromUrl(resolvedPaths.haskellCellsDir)}`,
+        '-i.',
         '-odir',
         buildDir,
         '-hidir',
         buildDir,
-        pathInUrl(resolvedPaths.haskellCellsDir, 'Main.hs'),
+        'Main.hs',
         '-o',
         pathInUrl(resolvedPaths.haskellWasmPublicDir, HASKELL_WASM_FILE)
       ],
-      { cwd: pathFromUrl(resolvedPaths.workspaceRoot) }
+      // GHC embeds source paths in Wasm. Keep random staging roots out of the output.
+      { cwd: pathFromUrl(resolvedPaths.haskellCellsDir) }
     );
   } catch (error) {
     const buildError = normalizeHaskellBuildError(error, compiler);
