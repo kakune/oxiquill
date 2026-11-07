@@ -294,6 +294,10 @@ describe('oxiquill virtual modules', () => {
         cells: [{ id: 'cell-one' }],
         runtimeVersion: 'version-one'
       });
+      rmSync(paths.cellsJsonPath);
+      middlewareHandlers[0]({ url: '/__oxiquill/manifest.json?fresh=2' }, response, vi.fn());
+      expect(response.statusCode).toBe(503);
+      expect(JSON.parse(body)).toEqual({ error: 'Generated runtime manifest is not ready.' });
     } finally {
       rmSync(root, { force: true, recursive: true });
     }

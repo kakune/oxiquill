@@ -131,14 +131,19 @@ export function oxiquillVirtualModulesPlugin(paths, { generation, base: astroBas
           return;
         }
 
-        response.statusCode = 200;
+        const ready = existsSync(cellsJsonFile);
+        response.statusCode = ready ? 200 : 503;
         response.setHeader('Cache-Control', 'no-store');
         response.setHeader('Content-Type', 'application/json; charset=utf-8');
         response.end(
-          JSON.stringify({
-            ...readBrowserManifest(cellsJsonFile, base),
-            runtimeVersion: readGeneratedRuntimeVersion(pathFromUrl(paths.runtimeVersionPath))
-          })
+          JSON.stringify(
+            ready
+              ? {
+                  ...readBrowserManifest(cellsJsonFile, base),
+                  runtimeVersion: readGeneratedRuntimeVersion(pathFromUrl(paths.runtimeVersionPath))
+                }
+              : { error: 'Generated runtime manifest is not ready.' }
+          )
         );
       });
     }
@@ -207,7 +212,9 @@ function readGeneratedManifest(file) {
 }
 
 function readBrowserManifest(file, base) {
-  const manifest = readGeneratedManifest(file);
+  // A missing file during atomic publication must trigger a retry, never an
+  // empty snapshot that would invalidate otherwise unchanged Rust modules.
+  const manifest = parseGeneratedCellManifest(readFileSync(file, 'utf8'));
   const rust = resolveRustRegistryUrls(manifest.rust ?? { version: 1, modules: [] }, base);
   if (manifest.rust) validateRustRegistry(rust, manifest.cells);
   return { cells: manifest.cells, rust };
