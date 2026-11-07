@@ -65,7 +65,9 @@ export async function executeGeneratedHaskellCell({
 }
 
 function createHaskellWasi({ args, stderr, stdout }) {
-  return new WASI(args, [], [new OpenFile(new File([])), new ConsoleStdout(stdout), new ConsoleStdout(stderr)]);
+  return new WASI(args, [], [new OpenFile(new File([])), new ConsoleStdout(stdout), new ConsoleStdout(stderr)], {
+    debug: false
+  });
 }
 
 function createOutputCapture() {

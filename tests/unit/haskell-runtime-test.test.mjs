@@ -135,6 +135,25 @@ describe('generated Haskell runtime tests', () => {
       })
     ).rejects.toThrow('runtime failure');
   });
+
+  it('keeps WASI debug tracing off so unfiltered JSON output remains clean', async () => {
+    const log = vi.spyOn(console, 'log').mockImplementation(() => {});
+    try {
+      await executeGeneratedHaskellCell({
+        cell: cell('quiet', []),
+        module: {},
+        instantiate: async (_module, imports) => ({
+          exports: {
+            memory: new WebAssembly.Memory({ initial: 1 }),
+            _start: () => imports.wasi_snapshot_preview1.args_sizes_get(0, 4)
+          }
+        })
+      });
+      expect(log).not.toHaveBeenCalled();
+    } finally {
+      log.mockRestore();
+    }
+  });
 });
 
 function cell(id, inputs) {

@@ -418,6 +418,19 @@ try {
     .map((line) => JSON.parse(line));
   assert.equal(selectedEvents.at(-1).type, 'summary', 'packed harness must emit a final NDJSON summary');
   assert.equal(selectedEvents.at(-1).passed, 1);
+  const unfilteredTests = run(
+    process.execPath,
+    [installedCliPath, 'test-wasm', '--format', 'json'],
+    consumerRoot,
+    true
+  );
+  const unfilteredEvents = unfilteredTests.stdout
+    .trim()
+    .split('\n')
+    .map((line) => JSON.parse(line));
+  assert.equal(unfilteredEvents.at(-1).type, 'summary');
+  assert.equal(unfilteredEvents.at(-1).passed, 1);
+  if (process.platform !== 'win32') assert.equal(unfilteredEvents.at(-1).haskell?.status, 'pass');
 
   run(packageManager, ['run', 'build'], consumerRoot);
 
