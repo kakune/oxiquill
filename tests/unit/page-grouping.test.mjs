@@ -181,6 +181,20 @@ describe('page-grouped Rust runtime', () => {
     ).toEqual(['second.mdx']);
   });
 
+  it('reports the helper manifest path and failed validation without publishing', async () => {
+    const project = await fixture({ helpers: true });
+    await project.sync();
+    const before = await project.state();
+    await project.put('crates/Cargo.toml', '[workspace');
+    const output = [];
+    const events = createRuntimeEvents({ report: (event) => output.push(event) });
+    await expect(project.sync({ events })).rejects.toThrow(/Unable to read Rust helper input .*Cargo\.toml/u);
+    expect(output).toContainEqual(
+      expect.objectContaining({ type: 'phase', phase: 'validation', language: 'rust', state: 'failure' })
+    );
+    expect(await project.state()).toEqual(before);
+  });
+
   it('publishes nothing when a group fails and retries against the previous complete registry', async () => {
     const project = await fixture();
     await project.sync();

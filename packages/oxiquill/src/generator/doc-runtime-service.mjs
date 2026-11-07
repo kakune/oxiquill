@@ -256,21 +256,23 @@ export async function syncDocRuntime({
       : state;
   const groupAnalysis =
     rustOptions.grouping === 'page'
-      ? await analyzeRustGroups({
-          cells: rustCells,
-          paths,
-          helperCrates,
-          runtimeInputs,
-          fileSystem,
-          state,
-          mode,
-          buildInputs: rustBuildInputs,
-          buildOptions,
-          toolchain: toolchains.rust,
-          generatorIdentity: identity,
-          force: forceRustBuild,
-          failures
-        })
+      ? await events.phase('validation', { language: 'rust' }, () =>
+          analyzeRustGroups({
+            cells: rustCells,
+            paths,
+            helperCrates,
+            runtimeInputs,
+            fileSystem,
+            state,
+            mode,
+            buildInputs: rustBuildInputs,
+            buildOptions,
+            toolchain: toolchains.rust,
+            generatorIdentity: identity,
+            force: forceRustBuild,
+            failures
+          })
+        )
       : undefined;
   desired = {
     ...desired,

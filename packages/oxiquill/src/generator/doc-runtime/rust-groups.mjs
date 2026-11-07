@@ -90,7 +90,7 @@ export async function readRustHelperClosure({ cells, helperCrates, paths, fileSy
       return parse(await fileSystem.readFile(file, 'utf8'));
     } catch (error) {
       if (error?.code === 'ENOENT') return undefined;
-      throw error;
+      throw new Error(`Unable to read Rust helper input ${file}: ${error.message}`, { cause: error });
     }
   };
   const workspaceFor = async (directory, manifest) => {
