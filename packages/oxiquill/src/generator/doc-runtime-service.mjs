@@ -373,9 +373,13 @@ export async function syncDocRuntime({
         ...staleLanguageStages(paths, plan),
         { stagePath: generatedStage, targetPath: paths.generatedDir }
       ],
-      { fileSystem }
+      {
+        fileSystem,
+        onPublished: () => {
+          published = true;
+        }
+      }
     );
-    published = true;
     const retainedRustFiles = new Set(nextState.languages.rust?.publicFiles ?? []);
     const previousRustFiles = state?.rust
       ? state.rust.modules.flatMap((module) => [module.glue, module.wasm].map((asset) => path.basename(asset.url)))

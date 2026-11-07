@@ -1874,6 +1874,29 @@ describe('Rust registry publication', () => {
     await expect(sync()).resolves.toMatchObject({ plan: { hasChanges: false } });
   });
 
+  it('retains assets referenced by the committed registry when backup cleanup fails', async () => {
+    const { fileSystem, paths, sync } = createRustRuntimeHarness();
+    await sync();
+    const remove = fileSystem.rm;
+    fileSystem.rm = async (file, options) => {
+      if (file.endsWith('.previous')) throw new Error('backup cleanup failed');
+      await remove(file, options);
+    };
+    await expect(
+      sync({
+        forceRustBuild: true,
+        buildRust: async ({ paths: staged }) => {
+          await fileSystem.writeFile(path.join(staged.rustWasmPublicDir, 'doc_rust_cells.js'), 'committed glue');
+          await fileSystem.writeFile(path.join(staged.rustWasmPublicDir, 'doc_rust_cells_bg.wasm'), 'committed wasm');
+        }
+      })
+    ).rejects.toThrow('backup cleanup failed');
+    const manifest = JSON.parse(await fileSystem.readFile(paths.cellsJsonPath, 'utf8'));
+    for (const module of manifest.rust.modules)
+      for (const asset of [module.glue, module.wasm])
+        expect(fileSystem.existsSync(path.join(paths.publicDir, asset.url))).toBe(true);
+  });
+
   it('rolls back newly installed immutable files when registry publication fails', async () => {
     const { fileSystem, paths, sync } = createRustRuntimeHarness();
     await sync();
