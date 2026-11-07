@@ -9,9 +9,8 @@ import { loadOxiquillProjectConfig } from '../config/project-config.mjs';
 import { createDocRuntimeContext, syncDocRuntime } from '../generator/doc-runtime-service.mjs';
 import { cleanOxiquillWorkspace } from '../generator/clean.mjs';
 import { prepareCleanupOwnership } from '../generator/cleanup-ownership.mjs';
-import { wasmPackEnvironment } from '../generator/doc-runtime/compiler-cache.mjs';
 import { runHelperCargo } from '../generator/run-helper-cargo.mjs';
-import { testGeneratedHaskellCells } from '../generator/doc-runtime/haskell-runtime-test.mjs';
+import { runWasmTests } from './test-wasm.mjs';
 import { formatCliHelp, parseCliArguments } from './arguments.mjs';
 import { initializeProject } from './init.mjs';
 
@@ -119,25 +118,7 @@ export async function runCli(commandOrArgs = [], argsOrOptions = {}, legacyOptio
       await runHelperCargo({ argv: ['doc', '--no-deps'], paths });
       return;
     case 'test-wasm': {
-      const summary = await generateRuntime({ projectConfig, wasmMode: 'dev' });
-      if (summary.rustCellCount === 0) {
-        console.log('[runtime] no Rust cells; skipping wasm-pack test');
-      } else {
-        await runCommand('wasm-pack', ['test', '--node', pathFromUrl(paths.rustCellsDir), '--locked'], {
-          cwd: pathFromUrl(paths.workspaceRoot),
-          env: wasmPackEnvironment({ paths })
-        });
-      }
-
-      if (summary.haskellCellCount === 0) {
-        console.log('[runtime] no Haskell cells; skipping Haskell/WASI test');
-      } else {
-        const result = await testGeneratedHaskellCells({
-          expectedFingerprint: summary.haskellFingerprint,
-          paths
-        });
-        console.log(`[runtime] tested ${result.cellCount} generated Haskell cell(s)`);
-      }
+      await runWasmTests({ projectConfig, values, generateRuntime, log });
       return;
     }
   }
@@ -157,7 +138,9 @@ async function generateRuntime({
   ownershipFields = ['cacheDir', 'publicAssetsDir'],
   projectConfig,
   tolerateHaskellBuildFailure = false,
-  wasmMode
+  wasmMode,
+  log = console.log,
+  runtimeOptions = {}
 }) {
   const { paths } = projectConfig;
   await prepareCleanupOwnership({
@@ -168,10 +151,11 @@ async function generateRuntime({
   const context = await createDocRuntimeContext({ paths, pythonOptions: projectConfig.python });
   const summary = await syncDocRuntime({
     ...context,
+    ...runtimeOptions,
     mode: wasmMode,
     tolerateHaskellBuildFailure
   });
-  console.log(`Generated ${summary.cellCount} interactive cell(s).`);
+  log(`Generated ${summary.cellCount} interactive cell(s).`);
   if (summary.haskellBuildResult) warnToleratedHaskellBuildFailure(summary.haskellBuildResult);
   return summary;
 }

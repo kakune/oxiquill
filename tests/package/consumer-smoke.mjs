@@ -348,6 +348,8 @@ try {
       '```rust',
       '//| id: package-rust',
       '//| crates: [packed-helper]',
+      '//| tests:',
+      '//|   - { case: default, expect: [{ path: /outputs/0/stream, equals: stdout }] }',
       'let message = "This packed consumer source line deliberately exceeds the narrow viewport so that scrolling must move the source inside a stationary themed frame without widening the document or losing the configured source height: OXIQUILL_PACKED_SOURCE_END";',
       'println!("{message}");',
       'println!("{}", packed_helper::message());',
@@ -393,6 +395,30 @@ try {
   run(packageManager, ['run', 'check'], consumerRoot);
   run(packageManager, ['run', 'wasm:dev'], consumerRoot);
   run(packageManager, ['run', 'test:wasm'], consumerRoot);
+  const selectedTests = run(
+    process.execPath,
+    [
+      installedCliPath,
+      'test-wasm',
+      '--page',
+      'index.mdx',
+      '--cell',
+      'package-rust',
+      '--case',
+      'default',
+      '--format',
+      'json'
+    ],
+    consumerRoot,
+    true
+  );
+  const selectedEvents = selectedTests.stdout
+    .trim()
+    .split('\n')
+    .map((line) => JSON.parse(line));
+  assert.equal(selectedEvents.at(-1).type, 'summary', 'packed harness must emit a final NDJSON summary');
+  assert.equal(selectedEvents.at(-1).passed, 1);
+
   run(packageManager, ['run', 'build'], consumerRoot);
 
   const runtimeInputs = JSON.parse(

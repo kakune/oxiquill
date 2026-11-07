@@ -209,8 +209,7 @@ const runtimeInputs = Object.freeze({
       console_error_panic_hook: '0.1.7',
       serde: '1.0.228',
       serde_json: '1.0.150',
-      'wasm-bindgen': '0.2.122',
-      'wasm-bindgen-test': '0.3.72'
+      'wasm-bindgen': '0.2.122'
     }),
     edition: '2024',
     minimumVersion: '1.85.0',

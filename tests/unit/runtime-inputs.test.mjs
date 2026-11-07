@@ -21,8 +21,7 @@ const runtimeData = {
       console_error_panic_hook: '0.1.7',
       serde: '1.0.228',
       serde_json: '1.0.150',
-      'wasm-bindgen': '0.2.122',
-      'wasm-bindgen-test': '0.3.72'
+      'wasm-bindgen': '0.2.122'
     },
     edition: '2024',
     minimumVersion: '1.85.0',
@@ -79,8 +78,7 @@ describe('runtime inputs', () => {
       'console_error_panic_hook',
       'serde',
       'serde_json',
-      'wasm-bindgen',
-      'wasm-bindgen-test'
+      'wasm-bindgen'
     ]);
     expect(inputs.rustLockSha256).toMatch(/^[0-9a-f]{64}$/u);
     expect(normalizeRepository('https://example.com/repository.git')).toBe('https://example.com/repository');

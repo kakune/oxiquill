@@ -17,6 +17,7 @@ const cliMocks = vi.hoisted(() => ({
   markRuntimeReady: vi.fn(),
   prepareCleanupOwnership: vi.fn(),
   runHelperCargo: vi.fn(),
+  runWasmTests: vi.fn(),
   syncDocRuntime: vi.fn(),
   syncLicenseArtifacts: vi.fn(),
   testGeneratedHaskellCells: vi.fn(),
@@ -31,6 +32,7 @@ vi.mock('../../packages/oxiquill/src/generator/doc-runtime-service.mjs', () => (
   syncDocRuntime: cliMocks.syncDocRuntime,
   syncLicenseArtifacts: cliMocks.syncLicenseArtifacts
 }));
+vi.mock('../../packages/oxiquill/src/cli/test-wasm.mjs', () => ({ runWasmTests: cliMocks.runWasmTests }));
 vi.mock('../../packages/oxiquill/src/generator/clean.mjs', () => ({
   cleanOxiquillWorkspace: cliMocks.cleanOxiquillWorkspace
 }));
@@ -561,39 +563,31 @@ describe('oxiquill CLI', () => {
     expect(cliMocks.createDocRuntimeContext).not.toHaveBeenCalled();
   });
 
-  it('runs generated Rust cells through wasm-pack', async () => {
-    const log = vi.spyOn(console, 'log').mockImplementation(() => {});
-    const runCommand = vi.fn(async () => undefined);
-
-    await runCli('test-wasm', [], { cwd: repoRoot, runCommand });
-
-    expect(runCommand).toHaveBeenCalledWith(
-      'wasm-pack',
-      ['test', '--node', path.join(repoRoot, '.oxiquill', 'rust-cells'), '--locked'],
-      {
-        cwd: repoRoot,
-        env: expect.objectContaining({ CARGO_TARGET_DIR: path.join(repoRoot, '.oxiquill/build-cache/rust-target') })
-      }
+  it('delegates generated cell tests with repeated selectors and structured output', async () => {
+    const log = vi.fn();
+    await runCli(
+      [
+        'test-wasm',
+        '--page',
+        'a.mdx',
+        '--page',
+        'b.mdx',
+        '--cell',
+        'a__cell',
+        '--case',
+        'default',
+        '--all-cases',
+        '--format',
+        'json'
+      ],
+      { cwd: repoRoot, log }
     );
-    expect(cliMocks.syncDocRuntime).toHaveBeenCalledWith(expect.objectContaining({ mode: 'dev' }));
-    expect(cliMocks.testGeneratedHaskellCells).toHaveBeenCalledWith({
-      expectedFingerprint: 'haskell-fingerprint',
-      paths: expect.objectContaining({ workspaceRoot: repoRoot })
+    expect(cliMocks.runWasmTests).toHaveBeenCalledWith({
+      projectConfig: expect.objectContaining({ cwd: repoRoot }),
+      values: { page: ['a.mdx', 'b.mdx'], cell: ['a__cell'], case: ['default'], 'all-cases': true, format: 'json' },
+      generateRuntime: expect.any(Function),
+      log
     });
-    expect(log).toHaveBeenCalled();
-  });
-
-  it('skips wasm-pack tests when the manifest contains no Rust cells', async () => {
-    cliMocks.syncDocRuntime.mockResolvedValue({ cellCount: 0, haskellCellCount: 0, rustCellCount: 0 });
-    const log = vi.spyOn(console, 'log').mockImplementation(() => {});
-    const runCommand = vi.fn(async () => undefined);
-
-    await runCli('test-wasm', [], { cwd: repoRoot, runCommand });
-
-    expect(runCommand).not.toHaveBeenCalledWith('wasm-pack', expect.anything(), expect.anything());
-    expect(cliMocks.testGeneratedHaskellCells).not.toHaveBeenCalled();
-    expect(log).toHaveBeenCalledWith('[runtime] no Rust cells; skipping wasm-pack test');
-    expect(log).toHaveBeenCalledWith('[runtime] no Haskell cells; skipping Haskell/WASI test');
   });
 
   it('reports missing CLI entrypoints and unusable Node overrides', () => {

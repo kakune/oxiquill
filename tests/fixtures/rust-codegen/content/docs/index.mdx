@@ -7,6 +7,9 @@ title: Rust code generation regressions
 //| inputs:
 //|   fixture: { type: text, label: Fixture, value: '{"kind":"line","series":[]}' }
 //|   metadata: { type: text, label: Metadata, value: '{"id":"chart-id","title":"Artifact title","caption":"Caption"}' }
+//| tests:
+//|   - case: default
+//|     expect: [{ artifact: chart-id, path: /spec/kind, equals: line }]
 let spec: serde_json::Value = serde_json::from_str(&fixture).map_err(|error| error.to_string())?;
 let metadata: serde_json::Value = serde_json::from_str(&metadata).map_err(|error| error.to_string())?;
 emit_chart!(&spec);
@@ -173,5 +176,68 @@ emit_json!(serde_json::json!({
     "raw": raw,
     "bytes": bytes.as_slice(),
     "raw_bytes": raw_bytes.as_slice(),
+}));
+```
+
+```rust
+//| id: declared-tests
+//| inputs:
+//|   n: { type: number, value: 1 }
+//|   fail: { type: checkbox, value: false }
+//|   spin: { type: checkbox, value: false }
+//| cases:
+//|   - { id: named, label: Named, inputs: { n: 2 } }
+//|   - { id: failure, label: Failure, inputs: { fail: true } }
+//|   - { id: timeout, label: Timeout, inputs: { spin: true } }
+//| tests:
+//|   - case: default
+//|     expect:
+//|       - { path: /outputs/0/value/n, equals: 1 }
+//|       - { path: /outputs/0/value/residual, approx: { value: 0, atol: 1.0e-8 } }
+//|   - case: named
+//|     expect:
+//|       - { path: /outputs/0/value/n, range: { min: 2, max: 2 } }
+//|       - { path: /outputs/0/value/status, equals: iteration-limit }
+//|   - case: failure
+//|     expect: [{ error: requested failure }]
+//| timeoutMs: 1000
+if spin { loop { std::hint::spin_loop(); } }
+if fail { return Err("requested failure".to_owned()); }
+emit_json!(&serde_json::json!({ "n": n, "status": "iteration-limit", "residual": 1.0e-10 }));
+```
+
+```rust
+//| id: isolated-state
+//| cases:
+//|   - { id: second, label: Second, inputs: {} }
+//| tests:
+//|   - { case: default, expect: [{ path: /outputs/0/value, equals: 1 }] }
+//|   - { case: second, expect: [{ path: /outputs/0/value, equals: 1 }] }
+std::thread_local! { static COUNTER: std::cell::Cell<i32> = const { std::cell::Cell::new(0) }; }
+let count = COUNTER.with(|counter| { counter.set(counter.get() + 1); counter.get() });
+emit_json!(&count);
+```
+
+```rust
+//| id: internal-output-limits
+//| tests:
+//|   - case: default
+//|     expect:
+//|       - { path: /outputs/0/value/exact_bytes, equals: 1048576 }
+//|       - { path: /outputs/0/value/exact_truncated, equals: false }
+//|       - { path: /outputs/0/value/oversized_bounded, equals: true }
+//|       - { path: /outputs/0/value/oversized_truncated, equals: true }
+//|       - { path: /outputs/0/value/error_bounded, equals: true }
+use std::fmt::Write as _;
+let mut exact = BoundedText::new();
+write!(&mut exact, "{}", "x".repeat(1048576)).map_err(|error| error.to_string())?;
+let mut oversized = BoundedText::new();
+write!(&mut oversized, "{}", "語".repeat(1048576)).map_err(|error| error.to_string())?;
+let error = bounded_error_message(&"語".repeat(8193));
+emit_json!(&serde_json::json!({
+    "exact_bytes": exact.content.len(), "exact_truncated": exact.truncated,
+    "oversized_bounded": oversized.content.len() <= 1048576,
+    "oversized_truncated": oversized.truncated,
+    "error_bounded": error.len() <= 16384,
 }));
 ```

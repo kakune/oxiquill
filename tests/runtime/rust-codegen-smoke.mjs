@@ -1,9 +1,10 @@
 import assert from 'node:assert/strict';
+import { spawnSync } from 'node:child_process';
 import { verifyWasmOptCache } from './wasm-opt-cache-smoke.mjs';
 import { cp, mkdtemp, readFile, rm, stat, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
-import { pathToFileURL } from 'node:url';
+import { fileURLToPath, pathToFileURL } from 'node:url';
 import {
   buildRustWasm,
   createDocRuntimeContext,
@@ -25,6 +26,64 @@ try {
     cwd: workspaceRoot,
     loadProjectConfig: async () => ({ astroConfigArgs: [], cwd: workspaceRoot, paths })
   });
+  const generatedSource = await readFile(path.join(paths.rustCellsDir, 'src/lib.rs'), 'utf8');
+  assert.ok(!generatedSource.includes('wasm_bindgen_test'));
+  assert.ok(!(await readFile(path.join(paths.rustCellsDir, 'Cargo.toml'), 'utf8')).includes('wasm-bindgen-test'));
+  const configModule = new URL('../../packages/oxiquill/dist/astro/index.js', import.meta.url).href;
+  await writeFile(
+    path.join(workspaceRoot, 'astro.config.mjs'),
+    `import { oxiquillIntegration } from ${JSON.stringify(configModule)};\nexport default { integrations: [oxiquillIntegration()] };\n`
+  );
+  const cliPath = new URL('../../packages/oxiquill/dist/cli/index.mjs', import.meta.url);
+  const invoke = (args) =>
+    spawnSync(process.execPath, [fileURLToPath(cliPath), 'test-wasm', '--format', 'json', ...args], {
+      cwd: workspaceRoot,
+      encoding: 'utf8',
+      timeout: 120_000
+    });
+  const selected = invoke(['--page', './index.mdx', '--cell', 'declared-tests', '--case', 'named']);
+  assert.equal(selected.status, 0, selected.stderr || selected.stdout);
+  const selectedEvents = selected.stdout
+    .trim()
+    .split('\n')
+    .map((line) => JSON.parse(line));
+  assert.deepEqual(
+    selectedEvents.map((event) => event.type),
+    ['test', 'summary']
+  );
+  assert.equal(selectedEvents[0].case, 'named');
+  assert.equal(selectedEvents[0].status, 'pass');
+  const unmatched = invoke(['--cell', 'missing']);
+  assert.equal(unmatched.status, 1);
+  assert.match(unmatched.stdout, /matched no cells/u);
+  const timeout = invoke(['--page', 'index.mdx', '--cell', 'declared-tests', '--all-cases', '--case', 'timeout']);
+  assert.equal(timeout.status, 1, timeout.stderr || timeout.stdout);
+  const timeoutEvents = timeout.stdout
+    .trim()
+    .split('\n')
+    .map((line) => JSON.parse(line));
+  assert.equal(timeoutEvents[0].failures[0].reason, 'timeout');
+  assert.equal(timeoutEvents.at(-1).exitStatus, 1);
+  const pagePath = path.join(workspaceRoot, 'content/docs/index.mdx');
+  const authored = await readFile(pagePath, 'utf8');
+  for (const [assertion, reason] of [
+    ['{ path: /outputs/0/value/n, equals: 999 }', 'not-equal'],
+    ['{ path: /outputs/0/absent, equals: 1 }', 'missing-path'],
+    ['{ artifact: absent, path: "", equals: 1 }', 'missing-artifact']
+  ]) {
+    await writeFile(pagePath, authored.replace('{ path: /outputs/0/value/n, equals: 1 }', assertion));
+    const failed = invoke(['--page', 'index.mdx', '--cell', 'declared-tests', '--case', 'default']);
+    assert.equal(failed.status, 1, failed.stderr || failed.stdout);
+    const events = failed.stdout
+      .trim()
+      .split('\n')
+      .map((line) => JSON.parse(line));
+    assert.equal(events[0].failures[0].reason, reason);
+    assert.ok(events[0].failures[0].location.line > 0);
+    assert.equal(events.at(-1).type, 'summary');
+    assert.equal(events.at(-1).failed, 1);
+  }
+  await writeFile(pagePath, authored);
   const runtime = await import(pathToFileURL(path.join(paths.rustWasmPublicDir, 'doc_rust_cells.js')).href);
   runtime.initSync({ module: await readFile(path.join(paths.rustWasmPublicDir, 'doc_rust_cells_bg.wasm')) });
   const manifest = JSON.parse(await readFile(paths.cellsJsonPath, 'utf8')).cells;
