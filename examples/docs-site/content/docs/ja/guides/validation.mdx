@@ -158,3 +158,23 @@ pnpm exec oxiquill test-wasm --all-cases --format json
 セレクターがなければ全 Rust セルの既定入力と全宣言テストを実行します。`default` の宣言テストがあれば、その既定入力実行の判定条件になります。`--all-cases` はテスト未指定の名前付きケースもスモーク検証します。`--case` は実行可能なケースを絞るだけなので、未指定ケースには `--all-cases` が必要です。Python と Haskell の宣言テストは未対応です。フィルターなしでは従来の Haskell スモーク検証も実行しますが、page、cell、case の指定時は省略します。
 
 失敗にはページ、フェンス行、セル、ケース、期待値の位置、条件、長さ制限付き実際値を表示します。セレクターと NDJSON の詳細は [CLI](/ja/reference/cli/#declared-cell-testing) を参照してください。
+
+## ビルド済みリンクの検証
+
+生成された HTML を検証して、存在しないルート、変更された見出し、生成セルや安定参照のアンカーへのリンク切れを検出します。
+
+```sh
+pnpm exec oxiquill build --check-links
+pnpm exec oxiquill check-links --format json
+```
+
+単独コマンドは直近のビルドを利用し、ファイルに書き込みません。ローカルリダイレクトをたどり、アセットの存在を確認します。外部ホストへの通信は行いません。失敗時は解決先、理由、参照元ページの例を表示します。リンクのソースを修正するか対象を復元し、再ビルドして検証してください。
+
+利用側サイトの CI では、依存関係とセルに必要なツールチェーンを準備した後に、ビルドと検証をまとめて実行できます。
+
+```yaml
+- name: Build and validate local links
+  run: pnpm exec oxiquill build --check-links
+```
+
+リンク切れがあると非ゼロで終了しますが、調査用のビルド出力は保持します。base の扱い、失敗理由、NDJSON 形式は [CLI のリンク検証](/ja/reference/cli/#ビルド済みサイトのリンク検証) を参照してください。

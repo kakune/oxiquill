@@ -27,6 +27,7 @@ Unknown options, missing option values, unknown commands, and extra positional a
 | `dev:astro`          | Run only Astro's development server.                                                                                   |
 | `build`              | Generate required runtimes, run checks, and create the static site.                                                    |
 | `preview`            | Preview the existing production build.                                                                                 |
+| `check-links`        | Check local routes and fragments in the existing built output without writing files.                                   |
 | `check`              | Generate required runtimes, synchronize Astro types, and run Astro diagnostics.                                        |
 | `docgen`             | Synchronize the manifest; `--wasm dev \| build` also builds required runtimes.                                         |
 | `clean`              | Remove only resolved Oxiquill-owned/generated and configured Astro output paths; preserve the verified download cache. |
@@ -158,3 +159,23 @@ JSON output is NDJSON on stdout. Every line is one event, child output is wrappe
 The phases are `discovery`, `validation`, `generation`, `compile`, `optimize`, `publish`, `astro-check`, and `astro-build`. Optimization events come from Oxiquill's own optimizer operation and include verified optimizer-cache reuse. Summary durations aggregate operations within each phase.
 
 Plan reasons use `code`: `source-changed` (with `changes: [{ page, cell }]`), `helper-inputs-changed`, `toolchain-changed`, `build-options-changed` (with changed `variables` names only), `generator-changed`, `package-changed`, `mode-upgrade`, `output-missing`, `integrity-mismatch`, `previous-build-failed`, or `forced`. `cache-hit` describes verified reuse; `absent` describes an already absent language. Fingerprints and build-option values are never printed. No telemetry or benchmark history is stored.
+
+## Built-site Link Checks
+
+```sh
+pnpm exec oxiquill check-links
+pnpm exec oxiquill check-links --format json
+pnpm exec oxiquill build --check-links
+```
+
+`check-links` reads `<cacheDir>/build-report.json` and the existing rendered HTML. It writes no files, takes no runtime lock, and never regenerates runtimes. Run `oxiquill build` first if the report or output is missing. The report records the completed build's output directory, site URL, base, trailing-slash policy, build format, and redirects; a custom `build --outDir` is respected on subsequent checks.
+
+The checker validates `href` on anchors and image-map areas against local pages and assets. HTML fragments match rendered `id` attributes or legacy anchor `name` attributes, including generated cell and `ox-ref-*` anchors. Fragments are percent-decoded; empty fragments and `#top` always pass. Query strings do not affect file lookup. Non-HTML assets are checked only for existence.
+
+Relative paths resolve against the referring page's URL. Same-site absolute URLs within the configured base are checked; other hosts and same-site absolute URLs outside the base are skipped. Relative and root-relative paths outside the base fail. External links and schemes such as `mailto:`, `tel:`, `data:`, `javascript:`, and `blob:` are never fetched. Configured and rendered HTML redirects are followed, with fragments checked on the final target.
+
+Failures distinguish `missing-page`, `missing-fragment`, `outside-base`, `redirect-loop`, and `trailing-slash`. Explicit `trailingSlash: 'always'` and `'never'` policies apply to page routes. Repeated failures are grouped by resolved target and reason, retaining a total occurrence count and up to five example referring pages with their original `href` values.
+
+`--format human|json` defaults to `human`. JSON output is NDJSON: each `link-failure` event contains `target`, `reason`, `count`, and `examples` (objects with `source` and `href`). The final `summary` contains `exitStatus` and `linkCheck` totals: `pages`, `checked`, `skipped`, `failures` (distinct groups), and `occurrences` (all failed links). Fatal input errors emit a `diagnostic` and a final summary without link totals.
+
+Exit status is 0 for a clean site and 1 for broken links or invalid inputs. `build --check-links` runs the same checker after a successful build and adds link totals to the existing build summary. Broken links make it fail while keeping the output available for inspection. Plain `build` does not check links. `--check-links` cannot be combined with `--explain`.

@@ -282,7 +282,8 @@ function checkShellCommands() {
     'test-rust-coverage',
     'lint-rust',
     'doc-rust',
-    'test-wasm'
+    'test-wasm',
+    'check-links'
   ]);
 
   for (const [filePath, source] of documents) {
