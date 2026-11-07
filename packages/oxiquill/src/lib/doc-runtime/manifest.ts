@@ -1,17 +1,20 @@
 import { runtimeVersion as generatedRuntimeVersion } from 'virtual:oxiquill/runtime-version';
-import { resetInteractiveRuntime } from './runtime-client.js';
-import type { CellManifest } from './types.js';
+import { resetInteractiveRuntime, updateRustRuntimeRegistry } from './runtime-client.js';
+import type { CellManifest, RustRuntimeRegistry } from './types.js';
+import { validateRustRegistry } from './rust-registry.mjs';
 
 type RuntimeVersionModule = {
   runtimeVersion: string;
 };
 
 type GeneratedManifestPayload = {
+  rust?: RustRuntimeRegistry;
   cells: readonly CellManifest[];
   runtimeVersion: string;
 };
 
 type ManifestSnapshot = {
+  rust?: RustRuntimeRegistry;
   cells: readonly CellManifest[];
   version: string;
 };
@@ -44,6 +47,7 @@ type ActiveManifestRefresh = {
 };
 
 const hotData = import.meta.hot?.data as ManifestHotData | undefined;
+let rustSnapshot = hotData?.rust;
 let cellsSnapshot = initialCellsSnapshot(hotData);
 let versionSnapshot = initialVersionSnapshot(hotData);
 const listeners = new Set<() => void>();
@@ -52,12 +56,15 @@ let refreshGenerationSequence = 0;
 let currentRefreshGeneration: ManifestRefreshGeneration | undefined;
 let activeManifestRefresh: ActiveManifestRefresh | undefined;
 
+if (rustSnapshot) updateRustRuntimeRegistry(rustSnapshot);
+
 export function getCell(cellId: string): CellManifest | undefined {
   return cellsSnapshot.find((cell) => cell.id === cellId);
 }
 
 export function getManifestSnapshot(): ManifestSnapshot {
   return {
+    rust: rustSnapshot,
     cells: cellsSnapshot,
     version: versionSnapshot
   };
@@ -96,6 +103,7 @@ function persistHotData(): void {
   if (!import.meta.hot?.data) return;
 
   const data = import.meta.hot.data as ManifestHotData;
+  data.rust = rustSnapshot;
   data.cells = cellsSnapshot;
   data.version = versionSnapshot;
 }
@@ -120,10 +128,13 @@ export function applyRuntimeVersionSnapshot(nextVersion: string): void {
 }
 
 export function applyGeneratedSnapshot(nextSnapshot: ManifestSnapshot): void {
+  const rustChanged = nextSnapshot.rust !== rustSnapshot;
   const cellsChanged = nextSnapshot.cells !== cellsSnapshot;
   const versionChanged = nextSnapshot.version !== versionSnapshot;
-  if (!cellsChanged && !versionChanged) return;
+  if (!cellsChanged && !versionChanged && !rustChanged) return;
 
+  rustSnapshot = nextSnapshot.rust;
+  if (rustChanged && rustSnapshot) updateRustRuntimeRegistry(rustSnapshot);
   cellsSnapshot = nextSnapshot.cells;
   versionSnapshot = nextSnapshot.version;
   persistHotData();
@@ -139,7 +150,6 @@ function notifyManifestListeners(): void {
 }
 
 function resetGeneratedWasmRuntimes(): void {
-  resetInteractiveRuntime('rust');
   resetInteractiveRuntime('haskell');
 }
 
@@ -170,9 +180,11 @@ export async function refreshGeneratedManifest({
     }
 
     const payload = (await response.json()) as GeneratedManifestPayload;
+    if (payload.rust) validateRustRegistry(payload.rust, payload.cells);
 
     return {
       snapshot: {
+        rust: payload.rust,
         cells: payload.cells,
         version: payload.runtimeVersion
       },

@@ -5,6 +5,9 @@ import { pathInUrl } from '../../config/paths.mjs';
 import { boundedErrorMessage } from '../../lib/doc-runtime/output-limits.mjs';
 import { evaluateExpectation } from '../../lib/doc-runtime/cell-tests.mjs';
 import { boundedDisplay } from '../../cli/events.mjs';
+import { parseGeneratedCellManifest } from './cell-manifest.mjs';
+import { validateRustRegistry, rustModuleForCell } from '../../lib/doc-runtime/rust-registry.mjs';
+import { validateRustModuleFiles } from './rust-module-assets.mjs';
 
 export async function testGeneratedRustCells({
   tests,
@@ -15,15 +18,41 @@ export async function testGeneratedRustCells({
   fileSystem = { readFile }
 }) {
   if (!tests.length) return { total: 0, passed: 0, failed: 0 };
-  const module = await compile(await fileSystem.readFile(pathInUrl(paths.rustWasmPublicDir, 'doc_rust_cells_bg.wasm')));
-  const runtimeUrl = pathToFileURL(pathInUrl(paths.rustWasmPublicDir, 'doc_rust_cells.js')).href;
+  const manifest = parseGeneratedCellManifest(await fileSystem.readFile(paths.cellsJsonPath, 'utf8'));
+  validateRustRegistry(manifest.rust, manifest.cells);
+  const modules = new Map();
+  async function loadRuntime(cellId) {
+    const descriptor = rustModuleForCell(manifest.rust, cellId);
+    const key = JSON.stringify([descriptor.id, descriptor.fingerprint]);
+    if (!modules.has(key))
+      modules.set(
+        key,
+        (async () => {
+          await validateRustModuleFiles({
+            registry: { version: 1, modules: [descriptor] },
+            cells: manifest.cells.filter((cell) => descriptor.cells.includes(cell.id)),
+            publicDir: paths.publicDir,
+            fileSystem
+          });
+          return {
+            module: await compile(
+              await fileSystem.readFile(pathInUrl(paths.publicDir, decodeURIComponent(descriptor.wasm.url)))
+            ),
+            runtimeUrl: pathToFileURL(pathInUrl(paths.publicDir, decodeURIComponent(descriptor.glue.url))).href
+          };
+        })()
+      );
+    return modules.get(key);
+  }
   const events = [];
   for (const test of tests) {
     const started = performance.now();
-    const outcome = await execute({ module, runtimeUrl, cell: test.cell, inputs: test.inputs }).catch((error) => ({
-      kind: 'harness-error',
-      error: boundedErrorMessage(error)
-    }));
+    const outcome = await loadRuntime(test.cell.id)
+      .then((runtime) => execute({ ...runtime, cell: test.cell, inputs: test.inputs }))
+      .catch((error) => ({
+        kind: 'harness-error',
+        error: boundedErrorMessage(error)
+      }));
     const failures = testFailures(test, outcome);
     const event = {
       type: 'test',

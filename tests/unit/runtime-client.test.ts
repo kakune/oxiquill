@@ -1,13 +1,13 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import {
-  createInteractiveCellRunner,
+  createInteractiveCellRunner as createRunner,
   preparePythonRuntime,
   getPythonPreparationState,
   subscribePythonPreparation,
   resetInteractiveRuntime,
   runtimeHaskellFingerprintHash,
   runtimePythonPackages,
-  runInteractiveCell
+  runInteractiveCell as runDefaultCell
 } from '../../packages/oxiquill/src/lib/doc-runtime/runtime-client';
 import { normalizeCellExecutionResult } from '../../packages/oxiquill/src/lib/doc-runtime/output-artifacts';
 import { outputArtifactLimits, utf8ByteLength } from '../../packages/oxiquill/src/lib/doc-runtime/output-limits.mjs';
@@ -17,6 +17,40 @@ import type {
   CellManifest,
   RuntimeWorkerRequest
 } from '../../packages/oxiquill/src/lib/doc-runtime/types';
+
+const rustModule = {
+  id: 'site',
+  fingerprint: 'site-v1',
+  glue: { url: '/site.js' },
+  wasm: { url: '/site.wasm', integrity: `sha384-${'A'.repeat(64)}`, bytes: 8 },
+  cells: ['rust-cell', 'rust-cell-two', 'rust-companion', 'rust-second']
+};
+function createInteractiveCellRunner(dependencies: Parameters<typeof createRunner>[0]) {
+  const runner = createRunner(dependencies);
+  return {
+    ...runner,
+    runInteractiveCell: (...args: Parameters<typeof runner.runInteractiveCell>) =>
+      runner.runInteractiveCell(
+        args[0],
+        args[1],
+        args[2],
+        args[3],
+        args[4],
+        args[5],
+        args[6] ?? (args[0].language === 'rust' ? rustModule : undefined)
+      )
+  };
+}
+const runInteractiveCell = (...args: Parameters<typeof runDefaultCell>) =>
+  runDefaultCell(
+    args[0],
+    args[1],
+    args[2],
+    args[3],
+    args[4],
+    args[5],
+    args[6] ?? (args[0].language === 'rust' ? rustModule : undefined)
+  );
 
 class FakeWorker {
   addEventListenerFailure: unknown;
@@ -41,7 +75,19 @@ class FakeWorker {
   }
 
   emitMessage(response: unknown): void {
-    this.emit('message', { data: response } as MessageEvent);
+    const request = this.messages.find(
+      (message) =>
+        typeof response === 'object' &&
+        response !== null &&
+        'requestId' in response &&
+        message.requestId === response.requestId
+    );
+    this.emit('message', {
+      data:
+        typeof response === 'object' && response !== null
+          ? { ...(request?.rustModule ? { rustModule: request.rustModule } : {}), ...response }
+          : response
+    } as MessageEvent);
   }
 
   emitError(message: string): void {
@@ -106,6 +152,57 @@ afterEach(() => {
 });
 
 describe('runtime client', () => {
+  it('rejects missing descriptors before creating workers', async () => {
+    const createWorker = vi.fn();
+    const runner = createRunner({ clearTimeout, setTimeout, createWorker });
+    await expect(runner.runInteractiveCell(makeCell('rust'), {})).rejects.toThrow('no matching module');
+    expect(createWorker).not.toHaveBeenCalled();
+  });
+
+  it('invalidates only changed modules, rejects obsolete responses, and keeps the worker alive', async () => {
+    const { runner, workers } = makeRunner();
+    const firstModule = { ...rustModule, id: 'first', cells: ['rust-cell'] };
+    const secondModule = { ...rustModule, id: 'second', cells: ['rust-cell-two'] };
+    runner.updateRustRegistry({ version: 1, modules: [firstModule, secondModule] });
+    const first = runner.runInteractiveCell(
+      makeCell('rust'),
+      {},
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      firstModule
+    );
+    const rejected = expect(first).rejects.toThrow('obsolete');
+    const second = runner.runInteractiveCell(
+      makeCell('rust', { id: 'rust-cell-two' }),
+      {},
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      secondModule
+    );
+    const updated = { ...firstModule, fingerprint: 'next' };
+    runner.updateRustRegistry({ version: 1, modules: [updated, secondModule] });
+    await rejected;
+    expect(workers[0].terminated).toBe(false);
+    workers[0].emitMessage({ requestId: 1, ok: true, result });
+    workers[0].emitMessage({ requestId: 2, ok: true, result });
+    await expect(second).resolves.toEqual(normalizedResult);
+    await expect(
+      runner.runInteractiveCell(makeCell('rust'), {}, undefined, undefined, undefined, undefined, firstModule)
+    ).rejects.toThrow('obsolete');
+    const next = runner.runInteractiveCell(makeCell('rust'), {}, undefined, undefined, undefined, undefined, updated);
+    workers[0].emitMessage({ requestId: 3, rustModule: firstModule, ok: true, result });
+    await expect(next).rejects.toThrow('obsolete or invalid fingerprint');
+    const valid = runner.runInteractiveCell(makeCell('rust'), {}, undefined, undefined, undefined, undefined, updated);
+    workers[0].emitMessage({ requestId: 4, ok: true, result });
+    await expect(valid).resolves.toEqual(normalizedResult);
+    expect(workers).toHaveLength(1);
+    runner.resetWorker('rust');
+  });
+
   it('sends resolved setup and uses the combined timeout budget', async () => {
     vi.useFakeTimers();
     const { runner, workers } = makeRunner();
@@ -405,6 +502,7 @@ describe('runtime client', () => {
     expect(workers[0].messages[0]).toEqual({
       requestId: 1,
       cellId: 'rust-cell',
+      rustModule,
       inputArgs: undefined,
       inputs: {},
       source: undefined,

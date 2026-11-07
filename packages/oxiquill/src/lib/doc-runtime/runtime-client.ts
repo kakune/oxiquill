@@ -4,7 +4,9 @@ import type {
   InputValues,
   RuntimeWorkerRequest,
   PythonWorkerResponse,
-  RuntimeExecutionPhase
+  RuntimeExecutionPhase,
+  RustRuntimeModule,
+  RustRuntimeRegistry
 } from './types.js';
 import { ExecutionCancellationError } from './execution-cancellation.js';
 import { CellExecutionError } from './execution-error.js';
@@ -15,6 +17,7 @@ import { boundedErrorMessage } from './output-limits.mjs';
 import { markRuntimeEvent } from './runtime-timing.js';
 
 type PendingRequest = {
+  rustModule?: RustRuntimeModule;
   reject: (reason: Error) => void;
   timeout: ReturnType<typeof setTimeout>;
   worker: Worker;
@@ -42,10 +45,15 @@ export function runInteractiveCell(
   runtimeVersion?: string,
   signal?: AbortSignal,
   onPhase?: (phase: RuntimeExecutionPhase) => void,
-  overrides?: { source: string }
+  overrides?: { source: string },
+  rustModule?: RustRuntimeModule
 ): Promise<NormalizedCellExecutionResult> {
   /* v8 ignore next -- the factory is unit-tested; this delegates to browser Worker adapters. */
-  return defaultRuntimeClient.runInteractiveCell(cell, inputs, runtimeVersion, signal, onPhase, overrides);
+  return defaultRuntimeClient.runInteractiveCell(cell, inputs, runtimeVersion, signal, onPhase, overrides, rustModule);
+}
+
+export function updateRustRuntimeRegistry(registry: RustRuntimeRegistry): void {
+  defaultRuntimeClient.updateRustRegistry(registry);
 }
 
 export function preparePythonRuntime(packages: readonly string[], timeoutMs?: number): Promise<void> {
@@ -75,6 +83,32 @@ export function createInteractiveCellRunner(dependencies: RuntimeClientDependenc
   let nextRequestId = 1;
   const workers = new Map<CellLanguage, Worker>();
   const pending = new Map<number, PendingRequest>();
+  let rustRegistry: RustRuntimeRegistry | undefined;
+
+  function updateRustRegistry(registry: RustRuntimeRegistry): void {
+    rustRegistry = registry;
+    for (const [id, request] of pending) {
+      if (
+        !request.rustModule ||
+        registry.modules.some(
+          (module) => module.id === request.rustModule?.id && module.fingerprint === request.rustModule.fingerprint
+        )
+      )
+        continue;
+      pending.delete(id);
+      dependencies.clearTimeout(request.timeout);
+      request.removeAbortListener();
+      request.reject(new Error(`Rust module ${request.rustModule.id} has an obsolete fingerprint.`));
+    }
+    const worker = workers.get('rust');
+    if (worker) {
+      try {
+        worker.postMessage({ type: 'registry', registry });
+      } catch (error) {
+        failWorker(worker, toError(error));
+      }
+    }
+  }
   let preparation: { worker: Worker; key: string; promise: Promise<void> } | undefined;
   let preparationState: PythonPreparationState = 'idle';
   const preparationListeners = new Set<() => void>();
@@ -137,13 +171,24 @@ export function createInteractiveCellRunner(dependencies: RuntimeClientDependenc
     runtimeVersion?: string,
     signal?: AbortSignal,
     onPhase?: (phase: RuntimeExecutionPhase) => void,
-    overrides?: { source: string }
+    overrides?: { source: string },
+    rustModule?: RustRuntimeModule
   ): Promise<NormalizedCellExecutionResult> {
     const completeValues = completeInputValues(cell, inputs);
     try {
       if (overrides && cell.language !== 'python')
         throw new Error('Source editing is only available for Python cells.');
       assertValidInputValues(cell, completeValues);
+      if (cell.language === 'rust' && (!rustModule || !rustModule.cells.includes(cell.id)))
+        throw new Error(`Rust cell ${cell.id} has no matching module descriptor.`);
+      if (
+        rustModule &&
+        rustRegistry &&
+        !rustRegistry.modules.some(
+          (module) => module.id === rustModule.id && module.fingerprint === rustModule.fingerprint
+        )
+      )
+        throw new Error(`Rust module ${rustModule.id} has an obsolete fingerprint.`);
     } catch (error) {
       return Promise.reject(toError(error));
     }
@@ -151,6 +196,7 @@ export function createInteractiveCellRunner(dependencies: RuntimeClientDependenc
 
     const requestId = nextRequestId++;
     const request = createWorkerRequest(requestId, cell, completeValues, runtimeVersion);
+    if (rustModule) request.rustModule = rustModule;
     const timeoutMs = cellExecutionTimeoutMs(cell);
     if (overrides) request.source = overrides.source;
 
@@ -167,6 +213,7 @@ export function createInteractiveCellRunner(dependencies: RuntimeClientDependenc
         const abort = () => failWorker(ownedWorker, new ExecutionCancellationError());
         signal?.addEventListener('abort', abort, { once: true });
         pending.set(requestId, {
+          rustModule,
           type: 'execute',
           onPhase,
           resolve,
@@ -213,6 +260,21 @@ export function createInteractiveCellRunner(dependencies: RuntimeClientDependenc
 
         const request = pending.get(event.data.requestId);
         if (!request || request.worker !== worker) return;
+        if (
+          language === 'rust' &&
+          request.rustModule &&
+          (!('rustModule' in event.data) ||
+            event.data.rustModule?.id !== request.rustModule.id ||
+            event.data.rustModule.fingerprint !== request.rustModule.fingerprint)
+        ) {
+          pending.delete(event.data.requestId);
+          dependencies.clearTimeout(request.timeout);
+          request.removeAbortListener();
+          request.reject(
+            new Error(`Rust module ${request.rustModule.id} returned an obsolete or invalid fingerprint.`)
+          );
+          return;
+        }
         if ('type' in event.data && event.data.type === 'progress') {
           if (request.type === 'execute') request.onPhase?.(event.data.phase);
           return;
@@ -252,6 +314,14 @@ export function createInteractiveCellRunner(dependencies: RuntimeClientDependenc
     }
 
     workers.set(language, worker);
+    if (language === 'rust' && rustRegistry) {
+      try {
+        worker.postMessage({ type: 'registry', registry: rustRegistry });
+      } catch (error) {
+        failWorker(worker, toError(error));
+        throw error;
+      }
+    }
     return worker;
   }
 
@@ -300,7 +370,8 @@ export function createInteractiveCellRunner(dependencies: RuntimeClientDependenc
         preparationListeners.delete(listener);
       };
     },
-    resetWorker
+    resetWorker,
+    updateRustRegistry
   };
 }
 

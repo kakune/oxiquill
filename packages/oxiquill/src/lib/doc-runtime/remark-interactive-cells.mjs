@@ -38,6 +38,9 @@ export default function remarkInteractiveCells({ root = process.cwd(), pythonOpt
         allocateMdxIdentifier(reservedIdentifiers, interactiveCellIdentifier(index))
       );
 
+      const rustIdentifiers = cells.map((_, index) =>
+        allocateMdxIdentifier(reservedIdentifiers, `__oxiquillRustModule${index}`)
+      );
       cells.forEach(({ cell, node }, index) => {
         Object.assign(node, {
           type: 'mdxJsxFlowElement',
@@ -45,7 +48,8 @@ export default function remarkInteractiveCells({ root = process.cwd(), pythonOpt
           attributes: [
             { type: 'mdxJsxAttribute', name: 'client:visible', value: null },
             { type: 'mdxJsxAttribute', name: 'cellId', value: cell.id },
-            identifierAttribute('cell', cellIdentifiers[index])
+            identifierAttribute('cell', cellIdentifiers[index]),
+            identifierAttribute('rustModule', rustIdentifiers[index])
           ],
           children: []
         });
@@ -60,7 +64,11 @@ export default function remarkInteractiveCells({ root = process.cwd(), pythonOpt
           createInteractiveCellImports(
             componentIdentifier,
             generationId,
-            cells.map(({ cell }, index) => ({ cellId: cell.id, identifier: cellIdentifiers[index] }))
+            cells.map(({ cell }, index) => ({
+              cellId: cell.id,
+              identifier: cellIdentifiers[index],
+              rustIdentifier: rustIdentifiers[index]
+            }))
           )
         );
       }
@@ -77,7 +85,15 @@ function createInteractiveCellImports(componentIdentifier, generationId, cells) 
       false
     )
   );
-  const declarations = [componentImport, ...cellImports];
+  const rustImports = cells.map(({ cellId, rustIdentifier }) =>
+    createImportDeclaration(
+      rustIdentifier,
+      `virtual:oxiquill/cell?cellId=${encodeURIComponent(cellId)}${generationId ? `&generationId=${encodeURIComponent(generationId)}` : ''}`,
+      false,
+      'rustModule'
+    )
+  );
+  const declarations = [componentImport, ...cellImports, ...rustImports];
 
   return {
     type: 'mdxjsEsm',
@@ -92,7 +108,7 @@ function createInteractiveCellImports(componentIdentifier, generationId, cells) 
   };
 }
 
-function createImportDeclaration(localName, importPath, isDefault) {
+function createImportDeclaration(localName, importPath, isDefault, importedName = 'cell') {
   return {
     type: 'ImportDeclaration',
     specifiers: [
@@ -103,7 +119,7 @@ function createImportDeclaration(localName, importPath, isDefault) {
           }
         : {
             type: 'ImportSpecifier',
-            imported: { type: 'Identifier', name: 'cell' },
+            imported: { type: 'Identifier', name: importedName },
             local: { type: 'Identifier', name: localName }
           }
     ],
@@ -118,7 +134,7 @@ function renderImportDeclaration(declaration) {
     return `import ${specifier.local.name} from ${importPath};`;
   }
 
-  return `import { cell as ${specifier.local.name} } from ${importPath};`;
+  return `import { ${specifier.imported.name} as ${specifier.local.name} } from ${importPath};`;
 }
 
 function interactiveCellIdentifier(index) {

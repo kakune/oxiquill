@@ -6,7 +6,12 @@ import { boundedErrorMessage } from '../../lib/doc-runtime/output-limits.mjs';
 import { CellExecutionError } from '../../lib/doc-runtime/execution-error.js';
 import { runInteractiveCell } from '../../lib/doc-runtime/runtime-client.js';
 import type { NormalizedCellExecutionResult } from '../../lib/doc-runtime/output-artifacts.js';
-import type { CellManifest, InputValues, RuntimeExecutionPhase } from '../../lib/doc-runtime/types.js';
+import type {
+  CellManifest,
+  InputValues,
+  RuntimeExecutionPhase,
+  RustRuntimeModule
+} from '../../lib/doc-runtime/types.js';
 
 type InputValue = InputValues[string];
 
@@ -14,6 +19,7 @@ type CellRunRequest = {
   autorunKey?: string;
   cell: CellManifest;
   runtimeVersion: string;
+  rustModule?: RustRuntimeModule;
   values: InputValues;
   source?: string;
 };
@@ -30,7 +36,7 @@ type ExecutionState = {
 const autorunRequests = createRunOnceCache<string, NormalizedCellExecutionResult>();
 const reactiveDebounceMs = 150;
 
-export function useInteractiveCellRun(cell: CellManifest, runtimeVersion: string) {
+export function useInteractiveCellRun(cell: CellManifest, runtimeVersion: string, rustModule?: RustRuntimeModule) {
   const [values, setValues] = useState<InputValues>(() => restoreSharedInputs(cell));
   const [execution, setExecution] = useState<ExecutionState>({ status: 'idle' });
   const [inputsValid, setInputsValid] = useState(true);
@@ -51,7 +57,14 @@ export function useInteractiveCellRun(cell: CellManifest, runtimeVersion: string
 
   schedulerRef.current ??= createLatestRequestScheduler({
     execute: (
-      { autorunKey, cell: requestedCell, runtimeVersion: requestedVersion, values: requestedValues, source },
+      {
+        autorunKey,
+        cell: requestedCell,
+        runtimeVersion: requestedVersion,
+        values: requestedValues,
+        source,
+        rustModule: requestedModule
+      },
       signal
     ) => {
       const overrides: [] | [{ source: string }] = source === undefined ? [] : [{ source }];
@@ -67,7 +80,15 @@ export function useInteractiveCellRun(cell: CellManifest, runtimeVersion: string
               },
               ...overrides
             )
-          : runInteractiveCell(requestedCell, requestedValues, requestedVersion, signal);
+          : runInteractiveCell(
+              requestedCell,
+              requestedValues,
+              requestedVersion,
+              signal,
+              undefined,
+              undefined,
+              requestedModule
+            );
       return autorunKey ? autorunRequests.getOrCreate(autorunKey, execute) : execute();
     },
     onCancelled: () => {
@@ -133,7 +154,10 @@ export function useInteractiveCellRun(cell: CellManifest, runtimeVersion: string
   function schedule(nextValues: InputValues, delayMs = 0, autorunKey?: string): void {
     const source = isEditing ? draft?.source : undefined;
     latestRequestIsDraftRef.current = source !== undefined;
-    schedulerRef.current?.schedule({ autorunKey, cell, runtimeVersion, values: nextValues, source }, delayMs);
+    schedulerRef.current?.schedule(
+      { autorunKey, cell, runtimeVersion, rustModule, values: nextValues, source },
+      delayMs
+    );
   }
 
   function run(): void {

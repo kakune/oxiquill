@@ -1,3 +1,4 @@
+import * as runtimeClient from '../../packages/oxiquill/src/lib/doc-runtime/runtime-client';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import {
   applyCellsSnapshot,
@@ -11,7 +12,7 @@ import {
   subscribeManifest,
   syncRenderedSourceBlocks
 } from '../../packages/oxiquill/src/lib/doc-runtime/manifest';
-import type { CellManifest } from '../../packages/oxiquill/src/lib/doc-runtime/types';
+import type { CellManifest, RustRuntimeRegistry } from '../../packages/oxiquill/src/lib/doc-runtime/types';
 
 const firstCell = makeCell('first', '<pre>first</pre>');
 const secondCell = makeCell('second', '<pre>second</pre>');
@@ -30,6 +31,30 @@ afterEach(() => {
 });
 
 describe('generated manifest state', () => {
+  it('publishes Rust registry updates without resetting the Rust worker', () => {
+    const update = vi.spyOn(runtimeClient, 'updateRustRuntimeRegistry');
+    const reset = vi.spyOn(runtimeClient, 'resetInteractiveRuntime');
+    const rust: RustRuntimeRegistry = { version: 1, modules: [] };
+    applyGeneratedSnapshot({ cells: [], version: 'registry-v1', rust });
+    expect(getManifestSnapshot().rust).toBe(rust);
+    expect(update).toHaveBeenCalledWith(rust);
+    expect(reset).not.toHaveBeenCalledWith('rust');
+    expect(reset).toHaveBeenCalledWith('haskell');
+  });
+
+  it('rejects invalid registry refreshes before publishing a snapshot', async () => {
+    const warning = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
+    const fetchImpl = vi.fn(
+      async () =>
+        new Response(JSON.stringify({ cells: [firstCell], runtimeVersion: 'bad', rust: { version: 1, modules: [] } }))
+    );
+    await expect(refreshGeneratedManifest({ fetchImpl, hasHotRuntime: true, windowObject: window })).resolves.toEqual({
+      status: 'failure'
+    });
+    expect(warning).toHaveBeenCalled();
+    expect(getManifestSnapshot().version).toBe('test-runtime-version');
+  });
+
   it('tracks cells, versions, subscriptions, and rendered source blocks', () => {
     document.body.innerHTML = [
       '<div class="doc-cell" data-cell-id="first">',

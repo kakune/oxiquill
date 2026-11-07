@@ -1,3 +1,4 @@
+import { createRustModuleAssets } from '../../packages/oxiquill/src/generator/doc-runtime/rust-module-assets.mjs';
 import { describe, expect, it, vi } from 'vitest';
 import { mkdtempSync, mkdirSync, rmSync, writeFileSync } from 'node:fs';
 import os from 'node:os';
@@ -27,21 +28,18 @@ describe('oxiquill virtual modules', () => {
     const watchedFreshCellsNode = { url: '/@id/__x00__virtual:oxiquill/cells?oxiquill-fresh=2' };
     const unrelatedNode = { id: '/repo/src/lib/doc-runtime/manifest.ts' };
     const versionNode = { id: 'version' };
-    const rustNode = { id: 'rust-wasm' };
     const idToModuleMap = new Map([
       ['\0virtual:oxiquill/cells', cellsNode],
       ['\0virtual:oxiquill/cells?oxiquill-fresh=1', freshCellsNode],
       ['\0virtual:oxiquill/cell?cellId=page__one', singleCellNode],
-      ['\0virtual:oxiquill/runtime-version', versionNode],
-      ['\0virtual:oxiquill/rust-wasm', rustNode]
+      ['\0virtual:oxiquill/runtime-version', versionNode]
     ]);
     const moduleGraph = {
       getModuleById: vi.fn((id) =>
         new Map([
           ['\0virtual:oxiquill/cells', cellsNode],
           ['\0virtual:oxiquill/cell', undefined],
-          ['\0virtual:oxiquill/runtime-version', versionNode],
-          ['\0virtual:oxiquill/rust-wasm', rustNode]
+          ['\0virtual:oxiquill/runtime-version', versionNode]
         ]).get(id)
       ),
       idToModuleMap
@@ -63,7 +61,7 @@ describe('oxiquill virtual modules', () => {
     expect(hot.send).toHaveBeenCalledTimes(1);
     expect(plugin.hotUpdate.call(context, { file: pathFromUrl(paths.runtimeVersionPath) })).toEqual([versionNode]);
     expect(plugin.hotUpdate.call(context, { file: pathFromUrl(paths.cellsJsonPath) })).toEqual([singleCellNode]);
-    expect(plugin.hotUpdate.call(context, { file: rustWasmFile(paths) })).toEqual([rustNode]);
+    expect(plugin.hotUpdate.call(context, { file: rustWasmFile(paths) })).toBeUndefined();
     expect(plugin.hotUpdate.call(context, { file: '/repo/content/docs/index.mdx' })).toBeUndefined();
   });
 
@@ -98,6 +96,38 @@ describe('oxiquill virtual modules', () => {
     expect(plugin.load('\0virtual:oxiquill/runtime-paths')).toContain('runtime%20assets/python%20runtime/');
   });
 
+  it('captures the routed descriptor under Astro base without importing runtime assets', () => {
+    const root = mkdtempSync(path.join(os.tmpdir(), 'oxiquill-registry-base-'));
+    try {
+      const paths = createDocRuntimePaths(root);
+      const cells = [
+        { id: 'rust-a', language: 'rust' },
+        { id: 'rust-b', language: 'rust' }
+      ];
+      const modules = cells.map(
+        (cell, index) =>
+          createRustModuleAssets({
+            id: `module-${index}`,
+            cells: [cell],
+            glue: 'glue',
+            wasm: Buffer.from('wasm'),
+            publicPath: 'custom%20assets/rust'
+          }).module
+      );
+      mkdirSync(path.dirname(paths.cellsJsonPath), { recursive: true });
+      writeFileSync(paths.cellsJsonPath, JSON.stringify({ cells, rust: { version: 1, modules } }));
+      const plugin = oxiquillVirtualModulesPlugin(paths);
+      plugin.configResolved({ base: '/nested/base/' });
+      const source = plugin.load.call({ addWatchFile: vi.fn() }, '\0virtual:oxiquill/cell?cellId=rust-b');
+      expect(source).toContain(`/nested/base/${modules[1].glue.url}`);
+      expect(source).toContain(modules[1].fingerprint);
+      expect(source).not.toContain(modules[0].fingerprint);
+      expect(source).not.toContain('import ');
+    } finally {
+      rmSync(root, { force: true, recursive: true });
+    }
+  });
+
   it('serves one generated cell per page import', () => {
     const root = mkdtempSync(path.join(os.tmpdir(), 'oxiquill-virtual-cell-'));
 
@@ -117,7 +147,7 @@ describe('oxiquill virtual modules', () => {
 
       expect(plugin.resolveId(moduleId)).toBe('\0virtual:oxiquill/cell?cellId=page__second');
       expect(plugin.load.call(context, plugin.resolveId(moduleId))).toBe(
-        'export const cell = {"id":"page__second","source":"second"};\n'
+        'export const cell = {"id":"page__second","source":"second"};\nexport const rustModule = undefined;\n'
       );
       expect(context.addWatchFile).toHaveBeenCalledWith(pathFromUrl(paths.cellsJsonPath));
       expect(() => plugin.load.call(context, '\0virtual:oxiquill/cell?cellId=page__missing')).toThrow(
@@ -149,8 +179,7 @@ describe('oxiquill virtual modules', () => {
     expect(server.watcher.add).toHaveBeenCalledWith([
       pathFromUrl(paths.cellsModulePath),
       pathFromUrl(paths.runtimeVersionPath),
-      pathFromUrl(paths.cellsJsonPath),
-      rustWasmFile(paths)
+      pathFromUrl(paths.cellsJsonPath)
     ]);
     expect(server.watcher.on).not.toHaveBeenCalled();
     expect(server.middlewares.use).toHaveBeenCalledOnce();
@@ -204,6 +233,7 @@ describe('oxiquill virtual modules', () => {
       expect(response.statusCode).toBe(200);
       expect(response.setHeader).toHaveBeenCalledWith('Cache-Control', 'no-store');
       expect(JSON.parse(body)).toEqual({
+        rust: { version: 1, modules: [] },
         cells: [{ id: 'cell-one' }],
         runtimeVersion: 'version-one'
       });

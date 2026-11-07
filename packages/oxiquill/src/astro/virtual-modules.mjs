@@ -1,17 +1,18 @@
+import { resolveRustRegistryUrls, validateRustRegistry } from '../lib/doc-runtime/rust-registry.mjs';
 import { parseGeneratedCellManifest } from '../generator/doc-runtime/cell-manifest.mjs';
 import { sourceChangedError } from '../generator/doc-runtime/generation-snapshot.mjs';
 import { existsSync, readFileSync } from 'node:fs';
-import { normalizePath, pathFromUrl, pathInUrl, relativePathFromUrl } from '../config/paths.mjs';
+import { normalizePath, pathFromUrl, relativePathFromUrl } from '../config/paths.mjs';
 
 const moduleIds = new Map([
   ['virtual:oxiquill/cell', '\0virtual:oxiquill/cell'],
   ['virtual:oxiquill/cells', '\0virtual:oxiquill/cells'],
   ['virtual:oxiquill/runtime-version', '\0virtual:oxiquill/runtime-version'],
-  ['virtual:oxiquill/runtime-paths', '\0virtual:oxiquill/runtime-paths'],
-  ['virtual:oxiquill/rust-wasm', '\0virtual:oxiquill/rust-wasm']
+  ['virtual:oxiquill/runtime-paths', '\0virtual:oxiquill/runtime-paths']
 ]);
 
 export function oxiquillVirtualModulesPlugin(paths, { generation } = {}) {
+  let base = '/';
   const cellsJsonFile = pathFromUrl(paths.cellsJsonPath);
   const generatedModules = new Map([
     [
@@ -29,17 +30,18 @@ export function oxiquillVirtualModulesPlugin(paths, { generation } = {}) {
       }
     ]
   ]);
-  const rustWasmFile = pathInUrl(paths.rustWasmPublicDir, 'doc_rust_cells.js');
-  const watchedFiles = [...Array.from(generatedModules.values()).map(({ file }) => file), cellsJsonFile, rustWasmFile];
+  const watchedFiles = [...Array.from(generatedModules.values()).map(({ file }) => file), cellsJsonFile];
   const changedFileModuleIds = new Map([
     [normalizePath(cellsJsonFile), '\0virtual:oxiquill/cell'],
     [normalizePath(pathFromUrl(paths.cellsModulePath)), '\0virtual:oxiquill/cells'],
-    [normalizePath(pathFromUrl(paths.runtimeVersionPath)), '\0virtual:oxiquill/runtime-version'],
-    [normalizePath(rustWasmFile), '\0virtual:oxiquill/rust-wasm']
+    [normalizePath(pathFromUrl(paths.runtimeVersionPath)), '\0virtual:oxiquill/runtime-version']
   ]);
 
   return {
     name: 'oxiquill-virtual-modules',
+    configResolved(config) {
+      base = config.base;
+    },
     resolveId(id) {
       return resolveVirtualModuleId(id);
     },
@@ -53,9 +55,8 @@ export function oxiquillVirtualModulesPlugin(paths, { generation } = {}) {
         if (expected && requestedGeneration !== expected.generationId) {
           throw sourceChangedError([{ kind: 'changed', path: cellsJsonFile }]);
         }
-        const cell = (expected?.cells ?? readGeneratedCellsJson(cellsJsonFile)).find(
-          (candidate) => candidate.id === cellId
-        );
+        const manifest = expected ?? readGeneratedManifest(cellsJsonFile);
+        const cell = manifest.cells.find((candidate) => candidate.id === cellId);
         if (!cell) {
           if (expected) throw sourceChangedError([{ kind: 'added', path: cellsJsonFile, cellId }]);
           throw new Error(
@@ -63,7 +64,11 @@ export function oxiquillVirtualModulesPlugin(paths, { generation } = {}) {
           );
         }
 
-        return `export const cell = ${JSON.stringify(cell)};\n`;
+        const rust = manifest.rust ? resolveRustRegistryUrls(manifest.rust, base) : undefined;
+        if (rust) validateRustRegistry(rust, manifest.cells);
+        const rustModule =
+          cell.language === 'rust' ? rust?.modules.find((module) => module.cells.includes(cell.id)) : undefined;
+        return `export const cell = ${JSON.stringify(cell)};\nexport const rustModule = ${JSON.stringify(rustModule)};\n`;
       }
 
       const generated = generatedModules.get(baseId);
@@ -75,21 +80,6 @@ export function oxiquillVirtualModulesPlugin(paths, { generation } = {}) {
         return existsSync(generated.file) ? readFileSync(generated.file, 'utf8') : generated.fallback;
       }
 
-      if (baseId === '\0virtual:oxiquill/rust-wasm') {
-        this.addWatchFile(rustWasmFile);
-        if (!existsSync(rustWasmFile)) {
-          return [
-            'export default async function initRustWasm() {',
-            '  throw new Error("Oxiquill Rust/Wasm runtime has not been generated.");',
-            '}',
-            'export function run_rust_cell() {',
-            '  throw new Error("Oxiquill Rust/Wasm runtime has not been generated.");',
-            '}'
-          ].join('\n');
-        }
-
-        return `export { default, run_rust_cell } from "/@fs/${normalizePath(rustWasmFile)}";\n`;
-      }
       if (baseId === '\0virtual:oxiquill/runtime-paths') {
         return [
           `export const haskellWasmPath = ${JSON.stringify(publicUrlPath(paths, paths.haskellWasmPublicDir))};`,
@@ -124,7 +114,7 @@ export function oxiquillVirtualModulesPlugin(paths, { generation } = {}) {
         response.setHeader('Content-Type', 'application/json; charset=utf-8');
         response.end(
           JSON.stringify({
-            cells: readGeneratedCellsJson(cellsJsonFile),
+            ...readBrowserManifest(cellsJsonFile, base),
             runtimeVersion: readGeneratedRuntimeVersion(pathFromUrl(paths.runtimeVersionPath))
           })
         );
@@ -190,10 +180,15 @@ function virtualModuleName(resolvedId) {
   return resolvedId.slice('\0virtual:oxiquill/'.length);
 }
 
-function readGeneratedCellsJson(file) {
-  if (!existsSync(file)) return [];
+function readGeneratedManifest(file) {
+  return existsSync(file) ? parseGeneratedCellManifest(readFileSync(file, 'utf8')) : { cells: [] };
+}
 
-  return parseGeneratedCellManifest(readFileSync(file, 'utf8')).cells;
+function readBrowserManifest(file, base) {
+  const manifest = readGeneratedManifest(file);
+  const rust = resolveRustRegistryUrls(manifest.rust ?? { version: 1, modules: [] }, base);
+  if (manifest.rust) validateRustRegistry(rust, manifest.cells);
+  return { cells: manifest.cells, rust };
 }
 
 function readGeneratedRuntimeVersion(file) {
