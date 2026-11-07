@@ -1,4 +1,5 @@
 import { relativePagePath } from './authoring-ids.mjs';
+import { resolveRustDefinitions } from './rust-definitions.mjs';
 import {
   parseInteractiveCellNode,
   resolvePythonSetups,
@@ -19,14 +20,14 @@ export default function remarkInteractiveCells({ root = process.cwd(), pythonOpt
     const cells = [];
 
     visit(tree, (node) => {
-      const result = parseInteractiveCellNode(node, pagePath, pythonOptions);
+      const result = parseInteractiveCellNode(node, pagePath, pythonOptions, file?.value);
       if (result.kind === 'invalid') diagnostics.push(...result.diagnostics);
       if (result.kind === 'cell') cells.push({ cell: result.cell, node });
     });
 
     throwInteractiveCellDiagnostics(diagnostics);
     throwInteractiveCellDiagnostics(uniqueCellIdDiagnostics(cells.map(({ cell }) => cell)));
-    const normalizedCells = resolvePythonSetups(cells.map(({ cell }) => cell));
+    const normalizedCells = resolveRustDefinitions(resolvePythonSetups(cells.map(({ cell }) => cell)));
     const generationId = generation?.validatePage(pagePath, normalizedCells);
 
     return generationId instanceof Promise ? generationId.then(transform) : transform(generationId);

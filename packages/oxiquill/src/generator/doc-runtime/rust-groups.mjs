@@ -1,7 +1,7 @@
 import path from 'node:path';
 import { parse, stringify } from 'smol-toml';
 import { generateRustCargoToml } from './rust-codegen/cargo.mjs';
-import { generateRustLib } from './rust-codegen/lib.mjs';
+import { generateRustLibMapped } from './rust-codegen/lib.mjs';
 import { listAuthoredHelperInputFiles } from './helper-inputs.mjs';
 import { hashBytes, hashText, stableFingerprint } from './hashing.mjs';
 import { normalizePath } from './path-utils.mjs';
@@ -26,6 +26,7 @@ export function createRustGroups({ cells, paths, helperCrates, runtimeInputs }) 
         ])
       );
       const sortedCells = [...members].sort((a, b) => a.id.localeCompare(b.id));
+      const mapped = generateRustLibMapped(sortedCells);
       return Object.freeze({
         id,
         page,
@@ -33,7 +34,8 @@ export function createRustGroups({ cells, paths, helperCrates, runtimeInputs }) 
         sourceDir,
         cells: sortedCells,
         cargo: generateRustCargoToml(sortedCells, helpers, runtimeInputs, { packageName, workspace: false }),
-        lib: generateRustLib(sortedCells)
+        lib: mapped.text,
+        sourceMap: { ...mapped, file: path.join(sourceDir, 'src/lib.rs'), crateDir: sourceDir }
       });
     });
 }

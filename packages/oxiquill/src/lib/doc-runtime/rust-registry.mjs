@@ -3,14 +3,16 @@
 
 /** Validate metadata without performing I/O; shared by producers and consumers.
  * @param {unknown} registry
- * @param {readonly {id: string, language: string}[]} cells
+ * @param {readonly {id: string, language: string, kind?: string}[]} cells
  * @returns {asserts registry is RustRuntimeRegistry}
  */
 export function validateRustRegistry(registry, cells) {
   if (!isRecord(registry) || registry.version !== 1 || !Array.isArray(registry.modules)) {
     throw new Error('Rust runtime registry must use version 1 and contain modules.');
   }
-  const rustCells = new Set(cells.filter((cell) => cell.language === 'rust').map((cell) => cell.id));
+  const rustCells = new Set(
+    cells.filter((cell) => cell.language === 'rust' && cell.kind !== 'definitions').map((cell) => cell.id)
+  );
   const assignments = new Map();
   const ids = new Set();
   for (const module of registry.modules) {

@@ -1,3 +1,4 @@
+import { normalizeCell } from '../../lib/doc-runtime/normalized-cell.mjs';
 import { hashText, stableFingerprint } from './hashing.mjs';
 
 export function sourceFingerprints(cells) {
@@ -11,6 +12,8 @@ export function sourceFingerprints(cells) {
           digest: hashText(
             stableFingerprint({
               source: cell.source,
+              definitions: cell.definitions?.map(normalizeCell),
+              uses: cell.uses,
               inputs: cell.inputs,
               crates: cell.crates,
               packages: cell.packages,

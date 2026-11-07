@@ -1,5 +1,6 @@
 import { parsePageFrontmatter } from '../../lib/doc-runtime/references.mjs';
 import { normalizeCell } from '../../lib/doc-runtime/normalized-cell.mjs';
+import { resolveRustDefinitions } from '../../lib/doc-runtime/rust-definitions.mjs';
 import { unified } from 'unified';
 import remarkMath from 'remark-math';
 import remarkMdx from 'remark-mdx';
@@ -26,7 +27,7 @@ export function parseCellsFromMarkdown(source, pagePath, pythonOptions = {}) {
 
   visit(tree, (node) => {
     if (!node || typeof node !== 'object') return;
-    const result = parseInteractiveCellNode(node, pagePath, pythonOptions);
+    const result = parseInteractiveCellNode(node, pagePath, pythonOptions, source);
     if (result.kind === 'cell') cells.push(result.cell);
     if (result.kind === 'invalid') diagnostics.push(...result.diagnostics);
   });
@@ -65,7 +66,11 @@ export async function extractCellsFromMarkdown(source, pagePath, context) {
   ];
   throwInteractiveCellDiagnostics(diagnostics);
   assertUniqueCellIds(parsed.cells);
-  return Promise.all(resolvePythonSetups(parsed.cells).map((cell) => createCellManifest(cell, context.highlighter)));
+  return Promise.all(
+    resolveRustDefinitions(resolvePythonSetups(parsed.cells)).map((cell) =>
+      createCellManifest(cell, context.highlighter)
+    )
+  );
 }
 
 export async function createCellManifest(cell, highlighter) {

@@ -1,4 +1,5 @@
 import { createRuntimeEvents } from './runtime-events.mjs';
+import { resolveRustDefinitions, isDefinitionsBlock } from '../../lib/doc-runtime/rust-definitions.mjs';
 import path from 'node:path';
 import { pathFromUrl } from '../../config/paths.mjs';
 import { parseCellsFromMarkdown } from './cell-parser.mjs';
@@ -50,12 +51,12 @@ export async function collectAuthoringContent({
     ]);
     assertUniqueCellIds(cells);
     const haskell = cells.filter((cell) => cell.language === 'haskell');
-    const rust = cells.filter((cell) => cell.language === 'rust');
+    const rust = cells.filter((cell) => cell.language === 'rust' && !isDefinitionsBlock(cell));
     assertUniqueHaskellFunctionNames(haskell);
     assertUniqueHaskellInputBindings(haskell);
     assertUniqueRustFunctionNames(rust);
     assertUniqueRustInputBindings(rust);
-    return { cells: resolvePythonSetups(cells), pages: parsedPages.map(({ page }) => page) };
+    return { cells: resolveRustDefinitions(resolvePythonSetups(cells)), pages: parsedPages.map(({ page }) => page) };
   });
 }
 
