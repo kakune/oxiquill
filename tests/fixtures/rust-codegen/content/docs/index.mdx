@@ -122,6 +122,14 @@ emit_histogram!(&[[0, 1, 4]], options = &options);
 ```
 
 ```rust
+//| id: linked-chart-options
+let options = serde_json::json!({ "link": { "group": "linked-macros" } });
+emit_line_chart!(&[[0, 1], [1, 2]], options = &options);
+emit_scatter_chart!(&[[0, 2], [1, 3]], options = &options);
+emit_area_chart!(&[[0, 1], [1, 2]], options = &options);
+```
+
+```rust
 //| id: invalid-chart-options
 //| inputs:
 //|   invalid: { type: checkbox, label: Invalid options, value: false }

@@ -8,6 +8,7 @@ import {
 } from '../../packages/oxiquill/src/lib/doc-runtime/chart-options';
 import {
   chartAxes,
+  chartZoomRange,
   chartPointIndexes,
   hasIsolatedPoint
 } from '../../packages/oxiquill/src/lib/doc-runtime/chart-viewport';
@@ -27,6 +28,16 @@ function withChart(spec, action, locale = 'en') {
 }
 
 describe('real ECharts viewport regressions', () => {
+  it('reads the representative y zoom window for horizontal bars', () => {
+    withChart(
+      { kind: 'bar', orientation: 'horizontal', categories: ['a', 'b', 'c', 'd'], series: [{ values: [1, 2, 3, 4] }] },
+      (chart) => {
+        expect(chartZoomRange(chart, 'y')).toEqual([0, 3]);
+        chart.dispatchAction({ type: 'dataZoom', startValue: 1, endValue: 2 });
+        expect(chartZoomRange(chart, 'y')).toEqual([1, 2]);
+      }
+    );
+  });
   it.each(['en', 'ja'])('keeps calendar context and distinguishes fine time ticks in %s', (locale) => {
     for (const [start, end] of [
       ['2024-03-10T00:00:00Z', '2024-03-13T00:00:00Z'],

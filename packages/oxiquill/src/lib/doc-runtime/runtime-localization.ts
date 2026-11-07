@@ -40,6 +40,8 @@ export type RuntimeLabels = {
   showChartData: string;
   hideChartData: string;
   resetZoom: string;
+  chartKeyboardInstructions: string;
+  chartNoDataInRange: string;
   savePng: string;
   saveSvg: string;
   chartExportError: (detail: string) => string;
@@ -187,6 +189,8 @@ const runtimeLabels = {
     showChartData: 'Show data as a table',
     hideChartData: 'Hide data table',
     resetZoom: 'Reset zoom',
+    chartKeyboardInstructions: 'Use + or = to zoom in, - to zoom out, Left and Right arrows to pan, and 0 to reset.',
+    chartNoDataInRange: 'This chart has no data in the selected range.',
     savePng: 'Save PNG',
     saveSvg: 'Save SVG',
     chartExportError: (detail) => `Unable to save chart: ${detail}`,
@@ -294,6 +298,8 @@ const runtimeLabels = {
     showChartData: 'データを表で表示',
     hideChartData: 'データの表を隠す',
     resetZoom: 'ズームを戻す',
+    chartKeyboardInstructions: '+ または = で拡大、- で縮小、左右の矢印キーで移動、0 で元の範囲に戻します。',
+    chartNoDataInRange: 'このグラフには選択した範囲のデータがありません。',
     savePng: 'PNGを保存',
     saveSvg: 'SVGを保存',
     chartExportError: (detail) => `グラフを保存できませんでした: ${translateDiagnostic(detail)}`,

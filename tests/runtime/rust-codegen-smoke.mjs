@@ -103,6 +103,12 @@ try {
   assert.equal(presentations[0].spec.series[0].style.lineType, 'dashed');
   assert.deepEqual(presentations[1].spec.series[0].style.color, { dark: '#123' });
   const optionsCharts = run('chart-options').outputs;
+  const linkedCharts = validateOutputArtifacts(run('linked-chart-options').outputs);
+  assert.equal(linkedCharts.length, 3);
+  for (const output of linkedCharts) {
+    assert.equal(output.status, 'valid');
+    assert.deepEqual(output.artifact.spec.link, { group: 'linked-macros', zoom: true, cursor: true });
+  }
   assert.equal(optionsCharts.length, 4);
   for (const artifact of optionsCharts) {
     assert.equal(artifact.spec.yMin, 0);

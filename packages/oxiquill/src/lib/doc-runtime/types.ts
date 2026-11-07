@@ -149,6 +149,12 @@ export interface ScatterChartStyle extends BaseChartStyle {
   symbolSize?: number;
 }
 
+export interface ChartLink {
+  group: string;
+  zoom?: boolean;
+  cursor?: boolean;
+}
+
 export interface BaseChartSpec {
   annotations?: readonly ChartAnnotation[];
   style?: BaseChartStyle;
@@ -211,6 +217,7 @@ export type XyChartLayer =
   | (Omit<IntervalChartSeries, 'id'> & { id: string; kind: 'band' });
 
 export interface XyChartSpec extends BaseChartSpec {
+  link?: ChartLink;
   kind: 'xy';
   xType?: 'value' | 'time';
   yType?: 'value' | 'log';
@@ -219,6 +226,7 @@ export interface XyChartSpec extends BaseChartSpec {
 }
 
 export interface LineChartSpec extends BaseChartSpec {
+  link?: ChartLink;
   style?: LineChartStyle;
   kind: 'line';
   series: readonly XyChartSeries[];
@@ -229,6 +237,7 @@ export interface ScatterChartSeries extends Omit<XyChartSeries, 'style'> {
 }
 
 export interface ScatterChartSpec extends BaseChartSpec {
+  link?: ChartLink;
   style?: ScatterChartStyle;
   kind: 'scatter';
   series: readonly ScatterChartSeries[];
@@ -258,6 +267,7 @@ export interface HistogramChartSpec extends BaseChartSpec {
 }
 
 export interface AreaChartSpec extends BaseChartSpec {
+  link?: ChartLink;
   style?: LineChartStyle;
   kind: 'area';
   series: readonly AreaChartSeries[];
@@ -291,6 +301,7 @@ export interface IntervalChartSeries {
 }
 
 export interface IntervalChartSpec extends BaseChartSpec {
+  link?: ChartLink;
   kind: 'errorbar' | 'band';
   style?: LineChartStyle;
   yType?: 'value' | 'log';
