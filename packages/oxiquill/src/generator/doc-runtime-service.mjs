@@ -667,6 +667,7 @@ function createDesiredRuntime({
   return Object.freeze({
     generationId: snapshot.generationId,
     referenceId: snapshot.referenceId,
+    referenceSnapshotFingerprint: hashText(stableFingerprint(snapshot.pages)),
     manifestFingerprint: summary.manifestFingerprint,
     rust: Object.freeze({
       buildFingerprint: stableFingerprint({

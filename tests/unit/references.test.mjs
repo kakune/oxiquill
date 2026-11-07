@@ -109,6 +109,7 @@ describe('reference declarations and routes', () => {
     ['index.mdx', {}, '/manual/'],
     ['nested/index.md', {}, '/manual/nested/'],
     ['My Page.mdx', {}, '/manual/my-page/'],
+    ['Section/My Page.mdx', {}, '/manual/section/my-page/'],
     ['ja/日本語.mdx', {}, '/manual/ja/日本語/'],
     ['nested/demo.mdx', { trailingSlash: 'never' }, '/manual/nested/demo'],
     ['nested/demo.mdx', { trailingSlash: 'always' }, '/manual/nested/demo/'],

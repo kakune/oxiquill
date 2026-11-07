@@ -2,6 +2,7 @@
 
 import path from 'node:path';
 import { describe, expect, it } from 'vitest';
+import { hashText, stableFingerprint } from '../../packages/oxiquill/src/generator/doc-runtime/hashing.mjs';
 import { artifactBuildFingerprint } from '../../packages/oxiquill/src/generator/doc-runtime/build-inputs.mjs';
 import { createOxiquillPaths } from '../../packages/oxiquill/src/config/paths.mjs';
 import {
@@ -64,6 +65,29 @@ describe('runtime generation plan', () => {
     });
     expect(selected.generated).toBe('write');
     expect(selected.languages.rust).toEqual({ source: 'keep', public: 'keep' });
+  });
+
+  it('refreshes diagnostic locations even when semantic reference identity is unchanged', () => {
+    const current = {
+      ...desired,
+      referenceId: 'same',
+      referenceSnapshotFingerprint: hashText(stableFingerprint([{ position: { line: 8, column: 3 } }]))
+    };
+    const selected = plan({
+      desired: current,
+      state: {
+        schemaVersion: 1,
+        manifestFingerprint: desired.manifestFingerprint,
+        snapshot: { referenceId: 'same', pages: [{ position: { line: 3, column: 3 } }] }
+      },
+      outputComplete: { ...emptyOutputs, generated: true }
+    });
+    expect(selected.generated).toBe('write');
+    expect(selected.languages).toEqual({
+      rust: { source: 'keep', public: 'keep' },
+      python: { public: 'keep' },
+      haskell: { source: 'keep', public: 'keep' }
+    });
   });
 
   it('keeps every language absent for a new zero-cell project', () => {

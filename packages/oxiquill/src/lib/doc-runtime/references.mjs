@@ -72,7 +72,7 @@ export function pageSlug(page) {
     page.entryPath
       .replace(/\.(?:md|mdx)$/u, '')
       .split('/')
-      .map(githubSlug)
+      .map((segment) => githubSlug(segment))
       .join('/')
       .replace(/\/index$/u, '')
   );
