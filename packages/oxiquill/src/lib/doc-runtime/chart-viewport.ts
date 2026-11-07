@@ -27,13 +27,10 @@ export function chartAxes(instance: unknown): ChartAxes | undefined {
 export function chartZoomRange(instance: unknown, axis: 'x' | 'y' = 'x', index = 0): Extent | undefined {
   const chart = instance as {
     getModel?: () => {
-      getComponent: (
-        name: string,
-        index: number
-      ) => { getValueRange?: (axis: string, index: number) => unknown } | undefined;
+      getComponent: (name: string, index: number) => { getValueRange?: () => unknown } | undefined;
     };
   };
-  const range = chart.getModel?.().getComponent('dataZoom', index)?.getValueRange?.(axis, 0);
+  const range = chart.getModel?.().getComponent('dataZoom', index)?.getValueRange?.();
   if (
     Array.isArray(range) &&
     range.length === 2 &&

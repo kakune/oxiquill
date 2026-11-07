@@ -59,8 +59,9 @@ export function attachChartInteractions(
     if (applying || !spec) return;
     changed();
     status(false);
+    if (!page) return;
     const range = chartZoomRange(instance);
-    if (range) page?.coordinator.viewport(identity, range);
+    if (range) page.coordinator.viewport(identity, range);
   }
 
   function pointed(params: unknown) {
