@@ -297,24 +297,28 @@ async function generateProjectRuntime({
     pythonOptions: projectConfig.python,
     rustOptions: projectConfig.rust
   });
-  const summary = await syncDocRuntime({
-    ...context,
-    ...runtimeOptions,
-    events,
-    format,
-    explain,
-    trackChild,
-    mode: wasmMode,
-    tolerateHaskellBuildFailure
-  });
-  if (events)
-    events.report({
-      type: 'diagnostic',
-      message: `${explain ? 'Planned' : 'Generated'} ${summary.cellCount} interactive cell(s).`
+  try {
+    const summary = await syncDocRuntime({
+      ...context,
+      ...runtimeOptions,
+      events,
+      format,
+      explain,
+      trackChild,
+      mode: wasmMode,
+      tolerateHaskellBuildFailure
     });
-  else log(`Generated ${summary.cellCount} interactive cell(s).`);
-  if (summary.haskellBuildResult) warnToleratedHaskellBuildFailure(summary.haskellBuildResult);
-  return summary;
+    if (events)
+      events.report({
+        type: 'diagnostic',
+        message: `${explain ? 'Planned' : 'Generated'} ${summary.cellCount} interactive cell(s).`
+      });
+    else log(`Generated ${summary.cellCount} interactive cell(s).`);
+    if (summary.haskellBuildResult) warnToleratedHaskellBuildFailure(summary.haskellBuildResult);
+    return summary;
+  } finally {
+    context.highlighter?.dispose?.();
+  }
 }
 
 function warnToleratedHaskellBuildFailure(result) {
