@@ -100,3 +100,11 @@ Run `pnpm exec oxiquill build --explain` to see which language/module will rebui
 A heartbeat means the named child process has produced no output for 30 seconds; it is not a completion-time estimate. Inspect the final phase summary for compiler versus optimizer time and cache reuse. With `rust.grouping: 'page'`, a Rust failure names the module digest and page path. Fix that page or helper and rerun; failed groups never replace the previous complete registry.
 
 For a wasm-bindgen version or checksum failure, use the expected version and exact cache path in the diagnostic. Install the matching official CLI on PATH, or remove the named corrupt tool-cache entry and retry the verified download. Release builds still run wasm-opt; if automatic setup fails, install Binaryen on PATH and retry. Do not disable verification or edit generated artifacts.
+
+## Rust compiler locations
+
+Rust compilation failures report the authored MDX path, line, column, and cell ID, followed by the compiler code/message and an underlined source excerpt. Definitions errors point to the definitions block. The generated Rust location remains available as secondary detail; helper and dependency errors retain their actual file locations. Generated wrappers are labeled as generated code.
+
+After a compiler failure, Oxiquill runs a matching locked `cargo check` to recover structured diagnostics. Successful builds do not run this extra pass, and download, dependency-resolution, wasm-bindgen, and optimizer failures do not trigger it. The original build error and exit status are retained. If diagnostics cannot be recovered, the terminal says `could not map this error to an authored cell`. Suggestions are translated only when all edit spans belong entirely to authored source.
+
+During development, affected blocks show an inline compile-error panel through manifest HMR. The last successful Wasm remains available until the next successful compile, which clears the panel. A new failing block shows diagnostics without execution controls until it compiles. Production builds report errors only in the terminal. Locations refresh after edits and page renames.

@@ -275,3 +275,60 @@ putStrLn ("total = " ++ show (sum displayed))
 ```
 
 Python cells show **Preparing Python…** during initialization and package loading, then **Running** while authored code executes. See [Python Runtime Assets](/guides/python-runtime/#browser-preparation) for optional page preparation with `python.preload`.
+
+## Page-local Rust definitions
+
+Use `kind: definitions` to author ordinary Rust items once and share them through ordered, page-local `uses` references. Definitions show their title and source, without execution controls. Items and fields used by another block need normal Rust visibility, usually `pub(crate)`.
+
+```rust
+//| id: shared-model
+//| kind: definitions
+//| title: Shared model
+//| crates: []
+pub(crate) struct Model {
+    pub(crate) a: i32,
+}
+
+pub(crate) fn value(model: &Model) -> i32 {
+    model.a
+}
+```
+
+```rust
+//| id: shared-helper
+//| kind: definitions
+//| title: Model helper
+//| uses: [shared-model]
+pub(crate) fn make_model() -> Model {
+    Model { a: 7 }
+}
+```
+
+```rust
+//| id: shared-first
+//| title: First consumer
+//| uses: [shared-model]
+let model = Model { a: 3 };
+println!("{}", value(&model));
+```
+
+```rust
+//| id: shared-second
+//| title: Second consumer
+//| uses: [shared-model]
+let model = Model { a: 5 };
+println!("{}", value(&model));
+```
+
+```rust
+//| id: shared-transitive
+//| title: Transitive consumer
+//| uses: [shared-model, shared-helper]
+println!("{}", value(&make_model()));
+```
+
+A definitions block accepts only `id`, `kind`, `title`, `crates`, `uses`, and `showSource`. Explicit `kind` accepts only `definitions`; omit it for runnable cells. References must be unique, page-local definitions IDs and must not form cycles. Both metadata fields are currently supported only for Rust; Python setup behavior is unchanged.
+
+Imports follow normal Rust glob rules: local items can shadow imported names, ambiguous names are compiler errors, and imports are not automatically re-exported. The third cell lists both blocks because it calls the helper and names the model function directly.
+
+Consumers inherit helper crates from all reachable definitions. Unused definitions are checked for valid metadata and references but are not compiled and add no Rust dependencies. Editing a used block rebuilds its consuming site or page compilation units; editing an unused block only updates its displayed source.

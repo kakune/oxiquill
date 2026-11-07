@@ -273,3 +273,60 @@ putStrLn ("total = " ++ show (sum displayed))
 ```
 
 Python の初期化と package 読み込み中は「Python を準備中…」、執筆した code の実行中は「実行中…」と表示します。`python.preload` による page 単位の先読みは [Python runtime asset](/ja/guides/python-runtime/#browser-の準備) を参照してください。
+
+## ページ内の Rust 定義
+
+`kind: definitions` で通常の Rust アイテムを一度だけ定義し、順序付きの `uses` で同じページ内から参照できます。定義ブロックはタイトルとソースのみを表示し、実行用の操作はありません。他のブロックから使うアイテムやフィールドには、通常 `pub(crate)` の可視性が必要です。
+
+```rust
+//| id: shared-model
+//| kind: definitions
+//| title: Shared model
+//| crates: []
+pub(crate) struct Model {
+    pub(crate) a: i32,
+}
+
+pub(crate) fn value(model: &Model) -> i32 {
+    model.a
+}
+```
+
+```rust
+//| id: shared-helper
+//| kind: definitions
+//| title: Model helper
+//| uses: [shared-model]
+pub(crate) fn make_model() -> Model {
+    Model { a: 7 }
+}
+```
+
+```rust
+//| id: shared-first
+//| title: First consumer
+//| uses: [shared-model]
+let model = Model { a: 3 };
+println!("{}", value(&model));
+```
+
+```rust
+//| id: shared-second
+//| title: Second consumer
+//| uses: [shared-model]
+let model = Model { a: 5 };
+println!("{}", value(&model));
+```
+
+```rust
+//| id: shared-transitive
+//| title: Transitive consumer
+//| uses: [shared-model, shared-helper]
+println!("{}", value(&make_model()));
+```
+
+定義ブロックで指定できるのは `id`、`kind`、`title`、`crates`、`uses`、`showSource` のみです。実行セルでは `kind` を省略します。`uses` の参照先は同じページの定義 ID に限り、重複や循環参照は許可されません。現在は Rust のみ対応し、Python の setup の動作は変わりません。
+
+インポートには通常の Rust の glob 規則が適用されます。ローカル定義による隠蔽は可能ですが、名前の曖昧さはコンパイルエラーになります。インポートは自動的に再公開されません。3 番目のセルはヘルパーとモデル関数を直接使うため、両方のブロックを列挙しています。
+
+参照先を再帰的にたどり、必要なヘルパークレートを実行セルへ統合します。未使用の定義はメタデータと参照のみ検証し、コンパイルや依存関係には追加しません。使用中の定義を編集すると、その定義を使うサイトまたはページのコンパイル単位を再ビルドします。未使用の定義の編集はソース表示のみを更新します。

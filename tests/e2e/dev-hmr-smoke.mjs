@@ -152,6 +152,32 @@ try {
   await expect(rustCell.getByTestId('cell-source')).toContainText('updated Rust autorun ready', { timeout: 60_000 });
   await expect(rustCell.getByTestId('run-output')).toContainText('updated Rust autorun ready', { timeout: 60_000 });
 
+  const definitionsBlock = page.getByTestId('cell-features__interactive-cells__shared-model');
+  const definitionsConsumer = page.getByTestId('cell-features__interactive-cells__shared-first');
+  await definitionsConsumer.scrollIntoViewIfNeeded();
+  await definitionsConsumer.getByRole('button', { name: 'Run', exact: true }).click();
+  await expect(definitionsConsumer.getByTestId('run-output')).toContainText('3');
+  const validDefinitions = readFileSync(mdxPath, 'utf8');
+  await definitionsBlock.scrollIntoViewIfNeeded();
+  writeFileSync(mdxPath, validDefinitions.replace('    model.a', '    model.missing()'));
+  await expect(definitionsBlock.getByTestId('cell-compile-errors')).toContainText(
+    'content/docs/features/interactive-cells.mdx:',
+    { timeout: 60_000 }
+  );
+  await expect(definitionsBlock.getByTestId('cell-compile-errors')).toContainText('E0599');
+  await expect(async () => {
+    await definitionsConsumer.scrollIntoViewIfNeeded();
+    await definitionsConsumer.getByRole('button', { name: 'Run', exact: true }).click();
+    await expect(definitionsConsumer.getByTestId('run-output')).toContainText('3');
+  }).toPass({ timeout: 60_000 });
+  writeFileSync(mdxPath, validDefinitions.replace('    model.a', '    model.a + 10'));
+  await expect(definitionsBlock.getByTestId('cell-compile-errors')).toHaveCount(0, { timeout: 60_000 });
+  await expect(definitionsBlock.getByTestId('cell-source')).toContainText('model.a + 10', { timeout: 60_000 });
+  await expect(async () => {
+    await definitionsConsumer.getByRole('button', { name: 'Run', exact: true }).click();
+    await expect(definitionsConsumer.getByTestId('run-output')).toContainText('13');
+  }).toPass({ timeout: 60_000 });
+
   const referencePage = await browser.newPage();
   await referencePage.goto(`http://127.0.0.1:${port}${basePath}/reference-referrer/`);
   await expect(referencePage.locator('main a[href$="#ox-ref-hmr-heading"]')).toHaveAttribute(
