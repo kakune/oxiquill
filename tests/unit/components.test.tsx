@@ -1,6 +1,11 @@
 import { act, cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/preact';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import type { CellExecutionResult, CellManifest, InputSpec } from '../../packages/oxiquill/src/lib/doc-runtime/types';
+import type {
+  CellExecutionResult,
+  CellManifest,
+  InputSpec,
+  InputValues
+} from '../../packages/oxiquill/src/lib/doc-runtime/types';
 import {
   validateOutputArtifacts,
   type ValidatedImageArtifact
@@ -184,6 +189,195 @@ afterEach(() => {
 });
 
 describe('InteractiveCell', () => {
+  const defaultCaseValues = Object.fromEntries(inputs.map((input) => [input.name, input.value]));
+  const caseValues: InputValues = {
+    ...defaultCaseValues,
+    enabled: false,
+    operation: 'triple',
+    style: 'verbose',
+    notes: 'case notes',
+    count: 8
+  };
+  const inputCases = [
+    { id: 'five-inputs', label: 'Five inputs', description: 'A complete authored configuration.', inputs: caseValues },
+    { id: 'original', label: 'Original', inputs: defaultCaseValues }
+  ];
+
+  it.each(['button', 'reactive'] as const)(
+    'applies five inputs atomically in %s cells and derives indication',
+    async (run) => {
+      mocks.runInteractiveCell.mockResolvedValue({ outputs: [{ kind: 'text', stream: 'stdout', content: 'done' }] });
+      const cell = makeCell({ run, cases: inputCases });
+      setManifestCells([cell]);
+      render(<InteractiveCell cellId={cell.id} />);
+      const selector = screen.getByRole('combobox', { name: 'Case' });
+      expect(selector).toHaveValue('original');
+      if (run === 'reactive') await waitFor(() => expect(mocks.runInteractiveCell).toHaveBeenCalledOnce());
+      mocks.runInteractiveCell.mockClear();
+      fireEvent.change(selector, { target: { value: 'five-inputs' } });
+      expect(selector).toHaveValue('five-inputs');
+      expect(selector).toHaveAccessibleDescription('A complete authored configuration.');
+      expect(screen.getByLabelText('enabled')).not.toBeChecked();
+      expect(screen.getByLabelText('operation')).toHaveValue('triple');
+      expect(screen.getByLabelText('verbose')).toBeChecked();
+      expect(screen.getByLabelText('notes')).toHaveValue('case notes');
+      expect(screen.getByLabelText('count')).toHaveValue('8');
+      if (run === 'reactive') await waitFor(() => expect(mocks.runInteractiveCell).toHaveBeenCalledOnce());
+      else {
+        await new Promise((resolve) => setTimeout(resolve, 200));
+        expect(mocks.runInteractiveCell).not.toHaveBeenCalled();
+        fireEvent.click(screen.getByRole('button', { name: 'Run', exact: true }));
+        await waitFor(() => expect(mocks.runInteractiveCell).toHaveBeenCalledOnce());
+      }
+      expect(mocks.runInteractiveCell.mock.calls.map((call) => call[1])).toEqual([caseValues]);
+      fireEvent.input(screen.getByLabelText('count'), { target: { value: '6' } });
+      expect(selector).toHaveValue('');
+      expect(screen.queryByText('A complete authored configuration.')).not.toBeInTheDocument();
+      fireEvent.input(screen.getByLabelText('count'), { target: { value: '8' } });
+      expect(selector).toHaveValue('five-inputs');
+      fireEvent.input(screen.getByLabelText('count'), { target: { value: '-' } });
+      expect(selector).toHaveValue('');
+      fireEvent.change(selector, { target: { value: 'five-inputs' } });
+      expect(screen.getByLabelText('count')).toHaveValue('8');
+      expect(selector).toHaveValue('five-inputs');
+      fireEvent.click(screen.getByRole('button', { name: 'Reset inputs' }));
+      expect(selector).toHaveValue('original');
+      expect(screen.getByLabelText('count')).toHaveValue('2');
+    }
+  );
+
+  it('supersedes active execution without displaying stale case results', async () => {
+    const active = createDeferredResult();
+    mocks.runInteractiveCell
+      .mockReturnValueOnce(active.promise)
+      .mockResolvedValue({ outputs: [{ kind: 'text', stream: 'stdout', content: 'selected result' }] });
+    const cell = makeCell({ run: 'reactive', cases: inputCases });
+    setManifestCells([cell]);
+    render(<InteractiveCell cellId={cell.id} />);
+    await waitFor(() => expect(mocks.runInteractiveCell).toHaveBeenCalledOnce());
+    fireEvent.change(screen.getByRole('combobox', { name: 'Case' }), { target: { value: 'five-inputs' } });
+    expect(mocks.runInteractiveCell.mock.calls[0][3].aborted).toBe(true);
+    await waitFor(() => expect(mocks.runInteractiveCell).toHaveBeenCalledTimes(2));
+    await waitFor(() => expect(screen.getByTestId('run-output')).toHaveTextContent('selected result'));
+    await act(async () => active.resolve({ outputs: [{ kind: 'text', stream: 'stdout', content: 'stale result' }] }));
+    expect(screen.getByTestId('run-output')).toHaveTextContent('selected result');
+    expect(mocks.runInteractiveCell.mock.calls[1][1]).toEqual(caseValues);
+  });
+
+  it('keeps cases in explicit-run mode while editing a Python draft', async () => {
+    mocks.runInteractiveCell.mockResolvedValue({ outputs: [] });
+    const cell = makeCell({ language: 'python', run: 'reactive', cases: inputCases });
+    setManifestCells([cell]);
+    render(<InteractiveCell cellId={cell.id} />);
+    await waitFor(() => expect(mocks.runInteractiveCell).toHaveBeenCalledOnce());
+    fireEvent.click(screen.getByRole('button', { name: 'Edit Python' }));
+    fireEvent.change(screen.getByRole('combobox', { name: 'Case' }), { target: { value: 'five-inputs' } });
+    await new Promise((resolve) => setTimeout(resolve, 200));
+    expect(mocks.runInteractiveCell).toHaveBeenCalledOnce();
+    fireEvent.click(screen.getByRole('button', { name: 'Run', exact: true }));
+    await waitFor(() => expect(mocks.runInteractiveCell).toHaveBeenCalledTimes(2));
+    expect(mocks.runInteractiveCell.mock.calls[1][1]).toEqual(caseValues);
+  });
+
+  it('restores case-only links before the first run and on history navigation', async () => {
+    const previousUrl = location.href;
+    const cell = makeCell({ run: 'reactive', cases: inputCases });
+    const href = (caseId: string) => {
+      const url = new URL(previousUrl);
+      url.searchParams.set(
+        'oxiquill-inputs',
+        JSON.stringify({ v: 2, cells: { [cell.id]: { values: {}, case: caseId } } })
+      );
+      return url;
+    };
+    try {
+      history.replaceState(null, '', href('five-inputs'));
+      mocks.runInteractiveCell.mockResolvedValue({ outputs: [] });
+      setManifestCells([cell]);
+      render(<InteractiveCell cellId={cell.id} />);
+      const selector = screen.getByRole('combobox', { name: 'Case' });
+      expect(selector).toHaveValue('five-inputs');
+      expect(screen.getByRole('button', { name: 'Copy input link' })).toBeVisible();
+      await waitFor(() => expect(mocks.runInteractiveCell).toHaveBeenCalledOnce());
+      expect(mocks.runInteractiveCell.mock.calls[0][1]).toEqual(caseValues);
+      history.replaceState(null, '', href('original'));
+      fireEvent(window, new PopStateEvent('popstate'));
+      expect(selector).toHaveValue('original');
+      await waitFor(() => expect(mocks.runInteractiveCell).toHaveBeenCalledTimes(2));
+      expect(mocks.runInteractiveCell.mock.calls[1][1]).toEqual(defaultCaseValues);
+    } finally {
+      history.replaceState(null, '', previousUrl);
+    }
+  });
+
+  it('retains valid values across HMR and reconciles changed input definitions before running', async () => {
+    mocks.runInteractiveCell.mockResolvedValue({ outputs: [] });
+    const cell = makeCell({ run: 'reactive', cases: inputCases });
+    setManifestCells([cell]);
+    render(<InteractiveCell cellId={cell.id} />);
+    await waitFor(() => expect(mocks.runInteractiveCell).toHaveBeenCalledOnce());
+    fireEvent.change(screen.getByRole('combobox', { name: 'Case' }), { target: { value: 'five-inputs' } });
+    await waitFor(() => expect(mocks.runInteractiveCell).toHaveBeenCalledTimes(2));
+    await act(async () => {
+      setManifestCells([{ ...cell, cases: [{ ...inputCases[0], id: 'renamed', label: 'Renamed' }] }], 'v2');
+      mocks.manifestListeners.forEach((listener) => listener());
+    });
+    expect(screen.getByRole('combobox', { name: 'Case' })).toHaveValue('renamed');
+    expect(screen.getByLabelText('notes')).toHaveValue('case notes');
+    await waitFor(() => expect(mocks.runInteractiveCell).toHaveBeenCalledTimes(3));
+    const nextInputs = [
+      ...inputs
+        .filter((input) => input.name !== 'label')
+        .map((input) => (input.name === 'count' ? { ...input, max: 4 } : input)),
+      { name: 'new', type: 'text' as const, label: 'New input', value: 'new default', options: [] }
+    ];
+    await act(async () => {
+      setManifestCells(
+        [
+          {
+            ...cell,
+            inputs: nextInputs,
+            cases: [{ id: 'next', label: 'Next', inputs: { ...caseValues, count: 2, new: 'new default' } }]
+          }
+        ],
+        'v3'
+      );
+      mocks.manifestListeners.forEach((listener) => listener());
+    });
+    expect(screen.getByRole('combobox', { name: 'Case' })).toHaveValue('next');
+    expect(screen.getByLabelText('count')).toHaveValue('2');
+    expect(screen.getByLabelText('notes')).toHaveValue('case notes');
+    expect(screen.getByLabelText('New input')).toHaveValue('new default');
+    expect(screen.queryByLabelText('label')).not.toBeInTheDocument();
+    await waitFor(() => expect(mocks.runInteractiveCell).toHaveBeenCalledTimes(4));
+    expect(mocks.runInteractiveCell.mock.calls[3][1]).toEqual(
+      Object.fromEntries(
+        nextInputs.map((input) => [
+          input.name,
+          input.name === 'count' || input.name === 'new' ? input.value : caseValues[input.name]
+        ])
+      )
+    );
+    await act(async () => {
+      setManifestCells([{ ...cell, cases: [] }], 'v4');
+      mocks.manifestListeners.forEach((listener) => listener());
+    });
+    expect(screen.queryByRole('combobox', { name: 'Case' })).not.toBeInTheDocument();
+  });
+
+  it('recomputes indication for manifest-only changes and uses the first matching case', async () => {
+    const cell = makeCell({ cases: [inputCases[1], { ...inputCases[1], id: 'same', label: 'Same values' }] });
+    setManifestCells([cell]);
+    render(<InteractiveCell cellId={cell.id} />);
+    expect(screen.getByRole('combobox', { name: 'Case' })).toHaveValue('original');
+    await act(async () => {
+      setManifestCells([{ ...cell, cases: [{ ...inputCases[0], inputs: defaultCaseValues }] }]);
+      mocks.manifestListeners.forEach((listener) => listener());
+    });
+    expect(screen.getByRole('combobox', { name: 'Case' })).toHaveValue('five-inputs');
+    expect(mocks.runInteractiveCell).not.toHaveBeenCalled();
+  });
+
   it('restores shared inputs before the first reactive execution and handles history changes', async () => {
     const previousUrl = location.href;
     const cell = makeCell({

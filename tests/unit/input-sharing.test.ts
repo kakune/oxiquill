@@ -51,7 +51,7 @@ describe('input sharing', () => {
   });
   it('ignores unsupported, malformed, duplicate, and excessive URLs', () => {
     for (const href of [
-      link({ count: 4 }, 2),
+      link({ count: 4 }, 3),
       'invalid',
       'https://example.com/?oxiquill-inputs={',
       link({ text: 'x'.repeat(8192) }),
@@ -77,7 +77,11 @@ describe('input sharing', () => {
     expect(url.pathname).toBe('/base/ja/page/');
     expect(url.hash).toBe('#heading');
     expect(url.searchParams.get('q')).toBe('keep');
-    expect(parseSharedInputs(url.href)).toEqual({ [cell.id]: { count: 4, text: '日本語' }, [other.id]: { count: 6 } });
+    expect(parseSharedInputs(url.href)).toEqual({
+      [cell.id]: { values: { count: 4, text: '日本語' } },
+      [other.id]: { values: { count: 6 } }
+    });
+    expect(JSON.parse(url.searchParams.get('oxiquill-inputs') ?? '{}').v).toBe(2);
     unregister();
     expect(parseSharedInputs(createInputShareUrl(cell.pagePath, 'https://example.com/'))).toEqual({});
   });
@@ -89,5 +93,76 @@ describe('input sharing', () => {
     expect(() => createInputShareUrl(cell.pagePath, 'https://example.com/')).toThrow('invalid inputs');
     registerSharedInputs(element, () => ({ valid: true, values: { text: 'x'.repeat(8192) } }));
     expect(() => createInputShareUrl(cell.pagePath, 'https://example.com/')).toThrow('8192');
+  });
+});
+
+describe('case sharing', () => {
+  const defaults = Object.fromEntries(cell.inputs.map((input) => [input.name, input.value]));
+  const selected = { ...defaults, count: 8, private: 'author data' };
+  const withCases = { ...cell, cases: [{ id: 'authored', label: 'Authored', inputs: selected }] };
+
+  it('applies complete authored values and ignores conflicting reader values', () => {
+    expect(
+      restoreSharedInputs(withCases, link({ case: 'authored', values: { count: 4, private: 'reader data' } }, 2))
+    ).toEqual(selected);
+    expect(
+      restoreSharedInputs(withCases, link({ case: 'unknown', values: { count: 4, private: 'reader data' } }, 2))
+    ).toEqual({ ...defaults, count: 4 });
+    expect(restoreSharedInputs(withCases, link({ case: {}, values: { count: 3 } }, 2))).toEqual(defaults);
+  });
+
+  it('includes case ids only for exact matches and never copies private reader data', () => {
+    const element = document.createElement('section');
+    element.dataset.shareInputs = sharedInputMetadata(withCases);
+    document.body.append(element);
+    registerSharedInputs(element, () => ({ valid: true, values: selected }));
+    const url = createInputShareUrl(cell.pagePath, 'https://example.com/');
+    expect(parseSharedInputs(url)).toEqual({ [cell.id]: { values: { count: 8 }, case: 'authored' } });
+    expect(restoreSharedInputs(withCases, url)).toEqual(selected);
+    registerSharedInputs(element, () => ({ valid: true, values: { ...selected, private: 'reader data' } }));
+    const customUrl = createInputShareUrl(cell.pagePath, 'https://example.com/');
+    expect(parseSharedInputs(customUrl)).toEqual({ [cell.id]: { values: { count: 8 } } });
+    expect(customUrl).not.toContain('reader');
+  });
+
+  it('preserves cases on unhydrated cells, including default matches and cases with no share-enabled inputs', () => {
+    const privateCell = { ...withCases, inputs: cell.inputs.map((input) => ({ ...input, share: false })) };
+    const element = document.createElement('section');
+    element.dataset.shareInputs = sharedInputMetadata(privateCell);
+    document.body.append(element);
+    const url = createInputShareUrl(cell.pagePath, link({ values: {}, case: 'authored' }, 2));
+    expect(parseSharedInputs(url)).toEqual({ [cell.id]: { values: {}, case: 'authored' } });
+    expect(restoreSharedInputs(privateCell, url)).toEqual(selected);
+    element.dataset.shareInputs = sharedInputMetadata({
+      ...privateCell,
+      cases: [{ id: 'original', label: 'Original', inputs: defaults }]
+    });
+    expect(parseSharedInputs(createInputShareUrl(cell.pagePath, 'https://example.com/'))).toEqual({
+      [cell.id]: { values: {}, case: 'original' }
+    });
+  });
+
+  it('retains unshared reader values on value-only history restoration and replaces them for known cases', () => {
+    const current = { ...defaults, private: 'keep me', count: 6 };
+    expect(restoreSharedInputs(withCases, link({ values: { count: 4 }, case: 'unknown' }, 2), current)).toEqual({
+      ...defaults,
+      private: 'keep me',
+      count: 4
+    });
+    expect(restoreSharedInputs(withCases, link({ values: {}, case: 'authored' }, 2), current)).toEqual(selected);
+    expect(restoreSharedInputs(withCases, 'https://example.com/', current)).toEqual({
+      ...defaults,
+      private: 'keep me'
+    });
+  });
+
+  it('ignores malformed cells and treats v1 inputs named case or values as ordinary values', () => {
+    for (const raw of [null, [], 42]) {
+      expect(restoreSharedInputs(withCases, link(raw, 2))).toEqual(defaults);
+    }
+    expect(restoreSharedInputs(withCases, link({ case: 'authored', values: { count: 8 } }))).toEqual(defaults);
+    expect(restoreSharedInputs(withCases, link({ values: null }, 2))).toEqual(defaults);
+    expect(restoreSharedInputs(withCases, undefined)).toEqual(defaults);
+    expect(sharedInputMetadata({ ...cell, inputs: [] })).toBeUndefined();
   });
 });

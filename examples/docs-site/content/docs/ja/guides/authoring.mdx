@@ -100,6 +100,7 @@ standard library module だけを使います。Haskell セルでは外部 packa
 - `title`: cell UI に表示される non-empty string の見出し。明示した値は前後の空白を除去し、省略時は `id` を使います。
 - `run`: `button`、`reactive`、`autorun`。default は `button`。
 - `inputs`: lowercase cross-language identifier から input definition への mapping。`autorun` では指定できません。
+- `cases`: 名前付き入力プリセットの配列。各ケースに `id`、`label`、部分上書きの `inputs`、任意の `description` を指定します。`autorun` では指定できません。
 - `crates`: Rust helper crate。Rust のみ。
 - `packages`: Pyodide package。Python のみ。
 - `timeoutMs`: `1` 以上 `2147483647` 以下の integer で指定する millisecond timeout。default は `30000`。
@@ -112,6 +113,8 @@ top-level ではこれらの field だけを指定できます。dependency arra
 integer metadata の portable domain は `-2147483648` 以上 `2147483647` 以下の signed 32-bit です。この制限は `value`、`min`、`max`、`step` に適用され、generated Rust/Haskell/Python binding に同じ正確な integer を渡します。
 
 numeric default は input の step grid にも揃える必要があります。effective step は明示した `step`、または `1` です。base は `min` があればその値、なければ明示または default の numeric `value` です。不一致の default は丸めたり clamp したりせず、authoring 時に拒否されます。
+
+ケースの `id` はセル内で一意の kebab-case にし、予約語 `default` は使えません。入力とケースの label は空でない256文字以内の文字列です。省略した入力は宣言した既定値で補完します。ケースは全入力を一度に適用し、reactive セルは一度だけ実行し、button セルは「実行」を待ちます。乱数計算の seed も通常の入力として公開し、ケースに含めてください。実行例は[名前付き入力ケース](../../features/interactive-cells/#名前付き入力ケース)を参照してください。
 
 ## 数式を追加する
 

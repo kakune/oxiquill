@@ -3,7 +3,11 @@ import { createInputShareUrl, registerSharedInputs, sharedInputMetadata } from '
 import { boundedErrorMessage } from '../../lib/doc-runtime/output-limits.mjs';
 import { getPythonPreparationState, subscribePythonPreparation } from '../../lib/doc-runtime/runtime-client.js';
 import { markRuntimeEvent } from '../../lib/doc-runtime/runtime-timing.js';
-import { shouldShowInputControls, shouldShowRunButton } from '../../lib/doc-runtime/interactive-cell-model.js';
+import {
+  matchingInputCase,
+  shouldShowInputControls,
+  shouldShowRunButton
+} from '../../lib/doc-runtime/interactive-cell-model.js';
 import type { RuntimeLabels } from '../../lib/doc-runtime/runtime-localization.js';
 import type { CellManifest } from '../../lib/doc-runtime/types.js';
 import { CellOutput } from './CellOutput.js';
@@ -33,7 +37,9 @@ export default function InteractiveCell({ cell: initialCell, cellId }: Interacti
     );
   }
 
-  return <InteractiveCellPanel key={`${cell.id}:${version}`} cell={cell} labels={labels} runtimeVersion={version} />;
+  return (
+    <InteractiveCellPanel key={`${cell.id}:${cell.language}`} cell={cell} labels={labels} runtimeVersion={version} />
+  );
 }
 
 function InteractiveCellPanel({
@@ -47,6 +53,7 @@ function InteractiveCellPanel({
 }) {
   const [isSourceVisible, setIsSourceVisible] = useState(cell.showSource);
   const runtime = useInteractiveCellRun(cell, runtimeVersion);
+  const selectedCase = runtime.inputsValid ? matchingInputCase(cell, runtime.values) : undefined;
   const section = useRef<HTMLElement>(null);
   const snapshot = useRef(runtime);
   snapshot.current = runtime;
@@ -109,7 +116,7 @@ function InteractiveCellPanel({
               {labels.resetInputs}
             </button>
           ) : null}
-          {cell.inputs.some((input) => input.share) ? (
+          {cell.inputs.some((input) => input.share) || cell.cases?.length ? (
             <button
               type="button"
               class="secondary-button"
@@ -161,11 +168,36 @@ function InteractiveCellPanel({
 
       {shareStatus ? <p role={shareStatus.error ? 'alert' : 'status'}>{shareStatus.message}</p> : null}
 
-      {shouldShowInputControls(cell.run) && cell.inputs.length > 0 ? (
+      {shouldShowInputControls(cell.run) && (cell.inputs.length > 0 || cell.cases?.length) ? (
         <fieldset class="doc-input-grid">
           <legend id={ids.inputsLabel} class="doc-visually-hidden">
             {labels.cellInputs}
           </legend>
+          {cell.cases?.length ? (
+            <div class="doc-input">
+              <label for={ids.caseSelector}>{labels.inputCase}</label>
+              <select
+                id={ids.caseSelector}
+                value={selectedCase?.id ?? ''}
+                aria-describedby={selectedCase?.description ? ids.caseDescription : undefined}
+                onChange={(event) => runtime.applyCase(event.currentTarget.value)}
+              >
+                <option value="" disabled>
+                  {labels.customValues}
+                </option>
+                {cell.cases.map((candidate) => (
+                  <option key={candidate.id} value={candidate.id}>
+                    {candidate.label}
+                  </option>
+                ))}
+              </select>
+              {selectedCase?.description ? (
+                <p id={ids.caseDescription} class="doc-input__description">
+                  {selectedCase.description}
+                </p>
+              ) : null}
+            </div>
+          ) : null}
           {cell.inputs.map((input) => (
             <InputControl
               key={`${input.name}:${runtime.inputRevision}`}
@@ -232,6 +264,8 @@ function interactiveCellIds(cellId: string) {
   return {
     actionsLabel: `${root}-actions-label`,
     inputsLabel: `${root}-inputs-label`,
+    caseSelector: `${root}-case`,
+    caseDescription: `${root}-case-description`,
     output: `${root}-output`,
     source: `${root}-source`,
     title: `${root}-title`

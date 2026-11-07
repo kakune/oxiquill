@@ -9,6 +9,7 @@ export function normalizeCell(cell) {
     source: cell.source,
     ...(cell.setup ? { setup: cell.setup } : {}),
     inputs: cell.inputs,
+    ...(cell.cases?.length ? { cases: cell.cases } : {}),
     packages: cell.packages,
     crates: cell.crates,
     timeoutMs: cell.timeoutMs,

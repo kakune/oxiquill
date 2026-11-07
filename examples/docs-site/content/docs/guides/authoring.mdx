@@ -100,6 +100,7 @@ Common metadata fields:
 - `title`: non-empty string heading shown in the cell UI; explicit values are trimmed and omission defaults to `id`.
 - `run`: `button`, `reactive`, or `autorun`; defaults to `button`.
 - `inputs`: mapping of lowercase cross-language identifiers to input definitions; forbidden for `autorun`.
+- `cases`: named input presets, each with `id`, `label`, partial `inputs`, and an optional `description`; forbidden for `autorun`.
 - `crates`: Rust helper crates; Rust only.
 - `packages`: Pyodide packages; Python only.
 - `timeoutMs`: integer timeout from `1` through `2147483647` milliseconds, inclusive; defaults to `30000`.
@@ -112,6 +113,8 @@ These are the only top-level fields. Dependency arrays must contain unique non-e
 Integer metadata uses one portable signed 32-bit domain: `-2147483648` through `2147483647`. This limit applies to `value`, `min`, `max`, and `step` so generated Rust, Haskell, and Python bindings receive the same exact integer.
 
 Numeric defaults must also align with the input's step grid. The effective step is the declared `step` or `1`; the base is `min` when present and otherwise the declared or default numeric `value`. Misaligned defaults fail authoring and are never rounded or clamped.
+
+Case IDs are unique within the cell and use kebab-case; `default` is reserved. Input and case labels must be nonblank and at most 256 characters. Case overrides are merged over declared defaults and applied together, triggering one reactive run or waiting for Run in button cells. Expose stochastic seeds as ordinary inputs and include them in cases. See [Named Input Cases](../../features/interactive-cells/#named-input-cases) for an executable example.
 
 ## Add Math
 

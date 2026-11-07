@@ -8,6 +8,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ### Added
 
+- Named input cases apply complete presets atomically, with localized selectors, case-aware sharing links, and input preservation during development HMR. Input and case labels are limited to 256 characters.
+
 - Page-local chart groups link x-axis zoom, pan, reset, and cursors by domain value across cells. All zoomable charts support keyboard zoom, pan, and reset with accessible instructions.
 - Mixed `xy` charts overlay ordered line, scatter, and band layers on shared axes, with stable layer IDs, accessible data, annotations, legends, and PNG/SVG export through all three language emitters.
 

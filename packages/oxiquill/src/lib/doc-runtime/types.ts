@@ -23,7 +23,15 @@ export interface InputSpec {
   options: readonly InputOption[];
 }
 
+export interface InputCase {
+  id: string;
+  label: string;
+  description?: string;
+  inputs: InputValues;
+}
+
 export interface CellManifest {
+  cases?: readonly InputCase[];
   setup?: readonly PythonSetupStep[];
   id: string;
   language: CellLanguage;

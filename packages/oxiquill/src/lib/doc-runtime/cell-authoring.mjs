@@ -1,4 +1,5 @@
 import YAML from 'yaml';
+import { validInputValue } from './input-value-validation.mjs';
 import { scopedCellId } from './authoring-ids.mjs';
 import { numericStepGrid } from './numeric-step.mjs';
 import { isPortableInteger, PORTABLE_INTEGER_MAX, PORTABLE_INTEGER_MIN } from './portable-integer.mjs';
@@ -21,6 +22,7 @@ const cellFields = new Set([
   'title',
   'run',
   'inputs',
+  'cases',
   'packages',
   'crates',
   'timeoutMs',
@@ -40,6 +42,8 @@ const inputFields = new Set([
   'options',
   'share'
 ]);
+const caseFields = new Set(['id', 'label', 'description', 'inputs']);
+const maximumInputLabelLength = 256;
 const optionFields = new Set(['label', 'value']);
 const localIdPattern = /^[a-z][a-z0-9]*(?:-[a-z0-9]+)*$/u;
 const inputNamePattern = /^[a-z][a-z0-9_]*$/u;
@@ -107,6 +111,7 @@ export function parseInteractiveCellNode(node, pagePath, pythonOptions = {}) {
   }
   const editable = language === 'python' && normalizeBoolean(metadata, 'editable', true, context, diagnostics);
   const inputs = normalizeInputs(metadata, context, diagnostics);
+  const cases = normalizeCases(metadata, inputs, context, diagnostics);
   const packages = normalizeStringArray(metadata, 'packages', context, diagnostics);
   const crates = normalizeStringArray(metadata, 'crates', context, diagnostics);
   const setup = metadata.setup;
@@ -122,6 +127,9 @@ export function parseInteractiveCellNode(node, pagePath, pythonOptions = {}) {
   }
 
   validateDependencyFields(metadata, language, packages, context, diagnostics, pythonOptions);
+  if (run === 'autorun' && hasOwn(metadata, 'cases')) {
+    diagnostics.push(diagnostic(context, 'cases', 'Autorun cells cannot specify cases.'));
+  }
   if (run === 'autorun' && hasOwn(metadata, 'inputs')) {
     diagnostics.push(diagnostic(context, 'inputs', 'Autorun cells cannot specify inputs.'));
   }
@@ -141,6 +149,7 @@ export function parseInteractiveCellNode(node, pagePath, pythonOptions = {}) {
       source,
       ...(setup !== undefined ? { setup } : {}),
       inputs,
+      ...(cases.length ? { cases } : {}),
       packages,
       crates,
       timeoutMs,
@@ -378,6 +387,56 @@ function normalizeInputs(metadata, context, diagnostics) {
   return Object.entries(metadata.inputs).map(([name, value]) => normalizeInput(name, value, context, diagnostics));
 }
 
+function normalizeCases(metadata, inputs, context, diagnostics) {
+  if (!hasOwn(metadata, 'cases')) return [];
+  if (!Array.isArray(metadata.cases)) {
+    diagnostics.push(diagnostic(context, 'cases', 'Expected a list of case mappings.'));
+    return [];
+  }
+  const seen = new Set();
+  return metadata.cases.flatMap((value, index) => {
+    const path = `cases[${index}]`;
+    if (!isRecord(value)) {
+      diagnostics.push(diagnostic(context, path, 'Expected a case mapping.'));
+      return [];
+    }
+    diagnostics.push(...unknownFieldDiagnostics(value, caseFields, context, `${path}.`));
+    if (typeof value.id !== 'string' || !localIdPattern.test(value.id) || value.id === 'default') {
+      diagnostics.push(diagnostic(context, `${path}.id`, 'Expected a lowercase kebab-case id other than "default".'));
+    } else if (seen.has(value.id)) {
+      diagnostics.push(diagnostic(context, `${path}.id`, `Duplicate case id ${JSON.stringify(value.id)}.`));
+    }
+    seen.add(value.id);
+    const label = normalizeInputLabel(value, '', path, context, diagnostics);
+    const description = normalizeInputDescription(value, path, context, diagnostics);
+    if (!isRecord(value.inputs)) {
+      diagnostics.push(diagnostic(context, `${path}.inputs`, 'Expected a mapping of input names to values.'));
+    }
+    const overrides = isRecord(value.inputs) ? value.inputs : {};
+    Object.keys(overrides).forEach((name) => {
+      if (!inputs.some((input) => input.name === name)) {
+        diagnostics.push(diagnostic(context, `${path}.inputs.${name}`, 'Unknown input.'));
+      }
+    });
+    const values = Object.fromEntries(
+      inputs.map((input) => {
+        const candidate = hasOwn(overrides, input.name) ? overrides[input.name] : input.value;
+        if (!validInputValue(input, candidate)) {
+          diagnostics.push(
+            diagnostic(
+              context,
+              `${path}.inputs.${input.name}`,
+              'Expected a value matching the input type, bounds, step grid, integer domain, and options.'
+            )
+          );
+        }
+        return [input.name, candidate];
+      })
+    );
+    return [{ id: value.id, label, ...(description ? { description } : {}), inputs: values }];
+  });
+}
+
 function normalizeInput(name, value, context, diagnostics) {
   const inputPath = `inputs.${name}`;
   if (!inputNamePattern.test(name)) {
@@ -436,8 +495,16 @@ function normalizeInputType(value, inputPath, context, diagnostics) {
 }
 
 function normalizeInputLabel(value, name, inputPath, context, diagnostics) {
-  if (!hasOwn(value, 'label')) return name;
-  if (typeof value.label === 'string' && value.label.trim() !== '') return value.label.trim();
+  const candidate = hasOwn(value, 'label') ? value.label : name;
+  if (typeof candidate === 'string' && candidate.trim() !== '') {
+    const label = candidate.trim();
+    if (label.length > maximumInputLabelLength) {
+      diagnostics.push(
+        diagnostic(context, `${inputPath}.label`, `Expected at most ${maximumInputLabelLength} characters.`)
+      );
+    }
+    return label;
+  }
   diagnostics.push(diagnostic(context, `${inputPath}.label`, 'Expected a non-empty string.'));
   return name;
 }
