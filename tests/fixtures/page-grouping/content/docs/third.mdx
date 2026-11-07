@@ -1,0 +1,20 @@
+---
+title: Third page
+---
+
+```rust
+//| id: compute
+//| title: Compute third
+//| crates: []
+//| inputs:
+//|   value: { type: integer, label: Value, value: 3, min: 1, max: 10 }
+let result: i32 = (1..=value).map(|n| n * n).sum();
+println!("{result}");
+```
+
+```rust
+//| id: text
+//| title: Text third
+//| crates: []
+println!("third ready");
+```
