@@ -393,6 +393,46 @@ displayChart (JsonObject
 
 以下の種類と設定は、[chart schema](#chart-schema) を拡張します。どの spec も Rust の `emit_chart!`、Python の `display_chart`、Haskell の `displayChart` にそのまま渡せます。例は短く書ける言語で示します。
 
+### 混合 XY レイヤー
+
+`kind: "xy"` と順序付きの `layers` 配列を使います。各レイヤーには空でない一意の `id` と `kind`（`line`・`scatter`・`band`）が必須です。`name` と各種類の系列 `style` は省略できます。line・scatter は `[x, y]`、band は `[x, center, lower, upper]` と既存の区間・欠損ルールを使います。配列順で描画するため、背景の帯を先に置いてください。
+
+全レイヤーが value/time の X 軸と value/log の Y 軸（既定は両方 value）、範囲、数値書式、注釈を共有します。チャートの style は `lineWidth` と `symbolSize` にも対応します。レイヤー別の軸と積み上げは使えません。100,000 件の上限は全レイヤーを合計し、空のレイヤーも 1 件と数えます。表にはレイヤー ID・種類・元の座標・区間端点を表示し、凡例と書き出しは更新後も ID を保持します。
+
+Offset を動かして、接続されない標本と破線の基準曲線、不確実性の帯を比較できます。
+
+```rust
+//| id: mixed-xy-layers
+//| crates: []
+//| inputs:
+//|   offset: { type: range, label: Offset, min: -0.5, max: 0.5, step: 0.1, value: 0.1 }
+let samples: Vec<[f64; 2]> = (0..=4).map(|i| {
+    let x = f64::from(i);
+    [x, x + offset]
+}).collect();
+emit_chart!(serde_json::json!({
+    "kind": "xy", "title": "Reference and samples", "xLabel": "X", "yLabel": "Y",
+    "xMin": 0, "xMax": 4, "yMin": -1, "yMax": 5,
+    "annotations": [{ "kind": "line", "axis": "y", "value": 2, "label": "Threshold" }],
+    "layers": [
+        { "id": "uncertainty", "kind": "band", "name": "Uncertainty", "style": { "color": "#6688bb" },
+          "points": [[0, 0, -0.5, 0.5], [2, 2, 1.5, 2.5], [4, 4, 3.5, 4.5]] },
+        { "id": "reference", "kind": "line", "name": "Reference", "style": { "lineType": "dashed", "color": { "light": "#225588", "dark": "#88bbff" } },
+          "points": [[0, 0], [4, 4]] },
+        { "id": "samples", "kind": "scatter", "name": "Samples", "style": { "symbol": "diamond", "color": "#cc6633" },
+          "points": samples }
+    ]
+}));
+```
+
+```haskell
+--| id: haskell-mixed-xy
+let point = JsonArray [JsonInteger 0, JsonInteger 1]
+    layer = JsonObject [("id", JsonString "samples"), ("kind", JsonString "scatter"),
+                        ("points", JsonArray [point])]
+displayChart (JsonObject [("kind", JsonString "xy"), ("layers", JsonArray [layer])])
+```
+
 ### 積み上げグラフ
 
 bar と area の系列には空でない `stack` グループを指定できます。正値と負値は value 軸のゼロから別々に積み上がり、棒の欠損は加算されません。同じグループの area は X 座標と順序を一致させ、数値・時刻は昇順にします。tooltip とデータ表は各系列の元の値を示します。百分率への正規化は行いません。

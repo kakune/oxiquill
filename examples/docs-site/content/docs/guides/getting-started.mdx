@@ -137,3 +137,5 @@ Rust/Cargo 1.85.0 or newer and `wasm-pack >=0.15.0 <0.16.0` are supported. Insta
 Oxiquill owns `.oxiquill/**`, `public/oxiquill/**`, Astro's type/cache output, and `dist/**`. Keep them ignored and regenerate them through CLI commands. Verified downloads live separately under `.cache/oxiquill/downloads/v1/**`; the starter ignores this directory, and `oxiquill clean` preserves it for later online or offline regeneration. Do not copy generated output between configurations unless the matching manifest, fingerprints, and runtime inputs are unchanged.
 
 Continue with the [Authoring Guide](/guides/authoring/), [CLI reference](/reference/cli/), and [Troubleshooting](/guides/troubleshooting/).
+
+For reference curves, samples, and uncertainty in one figure, use [mixed XY layers](../../features/rich-output/#mixed-xy-layers) through Rust `emit_chart!`, Python `display_chart`, or Haskell `displayChart`. No custom HTML is required.

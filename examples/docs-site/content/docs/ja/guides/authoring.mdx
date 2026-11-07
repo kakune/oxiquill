@@ -154,3 +154,5 @@ PNG、JPEG、PDF など処理せずに配信したい静的 file は `public/med
 ```
 
 画像には具体的な alt text を書きます。PDF は embedded frame だけでなく、直接開ける通常 link も置きます。
+
+基準曲線・標本・不確実性を一つの図に重ねるには、Rust の `emit_chart!`、Python の `display_chart`、Haskell の `displayChart` から [混合 XY レイヤー](../../features/rich-output/#混合-xy-レイヤー)を使います。独自の HTML は不要です。

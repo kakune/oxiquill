@@ -393,6 +393,46 @@ displayChart (JsonObject
 
 These kinds and options extend the [chart schema](#chart-schema). Every spec works unchanged through Rust `emit_chart!`, Python `display_chart`, and Haskell `displayChart`; the examples use whichever language keeps them short.
 
+### Mixed XY layers
+
+Use `kind: "xy"` with an ordered `layers` array. Each layer requires a unique, nonempty `id` and a `kind` of `line`, `scatter`, or `band`; `name` and the corresponding series `style` are optional. Line/scatter use `[x, y]`; bands use `[x, center, lower, upper]` and the existing interval/gap rules. Layers draw in array order, so place a background band first.
+
+All layers share value/time X and value/log Y axes (both default to value), bounds, formats, and annotations. Chart style also accepts `lineWidth` and `symbolSize`. Per-layer axes and stacking are unsupported. The 100,000-item chart limit counts all layers together, including one item per empty layer. Tables expose layer IDs, kinds, and original coordinates/endpoints; legends and exports retain layer identity through updates.
+
+Move Offset to compare unconnected samples with the dashed reference and its uncertainty band.
+
+```rust
+//| id: mixed-xy-layers
+//| crates: []
+//| inputs:
+//|   offset: { type: range, label: Offset, min: -0.5, max: 0.5, step: 0.1, value: 0.1 }
+let samples: Vec<[f64; 2]> = (0..=4).map(|i| {
+    let x = f64::from(i);
+    [x, x + offset]
+}).collect();
+emit_chart!(serde_json::json!({
+    "kind": "xy", "title": "Reference and samples", "xLabel": "X", "yLabel": "Y",
+    "xMin": 0, "xMax": 4, "yMin": -1, "yMax": 5,
+    "annotations": [{ "kind": "line", "axis": "y", "value": 2, "label": "Threshold" }],
+    "layers": [
+        { "id": "uncertainty", "kind": "band", "name": "Uncertainty", "style": { "color": "#6688bb" },
+          "points": [[0, 0, -0.5, 0.5], [2, 2, 1.5, 2.5], [4, 4, 3.5, 4.5]] },
+        { "id": "reference", "kind": "line", "name": "Reference", "style": { "lineType": "dashed", "color": { "light": "#225588", "dark": "#88bbff" } },
+          "points": [[0, 0], [4, 4]] },
+        { "id": "samples", "kind": "scatter", "name": "Samples", "style": { "symbol": "diamond", "color": "#cc6633" },
+          "points": samples }
+    ]
+}));
+```
+
+```haskell
+--| id: haskell-mixed-xy
+let point = JsonArray [JsonInteger 0, JsonInteger 1]
+    layer = JsonObject [("id", JsonString "samples"), ("kind", JsonString "scatter"),
+                        ("points", JsonArray [point])]
+displayChart (JsonObject [("kind", JsonString "xy"), ("layers", JsonArray [layer])])
+```
+
 ### Stacked charts
 
 Bar and area series accept a nonempty `stack` group. Positive and negative values accumulate separately from zero on a value axis. Missing bar values do not contribute. Area series in each group must have identical, ordered X coordinates; numeric/time coordinates must increase. Tooltips and data tables retain the individual values. Percent normalization is not performed.

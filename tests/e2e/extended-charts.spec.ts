@@ -20,6 +20,7 @@ async function view(page: Page) {
 }
 
 for (const fixture of [
+  'mixedXy',
   'stackedBars',
   'stackedAreas',
   'horizontalBars',
@@ -36,6 +37,7 @@ for (const fixture of [
     await page.goto(`http://127.0.0.1:4323/?fixture=${fixture}&width=360`);
     await expect(page.locator('canvas').first()).toBeVisible({ timeout: 30_000 });
     const details: Record<string, string> = {
+      mixedXy: 'Lower boundary: 0.5',
       stackedBars: 'First: 2',
       stackedAreas: 'Second: 3',
       horizontalBars: 'North America (estimate)',

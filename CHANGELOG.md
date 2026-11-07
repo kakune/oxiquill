@@ -8,6 +8,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ### Added
 
+- Mixed `xy` charts overlay ordered line, scatter, and band layers on shared axes, with stable layer IDs, accessible data, annotations, legends, and PNG/SVG export through all three language emitters.
+
 ### Changed
 
 - **Breaking dependency migration:** consumers now own Astro (`^7.3.8`) and Starlight (`~0.42.6`) as required peers. Install them alongside Oxiquill. Vite is loaded from Astro, and supported internal dependencies accept compatible updates. Pyodide and KaTeX remain exact pins; starter framework and pnpm pins are unchanged.
