@@ -41,6 +41,7 @@ export function createChartLinkCoordinator() {
   const members = new Map<object, ChartLinkMember>();
   const ranges = new Map<string, ChartRange>();
   const applying = new Set<object>();
+  const cursorSources = new Map<string, object>();
 
   function deliver(identity: object, apply: () => void) {
     applying.add(identity);
@@ -59,6 +60,13 @@ export function createChartLinkCoordinator() {
 
   function unregister(identity: object) {
     const member = members.get(identity);
+    if (member && cursorSources.get(member.link.group) === identity) {
+      cursorSources.delete(member.link.group);
+      for (const [key, peer] of members) {
+        if (key !== identity && peer.link.group === member.link.group && peer.link.cursor !== false)
+          deliver(key, () => peer.cursor(undefined));
+      }
+    }
     members.delete(identity);
     if (member && !Array.from(members.values()).some((peer) => peer.link.group === member.link.group))
       ranges.delete(member.link.group);
@@ -91,6 +99,10 @@ export function createChartLinkCoordinator() {
     cursor(identity: object, value?: number) {
       const source = members.get(identity);
       if (!source || source.link.cursor === false || applying.has(identity)) return;
+      const owner = cursorSources.get(source.link.group);
+      if (value === undefined && owner !== identity) return;
+      if (value === undefined) cursorSources.delete(source.link.group);
+      else cursorSources.set(source.link.group, identity);
       for (const [key, peer] of members) {
         if (key !== identity && peer.link.group === source.link.group && peer.link.cursor !== false)
           deliver(key, () => peer.cursor(value));
@@ -100,6 +112,7 @@ export function createChartLinkCoordinator() {
       members.clear();
       ranges.clear();
       applying.clear();
+      cursorSources.clear();
     },
     get size() {
       return members.size;

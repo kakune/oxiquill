@@ -141,6 +141,26 @@ describe('page coordinator', () => {
     coordinator.viewport(b, [3, 4]);
     coordinator.cursor(b, 2);
   });
+  it('clears remote cursors when their source unmounts without hiding another member’s cursor', () => {
+    const coordinator = createChartLinkCoordinator();
+    const a = {},
+      b = {},
+      c = {};
+    const first = member(),
+      second = member(),
+      third = member();
+    coordinator.register(a, first);
+    coordinator.register(b, second);
+    coordinator.register(c, third);
+    coordinator.cursor(a, 43);
+    coordinator.unregister(c);
+    expect(second.cursor).toHaveBeenCalledExactlyOnceWith(43);
+    coordinator.cursor(b, 52);
+    coordinator.cursor(a);
+    expect(first.cursor).toHaveBeenCalledExactlyOnceWith(52);
+    coordinator.unregister(b);
+    expect(first.cursor).toHaveBeenLastCalledWith(undefined);
+  });
   it('honors independent sending and receiving opt-outs and propagates cursor leave', () => {
     const coordinator = createChartLinkCoordinator();
     const a = {},
