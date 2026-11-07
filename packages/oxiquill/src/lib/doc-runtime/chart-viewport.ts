@@ -1,3 +1,4 @@
+import { chartLineItems } from './chart-layers.js';
 import type { ChartSpec } from './types.js';
 
 type Point = readonly [number, number];
@@ -23,9 +24,8 @@ export function chartAxes(instance: unknown): ChartAxes | undefined {
 }
 
 export function chartPointIndexes(spec: ChartSpec, axes: ChartAxes) {
-  if (spec.kind !== 'line' && spec.kind !== 'area') return [];
-  return spec.series.map((series) => {
-    const points: Point[] = series.points
+  return chartLineItems(spec).map((series) => {
+    const points: Point[] = (series?.points ?? [])
       .map(([x, y]): Point => [axes.x.parse(x), axes.y.parse(y)])
       .filter(([x, y]) => Number.isFinite(x) && Number.isFinite(y));
     return {

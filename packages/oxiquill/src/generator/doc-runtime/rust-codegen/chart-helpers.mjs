@@ -141,8 +141,8 @@ function generateChartLimitHelper() {
     }
     let kind = spec.get("kind").and_then(Value::as_str).unwrap_or_default();
     let data_items = match kind {
-        "line" | "scatter" | "area" | "errorbar" | "band" | "bubble" => spec
-            .get("series")
+        "xy" | "line" | "scatter" | "area" | "errorbar" | "band" | "bubble" => spec
+            .get(if kind == "xy" { "layers" } else { "series" })
             .and_then(Value::as_array)
             .map(|series| {
                 series
@@ -176,7 +176,7 @@ function generateChartLimitHelper() {
             return Err("Field boundaries exceed the chart data limit.".to_owned());
         }
     }
-    let category_items = ["categories", "xCategories", "yCategories", "series"]
+    let category_items = ["categories", "xCategories", "yCategories", "series", "layers"]
         .iter()
         .filter_map(|key| spec.get(*key).and_then(Value::as_array))
         .map(Vec::len)

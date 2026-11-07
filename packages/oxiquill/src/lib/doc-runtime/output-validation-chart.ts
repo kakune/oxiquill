@@ -1,6 +1,7 @@
 import { heatmapColorScale } from './chart-color-scale.js';
 import type {
   BaseChartSpec,
+  XyChartLayer,
   BubblePoint,
   BubbleSizeMapping,
   BoxplotValue,
@@ -74,6 +75,47 @@ function validateChartSpec(value: unknown): ChartSpec {
   validateChartRanges({ ...base, kind });
 
   switch (kind) {
+    case 'xy': {
+      if (base.xType !== undefined && base.xType !== 'value' && base.xType !== 'time')
+        throw new ArtifactValidationError('XY chart x axis requires value or time.');
+      if (base.yType !== undefined && base.yType !== 'value' && base.yType !== 'log')
+        throw new ArtifactValidationError('XY chart y axis requires value or log.');
+      const rawLayers = plainArray(requiredOwnValue(record, 'layers', 'XY chart'), 'XY chart layers');
+      if (rawLayers.length > outputArtifactLimits.chartDataItems) throw chartLimitError(rawLayers.length);
+      const ids = new Set<string>();
+      let count = 0;
+      const layers = rawLayers.map((raw, index): XyChartLayer => {
+        const item = plainRecord(raw, 'XY layer ' + (index + 1));
+        const context = 'XY layer ' + (index + 1) + (typeof item.id === 'string' ? ' (' + item.id + ')' : '');
+        try {
+          const id = requiredString(item, 'id', context);
+          if (!id.trim() || ids.has(id)) throw new ArtifactValidationError('id must be non-empty and unique.');
+          ids.add(id);
+          const layerKind = requiredString(item, 'kind', context);
+          if (layerKind !== 'line' && layerKind !== 'scatter' && layerKind !== 'band')
+            throw new ArtifactValidationError('kind must be line, scatter, or band.');
+          rejectUnknownStyleFields(item, ['id', 'kind', 'name', 'style', 'points'], context);
+          const points = plainArray(requiredOwnValue(item, 'points', context), context + ' points');
+          count += Math.max(1, points.length);
+          if (count > outputArtifactLimits.chartDataItems) throw chartLimitError(count);
+          const validated = validateChartSpec({
+            xType: base.xType ?? 'value',
+            yType: base.yType ?? 'value',
+            kind: layerKind,
+            series: [item]
+          });
+          if (validated.kind === 'line') return { ...validated.series[0], id, kind: 'line' };
+          if (validated.kind === 'scatter') return { ...validated.series[0], id, kind: 'scatter' };
+          if (validated.kind === 'band') return { ...validated.series[0], id, kind: 'band' };
+          throw new ArtifactValidationError('Unsupported layer.');
+        } catch (error) {
+          if (error instanceof ArtifactValidationError)
+            throw new ArtifactValidationError(context + ': ' + error.message);
+          throw error;
+        }
+      });
+      return { ...base, kind, xType: base.xType ?? 'value', yType: base.yType ?? 'value', layers };
+    }
     case 'line': {
       const xType = base.xType ?? 'value';
       const yType = base.yType ?? 'value';
@@ -418,7 +460,7 @@ function validateChartSpec(value: unknown): ChartSpec {
 function validateChartStyle(value: unknown, kind: string): LineChartStyle & ScatterChartStyle {
   const context = `${kind} chart style`;
   const record = plainRecord(value, context);
-  const line = ['line', 'area', 'errorbar', 'band'].includes(kind);
+  const line = ['line', 'area', 'errorbar', 'band', 'xy'].includes(kind);
   rejectUnknownStyleFields(
     record,
     [
@@ -432,7 +474,7 @@ function validateChartStyle(value: unknown, kind: string): LineChartStyle & Scat
       'animationDurationMs',
       'height',
       ...(line ? ['lineWidth'] : []),
-      ...(kind === 'scatter' ? ['symbolSize'] : [])
+      ...(['scatter', 'xy'].includes(kind) ? ['symbolSize'] : [])
     ],
     context
   );

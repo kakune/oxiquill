@@ -71,6 +71,7 @@ function Gallery() {
                   ...(query.has('longText')
                     ? { title: 'T'.repeat(16000), xLabel: 'X'.repeat(16000), yLabel: 'Y'.repeat(16000) }
                     : {}),
+                  ...(spec.kind === 'xy' && reordered ? { layers: spec.layers.toReversed() } : {}),
                   ...(spec.kind === 'line'
                     ? {
                         series: (reordered ? spec.series.toReversed() : spec.series).map((series) => ({
@@ -99,6 +100,23 @@ if (app) render(<Gallery />, app);
 function updatedChart(spec: ChartSpec, revision: number): ChartSpec {
   if (!revision) return spec;
   switch (spec.kind) {
+    case 'xy':
+      return {
+        ...spec,
+        layers: spec.layers.map((layer) =>
+          layer.kind === 'band'
+            ? {
+                ...layer,
+                points: layer.points.map(([x, center, lower, upper]) =>
+                  center === null
+                    ? ([x, null, null, null] as const)
+                    : ([x, center + revision, lower + revision, upper + revision] as const)
+                )
+              }
+            : { ...layer, points: layer.points.map(([x, y]) => [x, Number(y) + revision] as const) }
+        )
+      };
+
     case 'bar':
       return {
         ...spec,

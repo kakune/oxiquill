@@ -1,4 +1,5 @@
 // @vitest-environment node
+import { chartFixtures } from '../fixtures/chart-specs';
 import { JSDOM } from 'jsdom';
 import { afterEach, expect, it, vi } from 'vitest';
 import { exportChartImage } from '../../packages/oxiquill/src/lib/doc-runtime/chart-export';
@@ -12,6 +13,7 @@ vi.mock('../../packages/oxiquill/src/lib/doc-runtime/echarts-runtime', async () 
 afterEach(() => vi.unstubAllGlobals());
 
 it.each([
+  chartFixtures.mixedXy,
   { kind: 'line', series: [] },
   {
     kind: 'line',

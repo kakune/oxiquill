@@ -1,3 +1,4 @@
+import { chartItems, chartLayerSpec } from './chart-layers.js';
 import { fieldSeries } from './chart-field.js';
 import { bubbleSizeMapping } from './chart-bubble.js';
 import { heatmapColorScale } from './chart-color-scale.js';
@@ -53,22 +54,26 @@ export function defaultChartChrome(theme: ChartTheme): ChartChrome {
 }
 
 export function showLegend(spec: ChartSpec): boolean {
-  return spec.legend ?? ('series' in spec && spec.series.length > 1);
+  return spec.legend ?? chartItems(spec).length > 1;
 }
 
 export function chartSeriesPresentation(spec: ChartSpec, index: number, theme: ChartTheme) {
   const palette = spec.style?.palette?.[theme] ?? chartPalette;
   const cycle = Math.floor(index / palette.length);
-  const authored = 'series' in spec ? spec.series[index].style : undefined;
-  const line = spec.kind === 'line' || spec.kind === 'area' ? spec.series[index].style : undefined;
+  const source = spec.kind === 'xy' ? chartLayerSpec(spec, index) : spec;
+  const item = chartItems(source)[spec.kind === 'xy' ? 0 : index];
+  const authored = item?.style;
+  const line =
+    source.kind === 'line' || source.kind === 'area' ? source.series[spec.kind === 'xy' ? 0 : index].style : undefined;
   return {
     color:
       (typeof authored?.color === 'string' ? authored.color : authored?.color?.[theme]) ??
       palette[index % palette.length],
     lineType: line?.lineType ?? (['solid', 'dashed', 'dotted'] as const)[cycle % 3],
     symbol:
-      spec.kind === 'scatter' || spec.kind === 'bubble'
-        ? (spec.series[index].style?.symbol ?? (['circle', 'rect', 'triangle', 'diamond'] as const)[cycle % 4])
+      source.kind === 'scatter' || source.kind === 'bubble'
+        ? (source.series[spec.kind === 'xy' ? 0 : index].style?.symbol ??
+          (['circle', 'rect', 'triangle', 'diamond'] as const)[cycle % 4])
         : (line?.symbol ?? 'emptyCircle')
   };
 }
@@ -76,6 +81,9 @@ export function chartSeriesPresentation(spec: ChartSpec, index: number, theme: C
 export function chartStructuralSignature(spec: ChartSpec): string {
   return JSON.stringify([
     spec.kind,
+    ...(spec.kind === 'xy'
+      ? [spec.layers.map(({ id, kind }) => [id, kind]).toSorted((a, b) => a[0].localeCompare(b[0]))]
+      : []),
     chartAxisType(spec, 'x'),
     chartAxisType(spec, 'y'),
     spec.tooltip !== false,
@@ -85,11 +93,11 @@ export function chartStructuralSignature(spec: ChartSpec): string {
 }
 
 function seriesNames(spec: ChartSpec, locale: RuntimeLocale): string[] {
-  return 'series' in spec
-    ? spec.series.map((series, index) =>
+  return spec.kind === 'xy' || 'series' in spec
+    ? chartItems(spec).map((series, index) =>
         series.name?.trim()
           ? series.name
-          : spec.series.length > 1 || showLegend(spec)
+          : chartItems(spec).length > 1 || showLegend(spec)
             ? labelsForLanguage(locale).chartSeriesName(index + 1)
             : ''
       )
@@ -97,7 +105,7 @@ function seriesNames(spec: ChartSpec, locale: RuntimeLocale): string[] {
 }
 
 export function chartSeriesId(spec: ChartSpec, index: number): string {
-  const id = 'series' in spec ? spec.series[index].id : undefined;
+  const id = chartItems(spec)[index]?.id;
   return id === undefined ? spec.kind + ':' + index : spec.kind + ':id:' + id;
 }
 
@@ -217,7 +225,8 @@ export function chartSpecToEChartsOptions(
         ? undefined
         : {
             trigger:
-              ['scatter', 'bubble', 'histogram', 'errorbar', 'band', 'boxplot', 'field'].includes(spec.kind) || heatmap
+              ['xy', 'scatter', 'bubble', 'histogram', 'errorbar', 'band', 'boxplot', 'field'].includes(spec.kind) ||
+              heatmap
                 ? 'item'
                 : 'axis',
             confine: true,
@@ -255,7 +264,9 @@ export function chartSpecToEChartsOptions(
             {
               type: 'inside',
               ...(horizontalBar ? { yAxisIndex: 0 } : { xAxisIndex: 0 }),
-              filterMode: ['histogram', 'errorbar', 'band', 'field'].includes(spec.kind) ? 'weakFilter' : 'filter',
+              filterMode: ['xy', 'histogram', 'errorbar', 'band', 'field'].includes(spec.kind)
+                ? 'weakFilter'
+                : 'filter',
               start: 0,
               end: 100,
               startValue: null,
@@ -264,12 +275,14 @@ export function chartSpecToEChartsOptions(
           ],
     series: chartSeries(spec).map((item, index) => {
       const { color, lineType, symbol } = chartSeriesPresentation(spec, index, theme);
+      const kind = spec.kind === 'xy' ? spec.layers[index].kind : spec.kind;
       return {
         ...item,
+        ...(spec.kind === 'xy' ? { z: index + 2 } : {}),
         id: chartSeriesId(spec, index),
         name: chartSeriesId(spec, index),
         itemStyle: { ...(item.itemStyle as Record<string, unknown>), color },
-        ...(spec.kind === 'line' || spec.kind === 'area'
+        ...(kind === 'line' || kind === 'area'
           ? {
               lineStyle: {
                 ...(item.lineStyle as Record<string, unknown>),
@@ -278,7 +291,7 @@ export function chartSpecToEChartsOptions(
               }
             }
           : {}),
-        ...(spec.kind === 'scatter' || spec.kind === 'bubble'
+        ...(kind === 'scatter' || kind === 'bubble'
           ? {
               symbol,
               itemStyle: { color, borderColor: chrome.tooltipBackground, borderWidth: 1 }
@@ -415,6 +428,8 @@ function sampleLine(spec: ChartSpec, series: XyChartSeries): boolean {
 
 function chartSeries(spec: ChartSpec): readonly Record<string, unknown>[] {
   switch (spec.kind) {
+    case 'xy':
+      return spec.layers.flatMap((_, index) => chartSeries(chartLayerSpec(spec, index)));
     case 'line':
     case 'area':
       return spec.series.map((series) => ({
@@ -529,6 +544,11 @@ function chartTooltipFormatter(spec: ChartSpec, locale: RuntimeLocale, names: re
         seriesId?: string;
         marker?: unknown;
       };
+      const layer =
+        spec.kind === 'xy'
+          ? (spec.layers.find((_, index) => chartSeriesId(spec, index) === item.seriesId) ??
+            spec.layers[item.seriesIndex ?? 0])
+          : undefined;
       const tuple = Array.isArray(item.value) ? item.value : undefined;
       const name = item.seriesId === undefined ? names[item.seriesIndex ?? 0] : nameById.get(item.seriesId);
       const coordinate = tuple ? x(tuple[0]) : (item.name ?? '');
@@ -575,7 +595,7 @@ function chartTooltipFormatter(spec: ChartSpec, locale: RuntimeLocale, names: re
               .map((part) => escapeChartText(String(part)))
               .join(': ')
         );
-      } else if ((spec.kind === 'errorbar' || spec.kind === 'band') && tuple) {
+      } else if ((spec.kind === 'errorbar' || spec.kind === 'band' || layer?.kind === 'band') && tuple) {
         rows.push(
           marker +
             [
@@ -633,20 +653,22 @@ export function chartDataSummary(spec: ChartSpec, labels: RuntimeLabels): string
       : format(bounds.minimum) + '–' + format(bounds.maximum);
   };
   const dataCount =
-    spec.kind === 'field'
-      ? spec.values.reduce((sum, row) => sum + row.length, 0)
-      : spec.kind === 'errorbar' || spec.kind === 'band'
-        ? spec.series.reduce((sum, series) => sum + series.points.length, 0)
-        : spec.kind === 'heatmap'
-          ? spec.data.length
-          : spec.kind === 'bar' || spec.kind === 'boxplot'
-            ? spec.series.reduce((count, series) => count + series.values.length, 0)
-            : values.y.length;
+    spec.kind === 'xy'
+      ? spec.layers.reduce((sum, layer) => sum + layer.points.length, 0)
+      : spec.kind === 'field'
+        ? spec.values.reduce((sum, row) => sum + row.length, 0)
+        : spec.kind === 'errorbar' || spec.kind === 'band'
+          ? spec.series.reduce((sum, series) => sum + series.points.length, 0)
+          : spec.kind === 'heatmap'
+            ? spec.data.length
+            : spec.kind === 'bar' || spec.kind === 'boxplot'
+              ? spec.series.reduce((count, series) => count + series.values.length, 0)
+              : values.y.length;
   const summary = labels.chartSummary({
     xLabel: spec.xLabel,
     yLabel: spec.kind === 'histogram' ? histogramLabel(spec, labels) : spec.yLabel,
     dataCount,
-    seriesCount: 'series' in spec ? spec.series.length : 1,
+    seriesCount: spec.kind === 'xy' || 'series' in spec ? chartItems(spec).length : 1,
     seriesNames: seriesNames(spec, labels.locale).filter(Boolean).join(', ').slice(0, 1000),
     xRange: range(values.x, chartAxisType(spec, 'x'), spec.style?.xFormat),
     yRange: range(values.y, chartAxisType(spec, 'y'), spec.style?.yFormat),

@@ -169,6 +169,7 @@ assert table["truncated"]
 it('bounds new chart payloads before leaving Python', () => {
   python.runPython(`
 for spec in (
+    {"kind": "xy", "layers": [{"id": "a", "kind": "line", "points": [[0, 1]] * 50001}, {"id": "b", "kind": "scatter", "points": [[0, 1]] * 50001}]},
     {"kind": "boxplot", "series": [{"values": [[0, 1, 2, 3, 4]] * 100001}]},
     {"kind": "bubble", "series": [{"points": [[0, 1, 2]] * 100001}]},
     {"kind": "field", "xEdges": [0, 1], "yEdges": [0, 1], "values": [[0] * 100001]},
@@ -176,7 +177,19 @@ for spec in (
     {"kind": "line", "series": [], "annotations": [{}] * 101}
 ):
     display_chart(spec)
-assert len(__oxiquill_outputs) == 5, repr(__oxiquill_outputs)
+assert len(__oxiquill_outputs) == 6, repr(__oxiquill_outputs)
 assert all(output["kind"] == "__oxiquill_error" and any(word in output["message"].lower() for word in ("limit", "maximum")) for output in __oxiquill_outputs), repr(__oxiquill_outputs)
+`);
+});
+
+it('emits mixed charts through the generic Python API', () => {
+  python.runPython(`
+spec = {"kind": "xy", "layers": [
+    {"id": "line", "kind": "line", "points": [[0, 1], [1, 2]]},
+    {"id": "samples", "kind": "scatter", "points": [[0, 1.1]]},
+    {"id": "band", "kind": "band", "points": [[0, 1, 0.5, 1.5]]}
+]}
+display_chart(spec)
+assert __oxiquill_take_outputs()[0].to_py()["spec"] == spec
 `);
 });

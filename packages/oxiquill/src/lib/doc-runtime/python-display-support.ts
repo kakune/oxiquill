@@ -592,7 +592,7 @@ def __oxiquill_check_chart_size(spec):
     annotations = spec.get("annotations")
     if isinstance(annotations, (list, tuple)) and len(annotations) > ${outputArtifactLimits.chartAnnotations}:
         raise ValueError("Chart annotations exceed the 100 item limit.")
-    for key in ("categories", "xCategories", "yCategories", "series", "bins", "data"):
+    for key in ("categories", "xCategories", "yCategories", "series", "layers", "bins", "data"):
         items = spec.get(key)
         if isinstance(items, (list, tuple)) and len(items) > __oxiquill_chart_limit:
             raise ValueError(f"Chart contains {len(items)} data items; maximum is {__oxiquill_chart_limit}.")
@@ -608,7 +608,7 @@ def __oxiquill_check_chart_size(spec):
                 count += max(1, len(row)) if isinstance(row, (list, tuple)) else 1
                 if count > __oxiquill_chart_limit:
                     raise ValueError(f"Chart contains {count} data items; maximum is {__oxiquill_chart_limit}.")
-    series = spec.get("series")
+    series = spec.get("layers" if spec.get("kind") == "xy" else "series")
     if not isinstance(series, (list, tuple)):
         return
     count = 0

@@ -181,7 +181,11 @@ try {
 
   for (const [id, source, kind] of [
     ['area-only', 'emit_area_chart!(&[[0, 1]]);', 'chart'],
-    ['generic-only', 'emit_chart!(serde_json::json!({ "kind": "line", "series": [] }));', 'chart'],
+    [
+      'generic-only',
+      'emit_chart!(serde_json::json!({ "kind": "xy", "layers": [{ "id": "reference", "kind": "line", "points": [[0, 1]] }, { "id": "samples", "kind": "scatter", "points": [[0, 1.1]] }, { "id": "band", "kind": "band", "points": [[0, 1, 0.5, 1.5]] }] }));',
+      'chart'
+    ],
     ['alias-only', 'emit_svg!(r#"<svg xmlns="http://www.w3.org/2000/svg"/>"#);', 'image']
   ]) {
     await writeFile(

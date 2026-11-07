@@ -53,6 +53,7 @@ export type ArtifactStream = 'stdout' | 'stderr' | 'display';
 export type TableColumnType = 'string' | 'number' | 'integer' | 'boolean' | 'date' | 'datetime' | 'null' | 'unknown';
 export type ChartAxisType = 'value' | 'category' | 'time' | 'log';
 export type ChartSpec =
+  | XyChartSpec
   | LineChartSpec
   | ScatterChartSpec
   | BarChartSpec
@@ -202,6 +203,19 @@ export interface XyChartSeries {
   style?: LineSeriesStyle;
   name?: string;
   points: readonly (readonly [number | string, number | string])[];
+}
+
+export type XyChartLayer =
+  | (Omit<XyChartSeries, 'id'> & { id: string; kind: 'line' })
+  | (Omit<ScatterChartSeries, 'id'> & { id: string; kind: 'scatter' })
+  | (Omit<IntervalChartSeries, 'id'> & { id: string; kind: 'band' });
+
+export interface XyChartSpec extends BaseChartSpec {
+  kind: 'xy';
+  xType?: 'value' | 'time';
+  yType?: 'value' | 'log';
+  style?: LineChartStyle & ScatterChartStyle;
+  layers: readonly XyChartLayer[];
 }
 
 export interface LineChartSpec extends BaseChartSpec {

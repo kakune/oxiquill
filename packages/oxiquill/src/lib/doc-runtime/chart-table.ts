@@ -14,7 +14,29 @@ export function chartToTable(spec: ChartSpec, labels: RuntimeLabels): TableArtif
     label,
     type
   });
-  if (spec.kind === 'field') {
+  if (spec.kind === 'xy') {
+    columns = [
+      column('id', 'ID', 'string'),
+      column('kind', labels.chartKind, 'string'),
+      column('series', labels.chartSeries, 'string'),
+      column('x', spec.xLabel ?? 'X', spec.xType === 'time' ? 'datetime' : 'number'),
+      column('y', spec.yLabel ?? 'Y'),
+      column('lower', labels.chartBinLower),
+      column('upper', labels.chartBinUpper)
+    ];
+    spec.layers.forEach((layer, index) => {
+      rowCount += layer.points.length;
+      for (const point of layer.points.slice(0, limit - rows.length))
+        rows.push([
+          layer.id,
+          layer.kind,
+          layer.name ?? labels.chartSeriesName(index + 1),
+          spec.xType === 'time' ? timeCoordinate(point[0]) : point[0],
+          point[1],
+          ...(point.length === 4 ? [point[2], point[3]] : [null, null])
+        ]);
+    });
+  } else if (spec.kind === 'field') {
     columns = [
       column('xLower', 'X: ' + labels.chartBinLower),
       column('xUpper', 'X: ' + labels.chartBinUpper),
