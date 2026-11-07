@@ -90,3 +90,13 @@ Release Rust の再 build で optimizer-result cache が有効になるのは、
 `oxiquill build --force` が消去するのは Astro の content cache だけで、package や runtime の再ビルドを強制しません。generated ownership data は最後の cell が消えた language の stale output を除去します。manifest、ownership marker、Wasm、Pyodide file、license、`dist` を手動修正しないでください。
 
 解決しない場合は [GitHub issue](https://github.com/kakune/oxiquill/issues) に Oxiquill/Node/tool version、OS、command、完全で簡潔な diagnostic、minimal reproducer を添えてください。security-sensitive detail は private vulnerability reporting を使います。
+
+## 遅いビルド・繰り返す再ビルドの確認
+
+`pnpm exec oxiquill build --explain` で、lock を待たず出力を変更せずに、再ビルドする言語・モジュールと理由を確認できます。`--format json` の NDJSON スキーマは [CLI リファレンス](/ja/reference/cli/#ビルドの報告と-explain) を参照してください。
+
+`source-changed` はページとセル、`helper-inputs-changed` は推移的な helper 入力の変更を示します。`mode-upgrade` は開発成果物からリリースへの更新です。`output-missing` と `integrity-mismatch` は不足・破損出力を再生成します。`previous-build-failed` は以前の完全な registry を維持して失敗した処理を再試行します。`build-options-changed` は値を表示せず変数名だけを示します。`generator-changed`、`package-changed`、`toolchain-changed` は実装・パッケージ・ツール変更、`forced` は明示的再ビルドです。`cache-hit` は検証済み再利用、`absent` は対象言語の出力が不要であることを示します。
+
+Heartbeat は対象プロセスに 30 秒間出力がないという意味で、完了予測ではありません。最後のフェーズ集計でコンパイル、最適化、キャッシュ再利用を確認してください。`rust.grouping: 'page'` の失敗にはモジュール digest とページパスが含まれます。対象のページや helper を修正して再実行してください。失敗したグループが以前の完全な registry を置き換えることはありません。
+
+wasm-bindgen のバージョン・checksum エラーでは、診断の期待バージョンとキャッシュパスを確認します。一致する公式 CLI を PATH にインストールするか、示された破損キャッシュだけを削除して再取得してください。リリースでは wasm-opt を引き続き実行します。自動セットアップが失敗する場合は Binaryen を PATH にインストールしてください。検証の無効化や生成物の直接編集は不要です。

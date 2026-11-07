@@ -90,3 +90,13 @@ Compiler caches in `cacheDir/build-cache` normally survive cell edits and failed
 `oxiquill build --force` clears only Astro's content cache and does not force package or runtime rebuilding. Generated ownership data removes stale language output when the final cell of that language disappears. Never repair generated manifests, ownership markers, Wasm, Pyodide files, licenses, or `dist` by hand.
 
 If the problem persists, open a [GitHub issue](https://github.com/kakune/oxiquill/issues) with the Oxiquill/Node/tool versions, operating system, command, complete concise diagnostic, and a minimal reproducer. Use private vulnerability reporting for security-sensitive details.
+
+## Understanding a Slow or Repeated Build
+
+Run `pnpm exec oxiquill build --explain` to see which language/module will rebuild and why, without waiting for the project lock or modifying output. Add `--format json` to consume the documented NDJSON schema in the [CLI reference](/reference/cli/#build-reporting-and-explain).
+
+`source-changed` names affected pages and cells; `helper-inputs-changed` includes transitive helper inputs. `mode-upgrade` means release output is required after a dev build. `output-missing` and `integrity-mismatch` regenerate incomplete or corrupt outputs. `previous-build-failed` retries failed work while retaining the last complete registry. `build-options-changed` names changed variables without printing their values. `generator-changed`, `package-changed`, and `toolchain-changed` explain installation/tool changes; `forced` identifies an explicit runtime rebuild. `cache-hit` confirms verified reuse, and `absent` requires no language output.
+
+A heartbeat means the named child process has produced no output for 30 seconds; it is not a completion-time estimate. Inspect the final phase summary for compiler versus optimizer time and cache reuse. With `rust.grouping: 'page'`, a Rust failure names the module digest and page path. Fix that page or helper and rerun; failed groups never replace the previous complete registry.
+
+For a wasm-bindgen version or checksum failure, use the expected version and exact cache path in the diagnostic. Install the matching official CLI on PATH, or remove the named corrupt tool-cache entry and retry the verified download. Release builds still run wasm-opt; if automatic setup fails, install Binaryen on PATH and retry. Do not disable verification or edit generated artifacts.

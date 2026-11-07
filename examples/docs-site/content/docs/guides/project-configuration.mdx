@@ -45,9 +45,10 @@ export const collections = createOxiquillCollections({ defineCollection, docsLoa
 | `vite`                            | Additional Vite settings. Oxiquill preserves required aliases, deduplication, worker plugins, and filesystem access. |
 | `paths`                           | Oxiquill-owned source, cache, generated, and public paths described below.                                           |
 | `python`                          | Pyodide download behavior: `preload`, `offline`, and the optional `packageMirror`.                                   |
+| `rust`                            | Rust compilation grouping: `site` (default) or `page`.                                                               |
 | Other Astro fields                | Passed through to Astro. Oxiquill always produces static output.                                                     |
 
-Use `oxiquillIntegration()` only when composing an Astro configuration manually. It accepts `base`, `markdown`, `paths`, `python`, and `vite`; the caller is then responsible for adding Preact and Starlight.
+Use `oxiquillIntegration()` only when composing an Astro configuration manually. It accepts `base`, `markdown`, `paths`, `python`, `rust`, and `vite`; the caller is then responsible for adding Preact and Starlight.
 
 Oxiquill owns `markdown.processor` because interactive cells, Mermaid, KaTeX, and public-asset base paths require its unified pipeline. A custom processor is not supported and throws a `TypeError`; configure supported Markdown fields and append `remarkPlugins` or `rehypePlugins` instead.
 
@@ -184,3 +185,21 @@ When you customize generated directories, update `tsconfig.json` exclusions to t
 `python.additionalPackages` accepts package names mapped to `{ version, license, licenseFiles }` records. It extends the built-in allowlist using the installed Pyodide lock. Only packages required by cells are distributed. See [Additional Packages](/guides/python-runtime/#additional-packages) for dependency notices, integrity checks, and an example.
 
 `python.experimentalSetup` defaults to `false`. Enable it to allow page-local Python setup references that execute afresh before each cell. See [Experimental Setup](/guides/python-runtime/#experimental-setup).
+
+## Rust Compilation Groups
+
+Set `rust: { grouping: 'page' }` in `defineOxiquillConfig()` or `oxiquillIntegration()` to compile each page's Rust cells into a separate module. Allowed values are `'site'` (the default, one module) and `'page'`. Pages without Rust cells create no Rust module.
+
+```js
+export default defineOxiquillConfig({
+  framework: { starlight },
+  title: 'My Docs',
+  rust: { grouping: 'page' }
+});
+```
+
+Page grouping rebuilds only modules whose source, helper dependency closure, toolchain, or build options changed. Readers download only the modules needed by cells they run. Shared dependencies are compiled once in the generated Cargo workspace but appear in each module that needs them, so total download/storage bytes can increase. Small sites often benefit from the default single module; page grouping bounds individual rebuild and page-download costs as a site grows. Use `oxiquill build --explain` to inspect the plan.
+
+Page mode uses Cargo directly and requires a wasm-bindgen CLI version exactly matching the generated Cargo.lock. Oxiquill uses a matching binary on PATH or downloads the official host release, verifies its pinned SHA-256, and caches it under `paths.downloadCacheDir`. A mismatching PATH binary is replaced by the verified cached/downloaded choice for this build. Release optimization similarly uses wasm-opt from PATH or a verified Binaryen 117 release, retaining the existing `-O` optimization. Archive extraction requires `tar`. Failed verification or an unsupported host reports the expected tool version and cache path; installing the matching tool on PATH is an alternative.
+
+Generated page crates have stable source paths below `paths.rustCellsDir`; compiler and optimizer caches stay shared. The runtime registry is published only after every required group succeeds. Failure retains the previous complete registry. Moving or deleting pages prunes obsolete owned modules after publication. `oxiquill clean` removes generated/compiler outputs while retaining verified tool downloads.
