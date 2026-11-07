@@ -31,7 +31,7 @@ async function fixture() {
   const paths = createOxiquillPaths({ workspaceRoot: root });
   await mkdir(paths.docsDir, { recursive: true });
   await mkdir(paths.generatedDir, { recursive: true });
-  const page = path.join(root, pagePath);
+  const page = path.join(paths.docsDir, 'index.mdx');
   await writeFile(page, source);
   const snapshot = await readGenerationSnapshot({ paths });
   const manifest = { generationId: snapshot.generationId, cells: snapshot.cells };
