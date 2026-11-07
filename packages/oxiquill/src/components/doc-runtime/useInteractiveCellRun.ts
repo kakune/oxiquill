@@ -1,5 +1,5 @@
-import { useEffect, useRef, useState } from 'preact/hooks';
-import { initialValues } from '../../lib/doc-runtime/interactive-cell-model.js';
+import { useEffect, useLayoutEffect, useRef, useState } from 'preact/hooks';
+import { initialValues, reconcileInputValues } from '../../lib/doc-runtime/interactive-cell-model.js';
 import { restoreSharedInputs, sharedInputsParameter } from '../../lib/doc-runtime/input-sharing.js';
 import { createLatestRequestScheduler, createRunOnceCache } from '../../lib/doc-runtime/interactive-cell-scheduler.js';
 import { boundedErrorMessage } from '../../lib/doc-runtime/output-limits.mjs';
@@ -44,6 +44,8 @@ export function useInteractiveCellRun(cell: CellManifest, runtimeVersion: string
   // The scheduler reports only the latest request, so this describes any result it delivers.
   const latestRequestIsDraftRef = useRef(false);
   const valuesRef = useRef(values);
+  const inputDefinitions = JSON.stringify(cell.inputs);
+  const previousInputDefinitions = useRef(inputDefinitions);
   const schedulerRef =
     useRef<ReturnType<typeof createLatestRequestScheduler<CellRunRequest, NormalizedCellExecutionResult>>>();
 
@@ -98,17 +100,23 @@ export function useInteractiveCellRun(cell: CellManifest, runtimeVersion: string
     return () => scheduler?.dispose();
   }, []);
 
-  useEffect(() => {
+  useLayoutEffect(() => {
+    schedulerRef.current?.cancel();
+    if (previousInputDefinitions.current !== inputDefinitions) {
+      previousInputDefinitions.current = inputDefinitions;
+      replaceInputs(reconcileInputValues(cell.inputs, valuesRef.current), false);
+    }
+    setExecution((previous) => ({ ...previous, status: 'idle' }));
     if (isEditing) return;
     if (cell.run === 'reactive' && invalidInputsRef.current.size === 0) {
       schedule(valuesRef.current);
     } else if (cell.run === 'autorun') {
       schedule(valuesRef.current, 0, JSON.stringify([cell.id, runtimeVersion, cell.source, valuesRef.current]));
     }
-  }, [cell.id, cell.run, cell.source, runtimeVersion, isEditing]);
+  }, [cell.id, cell.run, cell.source, runtimeVersion, isEditing, inputDefinitions]);
 
   useEffect(() => {
-    if (!cell.inputs.some((input) => input.share)) return;
+    if (!cell.inputs.some((input) => input.share) && !cell.cases?.length) return;
     const sharedQuery = () =>
       JSON.stringify(new URL(globalThis.location.href).searchParams.getAll(sharedInputsParameter));
     let previousQuery = sharedQuery();
@@ -116,13 +124,7 @@ export function useInteractiveCellRun(cell: CellManifest, runtimeVersion: string
       const query = sharedQuery();
       if (query === previousQuery) return;
       previousQuery = query;
-      const restored = restoreSharedInputs(cell);
-      replaceInputs({
-        ...valuesRef.current,
-        ...Object.fromEntries(
-          cell.inputs.filter((input) => input.share).map((input) => [input.name, restored[input.name]])
-        )
-      });
+      replaceInputs(restoreSharedInputs(cell, globalThis.location.href, valuesRef.current));
     };
     globalThis.addEventListener('popstate', restore);
     return () => globalThis.removeEventListener('popstate', restore);
@@ -154,7 +156,12 @@ export function useInteractiveCellRun(cell: CellManifest, runtimeVersion: string
     replaceInputs(initialValues(cell.inputs));
   }
 
-  function replaceInputs(nextValues: InputValues): void {
+  function applyCase(caseId: string): void {
+    const selected = cell.cases?.find((candidate) => candidate.id === caseId);
+    if (selected) replaceInputs({ ...selected.inputs });
+  }
+
+  function replaceInputs(nextValues: InputValues, shouldSchedule = true): void {
     schedulerRef.current?.cancel();
     invalidInputsRef.current.clear();
     valuesRef.current = nextValues;
@@ -162,7 +169,7 @@ export function useInteractiveCellRun(cell: CellManifest, runtimeVersion: string
     setInputsValid(true);
     setInputRevision((revision) => revision + 1);
     setExecution((previous) => ({ ...previous, error: undefined, partialResult: undefined, status: 'idle' }));
-    if (cell.run === 'reactive' && !isEditing) schedule(nextValues, reactiveDebounceMs);
+    if (shouldSchedule && cell.run === 'reactive' && !isEditing) schedule(nextValues, reactiveDebounceMs);
   }
 
   function stopExecution(): void {
@@ -215,6 +222,7 @@ export function useInteractiveCellRun(cell: CellManifest, runtimeVersion: string
     result: execution.result,
     run,
     resetInputs,
+    applyCase,
     setInputValue,
     setInputValidity,
     values

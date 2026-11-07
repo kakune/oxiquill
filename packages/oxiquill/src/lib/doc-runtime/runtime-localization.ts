@@ -89,6 +89,8 @@ export type RuntimeLabels = {
   rowsRange: (first: number, last: number, total: number | undefined, truncated: boolean) => string;
   run: string;
   resetInputs: string;
+  inputCase: string;
+  customValues: string;
   editCode: string;
   finishEditing: string;
   restoreCode: string;
@@ -253,6 +255,8 @@ const runtimeLabels = {
         : `Rows ${first}-${last} of ${total}${truncated ? ' (truncated)' : ''}`,
     run: 'Run',
     resetInputs: 'Reset inputs',
+    inputCase: 'Case',
+    customValues: 'Custom values',
     editCode: 'Edit Python',
     finishEditing: 'Finish editing',
     restoreCode: 'Restore original code',
@@ -362,6 +366,8 @@ const runtimeLabels = {
         : `${total} 行中 ${first}–${last} 行${truncated ? '（省略あり）' : ''}`,
     run: '実行',
     resetInputs: '入力を初期値に戻す',
+    inputCase: 'ケース',
+    customValues: 'カスタム値',
     editCode: 'Pythonを編集',
     finishEditing: '編集を終了',
     restoreCode: '元のコードに戻す',

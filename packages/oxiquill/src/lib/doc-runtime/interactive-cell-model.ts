@@ -1,6 +1,7 @@
 import type { RuntimeLabels } from './runtime-localization.js';
 import { labelsForLanguage } from './runtime-localization.js';
 import type { CellManifest, InputSpec, InputValues, RunMode } from './types.js';
+import { validInputValue } from './input-value-validation.mjs';
 
 export {
   formatInputValue,
@@ -14,6 +15,18 @@ export type { RuntimeLabels, RuntimeLocale } from './runtime-localization.js';
 
 export function initialValues(inputs: readonly InputSpec[]): InputValues {
   return Object.fromEntries(inputs.map((input) => [input.name, input.value]));
+}
+
+export function matchingInputCase(cell: Pick<CellManifest, 'inputs' | 'cases'>, values: InputValues) {
+  return cell.cases?.find((candidate) =>
+    cell.inputs.every((input) => values[input.name] === candidate.inputs[input.name])
+  );
+}
+
+export function reconcileInputValues(inputs: readonly InputSpec[], values: InputValues): InputValues {
+  return Object.fromEntries(
+    inputs.map((input) => [input.name, validInputValue(input, values[input.name]) ? values[input.name] : input.value])
+  );
 }
 
 export function cellExecutionTimeoutMs(cell: CellManifest): number {
