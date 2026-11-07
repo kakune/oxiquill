@@ -5,6 +5,14 @@ description: Recover from installation, configuration, runtime generation, downl
 
 Start with the first Oxiquill diagnostic. Generation errors include the relevant tool or path and, for authored cells, the page, fence line, cell ID when available, and exact metadata field.
 
+## Sources Changed During a Build
+
+`Interactive cell sources changed after runtime generation started.` means a cell or Rust helper input changed while the production build was running. The diagnostic lists every added, removed, or changed cell and helper path, including changed cell fields such as `source` or `inputs`.
+
+Finish saving the sources, then rerun `oxiquill build`. Oxiquill does not retry automatically. A failed generation preserves the previous complete runtime; a successful build uses matching cell manifests, MDX, and Wasm. Prose-only edits keep the same generation and reuse cached runtime artifacts.
+
+In development, a cell that is not generated yet reports that the runtime watcher will regenerate it. Allow that generation to finish; production consistency checkpoints do not run in the dev server.
+
 ## Installation and Package Resolution
 
 | Symptom                                                  | Resolution                                                                                                                              |

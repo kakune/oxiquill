@@ -20,6 +20,9 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ### Fixed
 
+- Production builds validate one interactive cell generation across runtime compilation, MDX transforms, and build completion, reporting source changes with affected paths and preserving the previous complete runtime on failure.
+- Generated Rust embeds cell source verbatim, preserving multiline string, raw string, and byte string contents and authored source columns.
+
 ### Security
 
 ## [0.4.1] - 2026-10-31

@@ -91,6 +91,7 @@ export function createRuntimePlan({ desired, forceRustBuild = false, mode, outpu
   );
   const generatedChanged =
     !outputComplete.generated ||
+    state?.generationId !== desired.generationId ||
     state?.manifestFingerprint !== desired.manifestFingerprint ||
     state?.schemaVersion !== 1 ||
     languageChanges;

@@ -4,27 +4,21 @@ import { recordedOutputIsComplete, recordOutputIntegrity } from './doc-runtime/o
 import { createHighlighter } from 'shiki';
 import { createOxiquillPaths, pathFromUrl, pathInUrl } from '../config/paths.mjs';
 import {
-  assertUniqueCellIds,
-  assertUniqueHaskellFunctionNames,
-  assertUniqueHaskellInputBindings,
-  assertUniqueRustFunctionNames,
-  assertUniqueRustInputBindings,
   createCellManifest,
   generateCellsJson,
   generateCellsModule,
   generateHaskellMain,
   generateRustCargoToml,
   generateRustLib,
-  parseCellsFromMarkdown,
   sourceThemes
 } from './doc-runtime-core.mjs';
-import {
-  resolvePythonSetups,
-  throwInteractiveCellDiagnostics,
-  validateCellDependencies
-} from '../lib/doc-runtime/cell-authoring.mjs';
 import { defaultFileSystem, listFiles, writeIfChanged } from './doc-runtime/file-system.mjs';
-import { listAuthoredHelperInputFiles } from './doc-runtime/helper-inputs.mjs';
+import { collectAuthoringCells } from './doc-runtime/cell-collection.mjs';
+import {
+  assertGenerationSnapshot,
+  createGenerationSnapshot,
+  readHelperInputs
+} from './doc-runtime/generation-snapshot.mjs';
 import { listHelperCrates } from './doc-runtime/helper-crate-service.mjs';
 import { normalizePath } from './doc-runtime/path-utils.mjs';
 import {
@@ -38,7 +32,7 @@ import {
   generateRuntimeVersionModule,
   summarizeCells
 } from './doc-runtime/runtime-summary.mjs';
-import { hashBytes, hashText, stableFingerprint } from './doc-runtime/hashing.mjs';
+import { hashText, stableFingerprint } from './doc-runtime/hashing.mjs';
 import { generateHaskellOutput } from './doc-runtime/haskell-output-codegen.mjs';
 import { createRuntimePlan } from './doc-runtime/runtime-plan.mjs';
 import {
@@ -46,7 +40,7 @@ import {
   generateRuntimeOwnershipJson,
   readRuntimeOwnership
 } from './doc-runtime/runtime-ownership.mjs';
-import { createDirectoryStage, discardDirectoryStage, replaceDirectory } from './doc-runtime/atomic-output.mjs';
+import { createDirectoryStage, discardDirectoryStage, publishDirectoryStages } from './doc-runtime/atomic-output.mjs';
 import { readRuntimeInputs as defaultReadRuntimeInputs } from './doc-runtime/runtime-inputs.mjs';
 import { preflightRequiredToolchains as defaultPreflightToolchains } from './doc-runtime/toolchain-preflight.mjs';
 import {
@@ -166,13 +160,13 @@ export async function syncDocRuntime({
   syncRustSupport = syncRustBuildSupportFiles,
   tolerateHaskellBuildFailure = false
 }) {
-  const cells = await collectCells({
-    fileSystem,
-    helperCrates,
-    highlighter,
-    paths,
-    pythonOptions
-  });
+  const snapshotOptions = { fileSystem, paths, pythonOptions };
+  const [authoringCells, helpers] = await Promise.all([
+    collectAuthoringCells({ ...snapshotOptions, helperCrates }),
+    readHelperInputs(snapshotOptions)
+  ]);
+  const snapshot = createGenerationSnapshot(authoringCells, helpers);
+  const cells = await Promise.all(authoringCells.map((cell) => createCellManifest(cell, highlighter)));
   const haskellCells = cells.filter((cell) => cell.language === 'haskell');
   const pythonCells = cells.filter((cell) => cell.language === 'python');
   const rustCells = cells.filter((cell) => cell.language === 'rust');
@@ -193,19 +187,18 @@ export async function syncDocRuntime({
       ? await resolvePyodideInputs({ fileSystem, requestedPackages: requestedPythonPackages, paths, pythonOptions })
       : undefined;
   const generated = {
-    cellsJson: generateCellsJson(cells),
-    cellsModule: generateCellsModule(cells),
+    cellsJson: generateCellsJson(cells, snapshot.generationId),
+    cellsModule: generateCellsModule(cells, snapshot.generationId),
     haskellMain: generateHaskellMain(haskellCells),
     haskellOutput: generateHaskellOutput(),
     rustCargo: generateRustCargoToml(rustCells, helperCrates, runtimeInputs),
     rustLib: generateRustLib(rustCells)
   };
-  const desired = await createDesiredRuntime({
+  const desired = createDesiredRuntime({
+    snapshot,
     generatorIdentity: await generatorIdentity(),
     rustBuildInputs: rustCells.length > 0 ? await readRustBuildInputs({ environment, fileSystem, paths }) : undefined,
-    fileSystem,
     generated,
-    paths,
     pythonCellCount: pythonCells.length,
     pyodideRuntimeInputs,
     runtimeInputs,
@@ -230,10 +223,10 @@ export async function syncDocRuntime({
       paths,
       pythonOptions
     });
-    return runtimeResult({ licensesChanged, plan, summary });
+    if (mode === 'build') await assertGenerationSnapshot(snapshot, snapshotOptions);
+    return runtimeResult({ licensesChanged, plan, snapshot, summary });
   }
 
-  await fileSystem.rm(paths.runtimeVersionPath, { force: true });
   const stages = [];
   let haskellBuildResult = { ok: true };
 
@@ -276,6 +269,7 @@ export async function syncDocRuntime({
 
     const nextState = await createNextRuntimeState({
       desired,
+      snapshot,
       fileSystem,
       haskellBuildResult,
       mode,
@@ -295,36 +289,62 @@ export async function syncDocRuntime({
       summary
     });
 
-    await promoteLanguageStages(stages, { fileSystem });
-    await removeStaleLanguageOutputs({ fileSystem, paths, plan });
+    // License collection must see the next runtime, including removed languages,
+    // while all published output remains untouched until the checkpoint passes.
+    for (const [language, field] of [
+      ['rust', 'rustWasmPublicDir'],
+      ['python', 'pyodidePublicDir'],
+      ['haskell', 'haskellWasmPublicDir']
+    ]) {
+      if (plan.languages[language].public === 'remove') {
+        await addDirectoryStage(field, paths, stagedPaths, stages, { fileSystem, type: 'absent' });
+      }
+    }
+    const licenseStage = await addDirectoryStage('licensesPublicDir', paths, stagedPaths, stages, { fileSystem });
+    const licenseFiles = fileSystem.existsSync(paths.licensesPublicDir)
+      ? await listFiles(paths.licensesPublicDir, { fileSystem })
+      : [];
+    await Promise.all(
+      licenseFiles.map(async (file) => {
+        const target = path.join(licenseStage, path.relative(paths.licensesPublicDir, file));
+        await fileSystem.mkdir(path.dirname(target), { recursive: true });
+        await fileSystem.copyFile(file, target);
+      })
+    );
     const licensesChanged = await syncLicenses({
       fileSystem,
       includeRustBuildFiles: false,
-      paths,
+      paths: stagedPaths,
       pythonOptions
     });
-    await replaceDirectory(generatedStage, paths.generatedDir, { fileSystem });
+    if (mode === 'build') await assertGenerationSnapshot(snapshot, snapshotOptions);
+    await publishDirectoryStages(
+      [
+        ...stages.filter(({ type }) => type === 'language'),
+        ...staleLanguageStages(paths, plan),
+        { stagePath: generatedStage, targetPath: paths.generatedDir }
+      ],
+      { fileSystem }
+    );
 
-    return runtimeResult({ haskellBuildResult, licensesChanged, plan, summary });
+    return runtimeResult({ haskellBuildResult, licensesChanged, plan, snapshot, summary });
   } finally {
     await Promise.all(stages.map(({ stagePath }) => discardDirectoryStage(stagePath, { fileSystem })));
   }
 }
 
-async function createDesiredRuntime({
+function createDesiredRuntime({
+  snapshot,
   generatorIdentity,
   rustBuildInputs,
-  fileSystem,
   generated,
-  paths,
   pythonCellCount,
   pyodideRuntimeInputs,
   runtimeInputs,
   summary,
   toolchains
 }) {
-  const helperFingerprint =
-    summary.rustCellCount > 0 ? await fingerprintHelperSources({ fileSystem, paths }) : stableFingerprint([]);
+  const helperFingerprint = summary.rustCellCount > 0 ? stableFingerprint(snapshot.helpers) : stableFingerprint([]);
   const rustSourceFingerprint = hashText(
     stableFingerprint({
       cargo: generated.rustCargo,
@@ -336,6 +356,7 @@ async function createDesiredRuntime({
   const pythonAssetFingerprint = pythonCellCount > 0 ? pyodideRuntimeInputs.fingerprint : stableFingerprint([]);
 
   return Object.freeze({
+    generationId: snapshot.generationId,
     manifestFingerprint: summary.manifestFingerprint,
     rust: Object.freeze({
       buildFingerprint: stableFingerprint({
@@ -444,15 +465,16 @@ async function stageLanguageOutputs({
   }
 }
 
-async function addDirectoryStage(pathName, paths, stagedPaths, stages, { fileSystem }) {
+async function addDirectoryStage(pathName, paths, stagedPaths, stages, { fileSystem, type = 'language' }) {
   const targetPath = paths[pathName];
   const stagePath = await createDirectoryStage(targetPath, { fileSystem });
   stagedPaths[pathName] = stagePath;
-  stages.push({ stagePath, targetPath, type: 'language' });
+  stages.push({ stagePath, targetPath, type });
   return stagePath;
 }
 
 async function createNextRuntimeState({
+  snapshot,
   desired,
   fileSystem,
   haskellBuildResult,
@@ -515,6 +537,8 @@ async function createNextRuntimeState({
 
   return {
     schemaVersion: 1,
+    generationId: snapshot.generationId,
+    snapshot,
     manifestFingerprint: desired.manifestFingerprint,
     ready: haskellBuildResult.ok,
     languages,
@@ -567,7 +591,7 @@ async function writeGeneratedRuntime({ fileSystem, generated, nextState, paths, 
       ? [
           writeIfChanged(
             pathInUrl(paths.generatedDir, 'runtime-version.ts'),
-            generateRuntimeVersionModule(createRuntimeVersion(summary)),
+            generateRuntimeVersionModule(createRuntimeVersion(summary, nextState.generationId)),
             { fileSystem }
           )
         ]
@@ -575,13 +599,7 @@ async function writeGeneratedRuntime({ fileSystem, generated, nextState, paths, 
   ]);
 }
 
-async function promoteLanguageStages(stages, { fileSystem }) {
-  for (const stage of stages.filter(({ type }) => type === 'language')) {
-    await replaceDirectory(stage.stagePath, stage.targetPath, { fileSystem });
-  }
-}
-
-async function removeStaleLanguageOutputs({ fileSystem, paths, plan }) {
+function staleLanguageStages(paths, plan) {
   const targets = [
     [plan.languages.rust.source, paths.rustCellsDir],
     [plan.languages.rust.public, paths.rustWasmPublicDir],
@@ -589,16 +607,13 @@ async function removeStaleLanguageOutputs({ fileSystem, paths, plan }) {
     [plan.languages.haskell.source, paths.haskellCellsDir],
     [plan.languages.haskell.public, paths.haskellWasmPublicDir]
   ];
-  await Promise.all(
-    targets
-      .filter(([action]) => action === 'remove')
-      .map(([, targetPath]) => fileSystem.rm(targetPath, { force: true, recursive: true }))
-  );
+  return targets.filter(([action]) => action === 'remove').map(([, targetPath]) => ({ targetPath }));
 }
 
-function runtimeResult({ haskellBuildResult, licensesChanged, plan, summary }) {
+function runtimeResult({ haskellBuildResult, licensesChanged, plan, snapshot, summary }) {
   return {
     ...summary,
+    generationId: snapshot.generationId,
     cellsChanged: plan.generated === 'write',
     haskellChanged: plan.languages.haskell.source !== 'keep',
     haskellBuildResult,
@@ -614,51 +629,9 @@ async function listRelativeFiles(directory, { fileSystem }) {
   return files.map((filePath) => normalizePath(path.relative(directory, filePath))).sort();
 }
 
-async function fingerprintHelperSources({ fileSystem, paths }) {
-  const files = await listAuthoredHelperInputFiles(paths.cratesDir, { fileSystem });
-  const entries = await Promise.all(
-    files.map(async ({ filePath, path: relativePath }) => ({
-      digest: hashBytes(await fileSystem.readFile(filePath)),
-      path: relativePath
-    }))
-  );
-  return stableFingerprint(entries);
-}
-
-export async function collectCells({
-  fileSystem = defaultFileSystem,
-  helperCrates,
-  highlighter,
-  paths,
-  pythonOptions = {}
-}) {
-  const docsDir = pathFromUrl(paths.docsDir);
-  const workspaceRoot = pathFromUrl(paths.workspaceRoot);
-  const files = await listFiles(docsDir, { fileSystem });
-  const markdownFiles = files.filter((filePath) => filePath.endsWith('.mdx') || filePath.endsWith('.md'));
-  const parsedPages = await Promise.all(
-    markdownFiles.map(async (filePath) => {
-      const pagePath = normalizePath(path.relative(workspaceRoot, filePath));
-      const source = await fileSystem.readFile(filePath, 'utf8');
-      return parseCellsFromMarkdown(source, pagePath, pythonOptions);
-    })
-  );
-  const authoringCells = parsedPages.flatMap((page) => page.cells);
-  const diagnostics = [
-    ...parsedPages.flatMap((page) => page.diagnostics),
-    ...authoringCells.flatMap((cell) => validateCellDependencies(cell, helperCrates))
-  ];
-  throwInteractiveCellDiagnostics(diagnostics);
-
-  const haskellCells = authoringCells.filter((cell) => cell.language === 'haskell');
-  const rustCells = authoringCells.filter((cell) => cell.language === 'rust');
-  assertUniqueCellIds(authoringCells);
-  assertUniqueHaskellFunctionNames(haskellCells);
-  assertUniqueHaskellInputBindings(haskellCells);
-  assertUniqueRustFunctionNames(rustCells);
-  assertUniqueRustInputBindings(rustCells);
-
-  return Promise.all(resolvePythonSetups(authoringCells).map((cell) => createCellManifest(cell, highlighter)));
+export async function collectCells(options) {
+  const cells = await collectAuthoringCells({ ...options, helperCrates: options.helperCrates ?? new Map() });
+  return Promise.all(cells.map((cell) => createCellManifest(cell, options.highlighter)));
 }
 
 export async function markRuntimeReady({

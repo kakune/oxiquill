@@ -21,6 +21,7 @@ export async function runCli(commandOrArgs = [], argsOrOptions = {}, legacyOptio
     cwd = process.cwd(),
     initialize = initializeProject,
     loadPackageVersion = installedPackageVersion,
+    loadCheck,
     loadProjectConfig = loadOxiquillProjectConfig,
     log = console.log,
     runCommand = runCommandWithInheritedStdio,
@@ -66,18 +67,24 @@ export async function runCli(commandOrArgs = [], argsOrOptions = {}, legacyOptio
     case 'preview':
       await runAstro(projectConfig, ['preview', ...astroArgs], { runCommand, selectNode });
       return;
-    case 'build':
-      await generateRuntime({
+    case 'build': {
+      const { generationId } = await generateRuntime({
         ownershipFields: ['cacheDir', 'outDir', 'publicAssetsDir'],
         projectConfig,
         wasmMode: 'build'
       });
-      await runOxiquillCheck(projectConfig, [], { runCommand, selectNode });
-      await runAstro(projectConfig, ['build', ...astroArgs], { runCommand, runtimeOwner: 'cli', selectNode });
+      await runOxiquillCheck(projectConfig, [], { generationId, loadCheck, runCommand, selectNode });
+      await runAstro(projectConfig, ['build', ...astroArgs], {
+        generationId,
+        runCommand,
+        runtimeOwner: 'cli',
+        selectNode
+      });
       return;
+    }
     case 'check':
       await generateRuntime({ projectConfig, wasmMode: 'dev' });
-      await runOxiquillCheck(projectConfig, commandArgs, { runCommand, selectNode });
+      await runOxiquillCheck(projectConfig, commandArgs, { loadCheck, runCommand, selectNode });
       return;
     case 'docgen':
       await generateRuntime({ projectConfig, wasmMode: values.wasm });
@@ -192,27 +199,36 @@ async function runDevServer({ args, projectConfig, runCommand, selectNode }) {
   }
 }
 
-async function runAstro(projectConfig, args, { runCommand, runtimeOwner, selectNode }) {
+async function runAstro(projectConfig, args, { generationId, runCommand, runtimeOwner, selectNode }) {
   const { paths } = projectConfig;
   const nodePath = selectNode(paths);
 
   await runCommand(nodePath, [frameworkBinScript(paths, 'astro'), ...args], {
     cwd: projectConfig.cwd,
-    env: frameworkEnv(paths, { nodePath, runtimeOwner })
+    env: frameworkEnv(paths, { generationId, nodePath, runtimeOwner })
   });
 }
 
-async function runOxiquillCheck(projectConfig, args, { runCommand, selectNode }) {
+async function runOxiquillCheck(
+  projectConfig,
+  args,
+  { generationId, loadCheck = importFromFramework, runCommand, selectNode }
+) {
   const { paths } = projectConfig;
-  await runAstro(projectConfig, ['sync', ...projectConfig.astroConfigArgs], { runCommand, selectNode });
+  await runAstro(projectConfig, ['sync', ...projectConfig.astroConfigArgs], { generationId, runCommand, selectNode });
 
-  const { check, parseArgsAsCheckConfig } = await importFromFramework(paths, '@astrojs/check');
+  const { check, parseArgsAsCheckConfig } = await loadCheck(paths, '@astrojs/check');
   const config = parseArgsAsCheckConfig(['node', 'oxiquill-check', ...args]);
   config.root = pathFromUrl(paths.workspaceRoot);
 
   console.info(`Getting diagnostics for Astro files in ${config.root}...`);
-  if (await check(config)) {
-    throw new Error('Astro check reported diagnostics.');
+  const previousId = process.env.OXIQUILL_GENERATION_ID;
+  try {
+    if (generationId) process.env.OXIQUILL_GENERATION_ID = generationId;
+    if (await check(config)) throw new Error('Astro check reported diagnostics.');
+  } finally {
+    if (previousId === undefined) delete process.env.OXIQUILL_GENERATION_ID;
+    else process.env.OXIQUILL_GENERATION_ID = previousId;
   }
 }
 
@@ -324,7 +340,7 @@ function frameworkBinScript(paths, packageName, binName = packageName) {
   return path.resolve(path.dirname(packageJsonPath), binPath);
 }
 
-export function frameworkEnv(paths, { env = process.env, nodePath, runtimeOwner } = {}) {
+export function frameworkEnv(paths, { env = process.env, generationId, nodePath, runtimeOwner } = {}) {
   const frameworkNodePath = pathInUrl(paths.frameworkRoot, 'node_modules');
   const currentNodePath = env.NODE_PATH;
   const nextEnv = {
@@ -340,6 +356,7 @@ export function frameworkEnv(paths, { env = process.env, nodePath, runtimeOwner 
       : path.dirname(nodePath);
   }
 
+  if (generationId) nextEnv.OXIQUILL_GENERATION_ID = generationId;
   if (runtimeOwner) nextEnv.OXIQUILL_RUNTIME_OWNER = runtimeOwner;
 
   return nextEnv;

@@ -121,7 +121,7 @@ describe('oxiquill virtual modules', () => {
       );
       expect(context.addWatchFile).toHaveBeenCalledWith(pathFromUrl(paths.cellsJsonPath));
       expect(() => plugin.load.call(context, '\0virtual:oxiquill/cell?cellId=page__missing')).toThrow(
-        'Oxiquill could not find generated interactive cell "page__missing".'
+        'Interactive cell "page__missing" is not generated yet. The runtime watcher will regenerate it.'
       );
     } finally {
       rmSync(root, { force: true, recursive: true });

@@ -1,3 +1,4 @@
+import { parseGeneratedCellManifest } from './cell-manifest.mjs';
 import { readFile } from 'node:fs/promises';
 import { ConsoleStdout, File, OpenFile, WASI } from '@bjorn3/browser_wasi_shim';
 import { pathInUrl } from '../../config/paths.mjs';
@@ -108,7 +109,7 @@ function assertReadyStatus(status, expectedFingerprint, filePath) {
 function parseCellManifest(source) {
   let cells;
   try {
-    cells = JSON.parse(source);
+    cells = parseGeneratedCellManifest(source).cells;
   } catch (error) {
     throw new Error('Generated cell manifest is invalid JSON.', { cause: error });
   }

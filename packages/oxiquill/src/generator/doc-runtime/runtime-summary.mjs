@@ -54,8 +54,9 @@ export function shouldBuildHaskellWasm({ current, force = false, previous }) {
   return previous.haskellFingerprint !== current.haskellFingerprint;
 }
 
-export function createRuntimeVersion(summary) {
+export function createRuntimeVersion(summary, generationId = summary?.generationId) {
   return stableFingerprint({
+    ...(generationId ? { generationId } : {}),
     haskell: hashText(summary?.haskellFingerprint ?? ''),
     manifest: hashText(summary?.manifestFingerprint ?? ''),
     python: summary?.pythonPackages ?? [],

@@ -1,3 +1,4 @@
+import { normalizeCell } from '../../lib/doc-runtime/normalized-cell.mjs';
 import { unified } from 'unified';
 import remarkMath from 'remark-math';
 import remarkMdx from 'remark-mdx';
@@ -43,22 +44,10 @@ export async function extractCellsFromMarkdown(source, pagePath, context) {
 
 export async function createCellManifest(cell, highlighter) {
   return {
-    id: cell.id,
-    language: cell.language,
-    title: cell.title,
-    run: cell.run,
-    source: cell.source,
-    ...(cell.setup ? { setup: cell.setup } : {}),
+    ...normalizeCell(cell),
     sourceHtml: await highlighter.codeToHtml(cell.source, {
       lang: cell.language,
       themes: sourceThemes
-    }),
-    inputs: cell.inputs,
-    packages: cell.packages,
-    crates: cell.crates,
-    timeoutMs: cell.timeoutMs,
-    showSource: cell.showSource,
-    editable: cell.editable,
-    pagePath: cell.pagePath
+    })
   };
 }

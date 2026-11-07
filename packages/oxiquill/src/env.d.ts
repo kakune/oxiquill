@@ -26,6 +26,7 @@ declare module 'virtual:starlight/project-context' {
 declare module 'virtual:oxiquill/cells' {
   import type { CellManifest } from './lib/doc-runtime/types.js';
 
+  export const generationId: string;
   export const cells: readonly CellManifest[];
 }
 

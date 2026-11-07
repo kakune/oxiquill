@@ -5,6 +5,14 @@ description: install、config、runtime generation、download、timeout、stale 
 
 最初の Oxiquill diagnostic から確認します。generation error は relevant tool/path を示し、authored cell では page、fence line、可能なら cell ID、正確な metadata field を含みます。
 
+## Build 中の source 変更
+
+`Interactive cell sources changed after runtime generation started.` は production build 中に cell または Rust helper input が変更されたことを示します。diagnostic は追加・削除・変更されたすべての cell と helper の path を表示し、cell では `source` や `inputs` などの変更 field も示します。
+
+source の保存が完了してから `oxiquill build` を再実行してください。自動 retry は行いません。generation が失敗しても以前の完全な runtime は保持され、成功した build では cell manifest、MDX、Wasm が同じ generation に対応します。prose だけの変更では generation は変わらず、runtime artifact の cache を再利用します。
+
+dev では未生成の cell に対し runtime watcher が再生成する旨を表示します。generation の完了を待ってください。production の整合性 checkpoint は dev server では実行しません。
+
 ## Install と package resolution
 
 | 症状                                                | 対応                                                                                                                                 |

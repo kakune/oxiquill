@@ -12,7 +12,7 @@ import {
   visit
 } from './remark-mdx-helpers.mjs';
 
-export default function remarkInteractiveCells({ root = process.cwd(), pythonOptions = {} } = {}) {
+export default function remarkInteractiveCells({ root = process.cwd(), pythonOptions = {}, generation } = {}) {
   return (tree, file) => {
     const pagePath = relativePagePath(root, file?.path);
     const diagnostics = [];
@@ -26,46 +26,56 @@ export default function remarkInteractiveCells({ root = process.cwd(), pythonOpt
 
     throwInteractiveCellDiagnostics(diagnostics);
     throwInteractiveCellDiagnostics(uniqueCellIdDiagnostics(cells.map(({ cell }) => cell)));
-    resolvePythonSetups(cells.map(({ cell }) => cell));
+    const normalizedCells = resolvePythonSetups(cells.map(({ cell }) => cell));
+    const generationId = generation?.validatePage(pagePath, normalizedCells);
 
-    const reservedIdentifiers = collectReservedMdxIdentifiers(tree);
-    const componentIdentifier = allocateMdxIdentifier(reservedIdentifiers, '__OxiquillInteractiveCell');
-    const cellIdentifiers = cells.map((_, index) =>
-      allocateMdxIdentifier(reservedIdentifiers, interactiveCellIdentifier(index))
-    );
+    return generationId instanceof Promise ? generationId.then(transform) : transform(generationId);
 
-    cells.forEach(({ cell, node }, index) => {
-      Object.assign(node, {
-        type: 'mdxJsxFlowElement',
-        name: componentIdentifier,
-        attributes: [
-          { type: 'mdxJsxAttribute', name: 'client:visible', value: null },
-          { type: 'mdxJsxAttribute', name: 'cellId', value: cell.id },
-          identifierAttribute('cell', cellIdentifiers[index])
-        ],
-        children: []
+    function transform(generationId) {
+      const reservedIdentifiers = collectReservedMdxIdentifiers(tree);
+      const componentIdentifier = allocateMdxIdentifier(reservedIdentifiers, '__OxiquillInteractiveCell');
+      const cellIdentifiers = cells.map((_, index) =>
+        allocateMdxIdentifier(reservedIdentifiers, interactiveCellIdentifier(index))
+      );
+
+      cells.forEach(({ cell, node }, index) => {
+        Object.assign(node, {
+          type: 'mdxJsxFlowElement',
+          name: componentIdentifier,
+          attributes: [
+            { type: 'mdxJsxAttribute', name: 'client:visible', value: null },
+            { type: 'mdxJsxAttribute', name: 'cellId', value: cell.id },
+            identifierAttribute('cell', cellIdentifiers[index])
+          ],
+          children: []
+        });
+
+        delete node.lang;
+        delete node.meta;
+        delete node.value;
       });
 
-      delete node.lang;
-      delete node.meta;
-      delete node.value;
-    });
-
-    if (cells.length > 0 && Array.isArray(tree.children)) {
-      tree.children.unshift(
-        createInteractiveCellImports(
-          componentIdentifier,
-          cells.map(({ cell }, index) => ({ cellId: cell.id, identifier: cellIdentifiers[index] }))
-        )
-      );
+      if (cells.length > 0 && Array.isArray(tree.children)) {
+        tree.children.unshift(
+          createInteractiveCellImports(
+            componentIdentifier,
+            generationId,
+            cells.map(({ cell }, index) => ({ cellId: cell.id, identifier: cellIdentifiers[index] }))
+          )
+        );
+      }
     }
   };
 }
 
-function createInteractiveCellImports(componentIdentifier, cells) {
+function createInteractiveCellImports(componentIdentifier, generationId, cells) {
   const componentImport = createImportDeclaration(componentIdentifier, 'oxiquill/runtime/InteractiveCell', true);
   const cellImports = cells.map(({ cellId, identifier }) =>
-    createImportDeclaration(identifier, `virtual:oxiquill/cell?cellId=${encodeURIComponent(cellId)}`, false)
+    createImportDeclaration(
+      identifier,
+      `virtual:oxiquill/cell?cellId=${encodeURIComponent(cellId)}${generationId ? `&generationId=${encodeURIComponent(generationId)}` : ''}`,
+      false
+    )
   );
   const declarations = [componentImport, ...cellImports];
 
