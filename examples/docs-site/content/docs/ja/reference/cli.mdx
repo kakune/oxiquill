@@ -27,6 +27,7 @@ unknown option、option value の欠落、unknown command、余分な positional
 | `dev:astro`          | Astro development server だけを起動します。                                                                         |
 | `build`              | 必要な runtime を生成し、check 後に static site を作ります。                                                        |
 | `preview`            | 既存 production build を preview します。                                                                           |
+| `check-links`        | 既存のビルド出力のローカルルートとフラグメントを読み取り専用で検証します。                                          |
 | `check`              | 必要な runtime、Astro type を同期し、Astro diagnostics を実行します。                                               |
 | `docgen`             | manifest を同期し、`--wasm dev \| build` で必要な runtime も build します。                                         |
 | `clean`              | resolved Oxiquill-owned/generated path と設定済み Astro output だけを削除し、verified download cache は保持します。 |
@@ -158,3 +159,23 @@ JSON 形式は stdout に 1 行 1 イベントの NDJSON を出力します。�
 フェーズは `discovery`、`validation`、`generation`、`compile`、`optimize`、`publish`、`astro-check`、`astro-build` です。最適化イベントは Oxiquill 自身の処理境界から発行し、検証済み最適化キャッシュの再利用も報告します。集計の時間は同じフェーズの処理時間の合計です。
 
 理由の `code` は `source-changed`（`changes: [{ page, cell }]`）、`helper-inputs-changed`、`toolchain-changed`、`build-options-changed`（変更された `variables` の名前だけ）、`generator-changed`、`package-changed`、`mode-upgrade`、`output-missing`、`integrity-mismatch`、`previous-build-failed`、`forced` です。`cache-hit` は検証済み再利用、`absent` は言語の出力が既に不要な状態です。fingerprint や設定値は表示せず、telemetry やベンチマーク履歴は保存しません。
+
+## ビルド済みサイトのリンク検証
+
+```sh
+pnpm exec oxiquill check-links
+pnpm exec oxiquill check-links --format json
+pnpm exec oxiquill build --check-links
+```
+
+`check-links` は `<cacheDir>/build-report.json` と既存の HTML を読み込みます。ファイルへの書き込み、ランタイムロックの取得、ランタイムの再生成は行いません。レポートや出力がない場合は、先に `oxiquill build` を実行してください。レポートにはビルド完了時の出力先、サイト URL、base、末尾スラッシュの方針、ビルド形式、リダイレクトが記録されます。`build --outDir` で指定した出力先も次回の検証に使われます。
+
+アンカーとイメージマップの area 要素の `href` を、ローカルページやアセットと照合します。フラグメントは実際の HTML の `id` またはアンカーの `name` と比較され、生成されたセルや `ox-ref-*` のアンカーも対象です。日本語などのパーセント符号化されたフラグメントはデコードします。空のフラグメントと `#top` は常に有効です。クエリ文字列はファイル検索に影響せず、HTML 以外のアセットは存在だけを確認します。
+
+相対パスは参照元ページの URL を基準に解決します。設定されたサイトと base 内の絶対 URL は検証し、別ホストの URL と同一サイトでも base 外の絶対 URL はスキップします。相対パスやルート相対パスが base 外を指す場合は失敗です。外部リンクや `mailto:`、`tel:`、`data:`、`javascript:`、`blob:` へのネットワークアクセスは行いません。設定されたリダイレクトと HTML のリダイレクトをたどり、最終ページでフラグメントを検証します。
+
+失敗理由は `missing-page`、`missing-fragment`、`outside-base`、`redirect-loop`、`trailing-slash` です。明示的な `trailingSlash: 'always'` と `'never'` の設定をページルートに適用します。同じ解決先と理由の失敗はまとめ、発生回数と最大 5 ページの参照元および元の `href` を表示します。
+
+`--format human|json` の既定値は `human` です。JSON は NDJSON 形式です。`link-failure` イベントには `target`、`reason`、`count`、`examples`（`source` と `href` を持つオブジェクト）が含まれます。最後の `summary` には `exitStatus` と `linkCheck` の集計値 `pages`、`checked`、`skipped`、`failures`（重複をまとめた件数）、`occurrences`（失敗したリンクの総数）が含まれます。入力エラーでは `diagnostic` とリンク集計のない最終 summary を出力します。
+
+正常時の終了ステータスは 0、リンク切れや入力エラーは 1 です。`build --check-links` はビルド成功後に同じ検証を実行し、既存のビルド summary に集計を追加します。失敗時も生成済みの出力は残ります。通常の `build` はリンクを検証しません。`--check-links` と `--explain` は併用できません。

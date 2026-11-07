@@ -14,6 +14,7 @@ import { cleanOxiquillWorkspace } from '../generator/clean.mjs';
 import { prepareCleanupOwnership } from '../generator/cleanup-ownership.mjs';
 import { runHelperCargo } from '../generator/run-helper-cargo.mjs';
 import { runWasmTests } from './test-wasm.mjs';
+import { runLinkCheck } from './check-links.mjs';
 import { debugRequested, formatCliError, formatCliHelp, parseCliArguments } from './arguments.mjs';
 import { initializeProject } from './init.mjs';
 import { acquireRuntimeLock, withRuntimeLock } from '../generator/runtime-lock.mjs';
@@ -24,6 +25,7 @@ export async function runCli(commandOrArgs = [], argsOrOptions = {}, legacyOptio
   let exitStatus = 0;
   let cancellationStatus;
   let finished = false;
+  let commandName;
   const makeEvents = (format) => {
     const render = createEventReporter({ format, write: options.log });
     return createRuntimeEvents({
@@ -36,26 +38,36 @@ export async function runCli(commandOrArgs = [], argsOrOptions = {}, legacyOptio
     if (!events || finished) return;
     if (cancelled) events.failActive?.();
     const command = args.find((arg) => ['build', 'check', 'docgen'].includes(arg));
-    const expected = [
-      'discovery',
-      'validation',
-      'generation',
-      'compile',
-      'optimize',
-      'publish',
-      ...(command !== 'docgen' ? ['astro-check'] : []),
-      ...(command === 'build' ? ['astro-build'] : [])
-    ];
+    const expected =
+      commandName === 'check-links'
+        ? []
+        : [
+            'discovery',
+            'validation',
+            'generation',
+            'compile',
+            'optimize',
+            'publish',
+            ...(command !== 'docgen' ? ['astro-check'] : []),
+            ...(command === 'build' ? ['astro-build'] : [])
+          ];
     for (const phase of expected)
       if (!events.phases.some((entry) => entry.phase === phase)) {
         events.skipped(phase, { reason: status ? 'upstream-failed' : 'not-required' });
       }
-    events.report({ type: 'summary', phases: summarizePhases(events.phases), exitStatus: status });
+    events.report({
+      type: 'summary',
+      ...(commandName === 'check-links' ? {} : { phases: summarizePhases(events.phases) }),
+      ...(events.linkCheck ? { linkCheck: events.linkCheck } : {}),
+      exitStatus: status
+    });
     finished = true;
   };
   try {
     const parsed = parseCliArguments(args);
-    const reporting = parsed.action === 'run' && ['build', 'check', 'docgen'].includes(parsed.commandName);
+    commandName = parsed.commandName;
+    const reporting =
+      parsed.action === 'run' && ['build', 'check', 'docgen', 'check-links'].includes(parsed.commandName);
     if (reporting) events = options.events ?? makeEvents(parsed.values.format);
     return await runCliCommand(args, {
       ...options,
@@ -77,9 +89,10 @@ export async function runCli(commandOrArgs = [], argsOrOptions = {}, legacyOptio
     if (cancellationStatus) error.exitCode = cancellationStatus;
     if (
       !events &&
-      args.some((arg) => ['build', 'check', 'docgen'].includes(arg)) &&
+      args.some((arg) => ['build', 'check', 'docgen', 'check-links'].includes(arg)) &&
       (args.includes('--format=json') || args.some((arg, index) => arg === '--format' && args[index + 1] === 'json'))
     ) {
+      commandName = args.find((arg) => ['build', 'check', 'docgen', 'check-links'].includes(arg));
       events = makeEvents('json');
     }
     if (events) {
@@ -182,6 +195,9 @@ async function runCliCommand(commandOrArgs = [], argsOrOptions = {}, legacyOptio
       case 'preview':
         await runAstro(projectConfig, ['preview', ...astroArgs], { runCommand, selectNode });
         return;
+      case 'check-links':
+        await runLinkCheck({ paths, events });
+        return;
       case 'build': {
         const { generationId } = await generateRuntime({
           ownershipFields: ['cacheDir', 'outDir', 'publicAssetsDir'],
@@ -206,6 +222,7 @@ async function runCliCommand(commandOrArgs = [], argsOrOptions = {}, legacyOptio
             selectNode
           })
         );
+        if (values['check-links']) await events.phase('check-links', {}, () => runLinkCheck({ paths, events }));
         return;
       }
       case 'check': {

@@ -1,5 +1,5 @@
 // @vitest-environment node
-import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises';
+import { mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 import { pathToFileURL } from 'node:url';
@@ -88,6 +88,17 @@ describe('production build hooks', () => {
         }
       });
       await integration.hooks['astro:build:start']();
+      integration.hooks['astro:config:done']({
+        config: {
+          base: '/manual/',
+          site: 'https://example.test',
+          trailingSlash: 'always',
+          build: { format: 'directory' },
+          redirects: { '/old': '/new' },
+          markdown: { processor: { name: 'custom' } }
+        },
+        injectTypes: vi.fn()
+      });
       expect(readRuntimeLock(path.join(paths.cacheDir, 'runtime.lock')).exists).toBe(true);
       expect(mocks.generate).toHaveBeenCalledTimes(owner === 'cli' ? 0 : 1);
       const plugin = update.vite.plugins.find(({ name }) => name === 'oxiquill-virtual-modules');
@@ -100,10 +111,18 @@ describe('production build hooks', () => {
         integration.hooks['astro:build:done']({ dir: pathToFileURL(`${paths.outDir}/`) })
       ).resolves.toBeUndefined();
       expect(readRuntimeLock(path.join(paths.cacheDir, 'runtime.lock')).exists).toBe(owner === 'cli');
+      const reportPath = path.join(paths.cacheDir, 'build-report.json');
+      const report = await readFile(reportPath, 'utf8');
+      expect(JSON.parse(report)).toMatchObject({
+        outDir: paths.outDir,
+        base: '/manual/',
+        redirects: { '/old': '/new' }
+      });
       await writeFile(page, '```rust\n//| id: demo\nprintln!("second");\n```');
       await expect(integration.hooks['astro:build:done']({ dir: pathToFileURL(`${paths.outDir}/`) })).rejects.toThrow(
         'cell "demo": source'
       );
+      expect(await readFile(reportPath, 'utf8')).toBe(report);
       lease?.release();
     }
   );

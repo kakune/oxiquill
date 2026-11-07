@@ -29,6 +29,7 @@ export async function assertPackedReferences({ consumerRoot, build, testWasm }) 
       '```',
       '',
       '[same page](oxref:packed-heading)',
+      `[generated cell](#doc-cell-${locale ? 'ja__' : ''}reference-fixtures__${edited ? 'moved' : 'original__index'}__demo-title)`,
       ''
     ].join('\n');
 

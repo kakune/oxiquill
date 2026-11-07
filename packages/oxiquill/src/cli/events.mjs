@@ -8,7 +8,10 @@ export function boundedDisplay(value) {
 export function createEventReporter({ format = 'human', write = console.log } = {}) {
   return (event) => {
     if (format === 'json') return write(JSON.stringify(event));
-    if (event.type === 'test') {
+    if (event.type === 'link-failure') {
+      write(`${event.reason}: ${event.target} (${event.count} occurrence(s))`);
+      event.examples.forEach(({ source, href }) => write(`  ${source}: ${JSON.stringify(href)}`));
+    } else if (event.type === 'test') {
       write(
         `${event.status === 'pass' ? 'PASS' : 'FAIL'} ${event.page}:${event.line} ${event.cell} case=${event.case}`
       );
@@ -37,6 +40,12 @@ export function createEventReporter({ format = 'human', write = console.log } = 
           `  ${phase.phase}${phase.language ? ` (${[phase.language, phase.module].filter(Boolean).join('/')})` : ''}: ${phase.state}, ${phase.elapsedMs}ms${phase.cache?.hits || phase.cache?.misses ? `, cache ${phase.cache.hits} reused/${phase.cache.misses} built` : ''}`
         )
       );
+      if (event.linkCheck) writeLinkSummary(event.linkCheck, write);
+      write(`Exit status: ${event.exitStatus}`);
+    } else if (event.type === 'summary' && event.linkCheck) {
+      writeLinkSummary(event.linkCheck, write);
+      write(`Exit status: ${event.exitStatus}`);
+    } else if (event.type === 'summary' && event.passed === undefined) {
       write(`Exit status: ${event.exitStatus}`);
     } else if (event.type === 'summary') {
       write(
@@ -44,4 +53,10 @@ export function createEventReporter({ format = 'human', write = console.log } = 
       );
     } else if (event.type === 'diagnostic') write(event.message);
   };
+}
+
+function writeLinkSummary(totals, write) {
+  write(
+    `Links: ${totals.checked} checked, ${totals.skipped} skipped, ${totals.failures} broken target(s), ${totals.occurrences} failure occurrence(s) across ${totals.pages} page(s).`
+  );
 }

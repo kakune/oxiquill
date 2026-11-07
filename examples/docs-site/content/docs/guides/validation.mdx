@@ -158,3 +158,23 @@ pnpm exec oxiquill test-wasm --all-cases --format json
 Without selectors, every Rust cell runs its defaults once and every declared test runs. A declared default test provides that default run’s assertions. `--all-cases` adds smoke checks for untested named cases. `--case` only filters runnable cases, so an untested named case requires `--all-cases`. Python and Haskell do not yet support declared tests. Unfiltered commands retain the existing Haskell smoke step; page, cell, or case filters skip it.
 
 Failures include page, fence line, cell, case, expectation location, condition, and a bounded actual value. See [CLI](/reference/cli/#declared-cell-testing) for selector and NDJSON details.
+
+## Check Rendered Links
+
+Check the built HTML to catch missing routes, renamed headings, and broken generated-cell or stable-reference anchors:
+
+```sh
+pnpm exec oxiquill build --check-links
+pnpm exec oxiquill check-links --format json
+```
+
+The standalone command reuses the most recent build and writes no files. It follows local redirects and checks assets for existence without contacting external hosts. Failures identify the resolved target, reason, and example referring pages. Fix the source links or restore the missing target, rebuild, and check again.
+
+For a consumer site's CI job, run the build and link check together after installing dependencies and the toolchains needed by its cells:
+
+```yaml
+- name: Build and validate local links
+  run: pnpm exec oxiquill build --check-links
+```
+
+Link failures produce a nonzero exit while preserving build output for debugging. See [CLI link checks](/reference/cli/#built-site-link-checks) for base-path behavior, failure reasons, and the NDJSON event format.
