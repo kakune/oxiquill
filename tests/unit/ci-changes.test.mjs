@@ -76,6 +76,19 @@ describe('CI change selection', () => {
 });
 
 describe('CI job graph and aggregation', () => {
+  it('builds and shares the grouped fixture so browser workers need no compiler', () => {
+    expect(jobs['site-build'].steps.find((step) => step.name === 'Build browser site').run).toContain(
+      'page-grouping-server.mjs --build-only'
+    );
+    const upload = jobs['site-build'].steps.find((step) => step.with?.name === 'grouped-browser-site');
+    expect(upload.with.path).toContain('tests/fixtures/page-grouping/dist');
+    expect(upload.with.path).toContain('.oxiquill/generated/cells.json');
+    expect(upload.with['include-hidden-files']).toBe(true);
+    expect(jobs.browser.env.OXIQUILL_FIXTURE_PREBUILT).toBe('1');
+    expect(jobs.browser.steps.find((step) => step.with?.name === 'grouped-browser-site').with.path).toBe(
+      'tests/fixtures/page-grouping'
+    );
+  });
   it('expands to sixteen jobs and runs the minimum toolchain for documentation', () => {
     expect(Object.values(jobs).reduce((count, job) => count + (job.strategy?.matrix.include.length ?? 1), 0)).toBe(16);
     expect(
