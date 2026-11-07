@@ -6,6 +6,7 @@ for (const locale of ['', 'ja/']) {
     await page.goto(`/${locale}features/rich-output/`);
     const prefix = locale ? 'ja__' : '';
     const cell = page.getByTestId(`cell-${prefix}features__rich-output__mixed-xy-layers`);
+    await cell.scrollIntoViewIfNeeded();
     await expect(cell.locator('.doc-plot canvas')).toBeVisible({ timeout: 60_000 });
     await expect(cell.locator('.doc-chart-output__legend button')).toHaveCount(3);
     const samples = cell.getByRole('button', { name: 'Samples', exact: true });
