@@ -43,8 +43,10 @@ export async function extractCellsFromMarkdown(source, pagePath, context) {
 }
 
 export async function createCellManifest(cell, highlighter) {
+  const normalized = normalizeCell(cell);
+  delete normalized.tests;
   return {
-    ...normalizeCell(cell),
+    ...normalized,
     sourceHtml: await highlighter.codeToHtml(cell.source, {
       lang: cell.language,
       themes: sourceThemes
