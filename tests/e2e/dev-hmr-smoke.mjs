@@ -170,10 +170,19 @@ try {
     `${basePath}/moved-reference-target/#ox-ref-hmr-heading`,
     { timeout: 60_000 }
   );
-  await referencePage.locator('main a[href$="#ox-ref-hmr-heading"]').click();
-  await expect(
-    referencePage.locator('#ox-ref-hmr-heading + h2, #ox-ref-hmr-heading + .sl-heading-wrapper h2')
-  ).toHaveText('Edited heading');
+  // Registry and runtime publication can each reload Vite. Automatic link refresh
+  // is verified above; retry navigation if a pending reload interrupts the click.
+  await expect(async () => {
+    await referencePage.goto(`http://127.0.0.1:${port}${basePath}/reference-referrer/`);
+    await referencePage.locator('main a[href$="#ox-ref-hmr-heading"]').click();
+    await expect(referencePage).toHaveURL(
+      `http://127.0.0.1:${port}${basePath}/moved-reference-target/#ox-ref-hmr-heading`,
+      { timeout: 2_000 }
+    );
+    await expect(
+      referencePage.locator('#ox-ref-hmr-heading + h2, #ox-ref-hmr-heading + .sl-heading-wrapper h2')
+    ).toHaveText('Edited heading', { timeout: 2_000 });
+  }).toPass({ timeout: 60_000 });
   expect(readFileSync(referenceReferrer, 'utf8')).toBe(unchangedReferrer);
   await referencePage.close();
 
