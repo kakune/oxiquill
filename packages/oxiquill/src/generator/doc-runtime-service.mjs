@@ -364,7 +364,9 @@ export async function syncDocRuntime({
       for (const file of await listRelativeFiles(rustStage.stagePath, { fileSystem })) {
         const target = path.join(paths.rustWasmPublicDir, file);
         if (!fileSystem.existsSync(target)) installedRustFiles.push(target);
-        await fileSystem.copyFile(path.join(rustStage.stagePath, file), target);
+        await fileSystem.mkdir(path.dirname(target), { recursive: true });
+        // Staging is on the same filesystem: never expose a partially copied module.
+        await fileSystem.rename(path.join(rustStage.stagePath, file), target);
       }
     }
     await publishDirectoryStages(
