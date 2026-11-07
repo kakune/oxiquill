@@ -1,0 +1,20 @@
+---
+title: First page
+---
+
+```rust
+//| id: compute
+//| title: Compute first
+//| crates: [page-math]
+//| inputs:
+//|   value: { type: integer, label: Value, value: 1, min: 1, max: 10 }
+let result: i32 = (1..=value).map(page_math::square).sum();
+println!("{result}");
+```
+
+```rust
+//| id: text
+//| title: Text first
+//| crates: []
+println!("first ready");
+```

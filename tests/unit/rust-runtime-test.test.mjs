@@ -262,6 +262,7 @@ describe('command orchestration and output', () => {
     });
     await runWasmTests(options);
     expect(options.generateRuntime.mock.calls[0][0].runtimeOptions).toEqual({
+      runCommand: expect.any(Function),
       buildRust: expect.any(Function),
       buildHaskell: expect.any(Function)
     });

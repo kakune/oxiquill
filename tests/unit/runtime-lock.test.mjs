@@ -231,6 +231,23 @@ describe('project runtime lock', () => {
     }
   });
 
+  it('notifies signal exit only after tracked children have drained', async () => {
+    const { acquire } = await fixture();
+    const processInterface = fakeProcess();
+    const onSignalExit = vi.fn();
+    const lease = await acquire({ process: processInterface, onSignalExit });
+    const child = Object.assign(new EventEmitter(), { kill: vi.fn() });
+    lease.trackChild(child);
+    processInterface.emit('SIGINT');
+    expect(onSignalExit).not.toHaveBeenCalled();
+    child.emit('close');
+    await Promise.resolve();
+    await Promise.resolve();
+    await Promise.resolve();
+    expect(onSignalExit).toHaveBeenCalledExactlyOnceWith('SIGINT');
+    expect(processInterface.kill).toHaveBeenCalledWith(4321, 'SIGINT');
+  });
+
   it('releases after compilation failure and preserves the previous output', async () => {
     const { options, paths, lockPath } = await fixture();
     fs.mkdirSync(paths.generatedDir, { recursive: true });

@@ -129,3 +129,32 @@ JSON の `test` イベントは `page`、`line`（フェンス行）、`cell`、
 ```
 
 すべて成功すれば終了ステータス 0、テスト失敗、タイムアウト、メタデータ不正、使用方法エラーは 1 です。フィルターなしのセルがないプロジェクトは成功しますが、不一致セレクターは必ずエラーです。期待値の形式は [検証](/ja/guides/validation/#rust-セルの宣言的テスト) を参照してください。
+
+## ビルドの報告と Explain
+
+`build`、`check`、`docgen` は `--format human|json`（既定値 `human`）と `--explain` を受け付けます。
+
+```sh
+pnpm exec oxiquill build --explain
+pnpm exec oxiquill docgen --wasm dev --format json
+pnpm exec oxiquill check --explain --format json
+```
+
+Explain は設定の解決、セルの検出と検証、通常ビルドと同じ計画の評価を行います。runtime lock を取得せず、書き込み、ダウンロード、生成、コンパイルを行いません。子プロセスはツールチェーンのバージョン確認だけです。`build` はリリース、`check` は開発モードを計画し、`docgen --wasm dev|build` は目的のモードを選びます。設定またはセルの検証失敗は非ゼロで終了します。利用できないツールは診断として報告します。`--outDir`、`--watch`、`--force`、`--lock-timeout` など実行専用のオプションとは併用できません。
+
+Human 形式はフェーズ、計画理由、最後のフェーズ集計を表示し、子プロセスの出力をすぐに転送します。30 秒間出力がなければフェーズと言語・モジュールを示す heartbeat を表示し、無出力が続く間は 30 秒ごとに繰り返します。終了・失敗・キャンセルで停止します。進捗率や完了予測時間は表示しません。
+
+JSON 形式は stdout に 1 行 1 イベントの NDJSON を出力します。子プロセス出力もイベントに包み、失敗時を含め最後は必ず `summary` です。
+
+| `type`       | フィールド                                                                                                                                           |
+| ------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `phase`      | `phase`、`state`、`elapsedMs`。該当時に `language`、`module`、`cache`（`hit` / `miss`）、`reason`。状態は `start`、`success`、`failure`、`skipped`。 |
+| `plan`       | `language`、`action`、`reasons`。該当時に `module`、`page`、`target`（`source` / `public`）。                                                        |
+| `heartbeat`  | `phase`、`elapsedMs`。該当時に `language`、`module`。                                                                                                |
+| `output`     | ツール名の `source`、`stream`（`stdout` / `stderr`）、`line`。                                                                                       |
+| `diagnostic` | `message`。                                                                                                                                          |
+| `summary`    | `exitStatus` と `phases`。各フェーズにつき `phase`、`state`、`elapsedMs`、`cache: { hits, misses }` の 1 行。                                        |
+
+フェーズは `discovery`、`validation`、`generation`、`compile`、`optimize`、`publish`、`astro-check`、`astro-build` です。最適化イベントは Oxiquill 自身の処理境界から発行し、検証済み最適化キャッシュの再利用も報告します。集計の時間は同じフェーズの処理時間の合計です。
+
+理由の `code` は `source-changed`（`changes: [{ page, cell }]`）、`helper-inputs-changed`、`toolchain-changed`、`build-options-changed`（変更された `variables` の名前だけ）、`generator-changed`、`package-changed`、`mode-upgrade`、`output-missing`、`integrity-mismatch`、`previous-build-failed`、`forced` です。`cache-hit` は検証済み再利用、`absent` は言語の出力が既に不要な状態です。fingerprint や設定値は表示せず、telemetry やベンチマーク履歴は保存しません。

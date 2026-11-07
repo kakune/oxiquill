@@ -10,7 +10,7 @@ if (isCliEntrypoint(process.argv[1], import.meta.url)) {
   try {
     await runCli(args);
   } catch (error) {
-    console.error(formatCliError(error, { debug: debugRequested(args) }));
-    process.exitCode = 1;
+    if (!error.reported) console.error(formatCliError(error, { debug: debugRequested(args) }));
+    process.exitCode = error.exitCode ?? 1;
   }
 }

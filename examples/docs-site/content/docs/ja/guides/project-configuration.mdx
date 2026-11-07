@@ -45,9 +45,10 @@ export const collections = createOxiquillCollections({ defineCollection, docsLoa
 | `vite`                            | 追加の Vite setting。必須 alias、dedupe、worker plugin、filesystem access は保持されます。 |
 | `paths`                           | 下記の source/cache/generated/public path。                                                |
 | `python`                          | Pyodide download の `preload`、`offline` と optional `packageMirror`。                     |
+| `rust`                            | Rust のコンパイル単位。`site`（既定値）または `page`。                                     |
 | その他の Astro field              | Astro に渡されます。Oxiquill の output は常に static です。                                |
 
-Astro config を手動で組み立てる場合だけ `oxiquillIntegration()` を使います。受け取る option は `base`、`markdown`、`paths`、`python`、`vite` で、Preact と Starlight は caller が追加します。
+Astro config を手動で組み立てる場合だけ `oxiquillIntegration()` を使います。受け取る option は `base`、`markdown`、`paths`、`python`、`rust`、`vite` で、Preact と Starlight は caller が追加します。
 
 interactive cell、Mermaid、KaTeX、public-asset base path には Oxiquill の unified pipeline が必要なため、`markdown.processor` は Oxiquill が管理します。custom processor は未対応で `TypeError` になり、代わりに対応する Markdown field と追加の `remarkPlugins` / `rehypePlugins` を設定します。
 
@@ -182,3 +183,21 @@ subpath 配下へ公開するときは Astro の `base` を設定します。Oxi
 `python.preload` の default は `false` です。有効にすると Python cell がある page の DOM ready 時に準備を始めます。詳細は [Python runtime asset](/ja/guides/python-runtime/#browser-の準備) を参照してください。
 
 `python.additionalPackages` はパッケージ名から `{ version, license, licenseFiles }` への mapping です。固定 Pyodide lock の配布物を許可リストへ追加します。`python.experimentalSetup` は既定で `false` で、有効にすると同じページの Python setup を毎回再実行できます。詳細は [Python runtime asset](/ja/guides/python-runtime/) を参照してください。
+
+## Rust コンパイルのグループ化
+
+`defineOxiquillConfig()` または `oxiquillIntegration()` に `rust: { grouping: 'page' }` を指定すると、ページごとの Rust セルを別々のモジュールにコンパイルします。指定可能な値は `'site'`（既定値、サイト全体で 1 モジュール）と `'page'` です。Rust セルのないページにはモジュールを生成しません。
+
+```js
+export default defineOxiquillConfig({
+  framework: { starlight },
+  title: 'My Docs',
+  rust: { grouping: 'page' }
+});
+```
+
+ページモードでは、ソース、helper の推移的な依存入力、ツールチェーン、ビルド設定が変わったモジュールだけを再ビルドします。読者は実行するセルが必要とするモジュールだけを取得します。共通依存は生成 Cargo workspace 内で一度コンパイルされますが、それぞれの Wasm に含まれるため、合計サイズは増える場合があります。小規模なサイトでは既定の単一モジュールが適しています。ページモードはサイトの拡大に伴う再ビルドとページ単位の転送量を抑えます。`oxiquill build --explain` で計画を確認できます。
+
+ページモードは Cargo を直接使い、生成 Cargo.lock と完全一致する wasm-bindgen CLI を必要とします。PATH 上の一致するバイナリを使い、なければ公式ホスト向け配布物の固定 SHA-256 を検証して `paths.downloadCacheDir` に保存します。PATH 上のバージョンが違う場合も検証済みのキャッシュまたはダウンロードを選択します。リリース最適化も PATH 上の wasm-opt、または検証済み Binaryen 117 を使い、既存の `-O` を維持します。展開には `tar` が必要です。検証失敗や未対応ホストでは期待するバージョンとキャッシュパスを表示します。一致するツールを PATH にインストールしても構いません。
+
+ページ crate のソースは `paths.rustCellsDir` 以下の安定したパスを使い、コンパイラと最適化キャッシュを共有します。必要な全グループが成功してから registry を公開し、失敗時は以前の完全な registry を維持します。移動・削除されたページの古い所有出力は公開後に削除します。`oxiquill clean` は生成物とコンパイラキャッシュを削除しますが、検証済みダウンロードは保持します。

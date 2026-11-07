@@ -26,6 +26,13 @@ export default defineConfig({
   ],
   webServer: [
     {
+      command: 'node tests/e2e/page-grouping-server.mjs',
+      env: { ASTRO_PREVIEW_BACKGROUND: '0' },
+      url: 'http://127.0.0.1:4325/grouped/',
+      timeout: 120_000,
+      reuseExistingServer: !process.env.CI
+    },
+    {
       command: 'pnpm exec vite --config tests/fixtures/rust-registry/vite.config.mjs --host 127.0.0.1',
       url: 'http://127.0.0.1:4324/registry-base/',
       reuseExistingServer: !process.env.CI

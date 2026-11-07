@@ -129,3 +129,32 @@ JSON output emits `test` events with `page`, `line` (fence line), `cell`, `case`
 ```
 
 Exit status is 0 when everything passes and 1 for failed tests, timeouts, invalid authoring, or usage errors. An unfiltered zero-cell project succeeds; unmatched selectors never succeed silently. See [Validation](/guides/validation/#declared-rust-cell-tests) for metadata and assertion forms.
+
+## Build Reporting and Explain
+
+`build`, `check`, and `docgen` accept `--format human|json` (default: `human`) and `--explain`:
+
+```sh
+pnpm exec oxiquill build --explain
+pnpm exec oxiquill docgen --wasm dev --format json
+pnpm exec oxiquill check --explain --format json
+```
+
+Explain resolves configuration, discovers and validates cells, and evaluates the same runtime plan without taking the runtime lock. It writes no artifacts, downloads nothing, and starts only toolchain version probes. `build` plans release artifacts, `check` plans development artifacts, and `docgen --wasm dev|build` selects the desired runtime mode. Configuration or cell validation failures exit nonzero. Unavailable toolchain probes are reported without running a build. Execution-only options such as `--outDir`, `--watch`, `--force`, and `--lock-timeout` cannot be combined with explain.
+
+Human output reports phase boundaries, plan reasons, and a final phase summary. Child stdout/stderr are forwarded immediately. After 30 seconds without child output, a heartbeat identifies the phase and language/module; it repeats every 30 seconds of silence and stops when the process ends. There are no percentages or completion-time estimates.
+
+JSON output is NDJSON on stdout. Every line is one event, child output is wrapped, and the final event is always a `summary`, including on failure:
+
+| `type`       | Fields                                                                                                                                                   |
+| ------------ | -------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `phase`      | `phase`, `state`, `elapsedMs`; optional `language`, `module`, `cache` (`hit` or `miss`), and `reason`. States: `start`, `success`, `failure`, `skipped`. |
+| `plan`       | `language`, `action`, `reasons`; applicable `module`, `page`, and `target` (`source` or `public`).                                                       |
+| `heartbeat`  | `phase`, `elapsedMs`; applicable `language` and `module`.                                                                                                |
+| `output`     | `source` (tool), `stream` (`stdout` or `stderr`), `line`.                                                                                                |
+| `diagnostic` | `message`.                                                                                                                                               |
+| `summary`    | `exitStatus`, `phases`: one row per phase with `phase`, `state`, `elapsedMs`, and `cache: { hits, misses }`.                                             |
+
+The phases are `discovery`, `validation`, `generation`, `compile`, `optimize`, `publish`, `astro-check`, and `astro-build`. Optimization events come from Oxiquill's own optimizer operation and include verified optimizer-cache reuse. Summary durations aggregate operations within each phase.
+
+Plan reasons use `code`: `source-changed` (with `changes: [{ page, cell }]`), `helper-inputs-changed`, `toolchain-changed`, `build-options-changed` (with changed `variables` names only), `generator-changed`, `package-changed`, `mode-upgrade`, `output-missing`, `integrity-mismatch`, `previous-build-failed`, or `forced`. `cache-hit` describes verified reuse; `absent` describes an already absent language. Fingerprints and build-option values are never printed. No telemetry or benchmark history is stored.

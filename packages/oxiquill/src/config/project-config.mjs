@@ -149,7 +149,8 @@ export function resolveOxiquillProjectConfig({
     configFile: resolvedConfigFile,
     cwd: invocationCwd,
     paths,
-    python: integrationMetadata.python
+    python: integrationMetadata.python,
+    rust: integrationMetadata.rust
   });
 }
 

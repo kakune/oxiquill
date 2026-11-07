@@ -54,6 +54,7 @@ export async function watchDocRuntime({ projectConfig, serviceOverrides = {}, sk
   const { paths } = projectConfig;
   const workspaceRoot = pathFromUrl(paths.workspaceRoot);
   let pythonOptions = projectConfig.python;
+  let rustOptions = projectConfig.rust;
   let licensePaths = pythonLicensePaths(pythonOptions, paths);
   let reloadConfig = false;
   let highlighter;
@@ -84,16 +85,17 @@ export async function watchDocRuntime({ projectConfig, serviceOverrides = {}, sk
         reloadConfig = false;
         const updated = await services.loadProjectConfig({ cwd: workspaceRoot, configFile: projectConfig.configFile });
         pythonOptions = updated.python;
+        rustOptions = updated.rust;
         licensePaths = pythonLicensePaths(pythonOptions, paths);
         watcher.add(licensePaths);
       }
-      const context = await services.createDocRuntimeContext({ paths, highlighter, pythonOptions });
+      const context = await services.createDocRuntimeContext({ paths, highlighter, pythonOptions, rustOptions });
       highlighter = context.highlighter;
 
       console.log(`[runtime] syncing after ${describeChangeKinds(currentKinds)}`);
       const current = await services.syncDocRuntime({
         ...context,
-        forceRustBuild: currentKinds.has('crate'),
+        forceRustBuild: rustOptions?.grouping !== 'page' && currentKinds.has('crate'),
         mode: 'dev',
         trackChild: lease.trackChild,
         tolerateHaskellBuildFailure: true

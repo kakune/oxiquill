@@ -1469,6 +1469,7 @@ describe('doc runtime service', () => {
 
     const commands = [];
     await buildRustWasm({
+      wasmOpt: { identity: 'managed-by-wasm-pack' },
       environment: {},
       mode: 'build',
       postprocess: async (options) => {
@@ -1495,13 +1496,17 @@ describe('doc runtime service', () => {
           'doc_rust_cells',
           '--locked'
         ],
-        { cwd: repoRoot, env: { CARGO_TARGET_DIR: repoPath('.oxiquill/build-cache/rust-target') } }
+        expect.objectContaining({
+          cwd: repoRoot,
+          env: { CARGO_TARGET_DIR: repoPath('.oxiquill/build-cache/rust-target') }
+        })
       ],
       ['postprocess', [], { rustWasmDir: repoPath('public/oxiquill/rust-wasm') }]
     ]);
 
     commands.length = 0;
     await buildRustWasm({
+      wasmOpt: { identity: 'managed-by-wasm-pack' },
       environment: {},
       mode: 'dev',
       postprocess: async () => undefined,
@@ -1539,7 +1544,7 @@ describe('doc runtime service', () => {
           '-o',
           repoPath('public/oxiquill/haskell-wasm/doc_haskell_cells.wasm')
         ],
-        { cwd: repoPath('.oxiquill/build-cache/haskell/build-9.14.1/src'), env: {} }
+        expect.objectContaining({ cwd: repoPath('.oxiquill/build-cache/haskell/build-9.14.1/src'), env: {} })
       ]
     ]);
     expect(fileSystem.existsSync('/repo/.oxiquill/build-cache/haskell/build-9.14.1/objects')).toBe(true);

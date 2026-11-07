@@ -51,6 +51,7 @@ export async function acquireRuntimeLock({
   random = randomUUID,
   delay = (milliseconds, abortSignal) => setTimeout(milliseconds, undefined, { signal: abortSignal }),
   log = console.error,
+  onSignalExit = /** @type {((signal: string) => void) | undefined} */ (undefined),
   preflight = preflightCleanupOwnership
 }) {
   if (!(timeout >= 0) || (timeout !== Infinity && !Number.isFinite(timeout))) {
@@ -102,7 +103,7 @@ export async function acquireRuntimeLock({
         await beforeWrite();
         try {
           fileSystem.linkSync(candidate(), lockPath);
-          return createLease({ lockPath, record, fileSystem, processInterface });
+          return createLease({ lockPath, record, fileSystem, processInterface, onSignalExit });
         } catch (error) {
           if (error.code !== 'EEXIST') throw error;
         }
@@ -201,7 +202,7 @@ function unlinkIfPresent(filePath, fileSystem) {
   }
 }
 
-function createLease({ lockPath, record, fileSystem, processInterface }) {
+function createLease({ lockPath, record, fileSystem, processInterface, onSignalExit }) {
   const children = new Set();
   let stopping = false;
   const stopChild = ({ child, detached }, signal) => {
@@ -220,8 +221,12 @@ function createLease({ lockPath, record, fileSystem, processInterface }) {
     if (stopping) return;
     stopping = true;
     const finish = () => {
-      releaseNow();
-      processInterface.kill(processInterface.pid, signal);
+      try {
+        onSignalExit?.(signal);
+      } finally {
+        releaseNow();
+        processInterface.kill(processInterface.pid, signal);
+      }
     };
     if (children.size === 0) return finish();
     children.forEach((child) => stopChild(child, signal));

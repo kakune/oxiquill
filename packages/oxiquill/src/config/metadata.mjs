@@ -22,7 +22,7 @@ export const oxiquillPathOptionNames = Object.freeze([
 
 export const astroDirectoryOptionNames = Object.freeze(['root', 'publicDir', 'cacheDir', 'outDir']);
 
-export function createOxiquillIntegrationMetadata({ astro = {}, paths = {}, python = {} } = {}) {
+export function createOxiquillIntegrationMetadata({ astro = {}, paths = {}, python = {}, rust = {} } = {}) {
   return Object.freeze({
     kind: 'integration',
     cwd: process.cwd(),
@@ -30,8 +30,18 @@ export function createOxiquillIntegrationMetadata({ astro = {}, paths = {}, pyth
     astroExplicitFields: explicitFields(astro, astroDirectoryOptionNames),
     paths: normalizeSelectedOptions(paths, oxiquillPathOptionNames),
     pathExplicitFields: explicitFields(paths, oxiquillPathOptionNames),
-    python: normalizePythonOptions(python)
+    python: normalizePythonOptions(python),
+    rust: normalizeRustOptions(rust)
   });
+}
+
+export function normalizeRustOptions(options = {}) {
+  if (!options || typeof options !== 'object' || Array.isArray(options)) throw new TypeError('rust must be an object.');
+  const unknown = Object.keys(options).filter((key) => key !== 'grouping');
+  if (unknown.length) throw new TypeError(`Unknown rust option: ${unknown.sort().join(', ')}.`);
+  const grouping = options.grouping === undefined ? 'site' : options.grouping;
+  if (!['site', 'page'].includes(grouping)) throw new TypeError('rust.grouping must be one of: site, page.');
+  return Object.freeze({ grouping });
 }
 
 function normalizePythonOptions(options) {

@@ -8,6 +8,9 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ### Added
 
+- Opt-in `rust.grouping: 'page'` compiles page modules in one Cargo workspace, reuses unaffected modules, and publishes the registry atomically with verified tool downloads.
+- Runtime builds explain cache decisions and report phase timings, silent-process heartbeats, and summaries. `build`, `check`, and `docgen` support NDJSON through `--format json` and read-only planning through `--explain`.
+
 - A versioned Rust module registry routes cells to lazily loaded, content-addressed assets with Wasm integrity checks, selective development updates, and shared `test-wasm` routing.
 
 - Project runtime locks serialize CLI commands, dev synchronization, and standalone Astro builds across processes, with `--lock-timeout`, holder diagnostics, and safe stale-lock recovery.

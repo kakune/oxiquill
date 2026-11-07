@@ -40,6 +40,7 @@ export async function runWasmTests({
       runtimeOptions:
         values.format === 'json'
           ? {
+              runCommand: runCommandToStderr,
               buildRust: (options) => buildRustWasm({ ...options, runCommand: runCommandToStderr }),
               buildHaskell: (options) => buildHaskellWasm({ ...options, runCommand: runCommandToStderr })
             }

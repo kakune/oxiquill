@@ -1,5 +1,8 @@
 import { trackRuntimeCommand } from '../runtime-lock.mjs';
-import { spawn } from 'node:child_process';
+import path from 'node:path';
+import { runProcess } from './process-runner.mjs';
+import { createRuntimeEvents } from './runtime-events.mjs';
+import { ensureToolDownload } from './tool-downloads.mjs';
 import { optimizeRustWasmFiles, resolveWasmOpt } from './wasm-opt-cache.mjs';
 import { createOxiquillPaths, pathFromUrl, pathInUrl } from '../../config/paths.mjs';
 import { postprocessRustWasm } from '../postprocess-rust-wasm.mjs';
@@ -45,10 +48,14 @@ export async function buildRustWasm({
   paths,
   postprocess = postprocessRustWasm,
   root = process.cwd(),
-  runCommand = runCommandWithInheritedStdio,
+  runCommand = runProcess,
+  events = createRuntimeEvents(),
+  format = 'human',
   trackChild
 }) {
-  runCommand = trackRuntimeCommand(runCommand, trackChild);
+  const execute = trackRuntimeCommand(runCommand, trackChild);
+  runCommand = (command, args, options) =>
+    execute(command, args, { events, format, language: 'rust', module: 'site', phase: 'compile', ...options });
   const resolvedPaths = paths ?? createOxiquillPaths({ workspaceRoot: root });
   const modeFlag = mode === 'build' ? '--release' : '--dev';
   const env = wasmPackEnvironment({ environment, paths: resolvedPaths });
@@ -60,28 +67,39 @@ export async function buildRustWasm({
           cwd: pathFromUrl(resolvedPaths.workspaceRoot),
           fileSystem,
           runCommand,
-          memoize: fileSystem === defaultFileSystem && runCommand === runCommandWithInheritedStdio
+          provision: true,
+          paths: resolvedPaths
         })))
       : undefined;
-  await runCommand(
-    'wasm-pack',
-    [
-      'build',
-      pathFromUrl(resolvedPaths.rustCellsDir),
-      '--target',
-      'web',
-      modeFlag,
-      '--out-dir',
-      pathFromUrl(resolvedPaths.rustWasmPublicDir),
-      '--out-name',
-      'doc_rust_cells',
-      ...(optimizer?.command ? ['--no-opt'] : []),
-      '--locked'
-    ],
-    { cwd: pathFromUrl(resolvedPaths.workspaceRoot), env }
+  await events.phase('compile', { language: 'rust', module: 'site' }, () =>
+    runCommand(
+      'wasm-pack',
+      [
+        'build',
+        pathFromUrl(resolvedPaths.rustCellsDir),
+        '--target',
+        'web',
+        modeFlag,
+        '--out-dir',
+        pathFromUrl(resolvedPaths.rustWasmPublicDir),
+        '--out-name',
+        'doc_rust_cells',
+        ...(optimizer?.command ? ['--no-opt'] : []),
+        '--locked'
+      ],
+      { cwd: pathFromUrl(resolvedPaths.workspaceRoot), env }
+    )
   );
   if (optimizer?.command) {
+    if (optimizer.url)
+      await ensureToolDownload(optimizer, {
+        fileSystem,
+        runCommand,
+        processOptions: { env, events, format, phase: 'optimize', language: 'rust', module: 'site' }
+      });
     await optimizeRustWasmFiles({
+      events,
+      context: { language: 'rust', module: 'site' },
       directory: pathFromUrl(resolvedPaths.rustWasmPublicDir),
       cacheDir: resolvedPaths.wasmOptCacheDir,
       cwd: pathFromUrl(resolvedPaths.workspaceRoot),
@@ -90,8 +108,145 @@ export async function buildRustWasm({
       runCommand,
       fileSystem
     });
-  }
+  } else
+    events.skipped('optimize', {
+      language: 'rust',
+      module: 'site',
+      reason: mode === 'build' ? 'managed-by-wasm-pack' : 'dev'
+    });
   await postprocess({ rustWasmDir: pathFromUrl(resolvedPaths.rustWasmPublicDir) });
+}
+
+export async function buildRustGroups({
+  groups,
+  paths,
+  mode,
+  wasmBindgen,
+  wasmOpt,
+  environment = process.env,
+  fileSystem = defaultFileSystem,
+  runCommand = runProcess,
+  events = createRuntimeEvents(),
+  format = 'human',
+  trackChild,
+  postprocess = postprocessRustWasm
+}) {
+  const invalid = groups.filter((group) => group.public === 'build');
+  if (!invalid.length) {
+    events.skipped('compile', { language: 'rust', cache: 'hit' });
+    events.skipped('optimize', { language: 'rust', cache: 'hit' });
+    return;
+  }
+  const env = wasmPackEnvironment({ environment, paths });
+  const execute = (command, args, options = {}) =>
+    runCommand(command, args, {
+      env,
+      cwd: paths.workspaceRoot,
+      events,
+      format,
+      trackChild,
+      language: 'rust',
+      phase: 'compile',
+      ...options
+    });
+  if (wasmBindgen.url) await ensureToolDownload(wasmBindgen, { fileSystem, runCommand: execute });
+  if (mode === 'build' && wasmOpt.url)
+    await ensureToolDownload(wasmOpt, { fileSystem, runCommand: execute, processOptions: { phase: 'optimize' } });
+  let output;
+  try {
+    output = await events.phase('compile', { language: 'rust' }, () =>
+      execute(
+        'cargo',
+        [
+          'build',
+          '--manifest-path',
+          path.join(paths.rustCellsDir, 'Cargo.toml'),
+          '--target',
+          'wasm32-unknown-unknown',
+          '--locked',
+          '--message-format=json-render-diagnostics',
+          ...(mode === 'build' ? ['--release'] : []),
+          ...invalid.flatMap((group) => ['--package', group.packageName])
+        ],
+        { captureOutput: true, source: 'cargo' }
+      )
+    );
+  } catch (cause) {
+    const diagnostics = `${cause.stdout ?? ''}\n${cause.message}`;
+    const failed = invalid.filter(
+      (group) =>
+        diagnostics.includes(`pages/${group.id}/src/`) ||
+        diagnostics.includes(`could not compile \`${group.packageName}\``)
+    );
+    const affected = failed.length ? failed : invalid;
+    const error = new Error(
+      `Rust compilation failed for ${affected.map((group) => `${group.id} (${group.page})`).join(', ')}: ${cause.message}`,
+      { cause }
+    );
+    error.exitCode = cause.exitCode;
+    throw error;
+  }
+  const artifacts = String(output)
+    .split('\n')
+    .flatMap((line) => {
+      try {
+        const value = JSON.parse(line);
+        return value.reason === 'compiler-artifact' ? [value] : [];
+      } catch {
+        return [];
+      }
+    });
+  for (const group of invalid) {
+    const directory = path.join(paths.rustWasmPublicDir, group.id);
+    await fileSystem.mkdir(directory, { recursive: true });
+    const artifact = artifacts
+      .find((entry) => entry.target?.name === group.packageName.replaceAll('-', '_'))
+      ?.filenames.find((name) => name.endsWith('.wasm'));
+    const wasm =
+      artifact ??
+      path.join(
+        env.CARGO_TARGET_DIR,
+        'wasm32-unknown-unknown',
+        mode === 'build' ? 'release' : 'debug',
+        `${group.packageName.replaceAll('-', '_')}.wasm`
+      );
+    try {
+      await events.phase('generation', { language: 'rust', module: group.id }, () =>
+        execute(
+          wasmBindgen.command,
+          [
+            wasm,
+            '--target',
+            'web',
+            '--out-dir',
+            directory,
+            '--out-name',
+            'doc_rust_cells',
+            ...(mode === 'build' ? [] : ['--debug', '--keep-debug'])
+          ],
+          { module: group.id, source: 'wasm-bindgen', phase: 'generation' }
+        )
+      );
+      if (mode === 'build')
+        await optimizeRustWasmFiles({
+          directory,
+          cacheDir: paths.wasmOptCacheDir,
+          cwd: paths.workspaceRoot,
+          optimizer: wasmOpt,
+          environment: env,
+          runCommand: execute,
+          fileSystem,
+          events,
+          context: { language: 'rust', module: group.id }
+        });
+      else events.skipped('optimize', { language: 'rust', module: group.id, reason: 'dev' });
+      await postprocess({ rustWasmDir: directory, fileSystem });
+    } catch (cause) {
+      const error = new Error(`Rust module ${group.id} (${group.page}) failed: ${cause.message}`, { cause });
+      error.exitCode = cause.exitCode;
+      throw error;
+    }
+  }
 }
 
 export async function buildHaskellWasm({
@@ -102,11 +257,15 @@ export async function buildHaskellWasm({
   mode,
   paths,
   root = process.cwd(),
-  runCommand = runCommandWithInheritedStdio,
+  runCommand = runProcess,
+  events = createRuntimeEvents(),
+  format = 'human',
   tolerateFailure = false,
   trackChild
 }) {
-  runCommand = trackRuntimeCommand(runCommand, trackChild);
+  const execute = trackRuntimeCommand(runCommand, trackChild);
+  runCommand = (command, args, options) =>
+    execute(command, args, { events, format, phase: 'compile', language: 'haskell', module: 'site', ...options });
   const resolvedPaths = paths ?? createOxiquillPaths({ workspaceRoot: root });
   const outputDir = pathFromUrl(resolvedPaths.haskellWasmPublicDir);
   const optimizationFlag = mode === 'build' ? '-O2' : '-O0';
@@ -216,30 +375,3 @@ async function writeHaskellRuntimeStatus({ fileSystem, haskellFingerprint, messa
     { fileSystem }
   );
 }
-
-/* v8 ignore start -- external process adapter covered through injected runCommand in tests. */
-function runCommandWithInheritedStdio(command, args, options) {
-  return new Promise((resolve, reject) => {
-    const detached = Boolean(options.trackChild) && process.platform !== 'win32';
-    const child = spawn(command, args, {
-      detached,
-      cwd: options.cwd,
-      env: options.env,
-      stdio: options.captureOutput ? ['ignore', 'pipe', 'inherit'] : 'inherit'
-    });
-
-    options.trackChild?.(child, detached);
-    const output = [];
-    child.stdout?.on('data', (chunk) => output.push(chunk));
-    child.on('error', reject);
-    child.on('close', (code, signal) => {
-      if (code === 0) {
-        resolve(Buffer.concat(output).toString('utf8'));
-      } else {
-        reject(new Error(`${command} exited with ${signal ?? code}`));
-      }
-    });
-  });
-}
-
-/* v8 ignore stop */

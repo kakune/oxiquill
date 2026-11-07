@@ -68,6 +68,24 @@ export async function readRustBuildInputs({ environment = process.env, fileSyste
   );
 }
 
+export async function readRustBuildOptionDigests({ environment = process.env, fileSystem = defaultFileSystem, paths }) {
+  const variables = Object.fromEntries(
+    Object.entries({ ...rustBuildEnvironment(environment), ...binaryenEnvironment(environment) })
+      .sort(([a], [b]) => a.localeCompare(b))
+      .map(([name, value]) => [name, hashText(value)])
+  );
+  for (const name of ['config', 'config.toml']) {
+    try {
+      variables[`.cargo/${name}`] = hashBytes(
+        await fileSystem.readFile(path.join(paths.workspaceRoot, '.cargo', name))
+      );
+    } catch (error) {
+      if (error?.code !== 'ENOENT') throw error;
+    }
+  }
+  return variables;
+}
+
 export function artifactBuildFingerprint(inputs, mode) {
   return stableFingerprint({ inputs, mode });
 }

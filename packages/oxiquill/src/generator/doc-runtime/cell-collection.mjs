@@ -1,3 +1,4 @@
+import { createRuntimeEvents } from './runtime-events.mjs';
 import path from 'node:path';
 import { pathFromUrl } from '../../config/paths.mjs';
 import { parseCellsFromMarkdown } from './cell-parser.mjs';
@@ -20,31 +21,36 @@ export async function collectAuthoringCells({
   fileSystem = defaultFileSystem,
   helperCrates,
   paths,
+  events = createRuntimeEvents(),
   pythonOptions = {}
 }) {
-  const files = await listFiles(paths.docsDir, { fileSystem });
-  const parsedPages = await Promise.all(
-    files
-      .filter((file) => file.endsWith('.mdx') || file.endsWith('.md'))
-      .map(async (file) =>
-        parseCellsFromMarkdown(
-          await fileSystem.readFile(file, 'utf8'),
-          normalizePath(path.relative(pathFromUrl(paths.workspaceRoot), file)),
-          pythonOptions
+  const parsedPages = await events.phase('discovery', {}, async () => {
+    const files = await listFiles(paths.docsDir, { fileSystem });
+    return Promise.all(
+      files
+        .filter((file) => file.endsWith('.mdx') || file.endsWith('.md'))
+        .map(async (file) =>
+          parseCellsFromMarkdown(
+            await fileSystem.readFile(file, 'utf8'),
+            normalizePath(path.relative(pathFromUrl(paths.workspaceRoot), file)),
+            pythonOptions
+          )
         )
-      )
-  );
-  const cells = parsedPages.flatMap((page) => page.cells);
-  throwInteractiveCellDiagnostics([
-    ...parsedPages.flatMap((page) => page.diagnostics),
-    ...(helperCrates ? cells.flatMap((cell) => validateCellDependencies(cell, helperCrates)) : [])
-  ]);
-  assertUniqueCellIds(cells);
-  const haskell = cells.filter((cell) => cell.language === 'haskell');
-  const rust = cells.filter((cell) => cell.language === 'rust');
-  assertUniqueHaskellFunctionNames(haskell);
-  assertUniqueHaskellInputBindings(haskell);
-  assertUniqueRustFunctionNames(rust);
-  assertUniqueRustInputBindings(rust);
-  return resolvePythonSetups(cells);
+    );
+  });
+  return events.phase('validation', {}, async () => {
+    const cells = parsedPages.flatMap((page) => page.cells);
+    throwInteractiveCellDiagnostics([
+      ...parsedPages.flatMap((page) => page.diagnostics),
+      ...(helperCrates ? cells.flatMap((cell) => validateCellDependencies(cell, helperCrates)) : [])
+    ]);
+    assertUniqueCellIds(cells);
+    const haskell = cells.filter((cell) => cell.language === 'haskell');
+    const rust = cells.filter((cell) => cell.language === 'rust');
+    assertUniqueHaskellFunctionNames(haskell);
+    assertUniqueHaskellInputBindings(haskell);
+    assertUniqueRustFunctionNames(rust);
+    assertUniqueRustInputBindings(rust);
+    return resolvePythonSetups(cells);
+  });
 }

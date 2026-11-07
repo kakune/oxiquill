@@ -1,5 +1,6 @@
 # Generated project output
 **/.astro/
+**/.cache/
 **/.oxiquill/
 **/coverage/
 **/dist/
