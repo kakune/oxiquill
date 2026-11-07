@@ -308,7 +308,7 @@ function createOxiquillIntegration(
           markdown: mergeMarkdownConfig(base, paths, markdown, pythonOptions, generation),
           outDir: astroDirectoryUrl(paths.outDir),
           publicDir: astroDirectoryUrl(paths.publicDir),
-          vite: mergeViteConfig(paths, vite, bundledModules, browserBundle, generation)
+          vite: mergeViteConfig(paths, vite, bundledModules, browserBundle, generation, config.base)
         } as unknown as Parameters<typeof updateConfig>[0];
 
         updateConfig(update);
@@ -325,6 +325,7 @@ function createOxiquillIntegration(
             'declare module "virtual:oxiquill/cell?*" {',
             '  import type { CellManifest } from "oxiquill/runtime/types";',
             '  export const cell: CellManifest;',
+            '  export const rustModule: import("oxiquill/runtime/types").RustRuntimeModule | undefined;',
             '}',
             'declare module "virtual:oxiquill/runtime-version" {',
             '  export const runtimeVersion: string;',
@@ -332,10 +333,6 @@ function createOxiquillIntegration(
             'declare module "virtual:oxiquill/runtime-paths" {',
             '  export const haskellWasmPath: string;',
             '  export const pyodidePath: string;',
-            '}',
-            'declare module "virtual:oxiquill/rust-wasm" {',
-            '  export default function init(): Promise<void>;',
-            '  export function run_rust_cell(cellId: string, inputsJson: string): string;',
             '}'
           ].join('\n')
         });
@@ -529,7 +526,8 @@ function mergeViteConfig(
   vite: ViteUserConfig,
   bundledModules: BundledModuleCollector,
   browserBundle: BrowserBundleCollector,
-  generation?: ReturnType<typeof createBuildGeneration>
+  generation?: ReturnType<typeof createBuildGeneration>,
+  astroBase?: string
 ): ViteUserConfig {
   const worker = vite.worker ?? {};
   const server = vite.server ?? {};
@@ -566,7 +564,7 @@ function mergeViteConfig(
       ...worker,
       plugins: () => [
         oxiquillDependencyResolverPlugin(paths),
-        oxiquillVirtualModulesPlugin(paths, { generation }),
+        oxiquillVirtualModulesPlugin(paths, { generation, base: astroBase }),
         bundledModuleCollectorPlugin(bundledModules, 'worker'),
         browserBundleCollectorPlugin(browserBundle, 'worker'),
         ...resolveWorkerPlugins(worker.plugins as ViteWorkerPlugins | undefined)
@@ -578,7 +576,7 @@ function mergeViteConfig(
     },
     plugins: [
       oxiquillDependencyResolverPlugin(paths),
-      oxiquillVirtualModulesPlugin(paths, { generation }),
+      oxiquillVirtualModulesPlugin(paths, { generation, base: astroBase }),
       bundledModuleCollectorPlugin(bundledModules, 'main'),
       browserBundleCollectorPlugin(browserBundle, 'main'),
       ...(vite.plugins ?? [])

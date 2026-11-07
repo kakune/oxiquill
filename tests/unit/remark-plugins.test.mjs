@@ -47,7 +47,8 @@ describe('remark interactive cells', () => {
             type: 'mdxJsxAttributeValueExpression',
             value: '__oxiquillCell0'
           }
-        }
+        },
+        expect.objectContaining({ name: 'rustModule' })
       ],
       children: []
     });
@@ -518,7 +519,11 @@ function runtimeImportLocal(tree, source) {
 
 function cellImportLocals(tree) {
   return runtimeImportNode(tree, 'oxiquill/runtime/InteractiveCell')
-    .data.estree.body.filter((declaration) => declaration.source.value.startsWith('virtual:oxiquill/cell?'))
+    .data.estree.body.filter(
+      (declaration) =>
+        declaration.source.value.startsWith('virtual:oxiquill/cell?') &&
+        declaration.specifiers[0].imported.name === 'cell'
+    )
     .map((declaration) => declaration.specifiers[0].local.name);
 }
 

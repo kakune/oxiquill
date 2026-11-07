@@ -1,4 +1,7 @@
 import path from 'node:path';
+import { finalizeRustModule, validateRustModuleFiles } from './doc-runtime/rust-module-assets.mjs';
+import { parseGeneratedCellManifest } from './doc-runtime/cell-manifest.mjs';
+import { validateRustRegistry } from '../lib/doc-runtime/rust-registry.mjs';
 import { artifactBuildFingerprint, getGeneratorIdentity, readRustBuildInputs } from './doc-runtime/build-inputs.mjs';
 import { recordedOutputIsComplete, recordOutputIntegrity } from './doc-runtime/output-integrity.mjs';
 import { createHighlighter } from 'shiki';
@@ -230,6 +233,8 @@ export async function syncDocRuntime({
   }
 
   const stages = [];
+  const installedRustFiles = [];
+  let published = false;
   let haskellBuildResult = { ok: true };
 
   try {
@@ -277,6 +282,25 @@ export async function syncDocRuntime({
       }
     }
 
+    const rust =
+      plan.languages.rust.public === 'build'
+        ? await finalizeRustModule({ cells: rustCells, paths: stagedPaths, publicPaths: paths, fileSystem })
+        : plan.languages.rust.public === 'keep'
+          ? state?.rust
+          : undefined;
+    if (rust)
+      await validateRustModuleFiles({
+        registry: rust,
+        cells,
+        assetDirectory: stagedPaths.rustWasmPublicDir,
+        fileSystem
+      });
+    generated.cellsJson = generateCellsJson(
+      cells,
+      snapshot.generationId,
+      rust ?? (rustCells.length === 0 ? { version: 1, modules: [] } : undefined)
+    );
+    generated.cellsModule = generateCellsModule(cells, snapshot.generationId, rust);
     const nextState = await createNextRuntimeState({
       desired,
       snapshot,
@@ -288,6 +312,11 @@ export async function syncDocRuntime({
       stagedPaths,
       state
     });
+    if (rust) nextState.rust = rust;
+    nextState.ownedOutputs = createRuntimeOwnedOutputs(paths, rust ?? { version: 1, modules: [] }).filter(
+      (entry) => desired[entry.language].cellCount > 0
+    );
+    nextState.ready = nextState.ready && (rustCells.length === 0 || Boolean(rust));
     const generatedStage = await createDirectoryStage(paths.generatedDir, { fileSystem });
     stages.push({ stagePath: generatedStage, targetPath: paths.generatedDir, type: 'generated' });
     await writeGeneratedRuntime({
@@ -295,7 +324,7 @@ export async function syncDocRuntime({
       generated,
       nextState,
       paths: { ...paths, generatedDir: generatedStage },
-      ready: haskellBuildResult.ok,
+      ready: nextState.ready,
       summary
     });
 
@@ -328,17 +357,46 @@ export async function syncDocRuntime({
       pythonOptions
     });
     if (mode === 'build') await assertGenerationSnapshot(snapshot, snapshotOptions);
+    // Install immutable assets first; keep the old registry's files reachable until publication succeeds.
+    const rustStage = stages.find((stage) => stage.targetPath === paths.rustWasmPublicDir && stage.type === 'language');
+    if (rustStage) {
+      await fileSystem.mkdir(paths.rustWasmPublicDir, { recursive: true });
+      for (const file of await listRelativeFiles(rustStage.stagePath, { fileSystem })) {
+        const target = path.join(paths.rustWasmPublicDir, file);
+        if (!fileSystem.existsSync(target)) installedRustFiles.push(target);
+        await fileSystem.mkdir(path.dirname(target), { recursive: true });
+        // Staging is on the same filesystem: never expose a partially copied module.
+        await fileSystem.rename(path.join(rustStage.stagePath, file), target);
+      }
+    }
     await publishDirectoryStages(
       [
-        ...stages.filter(({ type }) => type === 'language'),
+        ...stages.filter(({ type, targetPath }) => type === 'language' && targetPath !== paths.rustWasmPublicDir),
         ...staleLanguageStages(paths, plan),
         { stagePath: generatedStage, targetPath: paths.generatedDir }
       ],
-      { fileSystem }
+      {
+        fileSystem,
+        onPublished: () => {
+          published = true;
+        }
+      }
+    );
+    const retainedRustFiles = new Set(nextState.languages.rust?.publicFiles ?? []);
+    const previousRustFiles = state?.rust
+      ? state.rust.modules.flatMap((module) => [module.glue, module.wasm].map((asset) => path.basename(asset.url)))
+      : ['doc_rust_cells.js', 'doc_rust_cells_bg.wasm'].filter((name) =>
+          state?.languages?.rust?.publicFiles?.includes(name)
+        );
+    await Promise.all(
+      previousRustFiles
+        .filter((file) => !retainedRustFiles.has(file))
+        .map((file) => fileSystem.rm(path.join(paths.rustWasmPublicDir, file), { force: true }))
     );
 
     return runtimeResult({ haskellBuildResult, licensesChanged, plan, snapshot, summary });
   } finally {
+    if (!published) await Promise.all(installedRustFiles.map((file) => fileSystem.rm(file, { force: true })));
     await Promise.all(stages.map(({ stagePath }) => discardDirectoryStage(stagePath, { fileSystem })));
   }
 }
@@ -397,10 +455,16 @@ function createDesiredRuntime({
 }
 
 async function runtimeOutputState({ fileSystem, paths, state }) {
+  const manifest = fileSystem.existsSync(paths.cellsJsonPath)
+    ? parseGeneratedCellManifest(await fileSystem.readFile(paths.cellsJsonPath, 'utf8'))
+    : undefined;
+  if (manifest?.rust) validateRustRegistry(manifest.rust, manifest.cells);
+  const registryCurrent = !state?.rust || stableFingerprint(state.rust) === stableFingerprint(manifest?.rust);
   const outputPresent = {
     generated: fileSystem.existsSync(paths.generatedDir),
     rustSource: fileSystem.existsSync(paths.rustCellsDir),
-    rustPublic: fileSystem.existsSync(paths.rustWasmPublicDir),
+    rustPublic:
+      fileSystem.existsSync(paths.rustWasmPublicDir) && (!state || Boolean(state.languages?.rust?.publicFiles?.length)),
     pythonPublic: fileSystem.existsSync(paths.pyodidePublicDir),
     haskellSource: fileSystem.existsSync(paths.haskellCellsDir),
     haskellPublic: fileSystem.existsSync(paths.haskellWasmPublicDir)
@@ -410,6 +474,7 @@ async function runtimeOutputState({ fileSystem, paths, state }) {
     outputComplete: {
       generated:
         Boolean(state) &&
+        registryCurrent &&
         fileSystem.existsSync(paths.cellsModulePath) &&
         fileSystem.existsSync(paths.cellsJsonPath) &&
         fileSystem.existsSync(paths.runtimeOwnershipPath) &&
@@ -419,7 +484,9 @@ async function runtimeOutputState({ fileSystem, paths, state }) {
         ['Cargo.toml', 'Cargo.lock', 'LICENSE-MIT', 'LICENSE-APACHE', 'src/lib.rs'].every((fileName) =>
           fileSystem.existsSync(pathInUrl(paths.rustCellsDir, fileName))
         ),
-      rustPublic: await recordedOutputIsComplete(state?.languages?.rust, paths.rustWasmPublicDir, fileSystem),
+      rustPublic:
+        Boolean(state?.rust) &&
+        (await recordedOutputIsComplete(state?.languages?.rust, paths.rustWasmPublicDir, fileSystem)),
       pythonPublic: await recordedOutputIsComplete(state?.languages?.python, paths.pyodidePublicDir, fileSystem),
       haskellSource:
         outputPresent.haskellSource &&
@@ -612,7 +679,6 @@ async function writeGeneratedRuntime({ fileSystem, generated, nextState, paths, 
 function staleLanguageStages(paths, plan) {
   const targets = [
     [plan.languages.rust.source, paths.rustCellsDir],
-    [plan.languages.rust.public, paths.rustWasmPublicDir],
     [plan.languages.python.public, paths.pyodidePublicDir],
     [plan.languages.haskell.source, paths.haskellCellsDir],
     [plan.languages.haskell.public, paths.haskellWasmPublicDir]

@@ -2,6 +2,7 @@ import { act, cleanup, fireEvent, render, screen, waitFor, within } from '@testi
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type {
   CellExecutionResult,
+  RustRuntimeRegistry,
   CellManifest,
   InputSpec,
   InputValues
@@ -15,6 +16,7 @@ import { CellExecutionError } from '../../packages/oxiquill/src/lib/doc-runtime/
 import { chart, echartsInit, echartsUse, mermaidInitialize, mermaidRender } from './mocks/external-runtime';
 
 type ManifestSnapshot = {
+  rust?: RustRuntimeRegistry;
   cells: readonly CellManifest[];
   version: string;
 };
@@ -154,7 +156,22 @@ function makeCell(overrides: Partial<CellManifest> = {}): CellManifest {
 let manifestSnapshot: ManifestSnapshot = { cells: [], version: 'v1' };
 
 function setManifestCells(cells: readonly CellManifest[], version = 'v1') {
-  manifestSnapshot = { cells, version };
+  manifestSnapshot = {
+    cells,
+    version,
+    rust: {
+      version: 1,
+      modules: [
+        {
+          id: 'site',
+          fingerprint: version,
+          glue: { url: '/site.js' },
+          wasm: { url: '/site.wasm', integrity: `sha384-${'A'.repeat(64)}`, bytes: 8 },
+          cells: cells.filter((cell) => cell.language === 'rust').map((cell) => cell.id)
+        }
+      ]
+    }
+  };
   mocks.getManifestSnapshot.mockImplementation(() => manifestSnapshot);
 }
 
@@ -596,7 +613,10 @@ describe('InteractiveCell', () => {
         label: 'next'
       }),
       'v1',
-      expect.anything()
+      expect.anything(),
+      undefined,
+      undefined,
+      expect.objectContaining({ id: 'site' })
     );
   });
 
@@ -730,7 +750,15 @@ describe('InteractiveCell', () => {
     expect(runButton).toBeEnabled();
     fireEvent.click(runButton);
     await waitFor(() => expect(mocks.runInteractiveCell).toHaveBeenCalledOnce());
-    expect(mocks.runInteractiveCell).toHaveBeenCalledWith(expect.anything(), { count: -1.5 }, 'v1', expect.anything());
+    expect(mocks.runInteractiveCell).toHaveBeenCalledWith(
+      expect.anything(),
+      { count: -1.5 },
+      'v1',
+      expect.anything(),
+      undefined,
+      undefined,
+      expect.objectContaining({ id: 'site' })
+    );
   });
 
   it('supports keyboard stepping for numeric spinbuttons and clamps at their bounds', () => {
@@ -980,7 +1008,10 @@ describe('InteractiveCell', () => {
       expect.objectContaining({ id: 'cell-one' }),
       expect.objectContaining({ ratio: 2.5 }),
       'v1',
-      expect.anything()
+      expect.anything(),
+      undefined,
+      undefined,
+      expect.objectContaining({ id: 'site' })
     );
   });
 
@@ -1011,7 +1042,10 @@ describe('InteractiveCell', () => {
       expect.objectContaining({ source: 'println!("updated");' }),
       { count: 3 },
       'v1',
-      expect.anything()
+      expect.anything(),
+      undefined,
+      undefined,
+      expect.objectContaining({ id: 'site' })
     );
   });
 
@@ -1046,7 +1080,10 @@ describe('InteractiveCell', () => {
       expect.anything(),
       { label: 'newer input 9' },
       'v1',
-      expect.anything()
+      expect.anything(),
+      undefined,
+      undefined,
+      expect.objectContaining({ id: 'site' })
     );
     expect(screen.queryByText('obsolete result')).not.toBeInTheDocument();
 

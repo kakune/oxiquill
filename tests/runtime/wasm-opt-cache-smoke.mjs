@@ -20,7 +20,8 @@ export async function verifyWasmOptCache({ paths }) {
   }
   const context = await createDocRuntimeContext({ paths });
   const wasmName = 'doc_rust_cells_bg.wasm';
-  const published = path.join(paths.rustWasmPublicDir, wasmName);
+  const publishedPath = async () =>
+    path.join(paths.publicDir, JSON.parse(await readFile(paths.cellsJsonPath, 'utf8')).rust.modules[0].wasm.url);
   let calls = 0;
   let optimizationMs = 0;
   const runCommand = async (command, args, options) => {
@@ -45,7 +46,7 @@ export async function verifyWasmOptCache({ paths }) {
     };
   };
   await rebuild();
-  const expected = await readFile(published);
+  const expected = await readFile(await publishedPath());
   const plainOutput = path.join(paths.workspaceRoot, 'plain-release');
   await runCommandWithCapturedOutput(
     'wasm-pack',
@@ -70,14 +71,18 @@ export async function verifyWasmOptCache({ paths }) {
   );
 
   await rm(paths.wasmOptCacheDir, { recursive: true, force: true });
-  await rm(published);
+  await rm(await publishedPath());
   const miss = await rebuild();
   assert.equal(miss.optimizerCalls, 1, 'a cold cache must optimize');
-  assert.deepEqual(await readFile(published), expected, 'random source stages must produce identical release bytes');
-  await rm(published);
+  assert.deepEqual(
+    await readFile(await publishedPath()),
+    expected,
+    'random source stages must produce identical release bytes'
+  );
+  await rm(await publishedPath());
   const hit = await rebuild();
   assert.equal(hit.optimizerCalls, 0, 'missing published Wasm must rebuild from verified cache bytes');
-  assert.deepEqual(await readFile(published), expected);
+  assert.deepEqual(await readFile(await publishedPath()), expected);
   await syncDocRuntime({
     ...context,
     mode: 'dev',

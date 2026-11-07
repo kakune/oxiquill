@@ -84,8 +84,12 @@ try {
     assert.equal(events.at(-1).failed, 1);
   }
   await writeFile(pagePath, authored);
-  const runtime = await import(pathToFileURL(path.join(paths.rustWasmPublicDir, 'doc_rust_cells.js')).href);
-  runtime.initSync({ module: await readFile(path.join(paths.rustWasmPublicDir, 'doc_rust_cells_bg.wasm')) });
+  const rustAsset = async (kind) => {
+    const manifest = JSON.parse(await readFile(paths.cellsJsonPath, 'utf8'));
+    return path.join(paths.publicDir, decodeURIComponent(manifest.rust.modules[0][kind].url));
+  };
+  const runtime = await import(pathToFileURL(await rustAsset('glue')).href);
+  runtime.initSync({ module: await readFile(await rustAsset('wasm')) });
   const manifest = JSON.parse(await readFile(paths.cellsJsonPath, 'utf8')).cells;
   const run = (name, inputs = {}) => {
     const cell = manifest.find((entry) => entry.id.endsWith(`__${name}`));
@@ -241,7 +245,7 @@ try {
   assert.ok(dependencyFiles.length > 0, 'warm build must produce cached registry artifacts');
   const dependencyTimes = await Promise.all(dependencyFiles.map(async (file) => [file, (await stat(file)).mtimeMs]));
   await verifyWasmOptCache({ paths });
-  let publishedWasm = await readFile(path.join(paths.rustWasmPublicDir, 'doc_rust_cells_bg.wasm'));
+  let publishedWasm = await readFile(await rustAsset('wasm'));
   const publishedReady = await readFile(paths.runtimeVersionPath);
   const context = await createDocRuntimeContext({ paths });
   const entered = Promise.withResolvers();
@@ -265,19 +269,17 @@ try {
   );
   resume.resolve();
   await rejected;
-  assert.deepEqual(await readFile(path.join(paths.rustWasmPublicDir, 'doc_rust_cells_bg.wasm')), publishedWasm);
+  assert.deepEqual(await readFile(await rustAsset('wasm')), publishedWasm);
   assert.deepEqual(await readFile(paths.runtimeVersionPath), publishedReady);
   const settled = await syncDocRuntime({ ...context, mode: 'dev' });
   const settledManifest = JSON.parse(await readFile(paths.cellsJsonPath, 'utf8'));
   assert.equal(settledManifest.generationId, settled.generationId);
   const settledCell = settledManifest.cells.find((cell) => cell.id.endsWith('__settled'));
   assert.ok(settledCell, 'settled rebuild must include the newly authored cell');
-  const settledRuntime = await import(
-    `${pathToFileURL(path.join(paths.rustWasmPublicDir, 'doc_rust_cells.js')).href}?settled`
-  );
-  settledRuntime.initSync({ module: await readFile(path.join(paths.rustWasmPublicDir, 'doc_rust_cells_bg.wasm')) });
+  const settledRuntime = await import(`${pathToFileURL(await rustAsset('glue')).href}?settled`);
+  settledRuntime.initSync({ module: await readFile(await rustAsset('wasm')) });
   assert.equal(JSON.parse(settledRuntime.run_rust_cell(settledCell.id, '{}')).outputs[0].content, 'settled cell\n');
-  publishedWasm = await readFile(path.join(paths.rustWasmPublicDir, 'doc_rust_cells_bg.wasm'));
+  publishedWasm = await readFile(await rustAsset('wasm'));
 
   await writeFile(
     path.join(workspaceRoot, 'content/docs/index.mdx'),
@@ -289,7 +291,7 @@ try {
       loadProjectConfig: async () => ({ astroConfigArgs: [], cwd: workspaceRoot, paths })
     })
   );
-  assert.deepEqual(await readFile(path.join(paths.rustWasmPublicDir, 'doc_rust_cells_bg.wasm')), publishedWasm);
+  assert.deepEqual(await readFile(await rustAsset('wasm')), publishedWasm);
   await readFile(paths.runtimeVersionPath);
 
   for (const [id, source, kind] of [
@@ -309,10 +311,8 @@ try {
       cwd: workspaceRoot,
       loadProjectConfig: async () => ({ astroConfigArgs: [], cwd: workspaceRoot, paths })
     });
-    const isolated = await import(
-      `${pathToFileURL(path.join(paths.rustWasmPublicDir, 'doc_rust_cells.js')).href}?${id}`
-    );
-    isolated.initSync({ module: await readFile(path.join(paths.rustWasmPublicDir, 'doc_rust_cells_bg.wasm')) });
+    const isolated = await import(`${pathToFileURL(await rustAsset('glue')).href}?${id}`);
+    isolated.initSync({ module: await readFile(await rustAsset('wasm')) });
     const [cell] = JSON.parse(await readFile(paths.cellsJsonPath, 'utf8')).cells;
     const result = JSON.parse(isolated.run_rust_cell(cell.id, '{}'));
     assert.equal(result.outputs[0].kind, kind, id);

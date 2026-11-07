@@ -57,6 +57,21 @@ export interface PythonSetupStep {
 
 export type InputValues = Record<string, string | number | boolean>;
 
+export interface RustRuntimeModule {
+  readonly id: string;
+  readonly fingerprint: string;
+  readonly glue: { readonly url: string };
+  readonly wasm: { readonly url: string; readonly integrity: string; readonly bytes: number };
+  readonly cells: readonly string[];
+}
+
+export interface RustRuntimeRegistry {
+  readonly version: 1;
+  readonly modules: readonly RustRuntimeModule[];
+}
+
+export type RustWorkerRequest = RuntimeWorkerRequest | { type: 'registry'; registry: RustRuntimeRegistry };
+
 export type ArtifactStream = 'stdout' | 'stderr' | 'display';
 export type TableColumnType = 'string' | 'number' | 'integer' | 'boolean' | 'date' | 'datetime' | 'null' | 'unknown';
 export type ChartAxisType = 'value' | 'category' | 'time' | 'log';
@@ -325,6 +340,7 @@ export interface CellExecutionResult {
 }
 
 export interface RuntimeWorkerRequest {
+  rustModule?: RustRuntimeModule;
   setup?: readonly PythonSetupStep[];
   requestId: number;
   cellId: string;
@@ -351,7 +367,7 @@ export type PythonWorkerResponse =
   | { type: 'ready'; requestId: number; ok: true }
   | { type: 'progress'; requestId: number; phase: RuntimeExecutionPhase };
 
-export type RuntimeWorkerResponse =
+export type RuntimeWorkerResponse = { rustModule?: Pick<RustRuntimeModule, 'id' | 'fingerprint'> } & (
   | {
       requestId: number;
       ok: true;
@@ -362,7 +378,8 @@ export type RuntimeWorkerResponse =
       ok: false;
       error: string;
       partialResult?: RawCellExecutionResult;
-    };
+    }
+);
 
 export type BoxplotValue = readonly [number, number, number, number, number];
 export interface BoxplotChartSpec extends BaseChartSpec {

@@ -34,6 +34,7 @@ declare module 'virtual:oxiquill/cell?*' {
   import type { CellManifest } from './lib/doc-runtime/types';
 
   export const cell: CellManifest;
+  export const rustModule: import('./lib/doc-runtime/types.js').RustRuntimeModule | undefined;
 }
 
 declare module 'virtual:oxiquill/runtime-version' {
@@ -43,11 +44,6 @@ declare module 'virtual:oxiquill/runtime-version' {
 declare module 'virtual:oxiquill/runtime-paths' {
   export const haskellWasmPath: string;
   export const pyodidePath: string;
-}
-
-declare module 'virtual:oxiquill/rust-wasm' {
-  export default function init(): Promise<void>;
-  export function run_rust_cell(cellId: string, inputsJson: string): string;
 }
 
 declare module 'astro:content' {

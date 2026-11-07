@@ -1,3 +1,5 @@
+import path from 'node:path';
+import { createRustModuleAssets } from '../../packages/oxiquill/src/generator/doc-runtime/rust-module-assets.mjs';
 // @vitest-environment node
 import { EventEmitter } from 'node:events';
 import { afterEach, describe, expect, it, vi } from 'vitest';
@@ -124,7 +126,20 @@ describe('Rust test suite', () => {
       report,
       compile,
       execute,
-      fileSystem: { readFile: vi.fn(async () => 'bytes') }
+      fileSystem: {
+        readFile: vi.fn(async (file) => {
+          const assets = createRustModuleAssets({
+            id: 'site',
+            cells: [cell],
+            glue: 'glue',
+            wasm: Buffer.from('bytes'),
+            publicPath: 'oxiquill/rust-wasm'
+          });
+          return file === paths.cellsJsonPath
+            ? JSON.stringify({ cells: [cell], rust: { version: 1, modules: [assets.module] } })
+            : assets.files[path.basename(file)];
+        })
+      }
     });
     expect(result).toEqual({ total: 3, passed: 1, failed: 2 });
     expect(compile).toHaveBeenCalledTimes(1);
@@ -134,6 +149,34 @@ describe('Rust test suite', () => {
     expect(report.mock.calls[2][0].failures[0].reason).toBe('harness-error');
     expect(await testGeneratedRustCells({ tests: [], paths, report })).toEqual({ total: 0, passed: 0, failed: 0 });
   });
+  it('routes a two-module fixture and only compiles modules selected by tests', async () => {
+    const other = { ...cell, id: 'other' };
+    const assets = [cell, other].map((assigned, index) =>
+      createRustModuleAssets({
+        id: `module-${index}`,
+        cells: [assigned],
+        glue: 'glue',
+        wasm: Buffer.from(`wasm-${index}`),
+        publicPath: 'oxiquill/rust-wasm'
+      })
+    );
+    const manifest = { cells: [cell, other], rust: { version: 1, modules: assets.map((asset) => asset.module) } };
+    const files = Object.assign({}, ...assets.map((asset) => asset.files));
+    const readFile = vi.fn(async (file) =>
+      file === paths.cellsJsonPath ? JSON.stringify(manifest) : files[path.basename(file)]
+    );
+    const compile = vi.fn(async (bytes) => bytes.toString());
+    const execute = vi.fn(async () => ({ kind: 'result', result: { outputs: [] } }));
+    const options = { paths, report: vi.fn(), compile, execute, fileSystem: { readFile } };
+    await expect(testGeneratedRustCells({ ...options, tests: [test, test] })).resolves.toMatchObject({ passed: 2 });
+    expect(compile).toHaveBeenCalledExactlyOnceWith(Buffer.from('wasm-0'));
+    expect(readFile.mock.calls.some(([file]) => file.includes('module-1'))).toBe(false);
+    compile.mockClear();
+    await testGeneratedRustCells({ ...options, tests: [test, { ...test, cell: other }] });
+    expect(compile.mock.calls.map(([bytes]) => bytes.toString())).toEqual(['wasm-0', 'wasm-1']);
+    expect(execute.mock.lastCall[0].runtimeUrl).toContain(assets[1].module.glue.url);
+  });
+
   it('reports assertion locations, missing values, and expected errors', () => {
     const asserted = {
       ...test,

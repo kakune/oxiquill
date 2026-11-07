@@ -9,7 +9,7 @@ import {
   shouldShowRunButton
 } from '../../lib/doc-runtime/interactive-cell-model.js';
 import type { RuntimeLabels } from '../../lib/doc-runtime/runtime-localization.js';
-import type { CellManifest } from '../../lib/doc-runtime/types.js';
+import type { CellManifest, RustRuntimeModule } from '../../lib/doc-runtime/types.js';
 import { CellOutput } from './CellOutput.js';
 import { cellExecutionTimeoutMs } from '../../lib/doc-runtime/interactive-cell-model.js';
 import { InputControl } from './InputControl.js';
@@ -18,13 +18,19 @@ import { useInteractiveCellRun } from './useInteractiveCellRun.js';
 
 interface InteractiveCellProps {
   cell?: CellManifest;
+  rustModule?: RustRuntimeModule;
   cellId: string;
 }
 
-export default function InteractiveCell({ cell: initialCell, cellId }: InteractiveCellProps) {
-  const { cells, version } = useManifestSnapshot();
+export default function InteractiveCell({
+  cell: initialCell,
+  cellId,
+  rustModule: initialRustModule
+}: InteractiveCellProps) {
+  const { cells, version, rust } = useManifestSnapshot();
   const cell =
     cells.find((candidate) => candidate.id === cellId) ?? (initialCell?.id === cellId ? initialCell : undefined);
+  const rustModule = rust ? rust.modules.find((module) => module.cells.includes(cellId)) : initialRustModule;
   const labels = useRuntimeLabels();
 
   if (!cell) {
@@ -38,21 +44,33 @@ export default function InteractiveCell({ cell: initialCell, cellId }: Interacti
   }
 
   return (
-    <InteractiveCellPanel key={`${cell.id}:${cell.language}`} cell={cell} labels={labels} runtimeVersion={version} />
+    <InteractiveCellPanel
+      key={`${cell.id}:${cell.language}`}
+      cell={cell}
+      labels={labels}
+      runtimeVersion={version}
+      rustModule={rustModule}
+    />
   );
 }
 
 function InteractiveCellPanel({
   cell,
   labels,
-  runtimeVersion
+  runtimeVersion,
+  rustModule
 }: {
   cell: CellManifest;
   labels: RuntimeLabels;
   runtimeVersion: string;
+  rustModule?: RustRuntimeModule;
 }) {
   const [isSourceVisible, setIsSourceVisible] = useState(cell.showSource);
-  const runtime = useInteractiveCellRun(cell, runtimeVersion);
+  const runtime = useInteractiveCellRun(
+    cell,
+    cell.language === 'rust' ? (rustModule?.fingerprint ?? 'not-ready') : runtimeVersion,
+    rustModule
+  );
   const selectedCase = runtime.inputsValid ? matchingInputCase(cell, runtime.values) : undefined;
   const section = useRef<HTMLElement>(null);
   const snapshot = useRef(runtime);

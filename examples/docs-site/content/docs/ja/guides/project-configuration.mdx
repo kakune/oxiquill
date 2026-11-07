@@ -108,6 +108,16 @@ export default defineOxiquillConfig({
 
 Astro の `root`、`publicDir`、`outDir`、`cacheDir` と Oxiquill の path setting が同じ directory を示す場合、正規化後の location が一致しなければなりません。明示値の競合は error になり、Oxiquill が黙って一方を選ぶことはありません。すべての CLI command は file の読み書きや clean より前にこの config を解決します。
 
+## 生成される Rust アセット
+
+実行可能な `.oxiquill/generated/cells.json` には、バージョン 1 の `rust` レジストリが含まれます。各 Rust セルは必ず 1 つのモジュールに属し、現在の生成処理は `site` という単一モジュールを出力します。
+
+各モジュールには、ビルドのフィンガープリント、JavaScript グルーと Wasm の URL、Wasm の SHA-384 整合性情報、バイト数、セル ID が記録されます。`public/oxiquill/rust-wasm/` のファイル名は `site-<hash>.js` や `site-<hash>.wasm` の形式です。内容に基づく URL は不変です。レジストリは `publicDir` からの相対パスを保存し、Astro はカスタムのランタイムディレクトリも含めて、設定された `base` に合わせてブラウザー用 URL を解決します。
+
+Rust ワーカーは、そのモジュールのセルが初めて実行されたときにアセットを読み込み、取得時に Wasm の整合性を検証します。テキストのみ、または Python のみのページは Rust モジュールのアセットを取得しません。開発中の更新ではフィンガープリントが変わったモジュールだけを無効化します。キャンセルとタイムアウトは引き続き Rust ワーカー全体をリセットします。古い登録済みアセットは、新しいレジストリの公開後に削除されます。
+
+ソースのみを生成する `docgen` は Rust をコンパイルしません。実行可能なアセットを生成するには、`oxiquill docgen --wasm dev` またはサイトのビルドを実行してください。生成されたマニフェストやアセットを直接編集しないでください。
+
 ## Python download
 
 ```js

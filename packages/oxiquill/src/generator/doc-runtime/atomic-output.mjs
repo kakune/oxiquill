@@ -31,7 +31,7 @@ export async function discardDirectoryStage(stagePath, { fileSystem = defaultFil
 
 // The generated directory goes last: withdraw its old ready marker first and
 // expose the new one only after all language outputs have been installed.
-export async function publishDirectoryStages(stages, { fileSystem = defaultFileSystem } = {}) {
+export async function publishDirectoryStages(stages, { fileSystem = defaultFileSystem, onPublished = () => {} } = {}) {
   const changes = stages.map(({ stagePath, targetPath }) => ({
     stagePath,
     targetPath,
@@ -61,6 +61,9 @@ export async function publishDirectoryStages(stages, { fileSystem = defaultFileS
     }
     throw error;
   }
+  // From this point the new ready marker is visible. Cleanup errors must not
+  // cause callers to discard assets referenced by the committed generation.
+  onPublished();
   await Promise.all(
     changes
       .filter(({ backedUp }) => backedUp)

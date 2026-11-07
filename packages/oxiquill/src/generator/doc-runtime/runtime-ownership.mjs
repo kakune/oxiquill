@@ -1,15 +1,24 @@
 import path from 'node:path';
 import { assertPathWithin, canonicalPath, normalizePath } from '../../config/paths.mjs';
 import { defaultFileSystem } from './file-system.mjs';
+import { validateRustRegistry } from '../../lib/doc-runtime/rust-registry.mjs';
 
 export const RUNTIME_OWNERSHIP_SCHEMA_VERSION = 1;
 
-export function createRuntimeOwnedOutputs(paths) {
+export function createRuntimeOwnedOutputs(paths, rust) {
   return Object.freeze([
     ownedOutput('rust', 'cache', paths.cacheDir, paths.rustCellsDir),
     ownedOutput('rust', 'cache', paths.cacheDir, paths.rustTargetDir),
     ownedOutput('rust', 'cache', paths.cacheDir, paths.wasmOptCacheDir),
-    ownedOutput('rust', 'public', paths.publicAssetsDir, paths.rustWasmPublicDir),
+    ...(rust
+      ? rust.modules.flatMap((module) =>
+          [module.glue, module.wasm].map((asset) => {
+            const target = path.resolve(paths.publicDir, decodeURIComponent(asset.url));
+            assertPathWithin(paths.rustWasmPublicDir, target, `Rust module ${module.id} asset`);
+            return ownedOutput('rust', 'public', paths.publicAssetsDir, target);
+          })
+        )
+      : [ownedOutput('rust', 'public', paths.publicAssetsDir, paths.rustWasmPublicDir)]),
     ownedOutput('python', 'public', paths.publicAssetsDir, paths.pyodidePublicDir),
     ownedOutput('haskell', 'cache', paths.cacheDir, paths.haskellCellsDir),
     ownedOutput('haskell', 'cache', paths.cacheDir, paths.haskellBuildCacheDir),
@@ -47,7 +56,10 @@ export function validateRuntimeOwnership(manifest, paths) {
     throw new Error('Runtime ownership manifest must use schemaVersion 1 and contain valid runtime state.');
   }
 
-  const expected = new Map(createRuntimeOwnedOutputs(paths).map((entry) => [ownershipKey(entry), entry]));
+  if (manifest.rust) validateRustRegistry(manifest.rust, manifest.snapshot?.cells ?? []);
+  const expected = new Map(
+    createRuntimeOwnedOutputs(paths, manifest.rust).map((entry) => [ownershipKey(entry), entry])
+  );
   for (const entry of manifest.ownedOutputs) {
     if (!isOwnedOutput(entry)) throw new Error('Runtime ownership manifest contains an invalid owned output.');
 

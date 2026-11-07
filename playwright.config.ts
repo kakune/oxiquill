@@ -26,7 +26,12 @@ export default defineConfig({
   ],
   webServer: [
     {
-      command: 'pnpm --dir examples/docs-site preview --host 127.0.0.1 --port 4322',
+      command: 'pnpm exec vite --config tests/fixtures/rust-registry/vite.config.mjs --host 127.0.0.1',
+      url: 'http://127.0.0.1:4324/registry-base/',
+      reuseExistingServer: !process.env.CI
+    },
+    {
+      command: 'pnpm --dir examples/docs-site exec astro preview --ignore-lock --host 127.0.0.1 --port 4322',
       env: { ASTRO_PREVIEW_BACKGROUND: '0' },
       url: 'http://127.0.0.1:4322',
       reuseExistingServer: !process.env.CI

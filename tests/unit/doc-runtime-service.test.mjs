@@ -1098,7 +1098,8 @@ describe('doc runtime service', () => {
     await sync();
     for (const content of ['truncated', 'modified wasm!']) {
       const count = buildRust.mock.calls.length;
-      await fileSystem.writeFile('/repo/public/oxiquill/rust-wasm/doc_rust_cells_bg.wasm', content);
+      const manifest = JSON.parse(await fileSystem.readFile('/repo/.oxiquill/generated/cells.json', 'utf8'));
+      await fileSystem.writeFile(path.join('/repo/public', manifest.rust.modules[0].wasm.url), content);
       await sync();
       expect(buildRust).toHaveBeenCalledTimes(count + 1);
     }
@@ -1363,8 +1364,16 @@ describe('doc runtime service', () => {
 
     await expect(syncDocRuntime(options)).rejects.toThrow('/tools/wasm-opt: wasm-opt failed');
     expect([...fileSystem.files.keys()].filter((file) => file.includes('/build-cache/wasm-opt/'))).toEqual([]);
-    expect(fileSystem.files.get('/repo/public/oxiquill/rust-wasm/doc_rust_cells.js').toString()).toBe('old js');
-    expect(fileSystem.files.get('/repo/public/oxiquill/rust-wasm/doc_rust_cells_bg.wasm').toString()).toBe('old wasm');
+    expect(
+      Array.from(fileSystem.files.entries()).some(
+        ([file, bytes]) => file.includes('/rust-wasm/site-') && bytes.toString().startsWith('old js')
+      )
+    ).toBe(true);
+    expect(
+      Array.from(fileSystem.files.entries()).some(
+        ([file, bytes]) => file.includes('/rust-wasm/site-') && bytes.toString() === 'old wasm'
+      )
+    ).toBe(true);
     expect(fileSystem.existsSync('/repo/.oxiquill/generated/runtime-version.ts')).toBe(true);
     await syncDocRuntime(options);
     expect(buildRust).toHaveBeenCalledTimes(3);
@@ -1806,13 +1815,121 @@ describe('production generation checkpoints', () => {
   });
 });
 
+describe('Rust registry publication', () => {
+  it('rejects invalid published assignments and repairs missing legacy registry metadata without recompiling', async () => {
+    const { buildRust, fileSystem, paths, sync } = createRustRuntimeHarness();
+    await sync();
+    const manifest = JSON.parse(await fileSystem.readFile(paths.cellsJsonPath, 'utf8'));
+    await fileSystem.writeFile(paths.cellsJsonPath, JSON.stringify({ ...manifest, rust: { version: 1, modules: [] } }));
+    await expect(sync()).rejects.toThrow('missing cells:');
+    const { rust, ...legacy } = manifest;
+    expect(rust.modules).toHaveLength(1);
+    await fileSystem.writeFile(paths.cellsJsonPath, JSON.stringify(legacy));
+    await sync();
+    expect(JSON.parse(await fileSystem.readFile(paths.cellsJsonPath, 'utf8')).rust).toEqual(rust);
+    expect(buildRust).toHaveBeenCalledOnce();
+  });
+
+  it('publishes new assets before the registry, retires old registered files afterward, and preserves unrelated files', async () => {
+    const { fileSystem, paths, sync } = createRustRuntimeHarness();
+    await sync();
+    const previous = JSON.parse(await fileSystem.readFile(paths.cellsJsonPath, 'utf8')).rust;
+    const oldFiles = previous.modules.flatMap((module) =>
+      [module.glue, module.wasm].map((asset) => path.join(paths.publicDir, asset.url))
+    );
+    const unrelated = path.join(paths.rustWasmPublicDir, 'keep.txt');
+    await fileSystem.writeFile(unrelated, 'authored');
+    let published = false;
+    const rename = fileSystem.rename;
+    fileSystem.rename = async (from, to) => {
+      if (to === paths.generatedDir) {
+        const next = JSON.parse(await fileSystem.readFile(path.join(from, 'cells.json'), 'utf8')).rust;
+        oldFiles.forEach((file) => expect(fileSystem.existsSync(file)).toBe(true));
+        next.modules.forEach((module) =>
+          [module.glue, module.wasm].forEach((asset) =>
+            expect(fileSystem.existsSync(path.join(paths.publicDir, asset.url))).toBe(true)
+          )
+        );
+        published = true;
+      }
+      await rename(from, to);
+    };
+    const remove = fileSystem.rm;
+    fileSystem.rm = async (file, options) => {
+      if (oldFiles.includes(file)) expect(published).toBe(true);
+      await remove(file, options);
+    };
+    await sync({
+      forceRustBuild: true,
+      buildRust: async ({ paths: staged }) => {
+        await fileSystem.writeFile(path.join(staged.rustWasmPublicDir, 'doc_rust_cells.js'), 'replacement glue');
+        await fileSystem.writeFile(path.join(staged.rustWasmPublicDir, 'doc_rust_cells_bg.wasm'), 'replacement wasm');
+      }
+    });
+    expect(published).toBe(true);
+    oldFiles.forEach((file) => expect(fileSystem.existsSync(file)).toBe(false));
+    expect(await fileSystem.readFile(unrelated, 'utf8')).toBe('authored');
+    const state = JSON.parse(await fileSystem.readFile(paths.runtimeOwnershipPath, 'utf8'));
+    expect(state.ownedOutputs.filter((entry) => entry.language === 'rust' && entry.root === 'public')).toHaveLength(2);
+    await expect(sync()).resolves.toMatchObject({ plan: { hasChanges: false } });
+  });
+
+  it('retains assets referenced by the committed registry when backup cleanup fails', async () => {
+    const { fileSystem, paths, sync } = createRustRuntimeHarness();
+    await sync();
+    const remove = fileSystem.rm;
+    fileSystem.rm = async (file, options) => {
+      if (file.endsWith('.previous')) throw new Error('backup cleanup failed');
+      await remove(file, options);
+    };
+    await expect(
+      sync({
+        forceRustBuild: true,
+        buildRust: async ({ paths: staged }) => {
+          await fileSystem.writeFile(path.join(staged.rustWasmPublicDir, 'doc_rust_cells.js'), 'committed glue');
+          await fileSystem.writeFile(path.join(staged.rustWasmPublicDir, 'doc_rust_cells_bg.wasm'), 'committed wasm');
+        }
+      })
+    ).rejects.toThrow('backup cleanup failed');
+    const manifest = JSON.parse(await fileSystem.readFile(paths.cellsJsonPath, 'utf8'));
+    for (const module of manifest.rust.modules)
+      for (const asset of [module.glue, module.wasm])
+        expect(fileSystem.existsSync(path.join(paths.publicDir, asset.url))).toBe(true);
+  });
+
+  it('rolls back newly installed immutable files when registry publication fails', async () => {
+    const { fileSystem, paths, sync } = createRustRuntimeHarness();
+    await sync();
+    const before = new Map(fileSystem.files);
+    const rename = fileSystem.rename;
+    fileSystem.rename = async (from, to) => {
+      if (to === paths.generatedDir && !from.endsWith('.previous')) throw new Error('registry publication failed');
+      await rename(from, to);
+    };
+    await expect(
+      sync({
+        forceRustBuild: true,
+        buildRust: async ({ paths: staged }) => {
+          await fileSystem.writeFile(path.join(staged.rustWasmPublicDir, 'doc_rust_cells.js'), 'different glue');
+          await fileSystem.writeFile(path.join(staged.rustWasmPublicDir, 'doc_rust_cells_bg.wasm'), 'different wasm');
+        }
+      })
+    ).rejects.toThrow('registry publication failed');
+    expect(fileSystem.files).toEqual(before);
+  });
+});
+
 describe('staged runtime license inputs', () => {
   it('collects notices from new outputs before promotion and preserves unrelated license files', async () => {
     const { fileSystem, paths, sync } = createRustRuntimeHarness();
     await fileSystem.writeFile(path.join(paths.licensesPublicDir, 'keep.txt'), 'keep');
     const syncLicenses = async ({ paths: staged }) => {
       expect(staged.rustWasmPublicDir).not.toBe(paths.rustWasmPublicDir);
-      expect(fileSystem.existsSync(path.join(staged.rustWasmPublicDir, 'doc_rust_cells_bg.wasm'))).toBe(true);
+      expect(
+        (await fileSystem.readdir(staged.rustWasmPublicDir, { withFileTypes: true })).some((entry) =>
+          entry.name.endsWith('.wasm')
+        )
+      ).toBe(true);
       expect(fileSystem.existsSync(paths.runtimeVersionPath)).toBe(false);
       await fileSystem.writeFile(path.join(staged.licensesPublicDir, 'notices.txt'), 'next notices');
       return true;
