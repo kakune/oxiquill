@@ -1,4 +1,5 @@
 import path from 'node:path';
+import { stripVTControlCharacters } from 'node:util';
 import { hashText } from './hashing.mjs';
 
 export function compilerMessages(output) {
@@ -17,8 +18,9 @@ export function compilerMessages(output) {
 }
 
 export function isRustCompilerFailure(error) {
-  const output = `${error.stdout ?? ''}\n${error.stderr ?? error.message}`;
+  const output = stripVTControlCharacters(`${error.stdout ?? ''}\n${error.stderr ?? error.message}`);
   if (compilerMessages(output).length) return true;
+  if (/(?:^|\n)\[INFO\]:[^\n]*(?:Installing wasm-bindgen|Optimizing wasm)/u.test(output)) return false;
   // wasm-pack prints rustc's human diagnostics. Require both a diagnostic header
   // and Cargo's compile summary; tool and resolver errors have neither pairing.
   return (

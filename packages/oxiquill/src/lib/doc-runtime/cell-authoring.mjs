@@ -137,7 +137,7 @@ export function parseInteractiveCellNode(node, pagePath, pythonOptions = {}, aut
     const fieldNode = document.getIn(keys, true);
     const position = lineCounter.linePos(fieldNode?.range?.[0] ?? 0);
     const rawLine = String(node.value).split('\n')[position.line - 1];
-    const prefix = rawLine?.match(optionPatterns[language]);
+    const prefix = rawLine?.replace(/\r$/u, '').match(optionPatterns[language]);
     return {
       line: location.fenceStartLine + position.line,
       column:

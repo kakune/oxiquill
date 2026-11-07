@@ -148,6 +148,13 @@ describe('Rust diagnostic attribution', () => {
     expect(runCommand).not.toHaveBeenCalled();
   });
 
+  it('recognizes colored compiler output and excludes failed wasm-pack tool compilation', () => {
+    const compiler = 'error[E0599]: unknown method\nerror: could not compile `generated`';
+    expect(isRustCompilerFailure({ message: `${String.fromCharCode(27)}[31m${compiler}` })).toBe(true);
+    expect(isRustCompilerFailure({ message: `[INFO]: Installing wasm-bindgen...\n${compiler}` })).toBe(false);
+    expect(isRustCompilerFailure({ message: `[INFO]: Optimizing wasm binaries...\n${compiler}` })).toBe(false);
+  });
+
   it('runs one matching failure-only check and preserves the original failure status', async () => {
     const error = Object.assign(new Error('wasm-pack exited with 7'), {
       exitCode: 7,

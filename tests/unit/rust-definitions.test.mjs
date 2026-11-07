@@ -128,5 +128,6 @@ describe('page-local Rust definitions', () => {
     expect(diagnostics).toEqual([]);
     expect(cells[0].source).toBe(`${newline}  let label = "日本語";${newline}  label.missing();`);
     expect(cells[0].sourcePosition[2]).toMatchObject({ line: 10, column: 3, text: '    label.missing();' });
+    expect(cells[0].fieldPositions.crates).toEqual({ line: 7, column: 15 });
   });
 });
