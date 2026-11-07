@@ -146,14 +146,14 @@ Human output reports phase boundaries, plan reasons, and a final phase summary. 
 
 JSON output is NDJSON on stdout. Every line is one event, child output is wrapped, and the final event is always a `summary`, including on failure:
 
-| `type`       | Fields                                                                                                                                                        |
-| ------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `phase`      | `phase`, `state`, `elapsedMs`; optional `language`, `module`, `cache` (`hit` or `miss`), and skip `reason`. States: `start`, `success`, `failure`, `skipped`. |
-| `plan`       | `language`, `action`, `reasons`; applicable `module`, `page`, and `target` (`source` or `public`).                                                            |
-| `heartbeat`  | `phase`, `elapsedMs`; applicable `language` and `module`.                                                                                                     |
-| `output`     | `source` (tool), `stream` (`stdout` or `stderr`), `line`.                                                                                                     |
-| `diagnostic` | `message`.                                                                                                                                                    |
-| `summary`    | `exitStatus`, `phases`: one row per phase with `phase`, `state`, `elapsedMs`, and `cache: { hits, misses }`.                                                  |
+| `type`       | Fields                                                                                                                                                   |
+| ------------ | -------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `phase`      | `phase`, `state`, `elapsedMs`; optional `language`, `module`, `cache` (`hit` or `miss`), and `reason`. States: `start`, `success`, `failure`, `skipped`. |
+| `plan`       | `language`, `action`, `reasons`; applicable `module`, `page`, and `target` (`source` or `public`).                                                       |
+| `heartbeat`  | `phase`, `elapsedMs`; applicable `language` and `module`.                                                                                                |
+| `output`     | `source` (tool), `stream` (`stdout` or `stderr`), `line`.                                                                                                |
+| `diagnostic` | `message`.                                                                                                                                               |
+| `summary`    | `exitStatus`, `phases`: one row per phase with `phase`, `state`, `elapsedMs`, and `cache: { hits, misses }`.                                             |
 
 The phases are `discovery`, `validation`, `generation`, `compile`, `optimize`, `publish`, `astro-check`, and `astro-build`. Optimization events come from Oxiquill's own optimizer operation and include verified optimizer-cache reuse. Summary durations aggregate operations within each phase.
 

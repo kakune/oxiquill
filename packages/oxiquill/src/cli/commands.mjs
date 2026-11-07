@@ -22,22 +22,65 @@ export async function runCli(commandOrArgs = [], argsOrOptions = {}, legacyOptio
   const { args, options } = normalizeRunCliArguments(commandOrArgs, argsOrOptions, legacyOptions);
   let events;
   let exitStatus = 0;
+  let cancellationStatus;
+  let finished = false;
+  const makeEvents = (format) => {
+    const render = createEventReporter({ format, write: options.log });
+    return createRuntimeEvents({
+      report: (event) => {
+        if (!finished) render(event);
+      }
+    });
+  };
+  const finish = (status, cancelled = false) => {
+    if (!events || finished) return;
+    if (cancelled) events.failActive?.();
+    const command = args.find((arg) => ['build', 'check', 'docgen'].includes(arg));
+    const expected = [
+      'discovery',
+      'validation',
+      'generation',
+      'compile',
+      'optimize',
+      'publish',
+      ...(command !== 'docgen' ? ['astro-check'] : []),
+      ...(command === 'build' ? ['astro-build'] : [])
+    ];
+    for (const phase of expected)
+      if (!events.phases.some((entry) => entry.phase === phase)) {
+        events.skipped(phase, { reason: status ? 'upstream-failed' : 'not-required' });
+      }
+    events.report({ type: 'summary', phases: summarizePhases(events.phases), exitStatus: status });
+    finished = true;
+  };
   try {
     const parsed = parseCliArguments(args);
     const reporting = parsed.action === 'run' && ['build', 'check', 'docgen'].includes(parsed.commandName);
-    if (reporting)
-      events =
-        options.events ??
-        createRuntimeEvents({ report: createEventReporter({ format: parsed.values.format, write: options.log }) });
-    return await runCliCommand(args, { ...options, parsed, events, format: parsed.values?.format ?? 'human' });
-  } catch (error) {
-    exitStatus = error.exitCode ?? 1;
+    if (reporting) events = options.events ?? makeEvents(parsed.values.format);
+    return await runCliCommand(args, {
+      ...options,
+      parsed,
+      events,
+      format: parsed.values?.format ?? 'human',
+      ...(events
+        ? {
+            onSignalExit: (signal) => {
+              cancellationStatus = signal === 'SIGINT' ? 130 : 143;
+              finish(cancellationStatus, true);
+            }
+          }
+        : {})
+    });
+  } catch (cause) {
+    const error = cause instanceof Error ? cause : new Error(String(cause), { cause });
+    exitStatus = cancellationStatus ?? error.exitCode ?? 1;
+    if (cancellationStatus) error.exitCode = cancellationStatus;
     if (
       !events &&
       args.some((arg) => ['build', 'check', 'docgen'].includes(arg)) &&
       (args.includes('--format=json') || args.some((arg, index) => arg === '--format' && args[index + 1] === 'json'))
     ) {
-      events = createRuntimeEvents({ report: createEventReporter({ format: 'json', write: options.log }) });
+      events = makeEvents('json');
     }
     if (events) {
       events.report({ type: 'diagnostic', message: formatCliError(error, { debug: debugRequested(args) }) });
@@ -45,23 +88,7 @@ export async function runCli(commandOrArgs = [], argsOrOptions = {}, legacyOptio
     }
     throw error;
   } finally {
-    if (events) {
-      const command = args.find((arg) => ['build', 'check', 'docgen'].includes(arg));
-      const expected = [
-        'discovery',
-        'validation',
-        'generation',
-        'compile',
-        'optimize',
-        'publish',
-        ...(command !== 'docgen' ? ['astro-check'] : []),
-        ...(command === 'build' ? ['astro-build'] : [])
-      ];
-      for (const phase of expected)
-        if (!events.phases.some((entry) => entry.phase === phase))
-          events.skipped(phase, { reason: exitStatus ? 'upstream-failed' : 'not-required' });
-      events.report({ type: 'summary', phases: summarizePhases(events.phases), exitStatus });
-    }
+    finish(exitStatus);
   }
 }
 
@@ -77,6 +104,7 @@ async function runCliCommand(commandOrArgs = [], argsOrOptions = {}, legacyOptio
     loadProjectConfig = loadOxiquillProjectConfig,
     log = console.log,
     events,
+    onSignalExit,
     format = 'human',
     runCommand: executeCommand = runProcess,
     selectNode = frameworkNode
@@ -108,6 +136,8 @@ async function runCliCommand(commandOrArgs = [], argsOrOptions = {}, legacyOptio
           paths,
           configFile: projectConfig.configFile,
           command,
+          ...(events ? { log: (message) => events.report({ type: 'diagnostic', message }) } : {}),
+          ...(onSignalExit ? { onSignalExit } : {}),
           timeout: values['lock-timeout'] === undefined ? 1800 : Number(values['lock-timeout'])
         })
       : undefined;

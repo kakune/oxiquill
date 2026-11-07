@@ -107,6 +107,26 @@ describe('runtime process reporting', () => {
 });
 
 describe('phase and plan reporting', () => {
+  it('marks active work failed on cancellation without duplicate completion events', async () => {
+    const output = [];
+    let finish;
+    let time = 10;
+    const events = createRuntimeEvents({ now: () => time, report: (event) => output.push(event) });
+    const work = events.phase(
+      'compile',
+      { language: 'rust' },
+      () =>
+        new Promise((resolve) => {
+          finish = resolve;
+        })
+    );
+    time = 50;
+    events.failActive();
+    finish();
+    await work;
+    expect(output.map((event) => event.state)).toEqual(['start', 'failure']);
+    expect(events.phases).toEqual([expect.objectContaining({ reason: 'cancelled', elapsedMs: 40 })]);
+  });
   it('records successful, failed and skipped work using an injected clock', async () => {
     let time = 10;
     const output = [];

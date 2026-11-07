@@ -146,14 +146,14 @@ Human 形式はフェーズ、計画理由、最後のフェーズ集計を表�
 
 JSON 形式は stdout に 1 行 1 イベントの NDJSON を出力します。子プロセス出力もイベントに包み、失敗時を含め最後は必ず `summary` です。
 
-| `type`       | フィールド                                                                                                                                                      |
-| ------------ | --------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `phase`      | `phase`、`state`、`elapsedMs`。該当時に `language`、`module`、`cache`（`hit` / `miss`）、スキップの `reason`。状態は `start`、`success`、`failure`、`skipped`。 |
-| `plan`       | `language`、`action`、`reasons`。該当時に `module`、`page`、`target`（`source` / `public`）。                                                                   |
-| `heartbeat`  | `phase`、`elapsedMs`。該当時に `language`、`module`。                                                                                                           |
-| `output`     | ツール名の `source`、`stream`（`stdout` / `stderr`）、`line`。                                                                                                  |
-| `diagnostic` | `message`。                                                                                                                                                     |
-| `summary`    | `exitStatus` と `phases`。各フェーズにつき `phase`、`state`、`elapsedMs`、`cache: { hits, misses }` の 1 行。                                                   |
+| `type`       | フィールド                                                                                                                                           |
+| ------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `phase`      | `phase`、`state`、`elapsedMs`。該当時に `language`、`module`、`cache`（`hit` / `miss`）、`reason`。状態は `start`、`success`、`failure`、`skipped`。 |
+| `plan`       | `language`、`action`、`reasons`。該当時に `module`、`page`、`target`（`source` / `public`）。                                                        |
+| `heartbeat`  | `phase`、`elapsedMs`。該当時に `language`、`module`。                                                                                                |
+| `output`     | ツール名の `source`、`stream`（`stdout` / `stderr`）、`line`。                                                                                       |
+| `diagnostic` | `message`。                                                                                                                                          |
+| `summary`    | `exitStatus` と `phases`。各フェーズにつき `phase`、`state`、`elapsedMs`、`cache: { hits, misses }` の 1 行。                                        |
 
 フェーズは `discovery`、`validation`、`generation`、`compile`、`optimize`、`publish`、`astro-check`、`astro-build` です。最適化イベントは Oxiquill 自身の処理境界から発行し、検証済み最適化キャッシュの再利用も報告します。集計の時間は同じフェーズの処理時間の合計です。
 

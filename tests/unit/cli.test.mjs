@@ -106,6 +106,31 @@ afterEach(() => {
 });
 
 describe('oxiquill CLI', () => {
+  it.each([
+    ['SIGINT', 130],
+    ['SIGTERM', 143]
+  ])('finishes cancelled JSON builds with signal status %s', async (signal, exitStatus) => {
+    const lines = [];
+    let onSignalExit;
+    const acquireLock = vi.fn(async (options) => {
+      onSignalExit = options.onSignalExit;
+      return { token: 'lock', release: vi.fn() };
+    });
+    const generate = async ({ events }) =>
+      events.phase('compile', { language: 'rust' }, async () => {
+        onSignalExit(signal);
+        events.report({ type: 'output', source: 'compiler', stream: 'stderr', line: 'late output' });
+        throw new Error('cancelled');
+      });
+    await expect(
+      runCli(['docgen', '--format=json'], { acquireLock, generate, log: (line) => lines.push(line) })
+    ).rejects.toMatchObject({ exitCode: exitStatus });
+    const events = lines.map((line) => JSON.parse(line));
+    expect(events.at(-1)).toMatchObject({ type: 'summary', exitStatus });
+    expect(events.filter((event) => event.type === 'summary')).toHaveLength(1);
+    expect(events.some((event) => event.type === 'output')).toBe(false);
+    expect(events.at(-1).phases.find((phase) => phase.phase === 'compile').state).toBe('failure');
+  });
   it.each(['build', 'check', 'docgen'])(
     'explains %s without a lock, cleanup, or Astro subprocesses',
     async (command) => {
