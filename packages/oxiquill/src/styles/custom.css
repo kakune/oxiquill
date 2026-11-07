@@ -675,3 +675,13 @@
     min-height: 300px;
   }
 }
+
+/* Starlight supplies the header offset through document scroll-padding-top. */
+.ox-reference-anchor,
+.doc-cell[id^='ox-ref-'] {
+  scroll-margin-top: 0;
+}
+
+.ox-reference-anchor {
+  display: block;
+}

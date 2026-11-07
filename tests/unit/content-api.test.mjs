@@ -16,5 +16,9 @@ describe('oxiquill/content', () => {
         schema: 'schema'
       }
     });
+    const { extend } = docsSchema.mock.calls[0][0];
+    expect(extend.parse({ references: { demo: 'heading' } })).toEqual({ references: { demo: 'heading' } });
+    expect(extend.parse({})).toEqual({});
+    expect(extend.safeParse({ references: { demo: 1 } }).success).toBe(false);
   });
 });

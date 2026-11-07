@@ -8,6 +8,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ### Added
 
+- Stable `oxref:` links resolve locale-scoped cell `ref` and heading `references` names across page moves, with build diagnostics and development updates.
+
 - Opt-in `rust.grouping: 'page'` compiles page modules in one Cargo workspace, reuses unaffected modules, and publishes the registry atomically with verified tool downloads.
 - Runtime builds explain cache decisions and report phase timings, silent-process heartbeats, and summaries. `build`, `check`, and `docgen` support NDJSON through `--format json` and read-only planning through `--explain`.
 

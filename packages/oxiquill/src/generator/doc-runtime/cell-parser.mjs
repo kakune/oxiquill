@@ -1,3 +1,4 @@
+import { parsePageFrontmatter } from '../../lib/doc-runtime/references.mjs';
 import { normalizeCell } from '../../lib/doc-runtime/normalized-cell.mjs';
 import { unified } from 'unified';
 import remarkMath from 'remark-math';
@@ -13,22 +14,47 @@ import { visit } from '../../lib/doc-runtime/remark-mdx-helpers.mjs';
 import { sourceThemes } from './constants.mjs';
 import { assertUniqueCellIds } from './validators.mjs';
 
-const markdownParser = unified().use(remarkParse);
+const markdownParser = unified().use(remarkParse).use(remarkMath);
 const mdxParser = unified().use(remarkParse).use(remarkMath).use(remarkMdx);
 
 export function parseCellsFromMarkdown(source, pagePath, pythonOptions = {}) {
   const parser = String(pagePath).endsWith('.mdx') ? mdxParser : markdownParser;
-  const tree = parser.parse(source);
+  const metadata = parsePageFrontmatter(source, pagePath);
+  const tree = parser.parse(metadata.body);
   const cells = [];
   const diagnostics = [];
 
   visit(tree, (node) => {
+    if (!node || typeof node !== 'object') return;
     const result = parseInteractiveCellNode(node, pagePath, pythonOptions);
     if (result.kind === 'cell') cells.push(result.cell);
     if (result.kind === 'invalid') diagnostics.push(...result.diagnostics);
   });
 
-  return { cells, diagnostics, tree };
+  const links = [];
+  const headings = [];
+  visit(tree, (node) => {
+    if (!node || typeof node !== 'object') return;
+    if ((node.type === 'link' || node.type === 'definition') && node.url.startsWith('oxref:')) links.push(node.url);
+    if (node.type === 'heading') headings.push(node);
+  });
+  return {
+    cells,
+    diagnostics,
+    tree,
+    page: {
+      pagePath,
+      slug: metadata.frontmatter.slug,
+      references: metadata.references,
+      cellReferences: cells
+        .filter((cell) => cell.ref)
+        .map((cell) => ({ name: cell.ref, cellId: cell.id, position: cell.refPosition })),
+      links,
+      headingSignature: metadata.references.length
+        ? JSON.stringify(headings, (key, value) => (key === 'position' ? undefined : value))
+        : undefined
+    }
+  };
 }
 
 export async function extractCellsFromMarkdown(source, pagePath, context) {

@@ -48,7 +48,9 @@ async function checkLinks() {
   for (const [sourcePath, source] of documents) {
     for (const match of source.matchAll(linkPattern)) {
       const rawTarget = match[1].replace(/^<|>$/gu, '');
-      if (/^(?:https?:|mailto:)/u.test(rawTarget)) continue;
+      // Logical references are validated by the build's Markdown transform; this
+      // source-text check also sees intentionally illustrative links inside code.
+      if (/^(?:https?:|mailto:|oxref:)/u.test(rawTarget)) continue;
 
       const [target, fragment] = rawTarget.split('#', 2);
       if (!target) {

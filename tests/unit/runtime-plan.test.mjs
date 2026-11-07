@@ -2,6 +2,7 @@
 
 import path from 'node:path';
 import { describe, expect, it } from 'vitest';
+import { hashText, stableFingerprint } from '../../packages/oxiquill/src/generator/doc-runtime/hashing.mjs';
 import { artifactBuildFingerprint } from '../../packages/oxiquill/src/generator/doc-runtime/build-inputs.mjs';
 import { createOxiquillPaths } from '../../packages/oxiquill/src/config/paths.mjs';
 import {
@@ -36,6 +37,59 @@ function plan(options = {}) {
 }
 
 describe('runtime generation plan', () => {
+  it('publishes reference-only snapshot changes while retaining compiled runtimes', () => {
+    const current = {
+      ...desired,
+      generationId: 'runtime',
+      referenceId: 'new-reference',
+      rust: { ...desired.rust, cellCount: 1 }
+    };
+    const state = {
+      schemaVersion: 1,
+      generationId: 'runtime',
+      manifestFingerprint: desired.manifestFingerprint,
+      snapshot: { referenceId: 'old-reference' },
+      languages: {
+        rust: {
+          ...current.rust,
+          buildFingerprint: artifactBuildFingerprint(current.rust.buildFingerprint, 'dev'),
+          mode: 'dev',
+          status: 'ready'
+        }
+      }
+    };
+    const selected = plan({
+      desired: current,
+      state,
+      outputComplete: { ...emptyOutputs, generated: true, rustSource: true, rustPublic: true }
+    });
+    expect(selected.generated).toBe('write');
+    expect(selected.languages.rust).toEqual({ source: 'keep', public: 'keep' });
+  });
+
+  it('refreshes diagnostic locations even when semantic reference identity is unchanged', () => {
+    const current = {
+      ...desired,
+      referenceId: 'same',
+      referenceSnapshotFingerprint: hashText(stableFingerprint([{ position: { line: 8, column: 3 } }]))
+    };
+    const selected = plan({
+      desired: current,
+      state: {
+        schemaVersion: 1,
+        manifestFingerprint: desired.manifestFingerprint,
+        snapshot: { referenceId: 'same', pages: [{ position: { line: 3, column: 3 } }] }
+      },
+      outputComplete: { ...emptyOutputs, generated: true }
+    });
+    expect(selected.generated).toBe('write');
+    expect(selected.languages).toEqual({
+      rust: { source: 'keep', public: 'keep' },
+      python: { public: 'keep' },
+      haskell: { source: 'keep', public: 'keep' }
+    });
+  });
+
   it('keeps every language absent for a new zero-cell project', () => {
     expect(plan()).toMatchObject({
       generated: 'write',

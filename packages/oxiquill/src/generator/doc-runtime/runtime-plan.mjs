@@ -1,4 +1,5 @@
 import { artifactBuildFingerprint } from './build-inputs.mjs';
+import { hashText, stableFingerprint } from './hashing.mjs';
 
 export const runtimeLanguages = Object.freeze(['rust', 'python', 'haskell']);
 
@@ -92,6 +93,9 @@ export function createRuntimePlan({ desired, forceRustBuild = false, mode, outpu
   const generatedChanged =
     !outputComplete.generated ||
     state?.generationId !== desired.generationId ||
+    state?.snapshot?.referenceId !== desired.referenceId ||
+    (desired.referenceSnapshotFingerprint !== undefined &&
+      desired.referenceSnapshotFingerprint !== hashText(stableFingerprint(state?.snapshot?.pages))) ||
     state?.manifestFingerprint !== desired.manifestFingerprint ||
     state?.schemaVersion !== 1 ||
     languageChanges;

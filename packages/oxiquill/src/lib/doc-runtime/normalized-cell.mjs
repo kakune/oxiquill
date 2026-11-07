@@ -3,6 +3,7 @@
 export function normalizeCell(cell) {
   return {
     id: cell.id,
+    ...(cell.ref !== undefined ? { ref: cell.ref } : {}),
     language: cell.language,
     title: cell.title,
     run: cell.run,

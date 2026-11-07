@@ -1,3 +1,7 @@
+import { z } from 'astro/zod';
+
+const referenceSchema = z.object({ references: z.record(z.string(), z.string()).optional() });
+
 type Callable = (...args: never[]) => unknown;
 
 export interface OxiquillContentDependencies<
@@ -31,7 +35,9 @@ export function createOxiquillCollections<
   return {
     docs: createCollection({
       loader: docsLoader() as ReturnType<DocsLoader>,
-      schema: docsSchema() as ReturnType<DocsSchema>
+      schema: (docsSchema as unknown as (options: { extend: typeof referenceSchema }) => ReturnType<DocsSchema>)({
+        extend: referenceSchema
+      })
     })
   };
 }

@@ -1,6 +1,8 @@
 ---
 title: Authoring Guide
 description: Write MDX notes with pages, localization, executable cells, math, diagrams, and media.
+references:
+  authoring-cell-behavior: configure-cell-behavior
 ---
 
 Oxiquill pages are MDX files. A page can be a plain prose note, a runnable computation, a media-rich explanation, or a mix of those forms.
@@ -97,6 +99,7 @@ Use standard-library modules only. Haskell cells do not support external package
 Common metadata fields:
 
 - `id`: required lowercase kebab-case page-local cell identifier.
+- `ref`: optional stable reference name, unique across cell and heading targets in the locale.
 - `title`: non-empty string heading shown in the cell UI; explicit values are trimmed and omission defaults to `id`.
 - `run`: `button`, `reactive`, or `autorun`; defaults to `button`.
 - `inputs`: mapping of lowercase cross-language identifiers to input definitions; forbidden for `autorun`.
@@ -115,6 +118,39 @@ Integer metadata uses one portable signed 32-bit domain: `-2147483648` through `
 Numeric defaults must also align with the input's step grid. The effective step is the declared `step` or `1`; the base is `min` when present and otherwise the declared or default numeric `value`. Misaligned defaults fail authoring and are never rounded or clamped.
 
 Case IDs are unique within the cell and use kebab-case; `default` is reserved. Input and case labels must be nonblank and at most 256 characters. Case overrides are merged over declared defaults and applied together, triggering one reactive run or waiting for Run in button cells. Expose stochastic seeds as ordinary inputs and include them in cases. See [Named Input Cases](../../features/interactive-cells/#named-input-cases) for an executable example.
+
+## Link to Stable References
+
+Use a logical name when a link should survive page moves or heading edits. See [cell behavior](oxref:authoring-cell-behavior) and the [autorun cell](oxref:cell-autorun) for live examples.
+
+Give a cell a `ref` in its leading metadata block:
+
+````md
+```rust
+//| id: demo
+//| ref: solver-demo
+//| crates: []
+println!("solver ready");
+```
+````
+
+For a heading, map a reference name to its current heading slug in that page's frontmatter:
+
+```md
+---
+title: Solvers
+references:
+  step-size: choosing-the-step-size
+---
+
+## Choosing the step size
+```
+
+Link with `[the solver demo](oxref:solver-demo)` or a reference-style definition such as `[solver]: oxref:solver-demo`. Destinations cannot include a query or fragment. Names must match `^[a-z][a-z0-9]*(?:-[a-z0-9]+)*$` and contain at most 64 characters.
+
+Names are unique per locale across cells and headings. English and Japanese pages may reuse names; links resolve only within the referring page's locale. Missing translations produce errors rather than falling back to another locale.
+
+The build emits `ox-ref-<name>` anchors alongside existing cell and heading anchors. Moving a target updates referring links automatically. After renaming a heading, update only its `references` entry to the new slug, including any duplicate suffix such as `-1`. Development links refresh after target moves without restarting the server. Existing external page bookmarks still depend on their original URLs.
 
 ## Add Math
 

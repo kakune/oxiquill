@@ -1,7 +1,7 @@
 import { chromium, expect } from '@playwright/test';
 import { spawn } from 'node:child_process';
 import { createServer } from 'node:net';
-import { cpSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { cpSync, mkdtempSync, readFileSync, renameSync, rmSync, writeFileSync } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { observeProcess } from './process-output.mjs';
@@ -18,6 +18,12 @@ let browser;
 try {
   copyWorkspace(repoRoot, tempRoot);
   disableDevToolbar();
+  const referenceTarget = path.join(tempSiteRoot, 'content/docs/reference-target.mdx');
+  const referenceReferrer = path.join(tempSiteRoot, 'content/docs/reference-referrer.mdx');
+  const referenceSource =
+    '---\ntitle: Reference target\nreferences:\n  hmr-heading: original-heading\n---\n\n## Original heading\n';
+  writeFileSync(referenceTarget, referenceSource);
+  writeFileSync(referenceReferrer, '---\ntitle: Reference links\n---\n\n[target](oxref:hmr-heading)\n');
   await runCommand('install', 'pnpm', ['install', '--offline', '--frozen-lockfile', '--ignore-scripts'], tempRoot);
 
   await runCommand('build', 'pnpm', ['build:package'], tempRoot);
@@ -146,7 +152,42 @@ try {
   await expect(rustCell.getByTestId('cell-source')).toContainText('updated Rust autorun ready', { timeout: 60_000 });
   await expect(rustCell.getByTestId('run-output')).toContainText('updated Rust autorun ready', { timeout: 60_000 });
 
+  const referencePage = await browser.newPage();
+  await referencePage.goto(`http://127.0.0.1:${port}${basePath}/reference-referrer/`);
+  await expect(referencePage.locator('main a[href$="#ox-ref-hmr-heading"]')).toHaveAttribute(
+    'href',
+    `${basePath}/reference-target/#ox-ref-hmr-heading`
+  );
+  const unchangedReferrer = readFileSync(referenceReferrer, 'utf8');
+  const movedTarget = path.join(tempSiteRoot, 'content/docs/moved-reference-target.mdx');
+  renameSync(referenceTarget, movedTarget);
+  writeFileSync(
+    movedTarget,
+    referenceSource.replace('original-heading', 'edited-heading').replace('Original heading', 'Edited heading')
+  );
+  await expect(referencePage.locator('main a[href$="#ox-ref-hmr-heading"]')).toHaveAttribute(
+    'href',
+    `${basePath}/moved-reference-target/#ox-ref-hmr-heading`,
+    { timeout: 60_000 }
+  );
+  // Registry and runtime publication can each reload Vite. Automatic link refresh
+  // is verified above; retry navigation if a pending reload interrupts the click.
+  await expect(async () => {
+    await referencePage.goto(`http://127.0.0.1:${port}${basePath}/reference-referrer/`);
+    await referencePage.locator('main a[href$="#ox-ref-hmr-heading"]').click();
+    await expect(referencePage).toHaveURL(
+      `http://127.0.0.1:${port}${basePath}/moved-reference-target/#ox-ref-hmr-heading`,
+      { timeout: 2_000 }
+    );
+    await expect(
+      referencePage.locator('#ox-ref-hmr-heading + h2, #ox-ref-hmr-heading + .sl-heading-wrapper h2')
+    ).toHaveText('Edited heading', { timeout: 2_000 });
+  }).toPass({ timeout: 60_000 });
+  expect(readFileSync(referenceReferrer, 'utf8')).toBe(unchangedReferrer);
+  await referencePage.close();
+
   expect(browserErrors, 'Browser console and page errors').toEqual([]);
+  console.log('Development reference moves and heading edits verified.');
   console.log(
     `Dev HMR source, input case, and Rust module replacement verified at http://127.0.0.1:${port}${basePath}/features/interactive-cells/`
   );
