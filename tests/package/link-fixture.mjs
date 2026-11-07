@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { spawnSync } from 'node:child_process';
-import { mkdir, readFile, rm, writeFile } from 'node:fs/promises';
+import { mkdir, readFile, realpath, rm, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 
 // Run against the installed tarball, with no imports from Oxiquill's source tree.
@@ -71,7 +71,7 @@ export async function assertPackedLinks({ consumerRoot, cliPath, environment }) 
       assert.equal(buildEvents.at(-1).exitStatus, 0);
       assert.equal(buildEvents.at(-1).linkCheck.failures, 0);
       const buildReport = JSON.parse(await readFile(path.join(consumerRoot, '.oxiquill/build-report.json'), 'utf8'));
-      assert.equal(path.resolve(buildReport.outDir), outputDir);
+      assert.equal(await realpath(buildReport.outDir), await realpath(outputDir));
       assert.equal(buildReport.build.format, format);
       assert.equal(events(['check-links']).at(-1).linkCheck.failures, 0);
       const broken = [route + '#absent', '/manual/ja/missing/', '/outside/', `/manual/link-target${suffix ? '' : '/'}`];
