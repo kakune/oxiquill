@@ -96,8 +96,46 @@ try {
     await page.waitForTimeout(250);
   }
 
+  const casesCell = page.getByTestId('cell-features__interactive-cells__named-cases');
+  await casesCell.scrollIntoViewIfNeeded();
+  const caseSelector = casesCell.getByRole('combobox', { name: 'Case', exact: true });
+  await expect(casesCell.getByTestId('run-output')).toContainText('samples = 100', { timeout: 60_000 });
+  await caseSelector.selectOption('low-noise');
+  await expect(casesCell.getByTestId('run-output')).toContainText('samples = 800, noise = 0.05, seed = 7');
+
+  // Exercise manifest HMR separately from Astro's full-page content reload.
+  await page.evaluate(async () => {
+    const url = performance
+      .getEntriesByType('resource')
+      .map((entry) => entry.name)
+      .filter((name) => new URL(name).pathname.endsWith('/lib/doc-runtime/manifest.js'))
+      .at(-1);
+    if (!url) throw new Error('The manifest module was not loaded.');
+    const { applyGeneratedSnapshot } = await import(url);
+    const snapshot = await fetch('/__oxiquill/manifest.json').then((response) => response.json());
+    applyGeneratedSnapshot({
+      cells: snapshot.cells.map((current) =>
+        current.id === 'features__interactive-cells__named-cases'
+          ? {
+              ...current,
+              cases: current.cases.map((candidate) =>
+                candidate.id === 'low-noise' ? { ...candidate, label: 'Updated low noise' } : candidate
+              )
+            }
+          : current
+      ),
+      version: `${snapshot.runtimeVersion}-case-refresh`
+    });
+  });
+
+  await expect(caseSelector.getByRole('option', { name: 'Updated low noise', exact: true })).toHaveCount(1);
+  await expect(caseSelector).toHaveValue('low-noise');
+  await expect(casesCell.getByRole('spinbutton', { name: 'Samples', exact: true })).toHaveValue('800');
+  await expect(casesCell.getByRole('spinbutton', { name: 'Seed', exact: true })).toHaveValue('7');
+  await expect(casesCell.getByTestId('run-output')).toContainText('samples = 800, noise = 0.05, seed = 7');
+
   expect(browserErrors, 'Browser console and page errors').toEqual([]);
-  console.log(`Dev HMR source refresh verified at http://127.0.0.1:${port}/features/interactive-cells/`);
+  console.log(`Dev HMR source and input case refresh verified at http://127.0.0.1:${port}/features/interactive-cells/`);
 } finally {
   try {
     if (browser) await browser.close();

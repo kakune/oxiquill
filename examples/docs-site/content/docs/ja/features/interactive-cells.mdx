@@ -21,6 +21,7 @@ interactive fence は `rust`、`python`、`haskell`（Markdown の `{.rust}` for
 | `title`      | cell header に表示する non-empty string。明示した値は前後の空白を除去。                                               | `id`     |
 | `run`        | `button`、`reactive`、`autorun`。                                                                                     | `button` |
 | `inputs`     | `^[a-z][a-z0-9_]*$` に一致する lowercase cross-language identifier から input spec への mapping。`autorun` では禁止。 | `{}`     |
+| `cases`      | 名前付き入力プリセットの配列。`autorun` では指定できません。                                                          | `[]`     |
 | `packages`   | unique non-empty Pyodide package name。Python 専用。                                                                  | `[]`     |
 | `crates`     | `cratesDir` 直下の helper package name の unique non-empty list。Rust 専用。                                          | `[]`     |
 | `timeoutMs`  | `1` 以上 `2147483647` 以下の integer millisecond。                                                                    | `30000`  |
@@ -47,6 +48,10 @@ Haskell cell は standard-library code のみで `packages`/`crates` を受け�
 //| crates: []
 //| inputs:
 //|   value: { type: integer, label: Input value, description: Choose an integer from 1 through 10., min: 1, max: 10, step: 1, value: 3 }
+//| cases:
+//|   - id: small
+//|     label: 小さい値
+//|     inputs: { value: 1 }
 println!("button value = {value}");
 ```
 
@@ -91,6 +96,40 @@ Pythonセルでは「Pythonを編集」でtextareaを開けます。セルに`ed
 「入力のリンクをコピー」の対象にするには、各入力のメタデータに `share: true` を追加します。自由記述を含め、既定では共有しません。リンクには、このページで共有を有効にした入力の既定値との差分だけを保存します。既存の検索パラメータと見出しへのリンクは保持します。不正な値や古い選択肢は復元しません。8,192文字を超えるリンクはコピーできません。コード、出力、乱数の状態、外部データは含まれず、同じ結果の再現を保証する機能ではありません。
 
 入力のあるセルには「入力を初期値に戻す」があります。すべての既定値を復元し、入力途中の文字列と検証エラーを消去します。reactive セルは一度だけ再計算し、button セルは実行操作を待ちます。次の結果を待つ間は前の成功結果を表示します。
+
+新しい共有リンクは `v: 2` を使い、各セルを `{ values, case? }` として保存します。`values` は引き続き `share: true` の差分だけです。現在値がケースと完全に一致する場合だけ `case` ID を含めます。既知のケースは著者の全入力値を復元するため、`share: false` の入力も適用します。未知のケース ID は検証済みの共有値にフォールバックします。従来の `v: 1` リンクも復元できます。
+
+## 名前付き入力ケース
+
+`cases` で複数の入力をまとめたプリセットを宣言できます。「ケース」から選ぶと、全入力を一度に置き換えます。reactive セルは変更後の組み合わせを一度だけ実行し、button セルは「実行」を待ちます。Python の編集中も「実行」を待ちます。
+
+各ケースにはセル内で一意の kebab-case `id`、必須の `label`、部分的な値の mapping である `inputs` を指定します。`default` は予約 ID です。`description` は任意の空でないプレーンテキストです。入力とケースの label は前後の空白を除去し、空でない256文字以内の文字列にします。省略した入力は現在の読者の値ではなく、宣言した既定値で補完します。すべての値に型、範囲、step grid、整数の制約、選択肢を検証します。`min` がなければ、step grid の基準は元の入力の既定値です。
+
+選択表示は現在の全入力と一致するケースを示し、一致しない場合は「カスタム値」を示します。手動編集で完全に一致すればケース表示に戻ります。複数のケースが一致するときは記述順の最初を表示します。「入力を初期値に戻す」は宣言した既定値を復元します。開発中の HMR は有効な現在値を保持し、無効または追加された入力だけを新しい既定値に戻して選択表示を更新します。
+
+乱数を使う計算では seed を通常の入力として公開し、ケースに含めることを推奨します。Oxiquill は別の seed 機構を追加しません。
+
+```rust
+//| id: named-cases
+//| title: 名前付き入力ケース
+//| run: reactive
+//| crates: []
+//| inputs:
+//|   samples: { type: integer, label: Samples, value: 100, min: 10, max: 1000, step: 10, share: true }
+//|   noise: { type: range, label: Noise, value: 0.1, min: 0, max: 1, step: 0.05 }
+//|   seed: { type: integer, label: Seed, value: 1, min: 0, max: 1000 }
+//|   model: { type: select, label: Model, value: simple, options: [simple, robust] }
+//|   enabled: { type: checkbox, label: Enabled, value: true }
+//| cases:
+//|   - id: low-noise
+//|     label: 低ノイズ
+//|     description: サンプル数を増やし、ノイズを減らします。
+//|     inputs: { samples: 800, noise: 0.05, seed: 7, model: robust, enabled: false }
+//|   - id: noisy-small
+//|     label: 高ノイズ・少数サンプル
+//|     inputs: { samples: 20, noise: 0.8 }
+println!("samples = {samples}, noise = {noise:.2}, seed = {seed}, model = {model}, enabled = {enabled}");
+```
 
 ## ソースの表示領域
 

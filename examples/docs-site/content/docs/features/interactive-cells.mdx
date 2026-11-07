@@ -21,6 +21,7 @@ Only these top-level fields are accepted; unknown fields are errors:
 | `title`      | Non-empty string shown in the cell header; explicit values are trimmed.                                                    | `id`     |
 | `run`        | `button`, `reactive`, or `autorun`.                                                                                        | `button` |
 | `inputs`     | Mapping from lowercase cross-language identifiers matching `^[a-z][a-z0-9_]*$` to input specs. Not allowed with `autorun`. | `{}`     |
+| `cases`      | List of named input presets. Not allowed with `autorun`.                                                                   | `[]`     |
 | `packages`   | Unique non-empty Pyodide package names; Python only.                                                                       | `[]`     |
 | `crates`     | Unique non-empty helper package names from direct children of `cratesDir`; Rust only.                                      | `[]`     |
 | `timeoutMs`  | Integer milliseconds from `1` through `2147483647`, inclusive.                                                             | `30000`  |
@@ -49,6 +50,10 @@ This button cell waits for an explicit run even when its input changes.
 //| crates: []
 //| inputs:
 //|   value: { type: integer, label: Input value, description: Choose an integer from 1 through 10., min: 1, max: 10, step: 1, value: 3 }
+//| cases:
+//|   - id: small
+//|     label: Small value
+//|     inputs: { value: 1 }
 println!("button value = {value}");
 ```
 
@@ -93,6 +98,40 @@ Python cells offer **Edit Python** with a plain textarea unless the cell sets `e
 To include an input in **Copy input link**, add `share: true` to that input's metadata. Sharing is disabled by default, including for text fields. The link stores only differences from defaults for opted-in inputs on this page. Existing query parameters and heading links remain intact. Invalid or outdated input values are ignored when opening a link. Links longer than 8,192 characters cannot be copied. Code, outputs, random state, and external data are not included; identical inputs do not guarantee identical results.
 
 Cells with inputs provide **Reset inputs**. It restores all defaults and clears incomplete edits and validation errors. Reactive cells recalculate once; button cells wait for Run. The previous successful output remains visible while the next result is pending.
+
+New sharing links use `v: 2` and store each cell as `{ values, case? }`. The `values` map still contains only opted-in differences. A `case` ID is included only for an exact match. A known case restores its complete authored values, including `share: false` inputs; an unknown case ID falls back to validated shared values. Legacy `v: 1` links continue to restore.
+
+## Named Input Cases
+
+Declare `cases` to offer presets that combine several inputs. Selecting a **Case** replaces every input in one transition. Reactive cells execute the complete combination once; button cells wait for **Run**. Python draft editing also waits for **Run**.
+
+Each case has a cell-local unique kebab-case `id`, a required `label`, and an `inputs` mapping of partial overrides. The ID `default` is reserved. An optional `description` is non-empty plain text. Input and case labels are trimmed, nonblank strings of at most 256 characters. Omitted inputs use the declared defaults, rather than the reader's current values. All values must satisfy the input's type, bounds, step grid, integer domain, and options. Without `min`, the original input default remains the step-grid base.
+
+The selector indicates a case when all current values match it, and **Custom values** otherwise. Editing back to an exact match restores the indication. If multiple cases match, the first authored case is indicated. **Reset inputs** restores declared defaults. During development, HMR retains valid current values, resets only invalid or added inputs to their new defaults, and recomputes the indication.
+
+For stochastic computations, expose seeds as ordinary inputs and include them in cases so the preset determines the computation. Oxiquill adds no separate seed mechanism.
+
+```rust
+//| id: named-cases
+//| title: Named input cases
+//| run: reactive
+//| crates: []
+//| inputs:
+//|   samples: { type: integer, label: Samples, value: 100, min: 10, max: 1000, step: 10, share: true }
+//|   noise: { type: range, label: Noise, value: 0.1, min: 0, max: 1, step: 0.05 }
+//|   seed: { type: integer, label: Seed, value: 1, min: 0, max: 1000 }
+//|   model: { type: select, label: Model, value: simple, options: [simple, robust] }
+//|   enabled: { type: checkbox, label: Enabled, value: true }
+//| cases:
+//|   - id: low-noise
+//|     label: Low noise
+//|     description: Many samples with little noise.
+//|     inputs: { samples: 800, noise: 0.05, seed: 7, model: robust, enabled: false }
+//|   - id: noisy-small
+//|     label: Noisy, few samples
+//|     inputs: { samples: 20, noise: 0.8 }
+println!("samples = {samples}, noise = {noise:.2}, seed = {seed}, model = {model}, enabled = {enabled}");
+```
 
 ## Source Panes
 
