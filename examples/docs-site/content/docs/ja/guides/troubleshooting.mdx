@@ -5,6 +5,14 @@ description: install、config、runtime generation、download、timeout、stale 
 
 最初の Oxiquill diagnostic から確認します。generation error は relevant tool/path を示し、authored cell では page、fence line、可能なら cell ID、正確な metadata field を含みます。
 
+## Runtime lock の競合と復旧
+
+runtime lock の待機表示は、別 command または dev 同期が project の generated artifact を使用中であることを示します。表示された command、PID、host、開始時刻、`<cacheDir>/runtime.lock` の path を確認し、holder の完了を待つか、その process を通常の方法で停止してください。CLI の既定の待機時間は1800秒です。`build`、`check`、`docgen`、`clean`、`test-wasm` の `--lock-timeout <seconds>` で変更し、`0` なら即座に失敗します。watcher は期限なく待ち、取得後に最新の変更を同期します。
+
+自動回収するのは、host が現在の host と一致し、PID が存在しない場合だけです。生存中の PID、権限不足による PID 確認失敗、古い開始時刻では回収しません。長時間の release Wasm build も lock を保持できます。
+
+読めない・不正な record や別 host の record は owner 不明として扱います。この project を使用する Oxiquill process が動いていないことを確認してから、diagnostic に表示された正確な lock path を手動で削除し、再実行してください。共有 storage では別 host も確認します。build または同期の実行中に lock を削除しないでください。調整の単位は consumer project であり、出力 directory を共有する別 project 間は調整しません。
+
 ## Build 中の source 変更
 
 `Interactive cell sources changed after runtime generation started.` は production build 中に cell または Rust helper input が変更されたことを示します。diagnostic は追加・削除・変更されたすべての cell と helper の path を表示し、cell では `source` や `inputs` などの変更 field も示します。

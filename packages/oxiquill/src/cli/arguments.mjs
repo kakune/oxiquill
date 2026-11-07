@@ -7,6 +7,12 @@ const globalOptionDefinitions = Object.freeze({
 });
 
 const configOptionDefinition = option('string', '--config <path>', 'Use a specific Astro/Oxiquill configuration file.');
+const lockOptionDefinition = option(
+  'string',
+  '--lock-timeout <seconds>',
+  'Wait for the project runtime lock (default: 1800 seconds; 0 fails immediately).'
+);
+const lockingCommands = new Set(['build', 'check', 'docgen', 'clean', 'test-wasm']);
 
 const astroDevOptions = Object.freeze({
   'allowed-hosts': optionalStringOption(
@@ -157,6 +163,7 @@ export function parseCliArguments(args = []) {
   const optionDefinitions = {
     ...globalOptionDefinitions,
     ...(definition?.project ? { config: configOptionDefinition } : {}),
+    ...(lockingCommands.has(commandName) ? { 'lock-timeout': lockOptionDefinition } : {}),
     ...definition?.options
   };
   const normalizedArgs = normalizeOptionalStringOptions(beforeTerminator, optionDefinitions, commandName);
@@ -185,6 +192,14 @@ export function parseCliArguments(args = []) {
   validateConfigOccurrences(beforeTerminator, commandName);
 
   const values = { ...parsed.values, ...forwardedParsed?.values };
+  if (
+    values['lock-timeout'] !== undefined &&
+    (values['lock-timeout'].trim() === '' ||
+      !Number.isFinite(Number(values['lock-timeout'])) ||
+      Number(values['lock-timeout']) < 0)
+  ) {
+    throw new CliUsageError('--lock-timeout must be a finite nonnegative number of seconds.', commandName);
+  }
 
   if (values.version) return Object.freeze({ action: 'version' });
 
@@ -243,6 +258,7 @@ export function formatCliHelp(commandName) {
     const options = {
       ...globalOptionDefinitions,
       ...(definition.project ? { config: configOptionDefinition } : {}),
+      ...(lockingCommands.has(commandName) ? { 'lock-timeout': lockOptionDefinition } : {}),
       ...definition.options
     };
     return [`Usage: oxiquill ${definition.usage}`, '', definition.description, '', formatOptionTable(options)].join(
@@ -391,8 +407,13 @@ function stripGlobalOptions(args) {
   const result = [];
   for (let index = 0; index < args.length; index += 1) {
     const argument = args[index];
-    if (['--debug', '--help', '-h', '--version'].includes(argument) || argument.startsWith('--config=')) continue;
-    if (argument === '--config') {
+    if (
+      ['--debug', '--help', '-h', '--version'].includes(argument) ||
+      argument.startsWith('--config=') ||
+      argument.startsWith('--lock-timeout=')
+    )
+      continue;
+    if (argument === '--config' || argument === '--lock-timeout') {
       index += 1;
       continue;
     }

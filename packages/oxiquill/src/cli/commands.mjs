@@ -13,17 +13,20 @@ import { runHelperCargo } from '../generator/run-helper-cargo.mjs';
 import { runWasmTests } from './test-wasm.mjs';
 import { formatCliHelp, parseCliArguments } from './arguments.mjs';
 import { initializeProject } from './init.mjs';
+import { acquireRuntimeLock, withRuntimeLock } from '../generator/runtime-lock.mjs';
 
 export async function runCli(commandOrArgs = [], argsOrOptions = {}, legacyOptions = {}) {
   const { args, options } = normalizeRunCliArguments(commandOrArgs, argsOrOptions, legacyOptions);
   const {
     cwd = process.cwd(),
+    acquireLock = acquireRuntimeLock,
     initialize = initializeProject,
+    generate = generateProjectRuntime,
     loadPackageVersion = installedPackageVersion,
     loadCheck,
     loadProjectConfig = loadOxiquillProjectConfig,
     log = console.log,
-    runCommand = runCommandWithInheritedStdio,
+    runCommand: executeCommand = runCommandWithInheritedStdio,
     selectNode = frameworkNode
   } = options;
   const parsed = parseCliArguments(args);
@@ -47,80 +50,115 @@ export async function runCli(commandOrArgs = [], argsOrOptions = {}, legacyOptio
   const paths = projectConfig.paths;
   const astroArgs = [...projectConfig.astroConfigArgs, ...commandArgs];
 
-  switch (command) {
-    case 'dev':
-      await generateRuntime({ projectConfig, tolerateHaskellBuildFailure: true, wasmMode: 'dev' });
-      await runDevServer({ args: astroArgs, projectConfig, runCommand, selectNode });
-      return;
-    case 'dev:runtime': {
-      const { watchDocRuntime } = await import('../generator/watch-doc-runtime.mjs');
-      await watchDocRuntime({
-        projectConfig,
-        skipInitial: values['skip-initial'] === true
-      });
-      return;
+  const lease = ['build', 'check', 'docgen', 'clean', 'test-wasm'].includes(command)
+    ? await acquireLock({
+        paths,
+        configFile: projectConfig.configFile,
+        command,
+        timeout: values['lock-timeout'] === undefined ? 1800 : Number(values['lock-timeout'])
+      })
+    : undefined;
+  const runCommand = (command, args, settings) =>
+    executeCommand(command, args, { ...settings, trackChild: lease?.trackChild });
+  const generateRuntime = (settings) =>
+    lease
+      ? generate({ ...settings, trackChild: lease.trackChild })
+      : withRuntimeLock({ paths, configFile: projectConfig.configFile, command, timeout: Infinity }, ({ trackChild }) =>
+          generate({ ...settings, trackChild })
+        );
+
+  try {
+    switch (command) {
+      case 'dev':
+        await generateRuntime({ projectConfig, tolerateHaskellBuildFailure: true, wasmMode: 'dev' });
+        await runDevServer({ args: astroArgs, projectConfig, runCommand, selectNode });
+        return;
+      case 'dev:runtime': {
+        const { watchDocRuntime } = await import('../generator/watch-doc-runtime.mjs');
+        await watchDocRuntime({
+          projectConfig,
+          skipInitial: values['skip-initial'] === true
+        });
+        return;
+      }
+      case 'dev:astro':
+        await runAstro(projectConfig, ['dev', ...astroArgs], { runCommand, selectNode });
+        return;
+      case 'preview':
+        await runAstro(projectConfig, ['preview', ...astroArgs], { runCommand, selectNode });
+        return;
+      case 'build': {
+        const { generationId } = await generateRuntime({
+          ownershipFields: ['cacheDir', 'outDir', 'publicAssetsDir'],
+          projectConfig,
+          wasmMode: 'build'
+        });
+        await runOxiquillCheck(projectConfig, [], {
+          generationId,
+          loadCheck,
+          lockToken: lease.token,
+          runCommand,
+          selectNode
+        });
+        await runAstro(projectConfig, ['build', ...astroArgs], {
+          generationId,
+          runCommand,
+          runtimeOwner: 'cli',
+          lockToken: lease.token,
+          selectNode
+        });
+        return;
+      }
+      case 'check': {
+        const { generationId } = await generateRuntime({ projectConfig, wasmMode: 'dev' });
+        await runOxiquillCheck(projectConfig, commandArgs, {
+          generationId,
+          lockToken: lease.token,
+          loadCheck,
+          runCommand,
+          selectNode
+        });
+        return;
+      }
+      case 'docgen':
+        await generateRuntime({ projectConfig, wasmMode: values.wasm });
+        return;
+      case 'clean':
+        await cleanOxiquillWorkspace({ configFile: projectConfig.configFile, paths, lockToken: lease.token });
+        return;
+      case 'test-rust':
+        await runHelperCargo({ argv: ['test'], paths });
+        return;
+      case 'test-rust-coverage':
+        await runHelperCargo({
+          argv: [
+            'llvm-cov',
+            '--fail-under-lines',
+            '85',
+            '--fail-under-functions',
+            '85',
+            '--fail-under-regions',
+            '85',
+            '--ignore-filename-regex',
+            '(/target/|/.oxiquill/)'
+          ],
+          paths
+        });
+        return;
+      case 'lint-rust':
+        await runHelperCargo({ argv: ['fmt', '--all', '--', '--check'], paths });
+        await runHelperCargo({ argv: ['clippy', '--all-targets', '--', '-D', 'warnings'], paths });
+        return;
+      case 'doc-rust':
+        await runHelperCargo({ argv: ['doc', '--no-deps'], paths });
+        return;
+      case 'test-wasm': {
+        await runWasmTests({ projectConfig, values, generateRuntime, log });
+        return;
+      }
     }
-    case 'dev:astro':
-      await runAstro(projectConfig, ['dev', ...astroArgs], { runCommand, selectNode });
-      return;
-    case 'preview':
-      await runAstro(projectConfig, ['preview', ...astroArgs], { runCommand, selectNode });
-      return;
-    case 'build': {
-      const { generationId } = await generateRuntime({
-        ownershipFields: ['cacheDir', 'outDir', 'publicAssetsDir'],
-        projectConfig,
-        wasmMode: 'build'
-      });
-      await runOxiquillCheck(projectConfig, [], { generationId, loadCheck, runCommand, selectNode });
-      await runAstro(projectConfig, ['build', ...astroArgs], {
-        generationId,
-        runCommand,
-        runtimeOwner: 'cli',
-        selectNode
-      });
-      return;
-    }
-    case 'check':
-      await generateRuntime({ projectConfig, wasmMode: 'dev' });
-      await runOxiquillCheck(projectConfig, commandArgs, { loadCheck, runCommand, selectNode });
-      return;
-    case 'docgen':
-      await generateRuntime({ projectConfig, wasmMode: values.wasm });
-      return;
-    case 'clean':
-      await cleanOxiquillWorkspace({ configFile: projectConfig.configFile, paths });
-      return;
-    case 'test-rust':
-      await runHelperCargo({ argv: ['test'], paths });
-      return;
-    case 'test-rust-coverage':
-      await runHelperCargo({
-        argv: [
-          'llvm-cov',
-          '--fail-under-lines',
-          '85',
-          '--fail-under-functions',
-          '85',
-          '--fail-under-regions',
-          '85',
-          '--ignore-filename-regex',
-          '(/target/|/.oxiquill/)'
-        ],
-        paths
-      });
-      return;
-    case 'lint-rust':
-      await runHelperCargo({ argv: ['fmt', '--all', '--', '--check'], paths });
-      await runHelperCargo({ argv: ['clippy', '--all-targets', '--', '-D', 'warnings'], paths });
-      return;
-    case 'doc-rust':
-      await runHelperCargo({ argv: ['doc', '--no-deps'], paths });
-      return;
-    case 'test-wasm': {
-      await runWasmTests({ projectConfig, values, generateRuntime, log });
-      return;
-    }
+  } finally {
+    lease?.release();
   }
 }
 
@@ -134,13 +172,14 @@ function normalizeRunCliArguments(commandOrArgs, argsOrOptions, legacyOptions) {
   return { args: commandOrArgs, options: argsOrOptions };
 }
 
-async function generateRuntime({
+async function generateProjectRuntime({
   ownershipFields = ['cacheDir', 'publicAssetsDir'],
   projectConfig,
   tolerateHaskellBuildFailure = false,
   wasmMode,
   log = console.log,
-  runtimeOptions = {}
+  runtimeOptions = {},
+  trackChild
 }) {
   const { paths } = projectConfig;
   await prepareCleanupOwnership({
@@ -152,6 +191,7 @@ async function generateRuntime({
   const summary = await syncDocRuntime({
     ...context,
     ...runtimeOptions,
+    trackChild,
     mode: wasmMode,
     tolerateHaskellBuildFailure
   });
@@ -183,36 +223,54 @@ async function runDevServer({ args, projectConfig, runCommand, selectNode }) {
   }
 }
 
-async function runAstro(projectConfig, args, { generationId, runCommand, runtimeOwner, selectNode }) {
+async function runAstro(projectConfig, args, { generationId, lockToken, runCommand, runtimeOwner, selectNode }) {
   const { paths } = projectConfig;
   const nodePath = selectNode(paths);
 
   await runCommand(nodePath, [frameworkBinScript(paths, 'astro'), ...args], {
     cwd: projectConfig.cwd,
-    env: frameworkEnv(paths, { generationId, nodePath, runtimeOwner })
+    env: frameworkEnv(paths, { generationId, lockToken, nodePath, runtimeOwner })
   });
 }
 
 async function runOxiquillCheck(
   projectConfig,
   args,
-  { generationId, loadCheck = importFromFramework, runCommand, selectNode }
+  { generationId, lockToken, loadCheck = importFromFramework, runCommand, selectNode }
 ) {
   const { paths } = projectConfig;
-  await runAstro(projectConfig, ['sync', ...projectConfig.astroConfigArgs], { generationId, runCommand, selectNode });
+  await runAstro(projectConfig, ['sync', ...projectConfig.astroConfigArgs], {
+    generationId,
+    lockToken,
+    runtimeOwner: 'cli',
+    runCommand,
+    selectNode
+  });
 
   const { check, parseArgsAsCheckConfig } = await loadCheck(paths, '@astrojs/check');
   const config = parseArgsAsCheckConfig(['node', 'oxiquill-check', ...args]);
   config.root = pathFromUrl(paths.workspaceRoot);
 
   console.info(`Getting diagnostics for Astro files in ${config.root}...`);
-  const previousId = process.env.OXIQUILL_GENERATION_ID;
+  const inherited = {
+    OXIQUILL_GENERATION_ID: generationId,
+    OXIQUILL_LOCK_TOKEN: lockToken,
+    OXIQUILL_RUNTIME_OWNER: 'cli'
+  };
+  const previous = Object.fromEntries(Object.keys(inherited).map((key) => [key, process.env[key]]));
   try {
-    if (generationId) process.env.OXIQUILL_GENERATION_ID = generationId;
+    Object.entries(inherited).forEach(([key, value]) => {
+      if (value !== undefined) process.env[key] = value;
+    });
     if (await check(config)) throw new Error('Astro check reported diagnostics.');
+    // @astrojs/check returns after its initial lint even when its watcher remains active.
+    // Keep the command's lock and environment until that process exits.
+    if (config.watch) await new Promise(() => {});
   } finally {
-    if (previousId === undefined) delete process.env.OXIQUILL_GENERATION_ID;
-    else process.env.OXIQUILL_GENERATION_ID = previousId;
+    Object.entries(previous).forEach(([key, value]) => {
+      if (value === undefined) delete process.env[key];
+      else process.env[key] = value;
+    });
   }
 }
 
@@ -324,7 +382,7 @@ function frameworkBinScript(paths, packageName, binName = packageName) {
   return path.resolve(path.dirname(packageJsonPath), binPath);
 }
 
-export function frameworkEnv(paths, { env = process.env, generationId, nodePath, runtimeOwner } = {}) {
+export function frameworkEnv(paths, { env = process.env, generationId, lockToken, nodePath, runtimeOwner } = {}) {
   const frameworkNodePath = pathInUrl(paths.frameworkRoot, 'node_modules');
   const currentNodePath = env.NODE_PATH;
   const nextEnv = {
@@ -342,18 +400,22 @@ export function frameworkEnv(paths, { env = process.env, generationId, nodePath,
 
   if (generationId) nextEnv.OXIQUILL_GENERATION_ID = generationId;
   if (runtimeOwner) nextEnv.OXIQUILL_RUNTIME_OWNER = runtimeOwner;
+  if (lockToken) nextEnv.OXIQUILL_LOCK_TOKEN = lockToken;
 
   return nextEnv;
 }
 
 function runCommandWithInheritedStdio(command, args, options) {
   return new Promise((resolve, reject) => {
+    const detached = Boolean(options.trackChild) && process.platform !== 'win32';
     const child = spawn(command, args, {
+      detached,
       cwd: options.cwd,
       env: options.env,
       stdio: 'inherit'
     });
 
+    options.trackChild?.(child, detached);
     child.on('error', reject);
     child.on('exit', (code, signal) => {
       if (code === 0 || options.successfulSignals?.includes(signal)) {

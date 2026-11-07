@@ -45,6 +45,23 @@ pnpm dev -- --host 0.0.0.0 --port 4321
 pnpm check -- --minimumSeverity warning
 ```
 
+## Project Runtime Lock
+
+`build`, `check`, `docgen`, `clean`, and `test-wasm` hold one cross-process lock at `<cacheDir>/runtime.lock` for the whole command. `build` keeps it through runtime generation, Astro diagnostics, and the final Astro build. A standalone `astro build` holds the same lock from its build-start hook through build completion. The lock belongs to the consumer project and never writes into the installed Oxiquill package.
+
+These five CLI commands accept `--lock-timeout <seconds>` before `--`. The default is `1800` seconds; `0` fails immediately if another process holds the lock. Values must be finite and nonnegative. For example:
+
+```sh
+pnpm exec oxiquill build --lock-timeout 60
+pnpm exec oxiquill clean --lock-timeout 0
+```
+
+On contention, stderr identifies the holder's command, PID, host, start time, and lock path. A reminder appears every 30 seconds. A timeout exits non-zero with the holder details and timeout value, without changing project files or generated artifacts; temporary acquisition records are removed. `test-wasm --format json` keeps stdout as NDJSON.
+
+Development holds the lock only during initial generation or a watcher synchronization. Watchers wait without a timeout, combine pending changes, and synchronize the latest inputs once the lock becomes available. `check --watch` holds its lock for the command's lifetime.
+
+Clean preserves the cache directory, its ownership marker, and active lock coordination files while removing generated contents. Normal completion and SIGINT/SIGTERM release owned locks. A dead same-host PID can be reclaimed automatically; lock age alone never permits reclamation. See [lock recovery](/guides/troubleshooting/#runtime-lock-contention-and-recovery) for unknown or foreign-host owners.
+
 ## Incremental and Clean Builds
 
 In the Oxiquill repository, `pnpm build` builds the reusable package incrementally and reuses unchanged runtime artifacts. Astro recreates its static output directory on every build. `pnpm build:package` incrementally builds only the package; packing always performs a clean package build.

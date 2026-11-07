@@ -1,3 +1,4 @@
+import { trackRuntimeCommand } from '../runtime-lock.mjs';
 import { spawn } from 'node:child_process';
 import { optimizeRustWasmFiles, resolveWasmOpt } from './wasm-opt-cache.mjs';
 import { createOxiquillPaths, pathFromUrl, pathInUrl } from '../../config/paths.mjs';
@@ -44,8 +45,10 @@ export async function buildRustWasm({
   paths,
   postprocess = postprocessRustWasm,
   root = process.cwd(),
-  runCommand = runCommandWithInheritedStdio
+  runCommand = runCommandWithInheritedStdio,
+  trackChild
 }) {
+  runCommand = trackRuntimeCommand(runCommand, trackChild);
   const resolvedPaths = paths ?? createOxiquillPaths({ workspaceRoot: root });
   const modeFlag = mode === 'build' ? '--release' : '--dev';
   const env = wasmPackEnvironment({ environment, paths: resolvedPaths });
@@ -100,8 +103,10 @@ export async function buildHaskellWasm({
   paths,
   root = process.cwd(),
   runCommand = runCommandWithInheritedStdio,
-  tolerateFailure = false
+  tolerateFailure = false,
+  trackChild
 }) {
+  runCommand = trackRuntimeCommand(runCommand, trackChild);
   const resolvedPaths = paths ?? createOxiquillPaths({ workspaceRoot: root });
   const outputDir = pathFromUrl(resolvedPaths.haskellWasmPublicDir);
   const optimizationFlag = mode === 'build' ? '-O2' : '-O0';
@@ -215,12 +220,15 @@ async function writeHaskellRuntimeStatus({ fileSystem, haskellFingerprint, messa
 /* v8 ignore start -- external process adapter covered through injected runCommand in tests. */
 function runCommandWithInheritedStdio(command, args, options) {
   return new Promise((resolve, reject) => {
+    const detached = Boolean(options.trackChild) && process.platform !== 'win32';
     const child = spawn(command, args, {
+      detached,
       cwd: options.cwd,
       env: options.env,
       stdio: options.captureOutput ? ['ignore', 'pipe', 'inherit'] : 'inherit'
     });
 
+    options.trackChild?.(child, detached);
     const output = [];
     child.stdout?.on('data', (chunk) => output.push(chunk));
     child.on('error', reject);

@@ -158,7 +158,8 @@ export async function syncDocRuntime({
   syncLicenses = defaultSyncLicenseArtifacts,
   syncPyodide = defaultCopyPyodideAssets,
   syncRustSupport = syncRustBuildSupportFiles,
-  tolerateHaskellBuildFailure = false
+  tolerateHaskellBuildFailure = false,
+  trackChild
 }) {
   const snapshotOptions = { fileSystem, paths, pythonOptions };
   const [authoringCells, helpers] = await Promise.all([
@@ -180,7 +181,8 @@ export async function syncDocRuntime({
     mode,
     runtimeInputs,
     rustCellCount: rustCells.length,
-    tolerateHaskellFailure: tolerateHaskellBuildFailure
+    tolerateHaskellFailure: tolerateHaskellBuildFailure,
+    ...(trackChild ? { trackChild } : {})
   });
   const pyodideRuntimeInputs =
     pythonCells.length > 0 || Object.keys(pythonOptions.additionalPackages ?? {}).length > 0
@@ -247,7 +249,14 @@ export async function syncDocRuntime({
     });
 
     if (plan.languages.rust.public === 'build') {
-      await buildRust({ environment, fileSystem, mode, paths: stagedPaths, wasmOpt: toolchains.rust?.wasmOpt });
+      await buildRust({
+        environment,
+        fileSystem,
+        mode,
+        paths: stagedPaths,
+        wasmOpt: toolchains.rust?.wasmOpt,
+        ...(trackChild ? { trackChild } : {})
+      });
     }
     if (plan.languages.haskell.public === 'build') {
       haskellBuildResult = await buildHaskell({
@@ -257,7 +266,8 @@ export async function syncDocRuntime({
         haskellFingerprint: summary.haskellFingerprint,
         mode,
         paths: stagedPaths,
-        tolerateFailure: tolerateHaskellBuildFailure
+        tolerateFailure: tolerateHaskellBuildFailure,
+        ...(trackChild ? { trackChild } : {})
       });
       if (!haskellBuildResult.ok && outputComplete.haskellPublic) {
         // A tolerated dev failure must not replace a previously verified runtime.

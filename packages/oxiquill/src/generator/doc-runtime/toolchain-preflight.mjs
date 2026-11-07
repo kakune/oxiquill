@@ -1,3 +1,4 @@
+import { trackRuntimeCommand } from '../runtime-lock.mjs';
 import { spawn } from 'node:child_process';
 import { resolveWasmOpt } from './wasm-opt-cache.mjs';
 import { defaultFileSystem } from './file-system.mjs';
@@ -13,9 +14,11 @@ export async function preflightRequiredToolchains({
   runCommand = runCommandWithCapturedOutput,
   runtimeInputs,
   rustCellCount,
-  tolerateHaskellFailure = false
+  tolerateHaskellFailure = false,
+  trackChild
 }) {
   if (mode === undefined) return Object.freeze({});
+  runCommand = trackRuntimeCommand(runCommand, trackChild);
 
   const [rust, haskell] = await Promise.all([
     rustCellCount > 0
@@ -177,7 +180,14 @@ function errorMessage(error) {
 
 export function runCommandWithCapturedOutput(command, args, options = {}, spawnProcess = spawn) {
   return new Promise((resolve, reject) => {
-    const child = spawnProcess(command, args, { ...options, stdio: ['ignore', 'pipe', 'pipe'] });
+    const { trackChild, ...spawnOptions } = options;
+    const detached = Boolean(trackChild) && process.platform !== 'win32';
+    const child = spawnProcess(command, args, {
+      ...spawnOptions,
+      ...(trackChild ? { detached } : {}),
+      stdio: ['ignore', 'pipe', 'pipe']
+    });
+    trackChild?.(child, detached);
     const stdout = [];
     const stderr = [];
     child.stdout.on('data', (chunk) => stdout.push(chunk));

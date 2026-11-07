@@ -8,6 +8,7 @@ import {
   validateProjectPathSafety
 } from '../config/path-safety.mjs';
 import { arePathsEqual, canonicalPath, normalizePath } from '../config/paths.mjs';
+import { isRuntimeLockFile, parseRuntimeLockRecord } from './runtime-lock-record.mjs';
 
 export const CLEANUP_OWNERSHIP_MARKER = '.oxiquill-ownership.json';
 
@@ -15,6 +16,17 @@ const markerSchemaVersion = 1;
 const defaultFileSystem = { lstat, mkdir, readFile, readdir, writeFile };
 const ownershipCorrection =
   'Use a missing or empty dedicated directory so Oxiquill can establish ownership, or restore its valid ownership marker.';
+
+export async function preflightCleanupOwnership({
+  configFile = undefined,
+  fields = cleanupRootFields,
+  fileSystem = defaultFileSystem,
+  paths
+}) {
+  const services = { ...defaultFileSystem, ...fileSystem };
+  const roots = await validatedCleanupRoots({ configFile, fields, fileSystem: services, paths });
+  await Promise.all(roots.map((root) => inspectOwnership(root, paths, services, { allowClaim: true })));
+}
 
 export async function prepareCleanupOwnership({
   configFile = undefined,
@@ -112,7 +124,25 @@ async function inspectOwnership(root, paths, fileSystem, { allowClaim }) {
     return { exists: true, markerPath, markerSource, root, writeMarker: allowClaim };
   }
 
-  const entries = await fileSystem.readdir(root.path);
+  const names = await fileSystem.readdir(root.path);
+  const entries =
+    root.property === 'cacheDir'
+      ? (
+          await Promise.all(
+            names.map(async (name) => {
+              if (!isRuntimeLockFile(name)) return name;
+              // Exclusive candidate creation precedes filling the record. A concurrent
+              // contender can see that temporary file before it is complete.
+              if (name.startsWith('runtime.lock.candidate-')) return undefined;
+              const source = await fileSystem.readFile(path.join(root.path, name), 'utf8').catch((error) => {
+                if (error.code === 'ENOENT') return undefined;
+                throw error;
+              });
+              return source === undefined || parseRuntimeLockRecord(source) ? undefined : name;
+            })
+          )
+        ).filter((name) => name !== undefined)
+      : names;
   if (allowClaim && entries.length === 0) {
     return { exists: true, markerPath, markerSource, root, writeMarker: true };
   }

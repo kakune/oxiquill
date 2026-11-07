@@ -5,6 +5,7 @@ import { parseArgs } from 'node:util';
 import { pathFromUrl } from '../config/paths.mjs';
 import { loadOxiquillProjectConfig } from '../config/project-config.mjs';
 import { createDocRuntimeContext, syncDocRuntime } from './doc-runtime-service.mjs';
+import { acquireRuntimeLock } from './runtime-lock.mjs';
 import { prepareCleanupOwnership } from './cleanup-ownership.mjs';
 import { pythonLicensePaths } from './doc-runtime/python-package-notices.mjs';
 import {
@@ -20,6 +21,7 @@ import {
 } from './doc-runtime-watch-core.mjs';
 
 const defaultServices = {
+  acquireRuntimeLock,
   createDocRuntimeContext,
   loadProjectConfig: loadOxiquillProjectConfig,
   prepareCleanupOwnership,
@@ -50,60 +52,82 @@ export async function main(argv = process.argv.slice(2), serviceOverrides = {}) 
 export async function watchDocRuntime({ projectConfig, serviceOverrides = {}, skipInitial = false }) {
   const services = { ...defaultServices, ...serviceOverrides };
   const { paths } = projectConfig;
-  await services.prepareCleanupOwnership({
-    configFile: projectConfig.configFile,
-    fields: ['cacheDir', 'publicAssetsDir'],
-    paths
-  });
   const workspaceRoot = pathFromUrl(paths.workspaceRoot);
   let pythonOptions = projectConfig.python;
   let licensePaths = pythonLicensePaths(pythonOptions, paths);
   let reloadConfig = false;
   let highlighter;
   let changeKinds = skipInitial ? new Set() : new Set(['docs']);
+  const controller = new AbortController();
+  let closing = false;
+  let activeSync = Promise.resolve();
 
   async function syncRuntime() {
-    if (!shouldSyncRuntime(changeKinds)) return;
-
-    const currentKinds = changeKinds;
-    changeKinds = new Set();
-    if (reloadConfig) {
-      reloadConfig = false;
-      const updated = await services.loadProjectConfig({ cwd: workspaceRoot, configFile: projectConfig.configFile });
-      pythonOptions = updated.python;
-      licensePaths = pythonLicensePaths(pythonOptions, paths);
-      watcher.add(licensePaths);
-    }
-    const context = await services.createDocRuntimeContext({ paths, highlighter, pythonOptions });
-    highlighter = context.highlighter;
-
-    console.log(`[runtime] syncing after ${describeChangeKinds(currentKinds)}`);
-    const current = await services.syncDocRuntime({
-      ...context,
-      forceRustBuild: currentKinds.has('crate'),
-      mode: 'dev',
-      tolerateHaskellBuildFailure: true
+    if (closing || !shouldSyncRuntime(changeKinds)) return;
+    const lease = await services.acquireRuntimeLock({
+      paths,
+      configFile: projectConfig.configFile,
+      command: 'dev:runtime',
+      timeout: Infinity,
+      signal: controller.signal
     });
+    try {
+      if (closing) return;
+      await services.prepareCleanupOwnership({
+        configFile: projectConfig.configFile,
+        fields: ['cacheDir', 'publicAssetsDir'],
+        paths
+      });
+      const currentKinds = changeKinds;
+      changeKinds = new Set();
+      if (reloadConfig) {
+        reloadConfig = false;
+        const updated = await services.loadProjectConfig({ cwd: workspaceRoot, configFile: projectConfig.configFile });
+        pythonOptions = updated.python;
+        licensePaths = pythonLicensePaths(pythonOptions, paths);
+        watcher.add(licensePaths);
+      }
+      const context = await services.createDocRuntimeContext({ paths, highlighter, pythonOptions });
+      highlighter = context.highlighter;
 
-    if (current.plan.languages.rust.public === 'build') {
-      console.log('[runtime] rebuilt Rust/Wasm cells');
-    }
-    if (current.plan.languages.haskell.public === 'build') {
-      console.log('[runtime] rebuilt Haskell/WASI cells');
-    }
-    if (current.haskellBuildResult && !current.haskellBuildResult.ok) {
-      console.warn(`[runtime] Haskell/WASI runtime unavailable: ${current.haskellBuildResult.error.message}`);
-    }
+      console.log(`[runtime] syncing after ${describeChangeKinds(currentKinds)}`);
+      const current = await services.syncDocRuntime({
+        ...context,
+        forceRustBuild: currentKinds.has('crate'),
+        mode: 'dev',
+        trackChild: lease.trackChild,
+        tolerateHaskellBuildFailure: true
+      });
 
-    console.log(`[runtime] ready: ${current.cellCount} interactive cell(s)`);
+      if (current.plan.languages.rust.public === 'build') {
+        console.log('[runtime] rebuilt Rust/Wasm cells');
+      }
+      if (current.plan.languages.haskell.public === 'build') {
+        console.log('[runtime] rebuilt Haskell/WASI cells');
+      }
+      if (current.haskellBuildResult && !current.haskellBuildResult.ok) {
+        console.warn(`[runtime] Haskell/WASI runtime unavailable: ${current.haskellBuildResult.error.message}`);
+      }
+
+      console.log(`[runtime] ready: ${current.cellCount} interactive cell(s)`);
+    } finally {
+      lease.release();
+    }
   }
 
-  const queue = createSerialTaskQueue(syncRuntime, {
-    onError: (error) => {
-      console.error('[runtime] sync failed');
-      console.error(error);
+  const queue = createSerialTaskQueue(
+    () => {
+      activeSync = syncRuntime();
+      return activeSync;
+    },
+    {
+      onError: (error) => {
+        if (closing && error.name === 'AbortError') return;
+        console.error('[runtime] sync failed');
+        console.error(error);
+      }
     }
-  });
+  );
 
   // Chokidar v4 does not expand globs, so watch stable roots and classify events ourselves.
   const watcher = services.watch(
@@ -118,6 +142,16 @@ export async function watchDocRuntime({ projectConfig, serviceOverrides = {}, sk
       ignoreInitial: true
     }
   );
+
+  const closeWatcher = watcher.close.bind(watcher);
+  watcher.close = async () => {
+    closing = true;
+    controller.abort();
+    await closeWatcher();
+    await activeSync.catch((error) => {
+      if (error.name !== 'AbortError') throw error;
+    });
+  };
 
   watcher.on('all', (event, filePath) => {
     if (!isRuntimeWatchFileEvent(event)) return;

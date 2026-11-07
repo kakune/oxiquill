@@ -8,6 +8,7 @@ import {
   mkdir,
   mkdtemp,
   readFile,
+  readdir,
   realpath,
   rename,
   rm,
@@ -181,6 +182,7 @@ try {
     : `file:${path.relative(consumerRoot, packageSource).split(path.sep).join('/')}`;
   packageJson.scripts['wasm:dev'] = 'oxiquill docgen --wasm dev';
   packageJson.scripts['test:wasm'] = 'oxiquill test-wasm';
+  packageJson.scripts['build:clean'] = `${packageManager} run clean && ${packageManager} run build`;
   await writeFile(packageJsonPath, `${JSON.stringify(packageJson, null, 2)}\n`);
 
   if (packageManager === 'pnpm' && profile !== 'starter') {
@@ -271,6 +273,7 @@ try {
   ]);
   const initialBuild = run(process.execPath, [installedCliPath, 'build'], consumerRoot, true, nodeOnlyEnvironment);
   assertNo404Warning(initialBuild);
+  assertNo404Warning(run(packageManager, ['run', 'build'], consumerRoot, true));
   const productionHtml = await readFile(path.join(consumerRoot, 'dist/index.html'), 'utf8');
   assert.match(productionHtml, /id="starlight__search"/u);
   assert.match(productionHtml, /class="katex-html"/u);
@@ -283,6 +286,7 @@ try {
   );
   await assertFile(path.join(consumerRoot, '.astro/preview.json'));
   stopAstroPreview(packageManager, consumerRoot);
+  assertNo404Warning(run(packageManager, ['run', 'build:clean'], consumerRoot, true));
   run(packageManager, ['run', 'clean'], consumerRoot);
 
   const projectRoot = path.join(consumerRoot, 'site root');
@@ -536,7 +540,7 @@ try {
   }
 
   run(packageManager, ['run', 'clean'], consumerRoot);
-  await assertMissing(path.join(projectRoot, 'state cache'));
+  assert.deepEqual(await readdir(path.join(projectRoot, 'state cache')), ['.oxiquill-ownership.json']);
   await assertMissing(path.join(projectRoot, 'built site'));
   await assertMissing(path.join(projectRoot, 'static files/oxiquill assets'));
   for (const fileName of requiredPyodideFiles) {
@@ -549,7 +553,7 @@ try {
     await assertFile(path.join(pyodidePublicDir, fileName));
   }
   run(packageManager, ['run', 'clean'], consumerRoot);
-  await assertMissing(path.join(projectRoot, 'state cache'));
+  assert.deepEqual(await readdir(path.join(projectRoot, 'state cache')), ['.oxiquill-ownership.json']);
   await assertMissing(path.join(projectRoot, 'static files/oxiquill assets'));
   for (const fileName of requiredPyodideFiles) {
     await assertFile(path.join(downloadCacheDirectory, fileName));
