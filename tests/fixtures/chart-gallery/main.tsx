@@ -8,6 +8,7 @@ import * as echarts from 'echarts/core';
 import { chartFixtures } from '@chart-fixtures';
 import '@starlight-props';
 import '@chart-source/styles/custom.css';
+import LinkedGallery from './linked';
 
 const query = new URLSearchParams(location.search);
 document.documentElement.dataset.theme = query.get('theme') ?? 'light';
@@ -95,7 +96,7 @@ function Gallery() {
 
 Object.assign(window, { galleryECharts: echarts, galleryFixtureCount: Object.keys(chartFixtures).length });
 const app = document.getElementById('app');
-if (app) render(<Gallery />, app);
+if (app) render(query.has('linked') ? <LinkedGallery /> : <Gallery />, app);
 
 function updatedChart(spec: ChartSpec, revision: number): ChartSpec {
   if (!revision) return spec;

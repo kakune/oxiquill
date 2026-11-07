@@ -61,6 +61,42 @@ Data updates preserve zoom. Changing or removing authored bounds or zero inclusi
 
 Rust line, scatter, area, bar, and histogram macros accept `options = &serde_json::json!({...})` after their data arguments; heatmaps and the other chart kinds use `emit_chart!` with a complete spec. Options accept the public chart settings, including labels and nested style; they cannot replace the kind or data. Existing positional style arguments remain supported. See the [logistic map](../../samples/logistic-map/) for a fixed 0–1 range.
 
+### Linked panels and keyboard navigation
+
+Line, scatter, area, band, errorbar, and xy charts with a zoomable value, time, or log x axis accept `link: { group: "residuals", zoom: true, cursor: true }`. The group is required and contains 1–64 ASCII letters, digits, underscores, or hyphens. Both booleans default to `true`; setting one to `false` disables sending and receiving that interaction. Category axes, `dataZoom: false`, and other chart kinds reject `link`. XY charts retain their value/time x-axis restriction.
+
+Groups belong to the current page, including charts emitted by separate cells. Zoom and pan share x-domain values across panels of different widths or data ranges. Each peer intersects the range with its own domain; a disjoint peer keeps its view and announces that it has no data in the selected range. Reset restores each panel's own authored bounds or data extent. A panel that appears later joins the current group viewport. All members must use the same x-axis type, and explicit `style.xFormat.unit` values must match. Units are never inferred from axis labels. Invalid charts show an artifact-local diagnostic while neighboring outputs remain usable.
+
+Cursor linking draws a line at the same x value, even between a peer's data points. Only the panel under the pointer shows a tooltip. Chart interactions do not execute cells, and navigation clears group state. PNG and SVG exports retain each panel's current viewport.
+
+Focus any zoomable plot and use **+** or **=** to zoom in, **-** to zoom out, **← / →** to pan by 10% of the visible range, and **0** to reset. The controls work without pointer hover, with or without linking. Horizontal bars navigate their category y axis; other charts navigate x. Screen readers receive the same short keyboard instructions when the plot receives focus.
+
+These separate cells share their x viewport and cursor:
+
+```rust
+//| id: linked-observations
+//| title: Observations
+//| crates: []
+emit_line_chart!(&[[0, 2], [20, 4], [40, 3], [60, 6], [80, 5], [100, 7]],
+    options = &serde_json::json!({
+        "link": { "group": "residuals" },
+        "xLabel": "Time", "yLabel": "Voltage",
+        "style": { "xFormat": { "unit": "s" }, "yFormat": { "unit": "V" } }
+    }));
+```
+
+```rust
+//| id: linked-residuals
+//| title: Residuals
+//| crates: []
+emit_line_chart!(&[[10, -1], [30, 1], [50, -2], [70, 2], [90, 0]],
+    options = &serde_json::json!({
+        "link": { "group": "residuals" },
+        "xLabel": "Time", "yLabel": "Residual",
+        "style": { "xFormat": { "unit": "s" }, "yFormat": { "unit": "V" } }
+    }));
+```
+
 ### Histogram intervals
 
 Histograms use a numeric x axis: each rectangle spans its exact `[lower, upper)` interval, including negative boundaries, unequal widths, and gaps. Overlapping bins are rejected; non-overlapping bins need not be sorted.

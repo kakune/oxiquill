@@ -61,6 +61,42 @@ chart は `html[data-theme]` の変更時も同じ ECharts instance を使い、
 
 Rust の line・scatter・area・bar・histogram マクロでは、データ引数の後ろに `options = &serde_json::json!({...})` を指定できます。heatmap とその他の種類は、spec 全体を `emit_chart!` に渡します。ラベルと nested style を含む公開設定を指定でき、kind やデータは上書きできません。従来の位置引数 style も利用できます。[ロジスティック写像](../../samples/logistic-map/)は 0–1 の固定範囲を使います。
 
+### パネルの連動とキーボード操作
+
+ズーム可能な value・time・log の x 軸を持つ line・scatter・area・band・errorbar・xy は、`link: { group: "residuals", zoom: true, cursor: true }` を指定できます。必須の group は ASCII 英数字・アンダースコア・ハイフンの 1–64 文字です。二つの真偽値は既定で `true` となり、`false` はその操作の送受信を無効にします。category 軸、`dataZoom: false`、その他の種類では `link` を指定できません。xy の x 軸は引き続き value・time だけです。
+
+同じページ内なら、別のセルから出力したグラフも同じグループに参加します。ズームと移動は x 座標値を共有するため、幅やデータ範囲が違うパネルでも位置が揃います。各パネルは受信範囲と自身の範囲の共通部分を表示し、重ならない場合は表示を保持して、選択範囲にデータがないことを読み上げます。リセットは各パネル固有の指定境界またはデータ全範囲へ戻します。後から表示されたパネルは現在のグループ範囲に参加します。x 軸の種類は全員同じにし、明示した `style.xFormat.unit` も一致させてください。軸ラベルから単位を推測することはありません。不正なグラフだけに artifact 単位の診断を表示し、隣の出力は引き続き操作できます。
+
+カーソルは相手のデータ点の間でも同じ x 座標に線を表示し、ツールチップはポインターのあるパネルだけに表示します。グラフ操作でセルは再実行されず、ページ移動で連動状態は破棄されます。PNG・SVG の保存には各パネルの現在の表示範囲を使います。
+
+ズーム可能なプロットにフォーカスし、**+** または **=** で拡大、**-** で縮小、**← / →** で表示範囲の 10% 移動、**0** でリセットします。連動の有無やポインター位置に依存しません。横棒グラフはカテゴリ y 軸、それ以外は x 軸を操作します。スクリーンリーダーにはフォーカス時に短い操作説明を伝えます。
+
+次の二つのセルは x 軸の表示範囲とカーソルを共有します。
+
+```rust
+//| id: linked-observations
+//| title: 観測値
+//| crates: []
+emit_line_chart!(&[[0, 2], [20, 4], [40, 3], [60, 6], [80, 5], [100, 7]],
+    options = &serde_json::json!({
+        "link": { "group": "residuals" },
+        "xLabel": "時間", "yLabel": "電圧",
+        "style": { "xFormat": { "unit": "s" }, "yFormat": { "unit": "V" } }
+    }));
+```
+
+```rust
+//| id: linked-residuals
+//| title: 残差
+//| crates: []
+emit_line_chart!(&[[10, -1], [30, 1], [50, -2], [70, 2], [90, 0]],
+    options = &serde_json::json!({
+        "link": { "group": "residuals" },
+        "xLabel": "時間", "yLabel": "残差",
+        "style": { "xFormat": { "unit": "s" }, "yFormat": { "unit": "V" } }
+    }));
+```
+
 ### ヒストグラムの区間
 
 ヒストグラムの x 軸は数値軸です。各矩形は正確な `[lower, upper)` に対応し、負の境界、異なる幅、区間の空白を保ちます。重なるビンは拒否し、重ならないビンの入力順は変更しません。
