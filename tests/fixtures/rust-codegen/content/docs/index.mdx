@@ -148,3 +148,22 @@ let series = serde_json::json!([{ "id": "a", "name": "Same", "points": [[0, 1]],
 emit_line_chart!(&series);
 emit_bar_chart!(&["x"], &serde_json::json!([{ "id": "b", "values": [2], "style": { "color": { "dark": "#123" } } }]));
 ```
+
+```rust
+//| id: multiline-literals
+//| crates: []
+let text = "first
+second";
+let raw = r###"first
+  second"###;
+let bytes = b"first
+second";
+let raw_bytes = br#"first
+  second"#;
+emit_json!(serde_json::json!({
+    "text": text,
+    "raw": raw,
+    "bytes": bytes.as_slice(),
+    "raw_bytes": raw_bytes.as_slice(),
+}));
+```

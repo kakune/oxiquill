@@ -184,6 +184,18 @@ describe('Rust macro invocation scanning', () => {
 });
 
 describe('Rust cell author scope', () => {
+  it('embeds every authored Rust line at its original column without altering literal contents', () => {
+    const source =
+      'let text = "first\nsecond";\nlet raw = r#"first\n  second"#;\nlet bytes = b"first\nsecond";\n    println!("{text}{raw}{bytes:?}");';
+    const generated = generateRustFunction({ id: 'literal', inputs: [], source });
+    const lines = generated.split('\n');
+    const start = lines.indexOf(source.split('\n')[0]);
+    expect(start).toBeGreaterThan(0);
+    expect(lines.slice(start, start + source.split('\n').length)).toEqual(source.split('\n'));
+    expect(lines[start - 1]).toBe('    let _ = {');
+    expect(lines[start + source.split('\n').length]).toBe('    };');
+  });
+
   it('keeps inputs and author bindings inside a discarded block after macro definitions', () => {
     const source =
       'let __stdout = label;\nlet __outputs = 42;\nprintln!("{__stdout}:{__outputs}");\nemit_text!(__stdout);\n42';
@@ -198,13 +210,8 @@ describe('Rust cell author scope', () => {
     expect(generated.indexOf('macro_rules! println')).toBeLessThan(block);
     expect(generated.indexOf('macro_rules! emit_text')).toBeLessThan(block);
     expect(generated.slice(block)).toContain('        let label = read_string(inputs, "label")?;');
-    expect(generated.slice(block)).toContain(
-      source
-        .split('\n')
-        .map((line) => `        ${line}`)
-        .join('\n')
-    );
-    expect(generated).toContain('        42\n    };\n\n    Ok(finish_cell_output(');
+    expect(generated.slice(block)).toContain(`\n${source}\n`);
+    expect(generated).toContain('42\n    };\n\n    Ok(finish_cell_output(');
     expect(generated.slice(generated.indexOf('    Ok(finish_cell_output('))).toContain('__stdout.into_inner()');
   });
 });
