@@ -30,9 +30,6 @@ console_error_panic_hook = "=${rust.dependencies.console_error_panic_hook}"
 ${localDependencies}serde = { version = "=${rust.dependencies.serde}", features = ["derive"] }
 serde_json = "=${rust.dependencies.serde_json}"
 wasm-bindgen = "=${rust.dependencies['wasm-bindgen']}"
-
-[dev-dependencies]
-wasm-bindgen-test = "=${rust.dependencies['wasm-bindgen-test']}"
 `;
 }
 

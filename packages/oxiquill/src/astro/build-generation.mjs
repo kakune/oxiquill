@@ -47,7 +47,7 @@ export function createBuildGeneration({ paths, pythonOptions, generationId }) {
       const manifest = current();
       if (!manifest) return undefined;
       const changes = diffCells(
-        manifest.cells.filter((cell) => cell.pagePath === pagePath),
+        manifest.snapshot.cells.filter((cell) => cell.pagePath === pagePath),
         cells
       );
       if (changes.length) return rejectChangedPage(manifest, pagePath, cells, changes);

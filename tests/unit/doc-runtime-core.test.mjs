@@ -227,8 +227,7 @@ const runtimeInputs = {
       console_error_panic_hook: '0.1.7',
       serde: '1.0.228',
       serde_json: '1.0.150',
-      'wasm-bindgen': '0.2.122',
-      'wasm-bindgen-test': '0.3.72'
+      'wasm-bindgen': '0.2.122'
     },
     edition: '2024',
     minimumVersion: '1.85.0'
@@ -999,8 +998,8 @@ describe('doc runtime core', () => {
     expect(generateRustLib([chartCell])).toContain('fn histogram_chart_spec');
     expect(generateRustLib([chartCell])).toContain('fn heatmap_chart_spec');
     expect(generateRustLib([chartCell])).toContain('fn ensure_chart_data_limit');
-    expect(generateRustLib([rustCell])).toContain('generated_plot_cell_runs');
-    expect(generateRustLib([rustCell])).toContain('generated_output_limits_are_enforced');
+    expect(generateRustLib([rustCell])).not.toContain('wasm_bindgen_test');
+    expect(generateRustLib([rustCell])).not.toContain('mod tests');
 
     const haskellCell = {
       id: 'haskell-cell',

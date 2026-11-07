@@ -132,6 +132,33 @@ describe('generation snapshots and build guards', () => {
     expect(() => generation.validatePage(pagePath, snapshot.cells)).not.toThrow();
   });
 
+  it('validates declared tests against the authoring snapshot while reader manifests omit them', async () => {
+    const { paths, page } = await fixture();
+    const authored = source.replace(
+      '//| id: demo',
+      '//| id: demo\n//| tests: [{ case: default, expect: [{ path: /outputs/0/content, equals: "first\\n" }] }]'
+    );
+    await writeFile(page, authored);
+    const snapshot = await readGenerationSnapshot({ paths });
+    const cells = snapshot.cells.map((cell) => {
+      const reader = { ...cell };
+      delete reader.tests;
+      return reader;
+    });
+    await writeFile(paths.cellsJsonPath, JSON.stringify({ generationId: snapshot.generationId, cells }));
+    await writeFile(paths.runtimeOwnershipPath, JSON.stringify({ generationId: snapshot.generationId, snapshot }));
+    const generation = createBuildGeneration({ paths, generationId: snapshot.generationId });
+    expect(generation.validatePage(pagePath, parseCellsFromMarkdown(authored, pagePath).cells)).toBe(
+      snapshot.generationId
+    );
+    await expect(
+      generation.validatePage(
+        pagePath,
+        parseCellsFromMarkdown(authored.replace('first\\n', 'second\\n'), pagePath).cells
+      )
+    ).rejects.toThrow('tests');
+  });
+
   it('checks disk at build completion, accepting prose edits and rejecting cells and helpers', async () => {
     const { paths, page, snapshot } = await fixture();
     const generation = createBuildGeneration({ paths, generationId: snapshot.generationId });

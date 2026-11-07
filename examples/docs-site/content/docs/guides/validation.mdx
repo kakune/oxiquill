@@ -116,3 +116,45 @@ pnpm doc:rust
 CI expands to 12 jobs: change selection, JavaScript quality, Rust quality, site build, three browsers, Linux runtime tests, three OS consumers, and the final `ci-ok` check. Markdown-only changes run four jobs: changes, JavaScript quality, Rust quality, and ci-ok. Other changes run the Linux site/runtime/consumer checks; macOS and Windows consumers run for package sources, package tests, root package metadata, the lockfile, and GitHub configuration. MDX is treated as executable site content. Release branches starting with `release/` always run the full matrix.
 
 Browser tests depend only on the built site. Chromium checks the bundle report and captures baseline chart screenshots only for chart sources, styles, or ECharts dependency changes. Linux exercises npm, pnpm with browser hydration, and HMR; macOS exercises pnpm and unit tests; Windows exercises npm and unit tests. Rust lint includes `cargo fmt --check`. The final check accepts intentional skips but rejects failed or cancelled jobs.
+
+## Declared Rust Cell Tests
+
+Declare `tests` in a Rust cell’s leading YAML comments. Each entry selects `default` or an authored `cases` id and provides a non-empty `expect` list. A case may appear only once. Test metadata is never rendered or included in reader manifests.
+
+```rust
+//| id: tested-square
+//| inputs:
+//|   n: { type: integer, value: 2, min: 0, max: 10 }
+//| cases:
+//|   - { id: larger, label: Larger input, inputs: { n: 3 } }
+//|   - { id: zero, label: Expected error, inputs: { n: 0 } }
+//| tests:
+//|   - { case: default, expect: [{ path: /outputs/0/value, equals: 4 }] }
+//|   - { case: larger, expect: [{ path: /outputs/0/value, range: { min: 9, max: 9 } }] }
+//|   - { case: zero, expect: [{ error: n must be positive }] }
+if n == 0 { return Err("n must be positive".to_owned()); }
+emit_json!(&(n * n));
+```
+
+Each expectation uses exactly one form:
+
+| Form                                                               | Condition                                                                                                                                          |
+| ------------------------------------------------------------------ | -------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `{ error: "substring" }`                                           | Execution fails with an error containing 1–256 UTF-8 bytes of text. This must be the test’s only expectation.                                      |
+| `{ path: "/outputs/0/value", equals: 4 }`                          | Structural JSON equality, without type coercion.                                                                                                   |
+| `{ path: "/outputs/0/value", range: { min: 1, max: 10 } }`         | A finite number within inclusive bounds; at least one bound is required.                                                                           |
+| `{ path: "/outputs/0/value", approx: { value: 0, atol: 1.0e-8 } }` | `abs(actual - value) <= atol + rtol * abs(value)`. Tolerances default to zero, must be finite and non-negative, and at least one must be positive. |
+
+`path` is an RFC 6901 JSON Pointer into the normalized `{ "outputs": [...] }` result. The empty string selects the root; `~0` escapes `~` and `~1` escapes `/`. Add `artifact: <id>` to select an artifact by its stable id before resolving the pointer, for example `{ artifact: plot, path: /spec/kind, equals: line }`. Missing paths or artifacts fail. Strings and `null` never become numbers.
+
+The harness uses the browser’s output bounding and artifact validation. It tests declared conditions only: an author-reported status such as `iteration-limit`, or an artifact validation diagnostic, is not an execution error. Each execution uses a fresh Wasm instance and the cell’s `timeoutMs`; a timeout always fails, including tests expecting an error.
+
+```sh
+pnpm exec oxiquill test-wasm
+pnpm exec oxiquill test-wasm --page guides/validation.mdx --cell tested-square --case larger
+pnpm exec oxiquill test-wasm --all-cases --format json
+```
+
+Without selectors, every Rust cell runs its defaults once and every declared test runs. A declared default test provides that default run’s assertions. `--all-cases` adds smoke checks for untested named cases. `--case` only filters runnable cases, so an untested named case requires `--all-cases`. Python and Haskell do not yet support declared tests. Unfiltered commands retain the existing Haskell smoke step; page, cell, or case filters skip it.
+
+Failures include page, fence line, cell, case, expectation location, condition, and a bounded actual value. See [CLI](/reference/cli/#declared-cell-testing) for selector and NDJSON details.

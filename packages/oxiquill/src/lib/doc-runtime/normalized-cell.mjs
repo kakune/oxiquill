@@ -10,6 +10,7 @@ export function normalizeCell(cell) {
     ...(cell.setup ? { setup: cell.setup } : {}),
     inputs: cell.inputs,
     ...(cell.cases?.length ? { cases: cell.cases } : {}),
+    ...(cell.tests?.length ? { tests: cell.tests.map(({ case: caseId, expect }) => ({ case: caseId, expect })) } : {}),
     packages: cell.packages,
     crates: cell.crates,
     timeoutMs: cell.timeoutMs,

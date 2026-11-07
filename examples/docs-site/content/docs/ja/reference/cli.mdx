@@ -73,3 +73,42 @@ pnpm preview
 strict command は必要な compiler、generated artifact、config、download dependency がないと失敗します。該当する場合、diagnostic は command/tool、page、fence line、cell ID、field/path を示します。`dev` は Haskell compiler/build failure を許容して docs server を維持しますが、再生成に成功するまで該当 cell に error を表示します。
 
 復旧方法は [トラブルシューティング](/ja/guides/troubleshooting/) を参照してください。
+
+## Declared Cell Testing
+
+```sh
+pnpm exec oxiquill test-wasm --page ja/guides/validation.mdx --cell tested-square --case default --format json
+```
+
+| オプション             | 動作                                                                                                                   |
+| ---------------------- | ---------------------------------------------------------------------------------------------------------------------- |
+| `--page <path>`        | docs からの相対 Markdown/MDX パス。複数指定可。区切り文字と `.` を正規化し、絶対パスと docs の外への移動を拒否します。 |
+| `--cell <id>`          | スコープ付きセル id。複数指定可。`--page` が一つならページ内 id も指定できます。                                       |
+| `--case <id>`          | `default` または名前付きケースを絞り込みます。複数指定可。テスト未指定のケースには `--all-cases` が必要です。          |
+| `--all-cases`          | テスト未指定の全ケースもスモーク検証します。                                                                           |
+| `--format human\|json` | 既定は人向けの表示。`json` は標準出力に NDJSON を出力し、コンパイラーと生成の進捗は標準エラーに出力します。            |
+
+同じオプション内の値は選択肢として扱い、page、cell、case はすべての条件を満たす対象を選びます。各セレクターに一致が必要で、空の選択は使用方法エラーです。Rust 以外のセルを明示選択すると、その言語のケーステストが未対応であると表示します。フィルター指定時は従来の Haskell スモーク検証を省略します。
+
+セレクターなしでは全 Rust 既定入力と宣言テストを実行します。セルとケースの組み合わせごとに一度実行し、宣言された期待値をスモーク検証の代わりに適用します。生成済み Wasm を一度コンパイルし、実行ごとに新しいインスタンスを初期化します。`wasm-pack test` や別のテストビルドは実行しません。
+
+JSON の `test` イベントは `page`、`line`（フェンス行）、`cell`、`case`、`status`（`pass` / `fail`）、`durationMs`、`failures` を持ちます。各失敗は `reason`、`fieldPath`、`location`（`line`、`column`）、長さ制限付き文字列 `actual` と `expected`、該当時は `path` と `artifact` を持ちます。実行エラー、タイムアウト、ハーネスエラー、パスや artifact の欠落、比較失敗を区別します。致命的エラーは `message` を持つ `diagnostic` イベントです。最後の `summary` は `total`、`passed`、`failed`、`exitStatus` と、該当時は `status` と `cellCount` を持つ `haskell` を含みます。Haskell の件数は Rust テスト総数と別です。
+
+```json
+{
+  "type": "test",
+  "page": "ja/guides/validation.mdx",
+  "line": 109,
+  "cell": "ja__guides__validation__tested-square",
+  "case": "default",
+  "status": "pass",
+  "durationMs": 1,
+  "failures": []
+}
+```
+
+```json
+{ "type": "summary", "total": 1, "passed": 1, "failed": 0, "exitStatus": 0 }
+```
+
+すべて成功すれば終了ステータス 0、テスト失敗、タイムアウト、メタデータ不正、使用方法エラーは 1 です。フィルターなしのセルがないプロジェクトは成功しますが、不一致セレクターは必ずエラーです。期待値の形式は [検証](/ja/guides/validation/#rust-セルの宣言的テスト) を参照してください。

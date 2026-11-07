@@ -104,7 +104,25 @@ const commandDefinitions = Object.freeze({
   }),
   'lint-rust': command('lint-rust [options]', 'Lint optional Rust helper crates.', { project: true }),
   'doc-rust': command('doc-rust [options]', 'Build optional Rust helper-crate documentation.', { project: true }),
-  'test-wasm': command('test-wasm [options]', 'Generate and test compiled Wasm runtimes.', { project: true })
+  'test-wasm': command('test-wasm [options]', 'Generate runtimes and run declared Rust cell tests and smoke checks.', {
+    project: true,
+    options: {
+      page: option('string', '--page <path>', 'Limit tests to a docs-relative page (repeatable).', { multiple: true }),
+      cell: option(
+        'string',
+        '--cell <id>',
+        'Limit tests to a scoped cell id, or a local id with one --page (repeatable).',
+        { multiple: true }
+      ),
+      case: option('string', '--case <id>', 'Filter runnable cases by default or a named case id (repeatable).', {
+        multiple: true
+      }),
+      'all-cases': option('boolean', '--all-cases', 'Also smoke-test authored cases without declared expectations.'),
+      format: option('string', '--format <format>', 'Report human-readable lines or NDJSON events.', {
+        choices: ['human', 'json']
+      })
+    }
+  })
 });
 
 const globalUsage = 'Usage: oxiquill <command> [options]';
@@ -262,8 +280,8 @@ function command(usage, description, { astro = false, options = {}, positionalLi
   return Object.freeze({ astro, description, options: Object.freeze(options), positionalLimit, project, usage });
 }
 
-function option(type, label, description, { choices, short } = {}) {
-  return Object.freeze({ choices, description, label, short, type });
+function option(type, label, description, { choices, short, multiple } = {}) {
+  return Object.freeze({ choices, description, label, short, type, multiple });
 }
 
 function optionalStringOption(label, description) {
@@ -292,7 +310,16 @@ function findCommandIndex(args) {
 function parseStrict(args, definitions, commandName) {
   const options = Object.fromEntries(
     Object.entries(definitions).flatMap(([name, definition]) => {
-      const entries = [[name, { type: definition.type, ...(definition.short ? { short: definition.short } : {}) }]];
+      const entries = [
+        [
+          name,
+          {
+            type: definition.type,
+            ...(definition.short ? { short: definition.short } : {}),
+            ...(definition.multiple ? { multiple: true } : {})
+          }
+        ]
+      ];
       if (definition.optionalString) entries.push([optionalBooleanName(name), { type: 'boolean' }]);
       return entries;
     })

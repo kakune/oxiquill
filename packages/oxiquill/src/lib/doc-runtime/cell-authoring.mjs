@@ -1,4 +1,5 @@
 import YAML from 'yaml';
+import { normalizeCellTests } from './cell-tests.mjs';
 import { validInputValue } from './input-value-validation.mjs';
 import { scopedCellId } from './authoring-ids.mjs';
 import { numericStepGrid } from './numeric-step.mjs';
@@ -23,6 +24,7 @@ const cellFields = new Set([
   'run',
   'inputs',
   'cases',
+  'tests',
   'packages',
   'crates',
   'timeoutMs',
@@ -86,8 +88,12 @@ export function parseInteractiveCellNode(node, pagePath, pythonOptions = {}) {
   if (split.kind !== 'cell') return split;
 
   let metadata;
+  let document;
+  const lineCounter = new YAML.LineCounter();
   try {
-    metadata = YAML.parse(split.metadataLines.join('\n')) ?? {};
+    document = YAML.parseDocument(split.metadataLines.join('\n'), { lineCounter });
+    if (document.errors.length) throw document.errors[0];
+    metadata = document.toJS() ?? {};
   } catch (error) {
     return invalidResult([
       diagnostic(location, 'metadata', `Malformed YAML: ${error instanceof Error ? error.message : String(error)}`)
@@ -112,6 +118,21 @@ export function parseInteractiveCellNode(node, pagePath, pythonOptions = {}) {
   const editable = language === 'python' && normalizeBoolean(metadata, 'editable', true, context, diagnostics);
   const inputs = normalizeInputs(metadata, context, diagnostics);
   const cases = normalizeCases(metadata, inputs, context, diagnostics);
+  const locate = (fieldPath) => {
+    const keys = fieldPath
+      .replace(/\[(\d+)\]/gu, '.$1')
+      .split('.')
+      .map((key) => (/^\d+$/u.test(key) ? Number(key) : key));
+    const fieldNode = document.getIn(keys, true);
+    const position = lineCounter.linePos(fieldNode?.range?.[0] ?? 0);
+    const rawLine = String(node.value).split('\n')[position.line - 1];
+    const prefix = rawLine?.match(optionPatterns[language]);
+    return {
+      line: location.fenceStartLine + position.line,
+      column: position.col + (prefix ? prefix[0].length - prefix[1].length : 0)
+    };
+  };
+  const tests = normalizeCellTests(metadata, cases, language, context, locate, diagnostics);
   const packages = normalizeStringArray(metadata, 'packages', context, diagnostics);
   const crates = normalizeStringArray(metadata, 'crates', context, diagnostics);
   const setup = metadata.setup;
@@ -150,6 +171,7 @@ export function parseInteractiveCellNode(node, pagePath, pythonOptions = {}) {
       ...(setup !== undefined ? { setup } : {}),
       inputs,
       ...(cases.length ? { cases } : {}),
+      ...(tests.length ? { tests } : {}),
       packages,
       crates,
       timeoutMs,
@@ -287,7 +309,7 @@ export function uniqueCellIdDiagnostics(cells) {
 export function formatInteractiveCellDiagnostic(value) {
   const pagePath = value.pagePath || '(unknown page)';
   const cell = value.cellId ? ` [cell ${JSON.stringify(value.cellId)}]` : '';
-  return `${pagePath}:${value.fenceStartLine}${cell} ${value.fieldPath}: ${value.message}`;
+  return `${pagePath}:${value.line ?? value.fenceStartLine}${value.column ? `:${value.column}` : ''}${cell} ${value.fieldPath}: ${value.message}`;
 }
 
 export function throwInteractiveCellDiagnostics(diagnostics) {
