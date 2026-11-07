@@ -32,7 +32,7 @@ import {
   sourceThemes
 } from './doc-runtime-core.mjs';
 import { defaultFileSystem, listFiles, writeIfChanged } from './doc-runtime/file-system.mjs';
-import { collectAuthoringCells } from './doc-runtime/cell-collection.mjs';
+import { collectAuthoringCells, collectAuthoringContent } from './doc-runtime/cell-collection.mjs';
 import {
   assertGenerationSnapshot,
   createGenerationSnapshot,
@@ -190,11 +190,12 @@ export async function syncDocRuntime({
   trackChild
 }) {
   const snapshotOptions = { fileSystem, paths, pythonOptions };
-  const [authoringCells, helpers] = await Promise.all([
-    collectAuthoringCells({ ...snapshotOptions, helperCrates, events }),
+  const [content, helpers] = await Promise.all([
+    collectAuthoringContent({ ...snapshotOptions, helperCrates, events }),
     readHelperInputs(snapshotOptions)
   ]);
-  const snapshot = createGenerationSnapshot(authoringCells, helpers);
+  const authoringCells = content.cells;
+  const snapshot = createGenerationSnapshot(authoringCells, helpers, content.pages);
   const cells = await Promise.all(authoringCells.map((cell) => createCellManifest(cell, highlighter)));
   const haskellCells = cells.filter((cell) => cell.language === 'haskell');
   const pythonCells = cells.filter((cell) => cell.language === 'python');
@@ -665,6 +666,7 @@ function createDesiredRuntime({
 
   return Object.freeze({
     generationId: snapshot.generationId,
+    referenceId: snapshot.referenceId,
     manifestFingerprint: summary.manifestFingerprint,
     rust: Object.freeze({
       buildFingerprint: stableFingerprint({

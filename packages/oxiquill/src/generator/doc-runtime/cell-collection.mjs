@@ -17,7 +17,7 @@ import {
   assertUniqueRustInputBindings
 } from './validators.mjs';
 
-export async function collectAuthoringCells({
+export async function collectAuthoringContent({
   fileSystem = defaultFileSystem,
   helperCrates,
   paths,
@@ -29,13 +29,17 @@ export async function collectAuthoringCells({
     return Promise.all(
       files
         .filter((file) => file.endsWith('.mdx') || file.endsWith('.md'))
-        .map(async (file) =>
-          parseCellsFromMarkdown(
+        .map(async (file) => {
+          const parsed = parseCellsFromMarkdown(
             await fileSystem.readFile(file, 'utf8'),
             normalizePath(path.relative(pathFromUrl(paths.workspaceRoot), file)),
             pythonOptions
-          )
-        )
+          );
+          return {
+            ...parsed,
+            page: { ...parsed.page, entryPath: normalizePath(path.relative(pathFromUrl(paths.docsDir), file)) }
+          };
+        })
     );
   });
   return events.phase('validation', {}, async () => {
@@ -51,6 +55,10 @@ export async function collectAuthoringCells({
     assertUniqueHaskellInputBindings(haskell);
     assertUniqueRustFunctionNames(rust);
     assertUniqueRustInputBindings(rust);
-    return resolvePythonSetups(cells);
+    return { cells: resolvePythonSetups(cells), pages: parsedPages.map(({ page }) => page) };
   });
+}
+
+export async function collectAuthoringCells(options) {
+  return (await collectAuthoringContent(options)).cells;
 }

@@ -31,6 +31,7 @@ export interface InputCase {
 }
 
 export interface CellManifest {
+  ref?: string;
   cases?: readonly InputCase[];
   setup?: readonly PythonSetupStep[];
   id: string;

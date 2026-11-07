@@ -1,19 +1,29 @@
 import path from 'node:path';
+import { referencePageIdentity } from '../../lib/doc-runtime/references.mjs';
 import { pathFromUrl } from '../../config/paths.mjs';
 import { normalizeCell } from '../../lib/doc-runtime/normalized-cell.mjs';
-import { collectAuthoringCells } from './cell-collection.mjs';
+import { collectAuthoringContent } from './cell-collection.mjs';
 import { defaultFileSystem } from './file-system.mjs';
 import { listAuthoredHelperInputFiles } from './helper-inputs.mjs';
 import { hashBytes, hashText, stableFingerprint } from './hashing.mjs';
 import { normalizePath } from './path-utils.mjs';
 
-export function createGenerationSnapshot(cells, helpers) {
+export function createGenerationSnapshot(cells, helpers, pages = []) {
   // Clone before freezing so callers retain ownership of their parsed cells.
   const snapshot = structuredClone({
     cells: cells.map(normalizeCell).sort((a, b) => compare(a.id, b.id)),
     helpers: [...helpers].sort((a, b) => compare(a.path, b.path))
   });
-  return freezeDeep({ ...snapshot, generationId: hashText(stableFingerprint(snapshot)) });
+  const sortedPages = [...pages].sort((a, b) => compare(a.pagePath, b.pagePath));
+  const references = sortedPages.filter(
+    (page) => page.references.length || page.cellReferences.length || page.links.length
+  );
+  return freezeDeep({
+    ...snapshot,
+    pages: structuredClone(sortedPages),
+    referenceId: hashText(stableFingerprint(references.map(referencePageIdentity))),
+    generationId: hashText(stableFingerprint(snapshot))
+  });
 }
 
 export async function readHelperInputs({ fileSystem = defaultFileSystem, paths }) {
@@ -27,8 +37,8 @@ export async function readHelperInputs({ fileSystem = defaultFileSystem, paths }
 }
 
 export async function readGenerationSnapshot(options) {
-  const [cells, helpers] = await Promise.all([collectAuthoringCells(options), readHelperInputs(options)]);
-  return createGenerationSnapshot(cells, helpers);
+  const [content, helpers] = await Promise.all([collectAuthoringContent(options), readHelperInputs(options)]);
+  return createGenerationSnapshot(content.cells, helpers, content.pages);
 }
 
 export function diffCells(expected, actual) {
@@ -69,7 +79,22 @@ export function diffGenerationSnapshots(expected, actual) {
           }
         ]
   );
-  return [...diffCells(expected.cells, actual.cells), ...helpers].sort(
+  const beforePages = new Map((expected.pages ?? []).map((page) => [page.pagePath, page]));
+  const afterPages = new Map((actual.pages ?? []).map((page) => [page.pagePath, page]));
+  const references =
+    expected.referenceId === actual.referenceId
+      ? []
+      : [...new Set([...beforePages.keys(), ...afterPages.keys()])].flatMap((pagePath) => {
+          const before = beforePages.get(pagePath);
+          const after = afterPages.get(pagePath);
+          if (
+            stableFingerprint(before && referencePageIdentity(before)) ===
+            stableFingerprint(after && referencePageIdentity(after))
+          )
+            return [];
+          return [{ kind: !before ? 'added' : !after ? 'removed' : 'changed', path: pagePath }];
+        });
+  return [...diffCells(expected.cells, actual.cells), ...helpers, ...references].sort(
     (a, b) => compare(a.path, b.path) || compare(a.cellId ?? '', b.cellId ?? '') || compare(a.kind, b.kind)
   );
 }
@@ -97,7 +122,7 @@ export async function assertGenerationSnapshot(expected, options) {
     // A deleted page or temporarily invalid cell is also a source change.
     throw sourceChangedError([{ kind: 'changed', path: cause.message }], { cause });
   }
-  if (expected.generationId !== actual.generationId) {
+  if (expected.generationId !== actual.generationId || expected.referenceId !== actual.referenceId) {
     throw sourceChangedError(diffGenerationSnapshots(expected, actual));
   }
 }

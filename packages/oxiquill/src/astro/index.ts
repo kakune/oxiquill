@@ -34,6 +34,9 @@ import {
 import { createBrowserBundleCollector, syncBrowserBundleReport } from '../generator/browser-bundle-report.mjs';
 import { maintainCleanupOwnership, prepareCleanupOwnership } from '../generator/cleanup-ownership.mjs';
 import rehypeKatex from '../lib/doc-runtime/rehype-katex.mjs';
+import remarkReferences from '../lib/doc-runtime/remark-references.mjs';
+import rehypeReferences from '../lib/doc-runtime/rehype-references.mjs';
+import { createReferences } from './references.mjs';
 import remarkInteractiveCells from '../lib/doc-runtime/remark-interactive-cells.mjs';
 import { pythonLicensePaths } from '../generator/doc-runtime/python-package-notices.mjs';
 import remarkMermaidDiagrams from '../lib/doc-runtime/remark-mermaid-diagrams.mjs';
@@ -275,6 +278,7 @@ function createOxiquillIntegration(
   const metadata = createOxiquillIntegrationMetadata({ astro: astroOptions, paths: pathOptions, python, rust });
   let paths: OxiquillPaths | undefined;
   let generation: ReturnType<typeof createBuildGeneration> | undefined;
+  let references: ReturnType<typeof createReferences> | undefined;
   let pythonOptions: Readonly<OxiquillPythonOptions> | undefined;
   let rustOptions: Readonly<OxiquillRustOptions> | undefined;
   let buildOwnership: Awaited<ReturnType<typeof prepareCleanupOwnership>> = Object.freeze([]);
@@ -302,6 +306,7 @@ function createOxiquillIntegration(
             generationId: process.env.OXIQUILL_GENERATION_ID
           });
         }
+        references = createReferences({ paths, pythonOptions, generation });
         if (pythonOptions?.preload) {
           injectScript(
             'page',
@@ -316,15 +321,28 @@ function createOxiquillIntegration(
 
         const update = {
           cacheDir: astroDirectoryUrl(paths.cacheDir),
-          markdown: mergeMarkdownConfig(base, paths, markdown, pythonOptions, generation),
+          markdown: mergeMarkdownConfig(config.base ?? base, paths, markdown, pythonOptions, generation, references),
           outDir: astroDirectoryUrl(paths.outDir),
           publicDir: astroDirectoryUrl(paths.publicDir),
-          vite: mergeViteConfig(paths, vite, bundledModules, browserBundle, generation, config.base)
+          vite: mergeViteConfig(
+            paths,
+            { ...vite, plugins: [references.vitePlugin(), ...(vite.plugins ?? [])] },
+            bundledModules,
+            browserBundle,
+            generation,
+            config.base
+          )
         } as unknown as Parameters<typeof updateConfig>[0];
 
         updateConfig(update);
       },
-      'astro:config:done': ({ injectTypes }) => {
+      'astro:config:done': ({ config, injectTypes }) => {
+        references?.configure(config);
+        if (references && config.markdown.processor.name === 'unified') {
+          const processor = config.markdown.processor as ReturnType<typeof unified>;
+          processor.options.rehypePlugins ??= [];
+          processor.options.rehypePlugins.push([rehypeReferences, { references }]);
+        }
         injectTypes({
           filename: 'virtual-modules.d.ts',
           content: [
@@ -359,6 +377,7 @@ function createOxiquillIntegration(
           browserBundle.reset();
           if (inherited) {
             generation?.start(process.env.OXIQUILL_GENERATION_ID);
+            references?.invalidate();
             return;
           }
           const context = await createDocRuntimeContextForPaths({ paths, pythonOptions, rustOptions });
@@ -368,6 +387,7 @@ function createOxiquillIntegration(
             trackChild: buildLease?.trackChild
           });
           generation?.start(result.generationId);
+          references?.invalidate();
         } catch (error) {
           buildLease?.release();
           buildLease = undefined;
@@ -488,7 +508,8 @@ function mergeMarkdownConfig(
   paths: OxiquillPaths,
   markdown: OxiquillMarkdownConfig,
   pythonOptions?: Readonly<OxiquillPythonOptions>,
-  generation?: ReturnType<typeof createBuildGeneration>
+  generation?: ReturnType<typeof createBuildGeneration>,
+  references?: ReturnType<typeof createReferences>
 ) {
   const {
     gfm,
@@ -507,6 +528,7 @@ function mergeMarkdownConfig(
       rehypePlugins: [rehypeKatex, ...rehypePlugins],
       remarkPlugins: [
         remarkMath,
+        [remarkReferences, { references }],
         [remarkPublicAssetBase, { base }],
         [remarkInteractiveCells, { root: pathFromUrl(paths.workspaceRoot), pythonOptions, generation }],
         remarkMermaidDiagrams,

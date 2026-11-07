@@ -102,6 +102,7 @@ function InteractiveCellPanel({
   return (
     <section
       ref={section}
+      id={cell.ref ? `ox-ref-${cell.ref}` : undefined}
       class="doc-cell not-content"
       aria-labelledby={ids.title}
       data-cell-id={cell.id}

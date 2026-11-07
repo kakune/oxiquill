@@ -1,4 +1,5 @@
 import YAML from 'yaml';
+import { validReferenceName } from './references.mjs';
 import { normalizeCellTests } from './cell-tests.mjs';
 import { validInputValue } from './input-value-validation.mjs';
 import { scopedCellId } from './authoring-ids.mjs';
@@ -20,6 +21,7 @@ export { supportedPyodidePackages };
 
 const cellFields = new Set([
   'id',
+  'ref',
   'title',
   'run',
   'inputs',
@@ -129,9 +131,17 @@ export function parseInteractiveCellNode(node, pagePath, pythonOptions = {}) {
     const prefix = rawLine?.match(optionPatterns[language]);
     return {
       line: location.fenceStartLine + position.line,
-      column: position.col + (prefix ? prefix[0].length - prefix[1].length : 0)
+      column:
+        position.col + (prefix ? prefix[0].length - prefix[1].length : 0) + (node.position?.start?.column ?? 1) - 1
     };
   };
+  const refPosition = hasOwn(metadata, 'ref') ? locate('ref') : undefined;
+  if (hasOwn(metadata, 'ref') && !validReferenceName(metadata.ref)) {
+    diagnostics.push({
+      ...diagnostic(context, 'ref', 'Invalid reference name; expected lowercase kebab-case, at most 64 characters.'),
+      ...refPosition
+    });
+  }
   const tests = normalizeCellTests(metadata, cases, language, context, locate, diagnostics);
   const packages = normalizeStringArray(metadata, 'packages', context, diagnostics);
   const crates = normalizeStringArray(metadata, 'crates', context, diagnostics);
@@ -164,6 +174,7 @@ export function parseInteractiveCellNode(node, pagePath, pythonOptions = {}) {
     cell: {
       id: scopedCellId(pagePath, localId),
       localId,
+      ...(hasOwn(metadata, 'ref') ? { ref: metadata.ref, refPosition } : {}),
       language,
       title,
       run,

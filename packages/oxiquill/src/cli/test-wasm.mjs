@@ -1,5 +1,5 @@
 import { spawn } from 'node:child_process';
-import { collectAuthoringCells } from '../generator/doc-runtime/cell-collection.mjs';
+import { collectAuthoringContent } from '../generator/doc-runtime/cell-collection.mjs';
 import { createCellTestPlan } from '../generator/doc-runtime/cell-test-plan.mjs';
 import {
   assertGenerationSnapshot,
@@ -18,7 +18,7 @@ export async function runWasmTests({
   generateRuntime,
   log = console.log,
   progress = console.error,
-  collect = collectAuthoringCells,
+  collect = collectAuthoringContent,
   readHelpers = readHelperInputs,
   assertSnapshot = assertGenerationSnapshot,
   testRust = testGeneratedRustCells,
@@ -30,8 +30,8 @@ export async function runWasmTests({
   let exitStatus = 1;
   try {
     const snapshotOptions = { paths: projectConfig.paths, pythonOptions: projectConfig.python };
-    const [cells, helpers] = await Promise.all([collect(snapshotOptions), readHelpers(snapshotOptions)]);
-    const snapshot = createGenerationSnapshot(cells, helpers);
+    const [{ cells, pages }, helpers] = await Promise.all([collect(snapshotOptions), readHelpers(snapshotOptions)]);
+    const snapshot = createGenerationSnapshot(cells, helpers, pages);
     const plan = createCellTestPlan(cells, values, projectConfig.paths);
     const summary = await generateRuntime({
       projectConfig,
