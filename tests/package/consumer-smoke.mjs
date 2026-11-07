@@ -456,12 +456,13 @@ try {
       `${name} must retain its exact runtime pin`
     );
   }
-  const rustRuntimeRoot = path.join(projectRoot, 'static files/oxiquill assets/rust runtime');
-  const rustRuntime = await import(pathToFileURL(path.join(rustRuntimeRoot, 'doc_rust_cells.js')).href);
-  rustRuntime.initSync({ module: await readFile(path.join(rustRuntimeRoot, 'doc_rust_cells_bg.wasm')) });
   const generatedCells = JSON.parse(
     await readFile(path.join(projectRoot, 'state cache/generated runtime/cells.json'), 'utf8')
   );
+  const rustDescriptor = generatedCells.rust.modules[0];
+  const rustAsset = (kind) => path.join(projectRoot, 'static files', decodeURIComponent(rustDescriptor[kind].url));
+  const rustRuntime = await import(pathToFileURL(rustAsset('glue')).href);
+  rustRuntime.initSync({ module: await readFile(rustAsset('wasm')) });
   const packedRustCell = generatedCells.cells.find((cell) => cell.id.endsWith('__package-rust'));
   assert.ok(packedRustCell, 'packed Rust cell must be generated');
   const rustResult = JSON.parse(rustRuntime.run_rust_cell(packedRustCell.id, '{}'));
@@ -525,7 +526,7 @@ try {
     bundleReport.chunks.every((chunk) => chunk.uncompressedBytes <= bundleReport.limitBytes),
     'packed consumer emitted an oversized client chunk'
   );
-  await assertFile(path.join(projectRoot, 'static files/oxiquill assets/rust runtime/doc_rust_cells_bg.wasm'));
+  await assertFile(rustAsset('wasm'));
   if (process.platform !== 'win32') {
     await assertFile(path.join(projectRoot, 'static files/oxiquill assets/haskell runtime/doc_haskell_cells.wasm'));
   }
