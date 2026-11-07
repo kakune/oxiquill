@@ -1,4 +1,5 @@
 // @vitest-environment node
+import path from 'node:path';
 import { describe, expect, it, vi } from 'vitest';
 import {
   mapRustSpan,
@@ -184,7 +185,7 @@ describe('Rust diagnostic attribution', () => {
     expect(runCommand.mock.calls[0][1]).toEqual([
       'check',
       '--manifest-path',
-      '/repo/.oxiquill/rust-cells/Cargo.toml',
+      path.join(file.crateDir, 'Cargo.toml'),
       '--locked',
       '--target',
       'wasm32-unknown-unknown',
