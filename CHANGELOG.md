@@ -8,6 +8,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ### Added
 
+- A versioned Rust module registry routes cells to lazily loaded, content-addressed assets with Wasm integrity checks, selective development updates, and shared `test-wasm` routing.
+
 - Project runtime locks serialize CLI commands, dev synchronization, and standalone Astro builds across processes, with `--lock-timeout`, holder diagnostics, and safe stale-lock recovery.
 
 - Rust cells support declarative `tests` against defaults and named input cases, with strict JSON, range, approximate, and execution-error expectations. `test-wasm` adds selectors and human/NDJSON reporting with isolated, timed executions.

@@ -108,6 +108,16 @@ Every path accepts a relative string, an absolute string, or a `file:` URL. Nest
 
 Astro's `root`, `publicDir`, `outDir`, and `cacheDir` and Oxiquill's explicit path settings must normalize to the same locations when they describe the same directory. Conflicting explicit values are errors; Oxiquill never silently chooses one. All CLI commands load this resolved configuration before reading, writing, or cleaning files.
 
+## Generated Rust Assets
+
+Runnable manifests in `.oxiquill/generated/cells.json` include a version 1 `rust` registry. Each Rust cell belongs to exactly one module; generation currently produces a single module named `site`.
+
+Each module records its build fingerprint, JavaScript glue URL, Wasm URL, Wasm SHA-384 integrity, byte length, and cell IDs. Files under `public/oxiquill/rust-wasm/` use names such as `site-<hash>.js` and `site-<hash>.wasm`. Their content-addressed URLs are immutable. The registry stores paths relative to `publicDir`; Astro resolves browser URLs under its configured `base`, including custom runtime directories.
+
+The Rust worker loads a module when one of its cells first runs and verifies Wasm integrity while fetching it. Text-only and Python-only pages fetch no Rust module assets. Development updates invalidate changed module fingerprints; cancellation and timeout still reset the whole Rust worker. Generation publishes the new registry before removing obsolete registered module assets.
+
+Source-only `docgen` does not compile Rust. Run `oxiquill docgen --wasm dev` or build the site to produce runnable module assets. Do not edit generated manifests or assets manually.
+
 ## Python Downloads
 
 ```js
