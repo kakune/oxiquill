@@ -8,6 +8,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ### Added
 
+- Project runtime locks serialize CLI commands, dev synchronization, and standalone Astro builds across processes, with `--lock-timeout`, holder diagnostics, and safe stale-lock recovery.
+
 - Rust cells support declarative `tests` against defaults and named input cases, with strict JSON, range, approximate, and execution-error expectations. `test-wasm` adds selectors and human/NDJSON reporting with isolated, timed executions.
 
 - Named input cases apply complete presets atomically, with localized selectors, case-aware sharing links, and input preservation during development HMR. Input and case labels are limited to 256 characters.

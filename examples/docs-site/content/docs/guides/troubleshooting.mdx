@@ -5,6 +5,14 @@ description: Recover from installation, configuration, runtime generation, downl
 
 Start with the first Oxiquill diagnostic. Generation errors include the relevant tool or path and, for authored cells, the page, fence line, cell ID when available, and exact metadata field.
 
+## Runtime Lock Contention and Recovery
+
+A runtime-lock waiting message means another command or dev synchronization is using this project's generated artifacts. Check the reported command, PID, host, start time, and `<cacheDir>/runtime.lock` path. Allow the holder to finish or stop that process normally. CLI commands wait up to 1800 seconds by default; set `--lock-timeout <seconds>` on `build`, `check`, `docgen`, `clean`, or `test-wasm` to change that limit. `--lock-timeout 0` fails immediately. Watchers wait indefinitely and then synchronize the latest pending changes.
+
+Oxiquill automatically reclaims a lock only when its host matches the current host and its PID no longer exists. A live PID, a permission-denied PID probe, or an old timestamp does not make the lock stale. Long release Wasm builds keep their locks.
+
+An unreadable/malformed record or a record from another host is treated as an unknown owner. If no Oxiquill process is running against this project, remove the exact lock path printed in the diagnostic, then rerun the command. Check other hosts too when the project resides on shared storage. Never remove a lock while a build or synchronization is active. Lock coordination applies to one consumer project; separate projects sharing output directories are not coordinated.
+
 ## Sources Changed During a Build
 
 `Interactive cell sources changed after runtime generation started.` means a cell or Rust helper input changed while the production build was running. The diagnostic lists every added, removed, or changed cell and helper path, including changed cell fields such as `source` or `inputs`.

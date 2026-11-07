@@ -45,6 +45,23 @@ pnpm dev -- --host 0.0.0.0 --port 4321
 pnpm check -- --minimumSeverity warning
 ```
 
+## Project runtime lock
+
+`build`、`check`、`docgen`、`clean`、`test-wasm` は、consumer project の `<cacheDir>/runtime.lock` にある process 間 lock を command 全体で保持します。`build` は runtime generation、Astro diagnostics、最終 Astro build まで保持します。単独の `astro build` も build-start hook から build 完了まで同じ lock を保持します。install 済み Oxiquill package には書き込みません。
+
+この5つの CLI command は `--` より前に `--lock-timeout <seconds>` を指定できます。既定は `1800` 秒、`0` は lock 保持中なら即座に失敗します。有限の非負数を指定してください。
+
+```sh
+pnpm exec oxiquill build --lock-timeout 60
+pnpm exec oxiquill clean --lock-timeout 0
+```
+
+競合時は holder の command、PID、host、開始時刻、lock path を標準エラーに表示し、30秒ごとに待機中の旨を表示します。timeout 時は同じ詳細と設定値を表示して非ゼロ終了し、project file や generated artifact を変更しません。一時的な取得用 record は削除します。`test-wasm --format json` の標準出力は NDJSON のままです。
+
+dev は初回生成と watcher の同期中だけ lock を保持します。watcher は timeout せず、待機中の変更をまとめ、取得後に最新の入力を一度同期します。`check --watch` は command 終了まで lock を保持します。
+
+clean は cache directory、ownership marker、lock 調整用 file を残し、生成内容を削除します。正常終了と SIGINT/SIGTERM で自身の lock を解放します。同じ host で PID が存在しない場合だけ自動回収し、経過時間だけでは回収しません。owner が不明または別 host の場合は[復旧手順](/ja/guides/troubleshooting/#runtime-lock-の競合と復旧)を参照してください。
+
 ## Incremental build と clean build
 
 Oxiquill repository の `pnpm build` は reusable package を incremental に build し、変更のない runtime artifact を再利用します。Astro は毎回 static output directory を作り直します。`pnpm build:package` は package だけを incremental に build し、pack は常に clean package build を行います。
