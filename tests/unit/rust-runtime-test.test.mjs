@@ -1,3 +1,4 @@
+import path from 'node:path';
 import { createRustModuleAssets } from '../../packages/oxiquill/src/generator/doc-runtime/rust-module-assets.mjs';
 // @vitest-environment node
 import { EventEmitter } from 'node:events';
@@ -136,7 +137,7 @@ describe('Rust test suite', () => {
           });
           return file === paths.cellsJsonPath
             ? JSON.stringify({ cells: [cell], rust: { version: 1, modules: [assets.module] } })
-            : assets.files[file.split('/').at(-1)];
+            : assets.files[path.basename(file)];
         })
       }
     });
@@ -162,7 +163,7 @@ describe('Rust test suite', () => {
     const manifest = { cells: [cell, other], rust: { version: 1, modules: assets.map((asset) => asset.module) } };
     const files = Object.assign({}, ...assets.map((asset) => asset.files));
     const readFile = vi.fn(async (file) =>
-      file === paths.cellsJsonPath ? JSON.stringify(manifest) : files[file.split('/').at(-1)]
+      file === paths.cellsJsonPath ? JSON.stringify(manifest) : files[path.basename(file)]
     );
     const compile = vi.fn(async (bytes) => bytes.toString());
     const execute = vi.fn(async () => ({ kind: 'result', result: { outputs: [] } }));

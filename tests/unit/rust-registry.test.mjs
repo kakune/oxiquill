@@ -1,3 +1,4 @@
+import path from 'node:path';
 // @vitest-environment node
 import { describe, expect, it } from 'vitest';
 import {
@@ -112,7 +113,7 @@ describe('Rust module assets', () => {
       registry,
       cells,
       publicDir: '/public',
-      fileSystem: { readFile: async (file) => ({ ...first.files, ...second.files })[file.split('/').at(-1)] }
+      fileSystem: { readFile: async (file) => ({ ...first.files, ...second.files })[path.basename(file)] }
     };
     await expect(validateRustModuleFiles(options)).resolves.toBeUndefined();
     for (const readFile of [
