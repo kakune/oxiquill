@@ -123,16 +123,23 @@ export function formatRustDiagnostic(diagnostic) {
   const header = `${primary ? `${primary.file}:${primary.line}:${primary.column}${primary.cellId ? ` [cell ${primary.cellId}]` : ''}${primary.kind === 'generated' ? ` [generated ${primary.region}]` : ''}: ` : ''}${diagnostic.code ? `${diagnostic.code}: ` : ''}${diagnostic.message}`;
   const details = locations.flatMap((span) => {
     if (span.kind !== 'authored')
-      return [`  ${span.file}:${span.line}:${span.column}${span.label ? `: ${span.label}` : ''}`];
+      return [
+        `  ${span.file}:${span.line}:${span.column}${span.kind === 'generated' ? ` [generated ${span.region}${span.cellId ? `; cell ${span.cellId}` : ''}]` : ''}${span.label ? `: ${span.label}` : ''}`
+      ];
     const start = Math.max(0, span.column - 41);
     const excerpt = Array.from(span.excerpt)
       .slice(start, start + 160)
       .join('')
       .replace(/\t/gu, ' ');
+    const characters = Array.from(excerpt);
+    const first = Math.max(0, span.column - start - 1);
+    const last = span.endLine === span.line ? first + span.endColumn - span.column : characters.length;
+    const indent = displayWidth(characters.slice(0, first).join(''));
+    const underline = Math.max(1, Math.min(160, displayWidth(characters.slice(first, last).join(''))));
     return [
-      `  ${span.file}:${span.line}:${span.column}`,
+      `  ${span.file}:${span.line}:${span.column} [cell ${span.cellId}]`,
       `  ${excerpt}`,
-      `  ${' '.repeat(Math.max(0, span.column - start - 1))}${'^'.repeat(Math.max(1, Math.min(160 - (span.column - start - 1), span.endLine === span.line ? span.endColumn - span.column : 1)))}${span.label ? ` ${span.label}` : ''}`,
+      `  ${' '.repeat(indent)}${'^'.repeat(underline)}${span.label ? ` ${span.label}` : ''}`,
       `  generated: ${span.generated.file}:${span.generated.line}:${span.generated.column}`
     ];
   });
@@ -154,6 +161,19 @@ export function formatRustDiagnostic(diagnostic) {
     ...untranslated,
     ...(diagnostic.untranslatedEdits ? [`  untranslated edits: ${JSON.stringify(diagnostic.untranslatedEdits)}`] : [])
   ].join('\n');
+}
+
+function displayWidth(value) {
+  const wide =
+    /\p{Extended_Pictographic}|[\u1100-\u115f\u2329\u232a\u2e80-\ua4cf\uac00-\ud7a3\uf900-\ufaff\ufe10-\ufe19\ufe30-\ufe6f\uff00-\uff60\uffe0-\uffe6]/u;
+  return Array.from(new Intl.Segmenter('en', { granularity: 'grapheme' }).segment(value)).reduce(
+    (width, { segment }) => {
+      if (/^\p{Mark}+$/u.test(segment)) return width;
+      const code = segment.codePointAt(0);
+      return width + (wide.test(segment) || (code >= 0x20000 && code <= 0x3fffd) ? 2 : 1);
+    },
+    0
+  );
 }
 
 // The original error remains the failure, regardless of the check pass outcome.

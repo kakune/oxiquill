@@ -65,6 +65,7 @@ describe('Rust diagnostic attribution', () => {
     const formatted = formatRustDiagnostic(mapRustDiagnostic(message([span('missing')]), [file], '/repo'));
     expect(formatted).toContain(`${cell.pagePath}:15:28 [cell ${cell.id}]`);
     expect(formatted).toContain('^^^^^^^ here');
+    expect(formatted.split('\n')).toContain(`  ${' '.repeat(30)}^^^^^^^ here`);
     expect(formatted).toContain('generated: src/lib.rs:2:1');
   });
 
@@ -244,5 +245,13 @@ describe('Rust diagnostic attribution', () => {
     });
     expect(error.message).toContain('could not map this error to an authored cell');
     expect(error.rustDiagnostics[0].spans[0].kind).toBe('external');
+  });
+  it('retains ownership on secondary generated spans', () => {
+    const mapped = mapRustDiagnostic(
+      message([span('missing'), span('wrapper', { is_primary: false })]),
+      [file],
+      '/repo'
+    );
+    expect(formatRustDiagnostic(mapped)).toContain(`[generated wrapper; cell ${cell.id}]`);
   });
 });
