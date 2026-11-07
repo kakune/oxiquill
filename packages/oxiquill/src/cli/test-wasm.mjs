@@ -75,11 +75,14 @@ export async function runWasmTests({
 // Compiler output belongs on stderr so stdout remains a machine-readable stream.
 function runCommandToStderr(command, args, options) {
   return new Promise((resolve, reject) => {
+    const detached = Boolean(options.trackChild) && process.platform !== 'win32';
     const child = spawn(command, args, {
+      detached,
       cwd: options.cwd,
       env: options.env,
       stdio: ['ignore', options.captureOutput ? 'pipe' : 2, 2]
     });
+    options.trackChild?.(child, detached);
     const chunks = [];
     child.stdout?.on('data', (chunk) => chunks.push(chunk));
     child.on('error', reject);

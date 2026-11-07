@@ -52,11 +52,7 @@ describe('runtime watcher entrypoint', () => {
 
     await main(['--skip-initial'], services);
 
-    expect(services.prepareCleanupOwnership).toHaveBeenCalledWith({
-      configFile: undefined,
-      fields: ['cacheDir', 'publicAssetsDir'],
-      paths
-    });
+    expect(services.prepareCleanupOwnership).not.toHaveBeenCalled();
     expect(services.watch).toHaveBeenCalledWith(
       expect.arrayContaining([expect.any(String)]),
       expect.objectContaining({
@@ -196,6 +192,7 @@ describe('runtime watcher entrypoint', () => {
 function createServices({ createDocRuntimeContext, syncDocRuntime }) {
   const handlers = new Map();
   const watcher = {
+    close: vi.fn(async () => undefined),
     add: vi.fn(),
     on: vi.fn((event, handler) => {
       handlers.set(event, handler);
@@ -203,6 +200,7 @@ function createServices({ createDocRuntimeContext, syncDocRuntime }) {
     })
   };
   const services = {
+    acquireRuntimeLock: vi.fn(async () => ({ token: 'test-token', release: vi.fn() })),
     createDocRuntimeContext: createDocRuntimeContext ?? vi.fn(async () => ({ highlighter: {}, paths })),
     loadProjectConfig: vi.fn(async () => ({ paths })),
     prepareCleanupOwnership: vi.fn(async () => []),

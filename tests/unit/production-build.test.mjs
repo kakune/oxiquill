@@ -4,6 +4,7 @@ import os from 'node:os';
 import path from 'node:path';
 import { pathToFileURL } from 'node:url';
 import { afterEach, describe, expect, it, vi } from 'vitest';
+import { acquireRuntimeLock, readRuntimeLock } from '../../packages/oxiquill/src/generator/runtime-lock.mjs';
 import { createOxiquillPaths } from '../../packages/oxiquill/src/config/paths.mjs';
 import { readGenerationSnapshot } from '../../packages/oxiquill/src/generator/doc-runtime/generation-snapshot.mjs';
 
@@ -21,6 +22,7 @@ vi.mock('../../packages/oxiquill/src/generator/browser-bundle-report.mjs', async
   syncBrowserBundleReport: vi.fn()
 }));
 vi.mock('../../packages/oxiquill/src/generator/cleanup-ownership.mjs', () => ({
+  preflightCleanupOwnership: vi.fn(async () => undefined),
   prepareCleanupOwnership: vi.fn(async () => []),
   maintainCleanupOwnership: vi.fn()
 }));
@@ -33,7 +35,26 @@ afterEach(async () => {
 });
 
 describe('production build hooks', () => {
-  it.each(['integration', 'cli'])(
+  it('releases its own lock if runtime generation fails', async () => {
+    const root = await mkdtemp(path.join(os.tmpdir(), 'oxiquill-build-failure-'));
+    roots.push(root);
+    const paths = createOxiquillPaths({ workspaceRoot: root });
+    mocks.context.mockResolvedValue({ paths });
+    mocks.generate.mockRejectedValueOnce(new Error('compiler failed'));
+    vi.stubEnv('OXIQUILL_RUNTIME_OWNER', '');
+    const integration = oxiquillIntegration({ paths: { workspaceRoot: root } });
+    integration.hooks['astro:config:setup']({
+      command: 'build',
+      config: { root: pathToFileURL(`${root}/`) },
+      addWatchFile: vi.fn(),
+      injectScript: vi.fn(),
+      updateConfig: vi.fn()
+    });
+    await expect(integration.hooks['astro:build:start']()).rejects.toThrow('compiler failed');
+    expect(readRuntimeLock(path.join(paths.cacheDir, 'runtime.lock')).exists).toBe(false);
+  });
+
+  it.each(['integration', 'cli', 'unverified-cli'])(
     'validates the %s generation through transforms and build completion',
     async (owner) => {
       const root = await mkdtemp(path.join(os.tmpdir(), 'oxiquill-build-hooks-'));
@@ -49,7 +70,9 @@ describe('production build hooks', () => {
         JSON.stringify({ generationId: snapshot.generationId, cells: snapshot.cells })
       );
       await writeFile(paths.runtimeOwnershipPath, JSON.stringify({ generationId: snapshot.generationId, snapshot }));
-      vi.stubEnv('OXIQUILL_RUNTIME_OWNER', owner === 'cli' ? 'cli' : '');
+      const lease = owner === 'cli' ? await acquireRuntimeLock({ paths, command: 'build' }) : undefined;
+      vi.stubEnv('OXIQUILL_LOCK_TOKEN', lease?.token ?? 'unverified');
+      vi.stubEnv('OXIQUILL_RUNTIME_OWNER', owner === 'integration' ? '' : 'cli');
       vi.stubEnv('OXIQUILL_GENERATION_ID', owner === 'cli' ? snapshot.generationId : '');
       mocks.context.mockResolvedValue({ paths });
       mocks.generate.mockResolvedValue({ generationId: snapshot.generationId });
@@ -65,6 +88,7 @@ describe('production build hooks', () => {
         }
       });
       await integration.hooks['astro:build:start']();
+      expect(readRuntimeLock(path.join(paths.cacheDir, 'runtime.lock')).exists).toBe(true);
       expect(mocks.generate).toHaveBeenCalledTimes(owner === 'cli' ? 0 : 1);
       const plugin = update.vite.plugins.find(({ name }) => name === 'oxiquill-virtual-modules');
       const loaded = plugin.load.call(
@@ -75,10 +99,12 @@ describe('production build hooks', () => {
       await expect(
         integration.hooks['astro:build:done']({ dir: pathToFileURL(`${paths.outDir}/`) })
       ).resolves.toBeUndefined();
+      expect(readRuntimeLock(path.join(paths.cacheDir, 'runtime.lock')).exists).toBe(owner === 'cli');
       await writeFile(page, '```rust\n//| id: demo\nprintln!("second");\n```');
       await expect(integration.hooks['astro:build:done']({ dir: pathToFileURL(`${paths.outDir}/`) })).rejects.toThrow(
         'cell "demo": source'
       );
+      lease?.release();
     }
   );
 });

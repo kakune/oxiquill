@@ -38,6 +38,7 @@ import remarkInteractiveCells from '../lib/doc-runtime/remark-interactive-cells.
 import { pythonLicensePaths } from '../generator/doc-runtime/python-package-notices.mjs';
 import remarkMermaidDiagrams from '../lib/doc-runtime/remark-mermaid-diagrams.mjs';
 import remarkPublicAssetBase from '../lib/doc-runtime/remark-public-asset-base.mjs';
+import { acquireRuntimeLock, hasInheritedRuntimeLock } from '../generator/runtime-lock.mjs';
 import { createBuildGeneration } from './build-generation.mjs';
 import { oxiquillVirtualModulesPlugin } from './virtual-modules.mjs';
 
@@ -156,7 +157,10 @@ const createDocRuntimeContextForPaths = createDocRuntimeContext as unknown as (o
   pythonOptions?: Readonly<OxiquillPythonOptions>;
 }) => Promise<DocRuntimeContext>;
 const syncDocRuntimeForBuild = syncDocRuntime as unknown as (
-  options: DocRuntimeContext & { mode: 'build' }
+  options: DocRuntimeContext & {
+    mode: 'build';
+    trackChild?: Awaited<ReturnType<typeof acquireRuntimeLock>>['trackChild'];
+  }
 ) => Promise<{ generationId: string }>;
 
 export function defineOxiquillConfig<StarlightOptions extends object>(
@@ -264,6 +268,7 @@ function createOxiquillIntegration(
   let generation: ReturnType<typeof createBuildGeneration> | undefined;
   let pythonOptions: Readonly<OxiquillPythonOptions> | undefined;
   let buildOwnership: Awaited<ReturnType<typeof prepareCleanupOwnership>> = Object.freeze([]);
+  let buildLease: Awaited<ReturnType<typeof acquireRuntimeLock>> | undefined;
   const bundledModules = createBundledModuleCollector();
   const browserBundle = createBrowserBundleCollector();
 
@@ -338,35 +343,51 @@ function createOxiquillIntegration(
       'astro:build:start': async () => {
         if (!paths) return;
 
-        buildOwnership = await prepareCleanupOwnership({ paths });
-        bundledModules.reset();
-        browserBundle.reset();
-        if (process.env.OXIQUILL_RUNTIME_OWNER === 'cli') {
-          generation?.start(process.env.OXIQUILL_GENERATION_ID);
-          return;
+        const inherited = process.env.OXIQUILL_RUNTIME_OWNER === 'cli' && hasInheritedRuntimeLock({ paths });
+        if (!inherited) buildLease = await acquireRuntimeLock({ paths, command: 'astro build' });
+        try {
+          buildOwnership = await prepareCleanupOwnership({ paths });
+          bundledModules.reset();
+          browserBundle.reset();
+          if (inherited) {
+            generation?.start(process.env.OXIQUILL_GENERATION_ID);
+            return;
+          }
+          const context = await createDocRuntimeContextForPaths({ paths, pythonOptions });
+          const result = await syncDocRuntimeForBuild({
+            ...context,
+            mode: 'build',
+            trackChild: buildLease?.trackChild
+          });
+          generation?.start(result.generationId);
+        } catch (error) {
+          buildLease?.release();
+          buildLease = undefined;
+          throw error;
         }
-
-        const context = await createDocRuntimeContextForPaths({ paths, pythonOptions });
-        const result = await syncDocRuntimeForBuild({ ...context, mode: 'build' });
-        generation?.start(result.generationId);
       },
       'astro:build:done': async ({ dir }) => {
         if (!paths) return;
 
-        await syncLicenseArtifacts({
-          moduleGroups: bundledModules.snapshot(),
-          outputDirectory: pathInUrl(dir, relativePathFromUrl(paths.publicDir, paths.licensesPublicDir)),
-          pythonOptions,
-          paths
-        });
-        await syncBrowserBundleReport({
-          chunks: browserBundle.snapshot(),
-          frameworkRoot: paths.frameworkRoot,
-          outputDirectory: dir,
-          workspaceRoot: paths.workspaceRoot
-        });
-        await maintainCleanupOwnership({ ownership: buildOwnership });
-        await generation?.checkSources();
+        try {
+          await syncLicenseArtifacts({
+            moduleGroups: bundledModules.snapshot(),
+            outputDirectory: pathInUrl(dir, relativePathFromUrl(paths.publicDir, paths.licensesPublicDir)),
+            pythonOptions,
+            paths
+          });
+          await syncBrowserBundleReport({
+            chunks: browserBundle.snapshot(),
+            frameworkRoot: paths.frameworkRoot,
+            outputDirectory: dir,
+            workspaceRoot: paths.workspaceRoot
+          });
+          await maintainCleanupOwnership({ ownership: buildOwnership });
+          await generation?.checkSources();
+        } finally {
+          buildLease?.release();
+          buildLease = undefined;
+        }
       }
     }
   };

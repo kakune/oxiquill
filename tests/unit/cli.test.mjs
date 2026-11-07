@@ -9,6 +9,9 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { createOxiquillPaths } from '../../packages/oxiquill/src/config/paths.mjs';
 
 const cliMocks = vi.hoisted(() => ({
+  acquireRuntimeLock: vi.fn(),
+  release: vi.fn(),
+  verifyCleanupOwnership: vi.fn(),
   buildHaskellWasm: vi.fn(),
   buildRustWasm: vi.fn(),
   cleanOxiquillWorkspace: vi.fn(),
@@ -24,6 +27,18 @@ const cliMocks = vi.hoisted(() => ({
   watchDocRuntime: vi.fn()
 }));
 
+vi.mock('../../packages/oxiquill/src/generator/runtime-lock.mjs', () => ({
+  acquireRuntimeLock: cliMocks.acquireRuntimeLock,
+  withRuntimeLock: async (options, action) => {
+    const lease = await cliMocks.acquireRuntimeLock(options);
+    try {
+      return await action(lease);
+    } finally {
+      lease.release();
+    }
+  }
+}));
+
 vi.mock('../../packages/oxiquill/src/generator/doc-runtime-service.mjs', () => ({
   buildHaskellWasm: cliMocks.buildHaskellWasm,
   buildRustWasm: cliMocks.buildRustWasm,
@@ -37,7 +52,8 @@ vi.mock('../../packages/oxiquill/src/generator/clean.mjs', () => ({
   cleanOxiquillWorkspace: cliMocks.cleanOxiquillWorkspace
 }));
 vi.mock('../../packages/oxiquill/src/generator/cleanup-ownership.mjs', () => ({
-  prepareCleanupOwnership: cliMocks.prepareCleanupOwnership
+  prepareCleanupOwnership: cliMocks.prepareCleanupOwnership,
+  verifyCleanupOwnership: cliMocks.verifyCleanupOwnership
 }));
 vi.mock('../../packages/oxiquill/src/generator/run-helper-cargo.mjs', () => ({
   runHelperCargo: cliMocks.runHelperCargo
@@ -69,6 +85,7 @@ const testRoot = path.parse(process.cwd()).root;
 
 beforeEach(() => {
   vi.clearAllMocks();
+  cliMocks.acquireRuntimeLock.mockResolvedValue({ token: 'test-lock-token', release: cliMocks.release });
   const paths = createOxiquillPaths({ workspaceRoot: repoRoot });
   cliMocks.createDocRuntimeContext.mockResolvedValue({ paths });
   cliMocks.loadProjectConfig.mockResolvedValue({ astroConfigArgs: [], cwd: repoRoot, paths });
@@ -89,6 +106,29 @@ afterEach(() => {
 });
 
 describe('oxiquill CLI', () => {
+  it.each(['build', 'check', 'docgen', 'clean', 'test-wasm'])('documents and parses %s lock timeout', (command) => {
+    expect(formatCliHelp(command)).toContain('--lock-timeout <seconds>');
+    expect(parseCliArguments([command, '--lock-timeout', '0']).values['lock-timeout']).toBe('0');
+    expect(parseCliArguments([command, '--lock-timeout=1.5']).commandArgs).toEqual([]);
+  });
+
+  it.each(['-1', 'NaN', 'Infinity', '', 'bad'])(
+    'rejects invalid CLI lock timeout %j before loading the project',
+    async (value) => {
+      await expect(runCli(['build', `--lock-timeout=${value}`])).rejects.toThrow('--lock-timeout');
+      expect(cliMocks.loadProjectConfig).not.toHaveBeenCalled();
+      expect(cliMocks.acquireRuntimeLock).not.toHaveBeenCalled();
+    }
+  );
+
+  it('does not generate or clean when acquisition fails', async () => {
+    cliMocks.acquireRuntimeLock.mockRejectedValueOnce(new Error('Timed out'));
+    await expect(runCli(['clean', '--lock-timeout', '0'])).rejects.toThrow('Timed out');
+    expect(cliMocks.acquireRuntimeLock).toHaveBeenCalledWith(expect.objectContaining({ command: 'clean', timeout: 0 }));
+    expect(cliMocks.prepareCleanupOwnership).not.toHaveBeenCalled();
+    expect(cliMocks.cleanOxiquillWorkspace).not.toHaveBeenCalled();
+  });
+
   it('parses global and command options without forwarding Oxiquill options', () => {
     expect(parseCliArguments(['--debug', 'preview', '--host', 'localhost', '--config', 'custom config.mts'])).toEqual({
       action: 'run',
@@ -458,7 +498,8 @@ describe('oxiquill CLI', () => {
 
     expect(cliMocks.cleanOxiquillWorkspace).toHaveBeenCalledWith({
       configFile: undefined,
-      paths: expect.objectContaining({ workspaceRoot: repoRoot })
+      paths: expect.objectContaining({ workspaceRoot: repoRoot }),
+      lockToken: 'test-lock-token'
     });
   });
 
@@ -495,6 +536,8 @@ describe('oxiquill CLI', () => {
       const previous = process.env.OXIQUILL_GENERATION_ID;
       const check = vi.fn(async () => {
         expect(process.env.OXIQUILL_GENERATION_ID).toBe(id);
+        expect(process.env.OXIQUILL_LOCK_TOKEN).toBe('test-lock-token');
+        expect(cliMocks.release).not.toHaveBeenCalled();
         return hasDiagnostics;
       });
       const runCommand = vi.fn(async () => undefined);
@@ -507,6 +550,9 @@ describe('oxiquill CLI', () => {
       if (hasDiagnostics) await expect(attempt).rejects.toThrow('Astro check reported diagnostics.');
       else await attempt;
       expect(check).toHaveBeenCalledOnce();
+      expect(cliMocks.acquireRuntimeLock).toHaveBeenCalledOnce();
+      expect(cliMocks.release).toHaveBeenCalledOnce();
+      expect(runCommand.mock.calls[0][2].env.OXIQUILL_LOCK_TOKEN).toBe('test-lock-token');
       expect(process.env.OXIQUILL_GENERATION_ID).toBe(previous);
       expect(runCommand.mock.calls[0][2].env.OXIQUILL_GENERATION_ID).toBe(id);
       if (!hasDiagnostics) {
