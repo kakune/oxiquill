@@ -26,6 +26,9 @@ const result = await testGeneratedHaskellCells({
       validateOutputArtifacts(outputs).filter((artifact) => artifact.status === 'error'),
       []
     );
+    if (options.cell.id.endsWith('__haskell-mixed-xy')) {
+      assert.deepEqual(outputs[0].spec, { kind: 'xy', layers: [{ id: 'samples', kind: 'scatter', points: [[0, 1]] }] });
+    }
     if (options.cell.id.endsWith('__haskell-grid-field')) {
       assert.equal(outputs.length, 1);
       assert.deepEqual(outputs[0].spec, { kind: 'field', xEdges: [-2, 0, 3], yEdges: [-1, 1], values: [[2, null]] });

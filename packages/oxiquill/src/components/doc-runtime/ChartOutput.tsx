@@ -1,3 +1,4 @@
+import { chartItems, chartLineItems } from '../../lib/doc-runtime/chart-layers.js';
 import { updatedColorSelection, selectedColorRange } from '../../lib/doc-runtime/chart-color-scale.js';
 import { useEffect, useMemo, useRef, useState } from 'preact/hooks';
 import { boundedErrorMessage } from '../../lib/doc-runtime/output-limits.mjs';
@@ -100,6 +101,18 @@ export default function ChartOutput({ artifact, idPrefix, labels }: ChartOutputP
           canvasLegend: false,
           chrome: resolveChartChrome(nextTheme, element.current ?? undefined)
         });
+        if (
+          notMerge &&
+          current.spec?.kind === 'xy' &&
+          next.spec.kind === 'xy' &&
+          current.spec.xType === next.spec.xType &&
+          current.spec.yType === next.spec.yType
+        ) {
+          const state = chartViewState(current.instance);
+          delete state.symbols;
+          if (chartRangeSignature(current.spec) !== chartRangeSignature(next.spec)) delete state.dataZoom;
+          applyChartViewState(options, state);
+        }
         if (!current.spec && savedView.current?.signature === signature) {
           const state = { ...savedView.current.state };
           if (savedView.current.rangeSignature !== chartRangeSignature(next.spec)) {
@@ -207,22 +220,24 @@ export default function ChartOutput({ artifact, idPrefix, labels }: ChartOutputP
               const x = axes.x.getExtent();
               const y = axes.y.getExtent();
               const patch: Record<string, unknown> = {};
-              if (spec.kind === 'line' || spec.kind === 'area') {
+              if (spec.kind === 'line' || spec.kind === 'area' || spec.kind === 'xy') {
+                const lines = chartLineItems(spec);
                 current.indexes ??= chartPointIndexes(spec, axes);
                 const visible = current.indexes.map(
-                  (index, seriesIndex) => spec.series[seriesIndex].style?.showSymbol ?? hasIsolatedPoint(index, x, y)
+                  (index, seriesIndex) => lines[seriesIndex]?.style?.showSymbol ?? hasIsolatedPoint(index, x, y)
                 );
                 const signature = JSON.stringify(visible);
                 if (current.symbols !== signature) {
                   const initial =
                     current.symbols === undefined &&
                     visible.every(
-                      (show, index) =>
-                        show === (spec.series[index].style?.showSymbol ?? spec.series[index].points.length === 1)
+                      (show, index) => show === (lines[index]?.style?.showSymbol ?? lines[index]?.points.length === 1)
                     );
                   current.symbols = signature;
                   if (!initial)
-                    patch.series = visible.map((showSymbol, index) => ({ id: chartSeriesId(spec, index), showSymbol }));
+                    patch.series = visible.flatMap((showSymbol, index) =>
+                      lines[index] ? [{ id: chartSeriesId(spec, index), showSymbol }] : []
+                    );
                 }
               }
               if (Object.keys(patch).length) current.instance.setOption(patch);
@@ -286,7 +301,9 @@ export default function ChartOutput({ artifact, idPrefix, labels }: ChartOutputP
   const title = authoredTitle ?? labels.chartTitle(displayed.spec.kind);
   const subtitle = artifactTitle && specTitle && artifactTitle !== specTitle ? specTitle : undefined;
   const legendSeries =
-    'series' in displayed.spec ? displayed.spec.series : [{ name: labels.chartTitle(displayed.spec.kind) }];
+    displayed.spec.kind === 'xy' || 'series' in displayed.spec
+      ? chartItems(displayed.spec)
+      : [{ name: labels.chartTitle(displayed.spec.kind) }];
   const legendPageCount = Math.max(1, Math.ceil(legendSeries.length / 25));
   const safeLegendPage = Math.min(legendPage, legendPageCount - 1);
   const legendStart = safeLegendPage * 25;
@@ -373,7 +390,10 @@ export default function ChartOutput({ artifact, idPrefix, labels }: ChartOutputP
                 disabled={!isReady}
                 onClick={() => chart.current?.instance.dispatchAction({ type: 'legendToggleSelect', name: id })}
               >
-                <LegendSwatch {...appearance} kind={displayed.spec.kind} />
+                <LegendSwatch
+                  {...appearance}
+                  kind={displayed.spec.kind === 'xy' ? displayed.spec.layers[index].kind : displayed.spec.kind}
+                />
                 {series.name?.trim() ? series.name : labels.chartSeriesName(index + 1)}
               </button>
             );

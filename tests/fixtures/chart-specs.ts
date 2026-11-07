@@ -10,6 +10,48 @@ const line = (values: number[], extra: Partial<ChartSpec> = {}): ChartSpec =>
   }) as ChartSpec;
 
 export const chartFixtures: Record<string, ChartSpec> = {
+  mixedXy: {
+    kind: 'xy',
+    xMin: 0,
+    xMax: 3,
+    yMin: 0,
+    yMax: 6,
+    annotations: [{ kind: 'line', axis: 'y', value: 2, label: 'Threshold' }],
+    layers: [
+      {
+        id: 'band',
+        kind: 'band',
+        name: 'Uncertainty',
+        style: { color: '#6688bb' },
+        points: [
+          [0, 1, 0.5, 1.5],
+          [1, 2, 1.5, 2.5],
+          [2, 3, 2.5, 3.5]
+        ]
+      },
+      {
+        id: 'reference',
+        kind: 'line',
+        name: 'Reference',
+        style: { lineType: 'dashed', color: { light: '#225588', dark: '#88bbff' } },
+        points: [
+          [0, 1],
+          [2, 3]
+        ]
+      },
+      {
+        id: 'samples',
+        kind: 'scatter',
+        name: 'Samples',
+        style: { symbol: 'diamond', color: '#cc6633' },
+        points: [
+          [0, 1.2],
+          [1, 1.8],
+          [2, 3.2]
+        ]
+      }
+    ]
+  },
   denseLine: {
     kind: 'line',
     style: { animation: false },

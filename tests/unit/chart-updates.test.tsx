@@ -1,3 +1,4 @@
+import { chartFixtures } from '../fixtures/chart-specs';
 import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/preact';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import ChartOutput, {
@@ -482,4 +483,28 @@ describe('persistent chart updates', () => {
     ).toMatchObject({ visualMap: { inRange: { color: ['#123', '#456'] } } });
     element.remove();
   });
+});
+
+it('keeps mixed layer IDs and selection through reorder and renderer changes', async () => {
+  const spec = chartFixtures.mixedXy;
+  if (spec.kind !== 'xy') throw new Error('Mixed fixture required');
+  const view = render(output(spec));
+  await waitFor(() => expect(chart.setOption).toHaveBeenCalled());
+  expect(screen.getByRole('button', { name: 'Samples', exact: true })).toBeTruthy();
+  chart.getOption.mockReturnValue({
+    legend: [{ selected: { 'xy:id:samples': false } }],
+    dataZoom: [{ start: 20, end: 80 }]
+  });
+  view.rerender(output({ ...spec, layers: spec.layers.toReversed() }));
+  await waitFor(() => expect(chart.setOption.mock.lastCall?.[0].series[0].id).toBe('xy:id:samples'));
+  expect(chart.setOption.mock.lastCall?.[1].notMerge).toBe(false);
+  view.rerender(
+    output({
+      ...spec,
+      layers: spec.layers.map((layer) => (layer.kind === 'scatter' ? { ...layer, kind: 'line' } : layer))
+    })
+  );
+  await waitFor(() => expect(chart.setOption.mock.lastCall?.[1].notMerge).toBe(true));
+  expect(chart.setOption.mock.lastCall?.[0].legend.selected).toEqual({ 'xy:id:samples': false });
+  expect(chart.setOption.mock.lastCall?.[0].dataZoom[0].start).toBe(20);
 });

@@ -20,6 +20,12 @@ export function chartCoordinates(spec: ChartSpec): {
   value: readonly unknown[];
 } {
   switch (spec.kind) {
+    case 'xy':
+      return {
+        x: spec.layers.flatMap((layer) => layer.points.map((point) => point[0])),
+        y: spec.layers.flatMap((layer) => layer.points.flatMap((point) => point.slice(1))),
+        value: []
+      };
     case 'bar':
       return spec.orientation === 'horizontal'
         ? { x: spec.series.flatMap((series) => series.values), y: spec.categories, value: [] }
