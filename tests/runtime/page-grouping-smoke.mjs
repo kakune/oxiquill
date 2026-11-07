@@ -131,6 +131,9 @@ try {
       }
       measurements.push({ grouping, clean, incremental, ...bytes });
       await writeFile(sourcePath, original);
+      await runCli(['clean'], { cwd });
+      await invoke(['build', '--format', 'json']);
+      assert.deepEqual((await state()).rust, built.rust, `${grouping} output changed across clean builds`);
     }
     console.log(
       JSON.stringify(
