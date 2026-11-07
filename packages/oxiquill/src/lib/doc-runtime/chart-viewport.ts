@@ -23,6 +23,26 @@ export function chartAxes(instance: unknown): ChartAxes | undefined {
   return x && y ? { x, y } : undefined;
 }
 
+/** Read the dataZoom value window before axis tick rounding expands its extent. */
+export function chartZoomRange(instance: unknown, axis: 'x' | 'y' = 'x', index = 0): Extent | undefined {
+  const chart = instance as {
+    getModel?: () => {
+      getComponent: (
+        name: string,
+        index: number
+      ) => { getValueRange?: (axis: string, index: number) => unknown } | undefined;
+    };
+  };
+  const range = chart.getModel?.().getComponent('dataZoom', index)?.getValueRange?.(axis, 0);
+  if (
+    Array.isArray(range) &&
+    range.length === 2 &&
+    range.every((value) => typeof value === 'number' && Number.isFinite(value))
+  )
+    return [range[0] as number, range[1] as number];
+  return chartAxes(instance)?.[axis].getExtent();
+}
+
 export function chartPointIndexes(spec: ChartSpec, axes: ChartAxes) {
   return chartLineItems(spec).map((series) => {
     const points: Point[] = (series?.points ?? [])

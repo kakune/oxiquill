@@ -11,6 +11,7 @@ import type {
   ChartNumberFormat,
   LineSeriesStyle,
   ChartSpec,
+  ChartLink,
   ChartPalette,
   LineChartStyle,
   ScatterChartStyle
@@ -42,10 +43,10 @@ const chartAxisTypes = new Set<ChartAxisType>(['value', 'category', 'time', 'log
 export function validateChartArtifact(record: Record<string, unknown>, remainingBytes: number): ValidationSuccess {
   rejectTruncated(record, 'Chart artifact');
   const base = validateBaseArtifact(record);
-  const spec = validateChartSpec(requiredOwnValue(record, 'spec', 'Chart artifact'));
+  const rawSpec = plainRecord(requiredOwnValue(record, 'spec', 'Chart artifact'), 'Chart spec');
+  const spec = validateChartLinkSpec(rawSpec, validateChartSpec(rawSpec));
   validateChartStacks(spec);
   if (spec.kind === 'heatmap') heatmapColorScale(spec);
-  const rawSpec = plainRecord(record.spec, 'Chart spec');
   if (Object.hasOwn(rawSpec, 'annotations'))
     spec.annotations = validateAnnotations(requiredOwnValue(rawSpec, 'annotations', 'Chart'), spec);
   const byteLength = base.byteLength + payloadByteLength(spec);
@@ -55,6 +56,36 @@ export function validateChartArtifact(record: Record<string, unknown>, remaining
   return {
     artifact: { ...artifactMetadata(base), kind: 'chart', spec },
     byteLength
+  };
+}
+
+function validateChartLinkSpec(record: Record<string, unknown>, spec: ChartSpec): ChartSpec {
+  if (!Object.hasOwn(record, 'link')) return spec;
+  switch (spec.kind) {
+    case 'line':
+    case 'scatter':
+    case 'area':
+    case 'band':
+    case 'errorbar':
+    case 'xy':
+      if (chartAxisType(spec, 'x') === 'category' || spec.dataZoom === false)
+        throw new ArtifactValidationError('Chart link requires a zoomable value, time, or log x axis.');
+      return { ...spec, link: validateChartLink(requiredOwnValue(record, 'link', 'Chart spec')) };
+    default:
+      throw new ArtifactValidationError('Chart link is unsupported for kind ' + spec.kind + '.');
+  }
+}
+
+function validateChartLink(value: unknown): ChartLink {
+  const record = plainRecord(value, 'Chart link');
+  rejectUnknownStyleFields(record, ['group', 'zoom', 'cursor'], 'Chart link');
+  const group = requiredString(record, 'group', 'Chart link');
+  if (!/^[A-Za-z0-9_-]{1,64}$/u.test(group))
+    throw new ArtifactValidationError('Chart link group must contain 1–64 letters, digits, underscores, or hyphens.');
+  return {
+    group,
+    zoom: optionalBoolean(record, 'zoom', 'Chart link') ?? true,
+    cursor: optionalBoolean(record, 'cursor', 'Chart link') ?? true
   };
 }
 

@@ -7,6 +7,7 @@ import { intervalSeries } from './chart-intervals.js';
 import { histogramLabel, histogramSeries } from './chart-histogram.js';
 import { chartAxisType, chartIncludesZero } from './chart-axes.js';
 import type { ChartSpec, ChartNumberFormat, XyChartSeries } from './types.js';
+import { chartLinkIdentity } from './chart-link.js';
 import { normalizeHeatmapSpec } from './heatmap-normalization.js';
 import { labelsForLanguage, type RuntimeLabels, type RuntimeLocale } from './runtime-localization.js';
 import { chartCoordinateFormatter, chartCoordinates, chartNumberFormatter, numericBounds } from './chart-format.js';
@@ -88,6 +89,7 @@ export function chartStructuralSignature(spec: ChartSpec): string {
     chartAxisType(spec, 'y'),
     spec.tooltip !== false,
     spec.kind !== 'heatmap' && spec.dataZoom !== false,
+    chartLinkIdentity(spec)?.link.cursor !== false && chartLinkIdentity(spec) !== undefined,
     hasChartColorScale(spec)
   ]);
 }
@@ -145,6 +147,7 @@ export function chartSpecToEChartsOptions(
   } = {}
 ): EChartsOptions {
   const style = spec.style;
+  const linkedCursor = chartLinkIdentity(spec)?.link.cursor !== false && chartLinkIdentity(spec) !== undefined;
   const labels = labelsForLanguage(locale);
   const palette = style?.palette?.[theme] ?? chartPalette;
   const legend = canvasLegend && showLegend(spec);
@@ -192,6 +195,7 @@ export function chartSpecToEChartsOptions(
           : { formatter: chartCoordinateFormatter(coordinates, type, locale, true, format) })
       },
       axisPointer: {
+        ...(horizontal && linkedCursor ? { show: true, type: 'line', snap: false, triggerEmphasis: false } : {}),
         label: {
           formatter: ({ value }: { value: unknown }) => pointerFormat(value)
         }
@@ -229,6 +233,7 @@ export function chartSpecToEChartsOptions(
               heatmap
                 ? 'item'
                 : 'axis',
+            ...(linkedCursor ? { axisPointer: { type: 'line', snap: false } } : {}),
             confine: true,
             padding: [10, 12],
             borderWidth: 1,

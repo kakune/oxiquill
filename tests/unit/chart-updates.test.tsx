@@ -46,6 +46,88 @@ afterEach(() => {
 });
 
 describe('persistent chart updates', () => {
+  it('announces plot keyboard controls and handles only unmodified navigation keys', async () => {
+    const instance = {
+      ...chart,
+      getModel: () => ({ getComponent: () => ({ getValueRange: () => [20, 80] }) })
+    };
+    echartsInit.mockReturnValue(instance);
+    const view = render(
+      output({
+        kind: 'line',
+        title: 'Observations',
+        series: [
+          {
+            points: [
+              [0, 1],
+              [100, 2]
+            ]
+          }
+        ]
+      })
+    );
+    await waitFor(() => expect(chart.setOption).toHaveBeenCalled());
+    const wrapper = screen.getByRole('group', { name: 'Observations' });
+    expect(wrapper).toHaveAttribute('tabindex', '0');
+    expect(wrapper).toHaveAccessibleDescription(labels.chartKeyboardInstructions);
+    expect(view.container.querySelector('.doc-plot')).toHaveAttribute('aria-hidden', 'true');
+    expect(fireEvent.keyDown(wrapper, { key: 'ArrowRight' })).toBe(false);
+    expect(chart.dispatchAction).toHaveBeenLastCalledWith(
+      { type: 'dataZoom', dataZoomIndex: 0, startValue: 26, endValue: 86 },
+      { silent: true }
+    );
+    chart.dispatchAction.mockClear();
+    expect(fireEvent.keyDown(wrapper, { key: '+', ctrlKey: true })).toBe(true);
+    expect(fireEvent.keyDown(wrapper, { key: 'Escape' })).toBe(true);
+    expect(chart.dispatchAction).not.toHaveBeenCalled();
+  });
+  it('disposes page listeners and chart instances on navigation, page hide, restore, and unmount', async () => {
+    const view = render(output({ ...line, link: { group: 'navigation' } }));
+    await waitFor(() => expect(echartsInit).toHaveBeenCalledOnce());
+    act(() => {
+      window.dispatchEvent(new PageTransitionEvent('pagehide'));
+    });
+    expect(chart.dispose).toHaveBeenCalledOnce();
+    act(() => {
+      window.dispatchEvent(new PageTransitionEvent('pageshow', { persisted: true }));
+    });
+    await waitFor(() => expect(echartsInit).toHaveBeenCalledTimes(2));
+    act(() => {
+      document.dispatchEvent(new Event('astro:before-swap'));
+    });
+    expect(chart.dispose).toHaveBeenCalledTimes(2);
+    view.unmount();
+    expect(chart.dispose).toHaveBeenCalledTimes(2);
+    expect(chart.off).toHaveBeenCalledTimes(4);
+    expect(disconnect).toHaveBeenCalledTimes(2);
+  });
+  it('disables only a conflicting chart with its artifact index and recovers on new output', async () => {
+    const linked = (unit: string): ChartSpec => ({ ...line, link: { group: 'units' }, style: { xFormat: { unit } } });
+    const outputs = (secondUnit: string) => (
+      <>
+        <ChartOutput artifact={{ kind: 'chart', spec: linked('s') }} idPrefix="first" labels={labels} />
+        <ChartOutput
+          artifact={{ kind: 'chart', spec: linked(secondUnit) }}
+          idPrefix="second"
+          labels={labels}
+          artifactIndex={4}
+        />
+      </>
+    );
+    const view = render(outputs('m'));
+    await waitFor(() => expect(screen.getByRole('alert')).toHaveTextContent('Artifact 5:'));
+    expect(screen.getByRole('alert')).toHaveTextContent('unit');
+    expect(view.container.querySelectorAll('.doc-plot')).toHaveLength(1);
+    view.rerender(outputs('s'));
+    await waitFor(() => expect(view.container.querySelectorAll('.doc-plot')).toHaveLength(2));
+    expect(screen.queryByRole('alert')).not.toBeInTheDocument();
+  });
+  it('keeps nonzoomable plots out of the keyboard tab order', async () => {
+    const view = render(output({ ...line, dataZoom: false }));
+    await waitFor(() => expect(chart.setOption).toHaveBeenCalled());
+    expect(view.container.querySelector('.doc-chart-output__viewport')).not.toHaveAttribute('tabindex');
+    expect(screen.queryByText(labels.chartKeyboardInstructions)).not.toBeInTheDocument();
+  });
   it.each([
     [undefined, undefined, 'Line chart', true, undefined],
     ['', '  ', 'Line chart', true, undefined],
@@ -121,7 +203,7 @@ describe('persistent chart updates', () => {
     fireEvent.click(first);
     expect(chart.dispatchAction).toHaveBeenLastCalledWith({ type: 'legendToggleSelect', name: 'line:0' });
     fireEvent.click(screen.getByRole('button', { name: 'Reset zoom' }));
-    expect(chart.dispatchAction).toHaveBeenLastCalledWith({ type: 'dataZoom', start: 0, end: 100 });
+    expect(chart.dispatchAction).toHaveBeenLastCalledWith({ type: 'dataZoom', start: 0, end: 100 }, { silent: true });
     fireEvent.click(screen.getByRole('button', { name: 'Show data as a table' }));
     expect(screen.getByRole('table')).toHaveTextContent('First');
     fireEvent.click(screen.getByRole('button', { name: 'Hide data table' }));

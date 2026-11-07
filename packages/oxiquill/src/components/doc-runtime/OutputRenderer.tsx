@@ -74,7 +74,9 @@ function ArtifactOutput({
     case 'html':
       return <HtmlOutput labels={labels} output={output.artifact} />;
     case 'chart':
-      return <LazyChartOutput artifact={output.artifact} idPrefix={idPrefix} labels={labels} />;
+      return (
+        <LazyChartOutput artifact={output.artifact} idPrefix={idPrefix} labels={labels} artifactIndex={output.index} />
+      );
     case 'table':
       return (
         <TableOutput idPrefix={idPrefix} labels={labels} table={output.artifact} resultIdentity={resultIdentity} />
@@ -89,7 +91,8 @@ export function LazyChartOutput({
   idPrefix = 'doc-chart',
   labels = labelsForLanguage(globalThis.document?.documentElement.lang),
   load = loadChartOutput,
-  spec
+  spec,
+  artifactIndex
 }: {
   artifact?: Extract<ValidatedOutputArtifact, { kind: 'chart' }>;
   spec?: ChartSpec;
@@ -97,6 +100,7 @@ export function LazyChartOutput({
   idPrefix?: string;
   labels?: RuntimeLabels;
   load?: LoadChartOutput;
+  artifactIndex?: number;
 }) {
   const chartArtifact = artifact ?? { kind: 'chart' as const, spec: spec as ChartSpec };
   const [state, setState] = useState<ChartRendererState>({ status: 'loading' });
@@ -147,7 +151,7 @@ export function LazyChartOutput({
   }
 
   const ChartOutput = state.module.default;
-  return <ChartOutput artifact={chartArtifact} idPrefix={idPrefix} labels={labels} />;
+  return <ChartOutput artifact={chartArtifact} idPrefix={idPrefix} labels={labels} artifactIndex={artifactIndex} />;
 }
 
 function TextOutput({ labels, output }: { labels: RuntimeLabels; output: TextArtifact }) {

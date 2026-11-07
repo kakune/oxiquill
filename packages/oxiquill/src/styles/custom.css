@@ -353,6 +353,7 @@
 }
 
 .doc-chart-output button:focus-visible,
+.doc-chart-output__viewport:focus-visible,
 .doc-source-editor textarea:focus-visible {
   outline: 2px solid var(--sl-color-text-accent);
   outline-offset: 3px;

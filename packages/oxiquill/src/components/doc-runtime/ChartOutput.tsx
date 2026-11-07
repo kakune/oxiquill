@@ -28,6 +28,9 @@ import {
 } from '../../lib/doc-runtime/chart-export.js';
 import { artifactDownloadName, downloadBlob } from '../../lib/doc-runtime/download.js';
 import { chartAxes, chartPointIndexes, hasIsolatedPoint } from '../../lib/doc-runtime/chart-viewport.js';
+import { attachChartInteractions } from '../../lib/doc-runtime/chart-interactions.js';
+import { chartZoomable } from '../../lib/doc-runtime/chart-navigation.js';
+import { ArtifactError } from './ArtifactErrorBoundary.js';
 
 export { chartDataSummary, chartSpecToEChartsOptions, chartStructuralSignature };
 export type { ChartChrome, ChartTheme, EChartsOptions } from '../../lib/doc-runtime/chart-options.js';
@@ -36,10 +39,11 @@ interface ChartOutputProps {
   artifact: ChartArtifact;
   idPrefix: string;
   labels: RuntimeLabels;
+  artifactIndex?: number;
 }
 import { loadECharts, type EChartsInstance } from '../../lib/doc-runtime/echarts-runtime.js';
 
-export default function ChartOutput({ artifact, idPrefix, labels }: ChartOutputProps) {
+export default function ChartOutput({ artifact, idPrefix, labels, artifactIndex = 0 }: ChartOutputProps) {
   const element = useRef<HTMLDivElement>(null);
   const chart = useRef<{
     instance: EChartsInstance;
@@ -55,6 +59,7 @@ export default function ChartOutput({ artifact, idPrefix, labels }: ChartOutputP
     indexes?: ReturnType<typeof chartPointIndexes>;
     counts?: { x: number; y: number };
     updateViewport?: () => void;
+    interactions?: ReturnType<typeof attachChartInteractions>;
   }>();
   const reducedMotion = useReducedMotion();
   const [displayed, setDisplayed] = useState(artifact);
@@ -74,6 +79,8 @@ export default function ChartOutput({ artifact, idPrefix, labels }: ChartOutputP
     [tableOpen, displayed.spec, labels]
   );
   const [exportError, setExportError] = useState<string>();
+  const [disjoint, setDisjoint] = useState(false);
+  const [linkFailure, setLinkFailure] = useState<{ artifact: ChartArtifact; message: string }>();
   const savedView = useRef<{ signature: string; rangeSignature: string; spec: ChartSpec; state: ChartViewState }>();
 
   function applyLatest(force = false): void {
@@ -139,6 +146,13 @@ export default function ChartOutput({ artifact, idPrefix, labels }: ChartOutputP
         if (notMerge) setSelected({ ...(options.legend as { selected?: Record<string, boolean> }).selected });
         current.signature = signature;
         current.spec = next.spec;
+        try {
+          current.interactions?.update(next.spec);
+        } catch (error) {
+          setLinkFailure({ artifact: next, message: boundedErrorMessage(error) });
+          setIsReady(false);
+          return;
+        }
         current.reducedMotion = motion;
         current.theme = nextTheme;
         current.replace = false;
@@ -170,8 +184,16 @@ export default function ChartOutput({ artifact, idPrefix, labels }: ChartOutputP
   }, []);
 
   useEffect(() => {
+    const restore = (event: PageTransitionEvent) => {
+      if (event.persisted) setRenderAttempt((attempt) => attempt + 1);
+    };
+    globalThis.window?.addEventListener('pageshow', restore);
+    return () => globalThis.window?.removeEventListener('pageshow', restore);
+  }, []);
+
+  useEffect(() => {
     const chartElement = element.current;
-    if (!chartElement) return;
+    if (!chartElement || linkFailure) return;
     setIsReady(false);
     let cancelled = false;
     let instance: EChartsInstance | undefined;
@@ -185,6 +207,9 @@ export default function ChartOutput({ artifact, idPrefix, labels }: ChartOutputP
           renderer: latest.current.artifact.spec.style?.renderer ?? 'canvas'
         });
         chart.current = { instance };
+        chart.current.interactions = attachChartInteractions(instance, chartElement, setDisjoint, () =>
+          chart.current?.updateViewport?.()
+        );
         const updateViewport = () => {
           if (frame !== undefined) return;
           frame = requestAnimationFrame(() => {
@@ -248,7 +273,6 @@ export default function ChartOutput({ artifact, idPrefix, labels }: ChartOutputP
           });
         };
         chart.current.updateViewport = updateViewport;
-        instance.on('datazoom', updateViewport);
         for (const event of [
           'legendselectchanged',
           'legendselected',
@@ -273,10 +297,14 @@ export default function ChartOutput({ artifact, idPrefix, labels }: ChartOutputP
       .catch((error: unknown) => {
         if (!cancelled) setRenderError({ message: boundedErrorMessage(error), initialization: true });
       });
-    return () => {
+    const cleanup = () => {
+      if (cancelled) return;
       cancelled = true;
+      chartElement.ownerDocument.removeEventListener('astro:before-swap', cleanup);
+      chartElement.ownerDocument.defaultView?.removeEventListener('pagehide', cleanup);
       if (frame !== undefined) cancelAnimationFrame(frame);
       resizeObserver?.disconnect();
+      chart.current?.interactions?.dispose();
       if (chart.current?.signature && chart.current.spec && instance)
         savedView.current = {
           signature: chart.current.signature,
@@ -287,9 +315,13 @@ export default function ChartOutput({ artifact, idPrefix, labels }: ChartOutputP
       instance?.dispose();
       chart.current = undefined;
     };
-  }, [renderAttempt, artifact.spec.style?.renderer]);
+    chartElement.ownerDocument.addEventListener('astro:before-swap', cleanup);
+    chartElement.ownerDocument.defaultView?.addEventListener('pagehide', cleanup);
+    return cleanup;
+  }, [renderAttempt, artifact.spec.style?.renderer, linkFailure]);
 
   useEffect(() => {
+    if (linkFailure && linkFailure.artifact !== artifact) setLinkFailure(undefined);
     applyLatest();
   }, [artifact, reducedMotion, labels, theme]);
   const titleId = idPrefix + '-title';
@@ -334,6 +366,10 @@ export default function ChartOutput({ artifact, idPrefix, labels }: ChartOutputP
       setExporting(false);
     }
   }
+  if (linkFailure)
+    return (
+      <ArtifactError message={labels.artifactError(artifactIndex + 1, labels.diagnosticDetail(linkFailure.message))} />
+    );
   return (
     <figure
       class="doc-chart-output"
@@ -360,12 +396,8 @@ export default function ChartOutput({ artifact, idPrefix, labels }: ChartOutputP
         >
           {tableOpen ? labels.hideChartData : labels.showChartData}
         </button>
-        {displayed.spec.kind !== 'heatmap' && displayed.spec.dataZoom !== false ? (
-          <button
-            type="button"
-            disabled={!isReady}
-            onClick={() => chart.current?.instance.dispatchAction({ type: 'dataZoom', start: 0, end: 100 })}
-          >
+        {chartZoomable(displayed.spec) ? (
+          <button type="button" disabled={!isReady} onClick={() => chart.current?.interactions?.reset()}>
             {labels.resetZoom}
           </button>
         ) : null}
@@ -424,14 +456,34 @@ export default function ChartOutput({ artifact, idPrefix, labels }: ChartOutputP
         </p>
       ) : null}
       <div
-        ref={element}
-        class="doc-plot"
-        style={{ height: chartHeight(displayed.spec) }}
-        aria-hidden="true"
-        data-chart-theme={theme}
-        data-chart-motion={reducedMotion ? 'reduced' : 'full'}
-        data-testid="doc-plot"
-      />
+        class="doc-chart-output__viewport"
+        role={chartZoomable(displayed.spec) ? 'group' : undefined}
+        tabIndex={chartZoomable(displayed.spec) ? 0 : undefined}
+        aria-labelledby={titleId}
+        aria-describedby={chartZoomable(displayed.spec) ? `${idPrefix}-keyboard` : undefined}
+        onKeyDown={(event) => {
+          if (event.altKey || event.ctrlKey || event.metaKey) return;
+          if (chart.current?.interactions?.key(event.key)) event.preventDefault();
+        }}
+      >
+        <div
+          ref={element}
+          class="doc-plot"
+          style={{ height: chartHeight(displayed.spec) }}
+          aria-hidden="true"
+          data-chart-theme={theme}
+          data-chart-motion={reducedMotion ? 'reduced' : 'full'}
+          data-testid="doc-plot"
+        />
+      </div>
+      {chartZoomable(displayed.spec) ? (
+        <p id={`${idPrefix}-keyboard`} class="doc-visually-hidden">
+          {labels.chartKeyboardInstructions}
+        </p>
+      ) : null}
+      <p class="doc-visually-hidden" role="status" aria-live="polite">
+        {disjoint ? labels.chartNoDataInRange : ''}
+      </p>
       <p id={descriptionId} class="doc-chart-output__summary">
         <span class="doc-visually-hidden">{labels.chartCaption}: </span>
         {chartDataSummary(displayed.spec, labels)}
