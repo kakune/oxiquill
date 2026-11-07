@@ -127,7 +127,7 @@ export function applyRustGroupPlan(plan, groupAnalysis, state, mode) {
   const { groups } = groupAnalysis;
   const previousIds = Object.keys(state?.languages?.rust?.groups ?? {});
   const invalid = previousIds.find((id) => !/^page-[a-f0-9]{64}$/u.test(id));
-  if (invalid)
+  if (invalid !== undefined)
     throw new Error(`Invalid Rust group state id ${JSON.stringify(invalid)}; clean the generated runtime and retry.`);
   const removed = previousIds.filter((id) => !groups.some((group) => group.id === id)).sort();
   if (!groups.length) return { ...plan, rustGroups: [], removedRustGroups: removed };
@@ -158,6 +158,24 @@ export async function prepareRustGroupSources({ analysis, paths, fileSystem, syn
   for (const group of analysis.groups.filter((entry) => entry.source === 'write')) {
     await writeIfChanged(path.join(group.sourceDir, 'Cargo.toml'), group.cargo, { fileSystem });
     await writeIfChanged(path.join(group.sourceDir, 'src/lib.rs'), group.lib, { fileSystem });
+  }
+}
+
+export async function assertRustGroupInputs({ groups, paths, helperCrates, fileSystem }) {
+  for (const group of groups) {
+    let current;
+    try {
+      current = await readRustHelperClosure({ cells: group.cells, paths, helperCrates, fileSystem });
+    } catch (cause) {
+      throw new Error(`Rust module ${group.id} (${group.page}) helper inputs could not be verified: ${cause.message}`, {
+        cause
+      });
+    }
+    if (stableFingerprint(current.inputs) !== stableFingerprint(group.helpers.inputs)) {
+      throw new Error(
+        `Rust module ${group.id} (${group.page}) helper inputs changed during generation. Rerun the build after the sources settle.`
+      );
+    }
   }
 }
 

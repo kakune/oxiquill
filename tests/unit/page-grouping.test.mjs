@@ -94,10 +94,10 @@ describe('page-grouped Rust runtime', () => {
     expect(() => normalizeRustOptions({ unknown: true })).toThrow('Unknown rust option');
   });
 
-  it('rejects untrusted saved group IDs before any cleanup paths are constructed', () => {
-    expect(() =>
-      applyRustGroupPlan({}, { groups: [] }, { languages: { rust: { groups: { '../../outside': {} } } } })
-    ).toThrow('Invalid Rust group state id');
+  it.each(['../../outside', '', 'site'])('rejects untrusted saved group ID %j before cleanup', (id) => {
+    expect(() => applyRustGroupPlan({}, { groups: [] }, { languages: { rust: { groups: { [id]: {} } } } })).toThrow(
+      'Invalid Rust group state id'
+    );
   });
 
   it('uses docs-relative IDs independent of traversal order and checkout location', async () => {
@@ -193,6 +193,27 @@ describe('page-grouped Rust runtime', () => {
       expect.objectContaining({ type: 'phase', phase: 'validation', language: 'rust', state: 'failure' })
     );
     expect(await project.state()).toEqual(before);
+  });
+
+  it('rejects transitive inputs outside cratesDir that change during compilation', async () => {
+    const project = await fixture({ helpers: true });
+    await project.put(
+      'crates/Cargo.toml',
+      '[workspace]\nmembers = ["alpha", "beta", "shared"]\n[workspace.dependencies]\nshared = { path = "../external-shared" }\n'
+    );
+    await project.put('external-shared/Cargo.toml', '[package]\nname = "shared"\nversion = "0.1.0"\n');
+    await project.put('external-shared/src/lib.rs', 'pub fn shared() {}');
+    await project.sync();
+    const before = await project.state();
+    const build = project.buildGroups.getMockImplementation();
+    project.buildGroups.mockImplementationOnce(async (options) => {
+      await build(options);
+      await project.put('external-shared/src/lib.rs', 'pub fn shared() { /* concurrent edit */ }');
+    });
+    await expect(project.sync({ forceRustBuild: true })).rejects.toThrow(/first\.mdx.*helper inputs changed/u);
+    expect(await project.state()).toEqual(before);
+    await project.put('external-shared/src/lib.rs', 'pub fn shared() {}');
+    expect((await project.sync()).plan.hasChanges).toBe(false);
   });
 
   it('publishes nothing when a group fails and retries against the previous complete registry', async () => {

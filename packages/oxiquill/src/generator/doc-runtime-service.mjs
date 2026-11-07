@@ -5,6 +5,7 @@ import { explainRuntimePlan, pageSourceFingerprints, sourceFingerprints } from '
 import {
   analyzeRustGroups,
   applyRustGroupPlan,
+  assertRustGroupInputs,
   prepareRustGroupSources,
   finalizeRustGroups
 } from './doc-runtime/rust-group-service.mjs';
@@ -370,6 +371,11 @@ export async function syncDocRuntime({
         }
       ]
     });
+  const assertInputs = () =>
+    events.phase('validation', {}, async () => {
+      if (mode === 'build') await assertGenerationSnapshot(snapshot, snapshotOptions);
+      if (groupAnalysis) await assertRustGroupInputs({ groups: groupAnalysis.groups, paths, helperCrates, fileSystem });
+    });
   if (explain) {
     for (const phase of ['generation', 'compile', 'optimize', 'publish']) events.skipped(phase, { reason: 'explain' });
     return runtimeResult({ plan, snapshot, summary });
@@ -383,7 +389,7 @@ export async function syncDocRuntime({
       paths,
       pythonOptions
     });
-    if (mode === 'build') await assertGenerationSnapshot(snapshot, snapshotOptions);
+    if (mode === 'build' || groupAnalysis) await assertInputs();
     return runtimeResult({ licensesChanged, plan, snapshot, summary });
   }
 
@@ -583,7 +589,7 @@ export async function syncDocRuntime({
       paths: stagedPaths,
       pythonOptions
     });
-    if (mode === 'build') await assertGenerationSnapshot(snapshot, snapshotOptions);
+    if (mode === 'build' || groupAnalysis) await assertInputs();
     // Install immutable assets first; keep the old registry's files reachable until publication succeeds.
     const rustStage = stages.find((stage) => stage.targetPath === paths.rustWasmPublicDir && stage.type === 'language');
     if (rustStage) {
