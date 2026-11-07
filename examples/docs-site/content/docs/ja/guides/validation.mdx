@@ -116,3 +116,45 @@ pnpm doc:rust
 通常の CI は変更分類、JavaScript 品質、Rust 品質、サイトビルド、3ブラウザ、Linux runtime、3 OS の consumer、最終集約の `ci-ok` の12ジョブです。Markdown のみの変更では変更分類、JavaScript 品質、Rust 品質、ci-ok の4ジョブになります。それ以外は Linux のサイト・runtime・consumer を実行し、package source、package test、root package metadata、lockfile、GitHub 設定の変更では macOS/Windows の consumer も実行します。MDX は実行可能なサイト内容として扱います。`release/` で始まるブランチは全件を実行します。
 
 ブラウザはサイトビルドだけを待ちます。Chromium で bundle report を検査し、チャート関連・style・ECharts 依存が変わった場合だけ変更前の画面を撮影します。Linux は npm、ブラウザ付き pnpm、HMR、macOS は pnpm と unit、Windows は npm と unit を検証します。Rust lint は `cargo fmt --check` も含みます。最終集約は意図的なスキップを許容し、失敗・キャンセルを失敗にします。
+
+## Rust セルの宣言的テスト
+
+Rust セル先頭の YAML コメントに `tests` を指定します。各項目は `default` または `cases` の id と、空でない `expect` リストを持ちます。同じケースは一度だけ指定できます。テストメタデータは表示されず、読者用マニフェストにも含まれません。
+
+```rust
+//| id: tested-square
+//| inputs:
+//|   n: { type: integer, value: 2, min: 0, max: 10 }
+//| cases:
+//|   - { id: larger, label: 大きい入力, inputs: { n: 3 } }
+//|   - { id: zero, label: 想定したエラー, inputs: { n: 0 } }
+//| tests:
+//|   - { case: default, expect: [{ path: /outputs/0/value, equals: 4 }] }
+//|   - { case: larger, expect: [{ path: /outputs/0/value, range: { min: 9, max: 9 } }] }
+//|   - { case: zero, expect: [{ error: n must be positive }] }
+if n == 0 { return Err("n must be positive".to_owned()); }
+emit_json!(&(n * n));
+```
+
+各期待値には次の形式を一つだけ指定します。
+
+| 形式                                                               | 成功条件                                                                                                                            |
+| ------------------------------------------------------------------ | ----------------------------------------------------------------------------------------------------------------------------------- |
+| `{ error: "substring" }`                                           | 実行エラーが 1–256 UTF-8 バイトの指定文字列を含むこと。このテスト内で唯一の期待値にします。                                         |
+| `{ path: "/outputs/0/value", equals: 4 }`                          | 型変換なしで JSON の構造と値が等しいこと。                                                                                          |
+| `{ path: "/outputs/0/value", range: { min: 1, max: 10 } }`         | 有限数が境界を含む範囲内であること。上下限の少なくとも一方が必要です。                                                              |
+| `{ path: "/outputs/0/value", approx: { value: 0, atol: 1.0e-8 } }` | `abs(actual - value) <= atol + rtol * abs(value)`。許容誤差の既定値はゼロで、有限かつ非負、少なくとも一方は正である必要があります。 |
+
+`path` は正規化後の `{ "outputs": [...] }` に対する RFC 6901 JSON Pointer です。空文字列はルート、`~0` は `~`、`~1` は `/` を表します。`artifact: <id>` を追加すると、その安定 id を持つ artifact を起点にします。例は `{ artifact: plot, path: /spec/kind, equals: line }` です。パスや artifact がなければ失敗します。文字列と `null` を数値に変換しません。
+
+ハーネスはブラウザーと同じ出力制限と artifact 検証を適用し、宣言された条件だけを判定します。`iteration-limit` などのステータス値や artifact 検証診断は実行エラーではありません。実行ごとに新しい Wasm インスタンスを使い、セルの `timeoutMs` を適用します。タイムアウトは、エラーを期待するテストでも失敗します。
+
+```sh
+pnpm exec oxiquill test-wasm
+pnpm exec oxiquill test-wasm --page ja/guides/validation.mdx --cell tested-square --case larger
+pnpm exec oxiquill test-wasm --all-cases --format json
+```
+
+セレクターがなければ全 Rust セルの既定入力と全宣言テストを実行します。`default` の宣言テストがあれば、その既定入力実行の判定条件になります。`--all-cases` はテスト未指定の名前付きケースもスモーク検証します。`--case` は実行可能なケースを絞るだけなので、未指定ケースには `--all-cases` が必要です。Python と Haskell の宣言テストは未対応です。フィルターなしでは従来の Haskell スモーク検証も実行しますが、page、cell、case の指定時は省略します。
+
+失敗にはページ、フェンス行、セル、ケース、期待値の位置、条件、長さ制限付き実際値を表示します。セレクターと NDJSON の詳細は [CLI](/ja/reference/cli/#declared-cell-testing) を参照してください。

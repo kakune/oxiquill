@@ -34,7 +34,7 @@ Unknown options, missing option values, unknown commands, and extra positional a
 | `test-rust-coverage` | Test helper crates with the configured 85% coverage thresholds.                                                        |
 | `lint-rust`          | Check helper-crate formatting and run Clippy for all targets with warnings denied.                                     |
 | `doc-rust`           | Build helper-crate documentation without dependencies.                                                                 |
-| `test-wasm`          | Generate runtimes and execute every generated Rust/Haskell cell with defaults.                                         |
+| `test-wasm`          | Generate runtimes, run Rust defaults and declared tests, and retain unfiltered Haskell smoke checks.                   |
 
 `dev:runtime` performs one initial runtime synchronization before waiting for source changes. Use `oxiquill dev:runtime --skip-initial` when the runtime has already been generated: it registers the watcher without synchronizing at startup and waits for the first relevant docs or crate event. The combined `dev` command performs its explicit startup generation once and uses this mode internally.
 
@@ -73,3 +73,42 @@ pnpm preview
 Strict commands fail when a required compiler, generated artifact, config, or downloaded dependency is unavailable. Diagnostics identify the command/tool, page, fence line, cell ID, and field/path when applicable. `dev` tolerates a Haskell compiler/build failure so the documentation server remains available, but the affected cell displays the error until regeneration succeeds.
 
 See [Troubleshooting](/guides/troubleshooting/) for recovery steps.
+
+## Declared Cell Testing
+
+```sh
+pnpm exec oxiquill test-wasm --page guides/validation.mdx --cell tested-square --case default --format json
+```
+
+| Option                 | Behavior                                                                                                                                         |
+| ---------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `--page <path>`        | Repeatable docs-relative Markdown/MDX path. Normalizes separators and `.` segments; absolute paths and escaping the docs directory are rejected. |
+| `--cell <id>`          | Repeatable scoped cell id. A page-local id is accepted with exactly one `--page`.                                                                |
+| `--case <id>`          | Repeatable filter for `default` or a named case. Untested named cases require `--all-cases`.                                                     |
+| `--all-cases`          | Also execute each untested authored case as a smoke check.                                                                                       |
+| `--format human\|json` | Human lines by default, or NDJSON events on stdout. Compiler and generation progress goes to stderr.                                             |
+
+Repeated values within an option are alternatives; page, cell, and case filters intersect. Every selector must match, and an empty selection is a usage error. Explicitly selecting a non-Rust cell reports that case tests are not yet supported for its language. Filtered runs skip the legacy Haskell smoke step.
+
+Without selectors, all Rust defaults and declared tests run. Every cell/case executes once: declared expectations replace its smoke check. The harness reuses the existing generated Wasm build, compiles its module once, and initializes a fresh instance for each execution. It does not invoke `wasm-pack test` or compile a separate test build.
+
+JSON output emits `test` events with `page`, `line` (fence line), `cell`, `case`, `status` (`pass` or `fail`), `durationMs`, and `failures`. Each failure includes `reason`, `fieldPath`, `location` (`line`, `column`), bounded `actual` and `expected` strings, and `path`/`artifact` when applicable. Failure reasons distinguish execution errors, timeouts, harness errors, missing paths/artifacts, and failed comparisons. Fatal errors emit a `diagnostic` event with `message`. The final `summary` event has `total`, `passed`, `failed`, `exitStatus`, and an optional `haskell` object with `status` and `cellCount`. Haskell counts are separate from Rust test totals.
+
+```json
+{
+  "type": "test",
+  "page": "guides/validation.mdx",
+  "line": 109,
+  "cell": "guides__validation__tested-square",
+  "case": "default",
+  "status": "pass",
+  "durationMs": 1,
+  "failures": []
+}
+```
+
+```json
+{ "type": "summary", "total": 1, "passed": 1, "failed": 0, "exitStatus": 0 }
+```
+
+Exit status is 0 when everything passes and 1 for failed tests, timeouts, invalid authoring, or usage errors. An unfiltered zero-cell project succeeds; unmatched selectors never succeed silently. See [Validation](/guides/validation/#declared-rust-cell-tests) for metadata and assertion forms.
