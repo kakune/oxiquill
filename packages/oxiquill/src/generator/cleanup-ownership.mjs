@@ -131,6 +131,9 @@ async function inspectOwnership(root, paths, fileSystem, { allowClaim }) {
           await Promise.all(
             names.map(async (name) => {
               if (!isRuntimeLockFile(name)) return name;
+              // Exclusive candidate creation precedes filling the record. A concurrent
+              // contender can see that temporary file before it is complete.
+              if (name.startsWith('runtime.lock.candidate-')) return undefined;
               const source = await fileSystem.readFile(path.join(root.path, name), 'utf8').catch((error) => {
                 if (error.code === 'ENOENT') return undefined;
                 throw error;

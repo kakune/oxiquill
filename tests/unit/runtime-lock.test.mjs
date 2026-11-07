@@ -276,6 +276,17 @@ describe('project runtime lock', () => {
     expect(next.token).not.toBe(lease.token);
   });
 
+  it("allows a custom cache containing a contender's unfinished temporary record", async () => {
+    const { acquire, paths } = await fixture({ cacheDir: 'custom-cache' });
+    fs.mkdirSync(paths.cacheDir);
+    const candidate = path.join(paths.cacheDir, 'runtime.lock.candidate-11111111-1111-4111-8111-111111111111');
+    fs.writeFileSync(candidate, '{');
+    const lease = await acquire();
+    await prepareCleanupOwnership({ paths });
+    await cleanOxiquillWorkspace({ paths, lockToken: lease.token });
+    expect(fs.readFileSync(candidate, 'utf8')).toBe('{');
+  });
+
   it('rejects unsafe custom cache contents before creating lock files', async () => {
     const { acquire, paths } = await fixture({ cacheDir: 'custom-cache' });
     fs.mkdirSync(paths.cacheDir);
