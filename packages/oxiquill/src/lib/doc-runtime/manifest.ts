@@ -1,6 +1,12 @@
 import { runtimeVersion as generatedRuntimeVersion } from 'virtual:oxiquill/runtime-version';
 import { resetInteractiveRuntime, updateRustRuntimeRegistry } from './runtime-client.js';
-import type { CellManifest, RustRuntimeRegistry } from './types.js';
+import type {
+  AuthoredBlockManifest,
+  CellCompileError,
+  DefinitionsBlockManifest,
+  CellManifest,
+  RustRuntimeRegistry
+} from './types.js';
 import { validateRustRegistry } from './rust-registry.mjs';
 
 type RuntimeVersionModule = {
@@ -8,12 +14,18 @@ type RuntimeVersionModule = {
 };
 
 type GeneratedManifestPayload = {
+  definitions?: readonly DefinitionsBlockManifest[];
+  compileErrors?: readonly CellCompileError[];
+  failedBlocks?: readonly AuthoredBlockManifest[];
   rust?: RustRuntimeRegistry;
   cells: readonly CellManifest[];
   runtimeVersion: string;
 };
 
 type ManifestSnapshot = {
+  definitions?: readonly DefinitionsBlockManifest[];
+  compileErrors?: readonly CellCompileError[];
+  failedBlocks?: readonly AuthoredBlockManifest[];
   rust?: RustRuntimeRegistry;
   cells: readonly CellManifest[];
   version: string;
@@ -47,6 +59,9 @@ type ActiveManifestRefresh = {
 };
 
 const hotData = import.meta.hot?.data as ManifestHotData | undefined;
+let definitionsSnapshot = hotData?.definitions;
+let compileErrorsSnapshot = hotData?.compileErrors;
+let failedBlocksSnapshot = hotData?.failedBlocks;
 let rustSnapshot = hotData?.rust;
 let cellsSnapshot = initialCellsSnapshot(hotData);
 let versionSnapshot = initialVersionSnapshot(hotData);
@@ -64,6 +79,9 @@ export function getCell(cellId: string): CellManifest | undefined {
 
 export function getManifestSnapshot(): ManifestSnapshot {
   return {
+    definitions: definitionsSnapshot,
+    compileErrors: compileErrorsSnapshot,
+    failedBlocks: failedBlocksSnapshot,
     rust: rustSnapshot,
     cells: cellsSnapshot,
     version: versionSnapshot
@@ -103,6 +121,9 @@ function persistHotData(): void {
   if (!import.meta.hot?.data) return;
 
   const data = import.meta.hot.data as ManifestHotData;
+  data.definitions = definitionsSnapshot;
+  data.compileErrors = compileErrorsSnapshot;
+  data.failedBlocks = failedBlocksSnapshot;
   data.rust = rustSnapshot;
   data.cells = cellsSnapshot;
   data.version = versionSnapshot;
@@ -131,7 +152,14 @@ export function applyGeneratedSnapshot(nextSnapshot: ManifestSnapshot): void {
   const rustChanged = nextSnapshot.rust !== rustSnapshot;
   const cellsChanged = nextSnapshot.cells !== cellsSnapshot;
   const versionChanged = nextSnapshot.version !== versionSnapshot;
-  if (!cellsChanged && !versionChanged && !rustChanged) return;
+  const displayChanged =
+    nextSnapshot.definitions !== definitionsSnapshot ||
+    nextSnapshot.compileErrors !== compileErrorsSnapshot ||
+    nextSnapshot.failedBlocks !== failedBlocksSnapshot;
+  if (!cellsChanged && !versionChanged && !rustChanged && !displayChanged) return;
+  definitionsSnapshot = nextSnapshot.definitions;
+  compileErrorsSnapshot = nextSnapshot.compileErrors;
+  failedBlocksSnapshot = nextSnapshot.failedBlocks;
 
   rustSnapshot = nextSnapshot.rust;
   if (rustChanged && rustSnapshot) updateRustRuntimeRegistry(rustSnapshot);
@@ -184,6 +212,9 @@ export async function refreshGeneratedManifest({
 
     return {
       snapshot: {
+        definitions: payload.definitions,
+        compileErrors: payload.compileErrors,
+        failedBlocks: payload.failedBlocks,
         rust: payload.rust,
         cells: payload.cells,
         version: payload.runtimeVersion
@@ -325,7 +356,11 @@ export function syncRenderedSourceBlocks(documentObject: Document | undefined = 
     '.doc-cell[data-cell-id] [data-testid="cell-source"]'
   )) {
     const cellId = sourceBlock.closest<HTMLElement>('.doc-cell[data-cell-id]')?.dataset.cellId;
-    const cell = cellId ? getCell(cellId) : undefined;
+    const cell = cellId
+      ? (failedBlocksSnapshot?.find((block) => block.id === cellId) ??
+        getCell(cellId) ??
+        definitionsSnapshot?.find((block) => block.id === cellId))
+      : undefined;
     if (cell && sourceBlock.innerHTML !== cell.sourceHtml) {
       sourceBlock.innerHTML = cell.sourceHtml;
     }

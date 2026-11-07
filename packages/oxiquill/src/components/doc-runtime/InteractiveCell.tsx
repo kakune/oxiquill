@@ -9,7 +9,12 @@ import {
   shouldShowRunButton
 } from '../../lib/doc-runtime/interactive-cell-model.js';
 import type { RuntimeLabels } from '../../lib/doc-runtime/runtime-localization.js';
-import type { CellManifest, RustRuntimeModule } from '../../lib/doc-runtime/types.js';
+import type {
+  AuthoredBlockManifest,
+  CellCompileError,
+  CellManifest,
+  RustRuntimeModule
+} from '../../lib/doc-runtime/types.js';
 import { CellOutput } from './CellOutput.js';
 import { cellExecutionTimeoutMs } from '../../lib/doc-runtime/interactive-cell-model.js';
 import { InputControl } from './InputControl.js';
@@ -17,7 +22,7 @@ import { useManifestSnapshot, useRuntimeLabels } from './manifest-hooks.js';
 import { useInteractiveCellRun } from './useInteractiveCellRun.js';
 
 interface InteractiveCellProps {
-  cell?: CellManifest;
+  cell?: AuthoredBlockManifest;
   rustModule?: RustRuntimeModule;
   cellId: string;
 }
@@ -27,11 +32,15 @@ export default function InteractiveCell({
   cellId,
   rustModule: initialRustModule
 }: InteractiveCellProps) {
-  const { cells, version, rust } = useManifestSnapshot();
+  const { cells, version, rust, definitions, compileErrors, failedBlocks } = useManifestSnapshot();
   const cell =
-    cells.find((candidate) => candidate.id === cellId) ?? (initialCell?.id === cellId ? initialCell : undefined);
+    cells.find((candidate) => candidate.id === cellId) ??
+    definitions?.find((candidate) => candidate.id === cellId) ??
+    failedBlocks?.find((candidate) => candidate.id === cellId) ??
+    (initialCell?.id === cellId ? initialCell : undefined);
   const rustModule = rust ? rust.modules.find((module) => module.cells.includes(cellId)) : initialRustModule;
   const labels = useRuntimeLabels();
+  const errors = compileErrors?.filter((error) => error.cellId === cellId) ?? [];
 
   if (!cell) {
     return (
@@ -43,6 +52,16 @@ export default function InteractiveCell({
     );
   }
 
+  if ('kind' in cell || (cell.language === 'rust' && !rustModule && errors.length > 0)) {
+    return (
+      <BlockSourcePanel
+        cell={failedBlocks?.find((block) => block.id === cellId) ?? cell}
+        errors={errors}
+        labels={labels}
+      />
+    );
+  }
+
   return (
     <InteractiveCellPanel
       key={`${cell.id}:${cell.language}`}
@@ -50,7 +69,69 @@ export default function InteractiveCell({
       labels={labels}
       runtimeVersion={version}
       rustModule={rustModule}
+      errors={errors}
     />
+  );
+}
+
+function CompileErrors({ errors }: { errors: readonly CellCompileError[] }) {
+  if (!errors.length) return null;
+  return (
+    <div role="alert" class="error-state" data-testid="cell-compile-errors">
+      {errors.map((error, index) => (
+        <p key={index}>
+          <code>
+            {error.file}:{error.line}:{error.column}
+          </code>{' '}
+          {error.code ? `${error.code}: ` : ''}
+          {error.message}
+        </p>
+      ))}
+    </div>
+  );
+}
+
+function BlockSourcePanel({
+  cell,
+  errors,
+  labels
+}: {
+  cell: AuthoredBlockManifest;
+  errors: readonly CellCompileError[];
+  labels: RuntimeLabels;
+}) {
+  const [visible, setVisible] = useState(cell.showSource);
+  const ids = interactiveCellIds(cell.id);
+  return (
+    <section
+      class="doc-cell not-content"
+      data-cell-id={cell.id}
+      data-testid={`cell-${cell.id}`}
+      data-language={cell.language}
+      aria-labelledby={ids.title}
+    >
+      <div class="doc-cell__header">
+        <h3 id={ids.title}>{cell.title}</h3>
+        <button
+          type="button"
+          class="secondary-button"
+          aria-expanded={visible}
+          aria-controls={ids.source}
+          onClick={() => setVisible((value) => !value)}
+        >
+          {visible ? labels.hideCode : labels.showCode}
+        </button>
+      </div>
+      <CompileErrors errors={errors} />
+      {visible ? (
+        <div
+          id={ids.source}
+          class="doc-source"
+          data-testid="cell-source"
+          dangerouslySetInnerHTML={{ __html: cell.sourceHtml }}
+        />
+      ) : null}
+    </section>
   );
 }
 
@@ -58,12 +139,14 @@ function InteractiveCellPanel({
   cell,
   labels,
   runtimeVersion,
-  rustModule
+  rustModule,
+  errors
 }: {
   cell: CellManifest;
   labels: RuntimeLabels;
   runtimeVersion: string;
   rustModule?: RustRuntimeModule;
+  errors: readonly CellCompileError[];
 }) {
   const [isSourceVisible, setIsSourceVisible] = useState(cell.showSource);
   const runtime = useInteractiveCellRun(
@@ -186,6 +269,7 @@ function InteractiveCellPanel({
       </div>
 
       {shareStatus ? <p role={shareStatus.error ? 'alert' : 'status'}>{shareStatus.message}</p> : null}
+      <CompileErrors errors={errors} />
 
       {shouldShowInputControls(cell.run) && (cell.inputs.length > 0 || cell.cases?.length) ? (
         <fieldset class="doc-input-grid">

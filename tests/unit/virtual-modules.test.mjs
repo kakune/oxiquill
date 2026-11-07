@@ -234,6 +234,7 @@ describe('oxiquill virtual modules', () => {
     plugin.configureServer(server);
 
     expect(server.watcher.add).toHaveBeenCalledWith([
+      path.join(paths.buildCacheDir, 'rust-dev-diagnostics.json'),
       pathFromUrl(paths.cellsModulePath),
       pathFromUrl(paths.runtimeVersionPath),
       pathFromUrl(paths.cellsJsonPath)
@@ -300,6 +301,48 @@ describe('oxiquill virtual modules', () => {
       expect(JSON.parse(body)).toEqual({ error: 'Generated runtime manifest is not ready.' });
     } finally {
       rmSync(root, { force: true, recursive: true });
+    }
+  });
+  it('serves diagnostics for a first failed compilation through dev HMR only', () => {
+    const root = mkdtempSync(path.join(os.tmpdir(), 'oxiquill-first-error-'));
+    try {
+      const paths = createDocRuntimePaths(root);
+      mkdirSync(paths.buildCacheDir, { recursive: true });
+      const block = {
+        id: 'new__model',
+        kind: 'definitions',
+        language: 'rust',
+        source: 'invalid',
+        title: 'New definitions'
+      };
+      const state = {
+        compileErrors: [{ cellId: block.id, file: 'content/docs/new.mdx', line: 5, column: 1, message: 'invalid' }],
+        failedBlocks: [block]
+      };
+      writeFileSync(path.join(paths.buildCacheDir, 'rust-dev-diagnostics.json'), JSON.stringify(state));
+      const plugin = oxiquillVirtualModulesPlugin(paths);
+      const context = { addWatchFile: vi.fn() };
+      const id = `\0virtual:oxiquill/cell?cellId=${block.id}`;
+      expect(() => plugin.load.call(context, id)).toThrow('not generated yet');
+      let handler;
+      plugin.configureServer({
+        watcher: { add: vi.fn() },
+        middlewares: {
+          use: (middleware) => {
+            handler = middleware;
+          }
+        }
+      });
+      expect(plugin.load.call(context, id)).toContain('New definitions');
+      const response = { setHeader: vi.fn(), end: vi.fn(), statusCode: 0 };
+      handler({ url: '/__oxiquill/manifest.json' }, response, vi.fn());
+      expect(response.statusCode).toBe(200);
+      expect(JSON.parse(response.end.mock.calls[0][0])).toMatchObject({ cells: [], ...state });
+      writeFileSync(path.join(paths.buildCacheDir, 'rust-dev-diagnostics.json'), '{broken');
+      handler({ url: '/__oxiquill/manifest.json' }, response, vi.fn());
+      expect(response.statusCode).toBe(503);
+    } finally {
+      rmSync(root, { recursive: true, force: true });
     }
   });
 });

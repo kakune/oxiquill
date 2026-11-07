@@ -156,7 +156,7 @@ describe('runtime watcher entrypoint', () => {
     });
     expect(services.syncDocRuntime).toHaveBeenNthCalledWith(
       2,
-      expect.objectContaining({ forceRustBuild: true, mode: 'dev', tolerateHaskellBuildFailure: true })
+      expect.objectContaining({ forceRustBuild: false, mode: 'dev', tolerateHaskellBuildFailure: true })
     );
     expect(log).toHaveBeenCalledWith('[runtime] rebuilt Rust/Wasm cells');
     expect(log).toHaveBeenCalledWith('[runtime] rebuilt Haskell/WASI cells');
@@ -179,7 +179,7 @@ describe('runtime watcher entrypoint', () => {
       const expectedCallCount = services.syncDocRuntime.mock.calls.length + 1;
       handlers.get('all')(event, assetPath);
       await waitForCallCount(services.syncDocRuntime, expectedCallCount);
-      expect(services.syncDocRuntime).toHaveBeenLastCalledWith(expect.objectContaining({ forceRustBuild: true }));
+      expect(services.syncDocRuntime).toHaveBeenLastCalledWith(expect.objectContaining({ forceRustBuild: false }));
     }
 
     handlers.get('all')('addDir', path.dirname(assetPath));

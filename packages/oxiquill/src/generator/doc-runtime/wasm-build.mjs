@@ -1,3 +1,4 @@
+import { diagnoseRustFailure } from './rust-diagnostics.mjs';
 import { trackRuntimeCommand } from '../runtime-lock.mjs';
 import path from 'node:path';
 import { runProcess } from './process-runner.mjs';
@@ -51,7 +52,8 @@ export async function buildRustWasm({
   runCommand = runProcess,
   events = createRuntimeEvents(),
   format = 'human',
-  trackChild
+  trackChild,
+  sourceFiles = []
 }) {
   const execute = trackRuntimeCommand(runCommand, trackChild);
   runCommand = (command, args, options) =>
@@ -71,25 +73,37 @@ export async function buildRustWasm({
           paths: resolvedPaths
         })))
       : undefined;
-  await events.phase('compile', { language: 'rust', module: 'site' }, () =>
-    runCommand(
-      'wasm-pack',
-      [
-        'build',
-        pathFromUrl(resolvedPaths.rustCellsDir),
-        '--target',
-        'web',
-        modeFlag,
-        '--out-dir',
-        pathFromUrl(resolvedPaths.rustWasmPublicDir),
-        '--out-name',
-        'doc_rust_cells',
-        ...(optimizer?.command ? ['--no-opt'] : []),
-        '--locked'
-      ],
-      { cwd: pathFromUrl(resolvedPaths.workspaceRoot), env }
-    )
-  );
+  try {
+    await events.phase('compile', { language: 'rust', module: 'site' }, () =>
+      runCommand(
+        'wasm-pack',
+        [
+          'build',
+          pathFromUrl(resolvedPaths.rustCellsDir),
+          '--target',
+          'web',
+          modeFlag,
+          '--out-dir',
+          pathFromUrl(resolvedPaths.rustWasmPublicDir),
+          '--out-name',
+          'doc_rust_cells',
+          ...(optimizer?.command ? ['--no-opt'] : []),
+          '--locked'
+        ],
+        { cwd: pathFromUrl(resolvedPaths.workspaceRoot), env, captureFailureOutput: true }
+      )
+    );
+  } catch (error) {
+    throw await diagnoseRustFailure({
+      error,
+      files: sourceFiles,
+      paths: resolvedPaths,
+      mode,
+      env,
+      runCommand,
+      fileSystem
+    });
+  }
   if (optimizer?.command) {
     if (optimizer.url)
       await ensureToolDownload(optimizer, {
@@ -168,10 +182,20 @@ export async function buildRustGroups({
           ...(mode === 'build' ? ['--release'] : []),
           ...invalid.flatMap((group) => ['--package', group.packageName])
         ],
-        { captureOutput: true, source: 'cargo' }
+        { captureOutput: true, captureFailureOutput: true, source: 'cargo' }
       )
     );
   } catch (cause) {
+    await diagnoseRustFailure({
+      error: cause,
+      files: groups.map((group) => group.sourceMap).filter(Boolean),
+      paths,
+      mode,
+      env,
+      runCommand: execute,
+      packages: invalid.map((group) => group.packageName),
+      fileSystem
+    });
     const diagnostics = `${cause.stdout ?? ''}\n${cause.message}`;
     const failed = invalid.filter(
       (group) =>
@@ -184,6 +208,7 @@ export async function buildRustGroups({
       { cause }
     );
     error.exitCode = cause.exitCode;
+    error.rustDiagnostics = cause.rustDiagnostics;
     throw error;
   }
   const artifacts = String(output)

@@ -1,3 +1,4 @@
+import { devDiagnosticsPath } from '../generator/doc-runtime/dev-diagnostics.mjs';
 import { resolveRustRegistryUrls, validateRustRegistry } from '../lib/doc-runtime/rust-registry.mjs';
 import { parseGeneratedCellManifest } from '../generator/doc-runtime/cell-manifest.mjs';
 import { sourceChangedError } from '../generator/doc-runtime/generation-snapshot.mjs';
@@ -13,6 +14,8 @@ const moduleIds = new Map([
 
 export function oxiquillVirtualModulesPlugin(paths, { generation, base: astroBase } = {}) {
   let base = astroBase ?? '/';
+  let development = false;
+  const diagnosticsFile = devDiagnosticsPath(paths);
   const cellsJsonFile = pathFromUrl(paths.cellsJsonPath);
   const generatedModules = new Map([
     [
@@ -30,8 +33,13 @@ export function oxiquillVirtualModulesPlugin(paths, { generation, base: astroBas
       }
     ]
   ]);
-  const watchedFiles = [...Array.from(generatedModules.values()).map(({ file }) => file), cellsJsonFile];
+  const watchedFiles = [
+    diagnosticsFile,
+    ...Array.from(generatedModules.values()).map(({ file }) => file),
+    cellsJsonFile
+  ];
   const changedFileModuleIds = new Map([
+    [normalizePath(diagnosticsFile), '\0virtual:oxiquill/cell'],
     [normalizePath(cellsJsonFile), '\0virtual:oxiquill/cell'],
     [normalizePath(pathFromUrl(paths.cellsModulePath)), '\0virtual:oxiquill/cells'],
     [normalizePath(pathFromUrl(paths.runtimeVersionPath)), '\0virtual:oxiquill/runtime-version']
@@ -56,7 +64,11 @@ export function oxiquillVirtualModulesPlugin(paths, { generation, base: astroBas
           throw sourceChangedError([{ kind: 'changed', path: cellsJsonFile }]);
         }
         const manifest = expected ?? readGeneratedManifest(cellsJsonFile);
-        const cell = manifest.cells.find((candidate) => candidate.id === cellId);
+        const failed = development ? readDevDiagnostics(diagnosticsFile) : {};
+        const cell =
+          manifest.cells.find((candidate) => candidate.id === cellId) ??
+          manifest.definitions?.find((candidate) => candidate.id === cellId) ??
+          failed.failedBlocks?.find((candidate) => candidate.id === cellId);
         if (!cell) {
           if (expected) throw sourceChangedError([{ kind: 'added', path: cellsJsonFile, cellId }]);
           throw new Error(
@@ -101,6 +113,7 @@ export function oxiquillVirtualModulesPlugin(paths, { generation, base: astroBas
       return loadedVirtualModuleNodes(this.environment.moduleGraph, resolvedId, options.modules);
     },
     configureServer(server) {
+      development = true;
       server.watcher.add(watchedFiles);
       server.middlewares.use((request, response, next) => {
         const requestUrl = new URL(request.originalUrl ?? request.url ?? '/', 'http://localhost');
@@ -131,7 +144,8 @@ export function oxiquillVirtualModulesPlugin(paths, { generation, base: astroBas
           return;
         }
 
-        const ready = existsSync(cellsJsonFile);
+        const devDiagnostics = readDevDiagnostics(diagnosticsFile);
+        const ready = existsSync(cellsJsonFile) || Boolean(devDiagnostics.failedBlocks?.length);
         response.statusCode = ready ? 200 : 503;
         response.setHeader('Cache-Control', 'no-store');
         response.setHeader('Content-Type', 'application/json; charset=utf-8');
@@ -139,7 +153,10 @@ export function oxiquillVirtualModulesPlugin(paths, { generation, base: astroBas
           JSON.stringify(
             ready
               ? {
-                  ...readBrowserManifest(cellsJsonFile, base),
+                  ...(existsSync(cellsJsonFile)
+                    ? readBrowserManifest(cellsJsonFile, base)
+                    : { cells: [], rust: { version: 1, modules: [] } }),
+                  ...devDiagnostics,
                   runtimeVersion: readGeneratedRuntimeVersion(pathFromUrl(paths.runtimeVersionPath))
                 }
               : { error: 'Generated runtime manifest is not ready.' }
@@ -217,7 +234,7 @@ function readBrowserManifest(file, base) {
   const manifest = parseGeneratedCellManifest(readFileSync(file, 'utf8'));
   const rust = resolveRustRegistryUrls(manifest.rust ?? { version: 1, modules: [] }, base);
   if (manifest.rust) validateRustRegistry(rust, manifest.cells);
-  return { cells: manifest.cells, rust };
+  return { cells: manifest.cells, ...(manifest.definitions ? { definitions: manifest.definitions } : {}), rust };
 }
 
 function readGeneratedRuntimeVersion(file) {
@@ -225,4 +242,13 @@ function readGeneratedRuntimeVersion(file) {
 
   const match = readFileSync(file, 'utf8').match(/export const runtimeVersion = (.*);/);
   return match ? JSON.parse(match[1]) : 'not-ready';
+}
+
+function readDevDiagnostics(file) {
+  try {
+    return JSON.parse(readFileSync(file, 'utf8'));
+  } catch (error) {
+    if (error.code === 'ENOENT' || error instanceof SyntaxError) return {};
+    throw error;
+  }
 }

@@ -334,3 +334,44 @@ describe('page-grouped Rust runtime', () => {
     expect(lockDependencyClosure(packages, ['root']).map((entry) => entry.name)).toEqual(['leaf', 'renamed', 'root']);
   });
 });
+
+describe('definitions compilation invalidation', () => {
+  const definitionsPage = (value = 7, unused = 'unused') =>
+    `---\ntitle: Definitions\n---\n\n\`\`\`rust\n//| id: model\n//| kind: definitions\n//| crates: [alpha]\npub(crate) fn value() -> i32 { ${value} }\n\`\`\`\n\n\`\`\`rust\n//| id: unused\n//| kind: definitions\n//| crates: [beta]\ncompile_error!("${unused}");\n\`\`\`\n\n\`\`\`rust\n//| id: consumer\n//| uses: [model]\nprintln!("{}", value());\n\`\`\`\n`;
+  it.each(['site', 'page'])('rebuilds used closures and ignores unused blocks with %s grouping', async (grouping) => {
+    const project = await fixture({ grouping, helpers: true });
+    await project.put('content/docs/second.mdx', page('println!("unrelated");'));
+    await project.put('content/docs/first.mdx', definitionsPage());
+    await project.sync();
+    const before = await project.state();
+    const changed = await project.sync();
+    expect(changed.plan.languages.rust.public).toBe('keep');
+    await project.put('content/docs/first.mdx', definitionsPage(7, 'edited unused'));
+    expect((await project.sync()).plan.languages.rust.public).toBe('keep');
+    await project.put('crates/beta/src/lib.rs', 'compile_error!("unused helper");');
+    expect((await project.sync()).plan.languages.rust.public).toBe('keep');
+    await project.put('content/docs/first.mdx', definitionsPage(9));
+    const used = await project.sync();
+    expect(used.plan.languages.rust.public).toBe('build');
+    if (grouping === 'page') {
+      expect(used.plan.rustGroups.filter((group) => group.public === 'build').map((group) => group.page)).toEqual([
+        'first.mdx'
+      ]);
+      const unrelated = before.rust.modules.find((module) => module.cells.includes('second__example'));
+      expect((await project.state()).rust.modules.find((module) => module.id === unrelated.id)).toEqual(unrelated);
+    }
+    const manifest = JSON.parse(await readFile(project.paths.cellsJsonPath, 'utf8'));
+    expect(manifest.definitions).toHaveLength(2);
+    expect(manifest.rust.modules.flatMap((module) => module.cells)).not.toContain('first__model');
+    expect(JSON.stringify(manifest)).not.toContain('sourcePosition');
+    expect(JSON.stringify(manifest)).not.toContain('regions');
+    await project.put('content/docs/first.mdx', '\n\n' + definitionsPage(9));
+    expect((await project.sync()).plan.languages.rust.public).toBe('keep');
+    const maps = JSON.parse(await readFile(path.join(project.paths.buildCacheDir, 'rust-source-maps.json')));
+    expect(
+      maps.files
+        .flatMap((file) => file.regions)
+        .find((region) => region.cellId === 'first__model' && region.kind === 'authored').line
+    ).toBe(11);
+  });
+});

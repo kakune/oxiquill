@@ -1,5 +1,6 @@
 import chokidar from 'chokidar';
 import path from 'node:path';
+import { formatCliError } from '../cli/arguments.mjs';
 import { pathToFileURL } from 'node:url';
 import { parseArgs } from 'node:util';
 import { pathFromUrl } from '../config/paths.mjs';
@@ -95,7 +96,7 @@ export async function watchDocRuntime({ projectConfig, serviceOverrides = {}, sk
       console.log(`[runtime] syncing after ${describeChangeKinds(currentKinds)}`);
       const current = await services.syncDocRuntime({
         ...context,
-        forceRustBuild: rustOptions?.grouping !== 'page' && currentKinds.has('crate'),
+        forceRustBuild: false,
         mode: 'dev',
         trackChild: lease.trackChild,
         tolerateHaskellBuildFailure: true
@@ -126,7 +127,7 @@ export async function watchDocRuntime({ projectConfig, serviceOverrides = {}, sk
       onError: (error) => {
         if (closing && error.name === 'AbortError') return;
         console.error('[runtime] sync failed');
-        console.error(error);
+        console.error(formatCliError(error));
       }
     }
   );
@@ -184,7 +185,7 @@ export async function watchDocRuntime({ projectConfig, serviceOverrides = {}, sk
 
 if (import.meta.url === pathToFileURL(process.argv[1] ?? '').href) {
   main().catch((error) => {
-    console.error(error);
+    console.error(formatCliError(error));
     process.exitCode = 1;
   });
 }
