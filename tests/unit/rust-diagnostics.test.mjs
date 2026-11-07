@@ -226,4 +226,23 @@ describe('Rust diagnostic attribution', () => {
       expect(error.rustDiagnostics[0].spans[0].kind).toBe('external');
     }
   });
+  it('rejects a previous page revision even when the old source lines still match', async () => {
+    const stale = {
+      ...file,
+      regions: file.regions.map((region) =>
+        region.kind === 'authored' ? { ...region, pageFingerprint: 'old page revision' } : region
+      )
+    };
+    const error = Object.assign(new Error('original'), { stdout: compilerOutput });
+    const page = [...Array(14).fill(''), ...cell.sourcePosition.map((position) => position.text)].join('\n');
+    await diagnoseRustFailure({
+      error,
+      files: [stale],
+      paths: { workspaceRoot: '/repo', rustCellsDir: file.crateDir },
+      runCommand: async () => compilerOutput,
+      fileSystem: { readFile: async (name) => (name.endsWith('.mdx') ? page : file.text) }
+    });
+    expect(error.message).toContain('could not map this error to an authored cell');
+    expect(error.rustDiagnostics[0].spans[0].kind).toBe('external');
+  });
 });

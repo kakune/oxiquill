@@ -34,6 +34,7 @@ export function authoredFragment(cell) {
         kind: 'authored',
         cellId: cell.id,
         pagePath: cell.pagePath,
+        ...(cell.pageFingerprint ? { pageFingerprint: cell.pageFingerprint } : {}),
         ...position,
         source: text.replace(/\r$/u, '')
       };

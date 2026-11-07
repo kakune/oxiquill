@@ -194,17 +194,17 @@ export async function diagnoseRustFailure({
     try {
       if (hashText(await fileSystem.readFile(file.file, 'utf8')) !== hashText(file.text)) continue;
       for (const region of file.regions.filter((region) => region.kind === 'authored')) {
-        if (!pages.has(region.pagePath))
-          pages.set(
-            region.pagePath,
-            String(await fileSystem.readFile(path.resolve(paths.workspaceRoot, region.pagePath), 'utf8')).split(
-              /\r?\n/u
-            )
-          );
+        if (!pages.has(region.pagePath)) {
+          const source = String(await fileSystem.readFile(path.resolve(paths.workspaceRoot, region.pagePath), 'utf8'));
+          pages.set(region.pagePath, { lines: source.split(/\r?\n/u), fingerprint: hashText(source) });
+        }
       }
       if (
         file.regions.every(
-          (region) => region.kind !== 'authored' || pages.get(region.pagePath)?.[region.line - 1] === region.text
+          (region) =>
+            region.kind !== 'authored' ||
+            (pages.get(region.pagePath)?.lines[region.line - 1] === region.text &&
+              (!region.pageFingerprint || pages.get(region.pagePath).fingerprint === region.pageFingerprint))
         )
       )
         verified.push(file);

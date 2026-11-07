@@ -1,4 +1,5 @@
 import { parsePageFrontmatter } from '../../lib/doc-runtime/references.mjs';
+import { hashText } from './hashing.mjs';
 import { normalizeCell } from '../../lib/doc-runtime/normalized-cell.mjs';
 import { resolveRustDefinitions } from '../../lib/doc-runtime/rust-definitions.mjs';
 import { unified } from 'unified';
@@ -28,7 +29,7 @@ export function parseCellsFromMarkdown(source, pagePath, pythonOptions = {}) {
   visit(tree, (node) => {
     if (!node || typeof node !== 'object') return;
     const result = parseInteractiveCellNode(node, pagePath, pythonOptions, source);
-    if (result.kind === 'cell') cells.push(result.cell);
+    if (result.kind === 'cell') cells.push({ ...result.cell, pageFingerprint: hashText(source) });
     if (result.kind === 'invalid') diagnostics.push(...result.diagnostics);
   });
 
