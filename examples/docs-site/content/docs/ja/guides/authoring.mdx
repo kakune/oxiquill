@@ -1,6 +1,8 @@
 ---
 title: 執筆ガイド
 description: ページ、多言語化、実行可能セル、数式、図、メディアを含む MDX ノートを書きます。
+references:
+  authoring-cell-behavior: セルの動作を設定する
 ---
 
 Oxiquill のページは MDX file です。ページは通常の文章ノートにも、実行可能な計算ノートにも、メディア付きの説明にも、その組み合わせにもできます。
@@ -97,6 +99,7 @@ standard library module だけを使います。Haskell セルでは外部 packa
 主な metadata field:
 
 - `id`: 必須の lowercase kebab-case ページ内 cell ID。
+- `ref`: 任意の安定した参照名。同じ locale の cell と見出し全体で一意にします。
 - `title`: cell UI に表示される non-empty string の見出し。明示した値は前後の空白を除去し、省略時は `id` を使います。
 - `run`: `button`、`reactive`、`autorun`。default は `button`。
 - `inputs`: lowercase cross-language identifier から input definition への mapping。`autorun` では指定できません。
@@ -115,6 +118,39 @@ integer metadata の portable domain は `-2147483648` 以上 `2147483647` 以�
 numeric default は input の step grid にも揃える必要があります。effective step は明示した `step`、または `1` です。base は `min` があればその値、なければ明示または default の numeric `value` です。不一致の default は丸めたり clamp したりせず、authoring 時に拒否されます。
 
 ケースの `id` はセル内で一意の kebab-case にし、予約語 `default` は使えません。入力とケースの label は空でない256文字以内の文字列です。省略した入力は宣言した既定値で補完します。ケースは全入力を一度に適用し、reactive セルは一度だけ実行し、button セルは「実行」を待ちます。乱数計算の seed も通常の入力として公開し、ケースに含めてください。実行例は[名前付き入力ケース](../../features/interactive-cells/#名前付き入力ケース)を参照してください。
+
+## 安定した参照でリンクする
+
+ページの移動や見出しの変更に追従するリンクには論理名を使います。[セルの動作](oxref:authoring-cell-behavior)と[autorun セル](oxref:cell-autorun)は実際に参照を解決する例です。
+
+セルの先頭の metadata block に `ref` を指定します。
+
+````md
+```rust
+//| id: demo
+//| ref: solver-demo
+//| crates: []
+println!("solver ready");
+```
+````
+
+見出しには、そのページの frontmatter で参照名と現在の見出し slug の mapping を指定します。
+
+```md
+---
+title: ソルバー
+references:
+  step-size: ステップ幅の選択
+---
+
+## ステップ幅の選択
+```
+
+リンクは `[ソルバーのデモ](oxref:solver-demo)`、参照形式なら `[solver]: oxref:solver-demo` と書きます。query や fragment は指定できません。参照名は `^[a-z][a-z0-9]*(?:-[a-z0-9]+)*$` に一致する64文字以内の文字列にします。
+
+名前は同じ locale のセルと見出し全体で一意にします。英語版と日本語版では同じ名前を使えます。参照元と同じ locale だけを検索し、翻訳がない場合は他言語に fallback せず error にします。
+
+build は既存のセル ID や見出し slug を保ち、`ox-ref-<name>` anchor を追加します。ページやセルを移動すると参照リンクが自動的に更新されます。見出しを変更したときは、そのページの `references` の slug だけを更新します。見出しが重複する場合は `-1` などの suffix も含めます。開発中の移動にも server の再起動なしで追従します。外部に保存したページ URL の bookmark は移動前の URL に依存します。
 
 ## 数式を追加する
 

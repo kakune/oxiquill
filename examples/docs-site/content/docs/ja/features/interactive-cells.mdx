@@ -17,6 +17,7 @@ interactive fence は `rust`、`python`、`haskell`（Markdown の `{.rust}` for
 
 | Field        | Type と rule                                                                                                          | Default  |
 | ------------ | --------------------------------------------------------------------------------------------------------------------- | -------- |
+| `ref`        | 任意の安定した参照名。64文字以内の lowercase kebab-case。同じ locale のセルと見出し全体で一意。                       | None     |
 | `id`         | 必須の lowercase kebab-case `^[a-z][a-z0-9]*(?:-[a-z0-9]+)*$`。page 内と route scope 後で unique。                    | —        |
 | `title`      | cell header に表示する non-empty string。明示した値は前後の空白を除去。                                               | `id`     |
 | `run`        | `button`、`reactive`、`autorun`。                                                                                     | `button` |
@@ -59,6 +60,7 @@ println!("button value = {value}");
 
 ```rust
 //| id: run-mode-autorun
+//| ref: cell-autorun
 //| title: One-time autorun execution
 //| run: autorun
 //| crates: []

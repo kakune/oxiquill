@@ -17,6 +17,7 @@ Only these top-level fields are accepted; unknown fields are errors:
 
 | Field        | Type and rule                                                                                                              | Default  |
 | ------------ | -------------------------------------------------------------------------------------------------------------------------- | -------- |
+| `ref`        | Optional stable lowercase kebab-case name, at most 64 characters; unique across cells and headings per locale.             | None     |
 | `id`         | Required lowercase kebab-case matching `^[a-z][a-z0-9]*(?:-[a-z0-9]+)*$`; unique within the page and after route scoping.  | —        |
 | `title`      | Non-empty string shown in the cell header; explicit values are trimmed.                                                    | `id`     |
 | `run`        | `button`, `reactive`, or `autorun`.                                                                                        | `button` |
@@ -61,6 +62,7 @@ This autorun cell has no execution controls and runs once for the current genera
 
 ```rust
 //| id: run-mode-autorun
+//| ref: cell-autorun
 //| title: One-time autorun execution
 //| run: autorun
 //| crates: []
