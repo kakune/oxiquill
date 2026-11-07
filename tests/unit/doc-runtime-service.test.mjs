@@ -1049,6 +1049,25 @@ describe('doc runtime service', () => {
     expect(buildRust).toHaveBeenCalledTimes(2);
   });
 
+  it('rebuilds when PATH optimizers appear, disappear, or change and reuses release output for dev', async () => {
+    const { buildRust, sync } = createRustRuntimeHarness();
+    for (const wasmOpt of [
+      { identity: 'managed-by-wasm-pack' },
+      { command: '/tools/wasm-opt', identity: { version: '117', sha256: 'first' } },
+      { command: '/tools/wasm-opt', identity: { version: '117', sha256: 'second' } },
+      { command: '/tools/wasm-opt', identity: { version: '118', sha256: 'second' } },
+      { identity: 'managed-by-wasm-pack' }
+    ]) {
+      const before = buildRust.mock.calls.length;
+      const preflightToolchains = async () => ({ rust: { wasmOpt } });
+      await sync({ preflightToolchains });
+      expect(buildRust).toHaveBeenCalledTimes(before + 1);
+      await sync({ preflightToolchains, mode: 'dev' });
+      expect(buildRust).toHaveBeenCalledTimes(before + 1);
+      expect(buildRust.mock.calls.at(-1)[0].wasmOpt).toEqual(wasmOpt);
+    }
+  });
+
   it('invalidates Rust builds for generator, environment, Cargo config, and each reported tool version', async () => {
     const { buildRust, fileSystem, sync } = createRustRuntimeHarness();
     await sync();
@@ -1057,7 +1076,8 @@ describe('doc runtime service', () => {
     for (const overrides of [
       { generatorIdentity: async () => 'updated generator' },
       { environment: { RUSTFLAGS: '-C opt-level=1' } },
-      ...['rustc', 'cargo', 'wasm-pack'].map((name) => ({
+      { environment: { BINARYEN_CORES: '2' } },
+      ...['rustc', 'cargo', 'wasm-pack', 'wasmOpt'].map((name) => ({
         preflightToolchains: async () => ({ rust: { [name]: 'changed' } })
       }))
     ]) {
@@ -1320,12 +1340,32 @@ describe('doc runtime service', () => {
       '/repo/content/docs/index.mdx',
       '```rust\n//| id: rust\n//| crates: []\nprintln!("two");\n```'
     );
-    buildRust.mockImplementationOnce(async () => {
-      throw new Error('wasm-pack failed');
-    });
+    const runtimeFileSystem = {
+      ...fileSystem,
+      readdir: async (...args) => (await fileSystem.readdir(...args)).map((entry) => entry.name)
+    };
+    buildRust.mockImplementationOnce(async (buildOptions) =>
+      buildRustWasm({
+        ...buildOptions,
+        fileSystem: runtimeFileSystem,
+        wasmOpt: { command: '/tools/wasm-opt', identity: { version: '117', sha256: 'binary' } },
+        runCommand: async (command) => {
+          if (command === 'wasm-pack') {
+            await fileSystem.writeFile(
+              path.join(buildOptions.paths.rustWasmPublicDir, 'doc_rust_cells_bg.wasm'),
+              'new unoptimized wasm'
+            );
+          } else {
+            throw new Error('wasm-opt failed');
+          }
+        }
+      })
+    );
 
-    await expect(syncDocRuntime(options)).rejects.toThrow('wasm-pack failed');
+    await expect(syncDocRuntime(options)).rejects.toThrow('/tools/wasm-opt: wasm-opt failed');
+    expect([...fileSystem.files.keys()].filter((file) => file.includes('/build-cache/wasm-opt/'))).toEqual([]);
     expect(fileSystem.files.get('/repo/public/oxiquill/rust-wasm/doc_rust_cells.js').toString()).toBe('old js');
+    expect(fileSystem.files.get('/repo/public/oxiquill/rust-wasm/doc_rust_cells_bg.wasm').toString()).toBe('old wasm');
     expect(fileSystem.existsSync('/repo/.oxiquill/generated/runtime-version.ts')).toBe(false);
     await syncDocRuntime(options);
     expect(buildRust).toHaveBeenCalledTimes(3);

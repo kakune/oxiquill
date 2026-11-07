@@ -179,6 +179,7 @@ export async function syncDocRuntime({
   const summary = summarizeCells(cells);
   const requestedPythonPackages = summary.pythonPackages;
   const toolchains = await preflightToolchains({
+    cwd: paths.workspaceRoot,
     environment,
     fileSystem,
     haskellCellCount: haskellCells.length,
@@ -253,7 +254,7 @@ export async function syncDocRuntime({
     });
 
     if (plan.languages.rust.public === 'build') {
-      await buildRust({ environment, mode, paths: stagedPaths });
+      await buildRust({ environment, fileSystem, mode, paths: stagedPaths, wasmOpt: toolchains.rust?.wasmOpt });
     }
     if (plan.languages.haskell.public === 'build') {
       haskellBuildResult = await buildHaskell({

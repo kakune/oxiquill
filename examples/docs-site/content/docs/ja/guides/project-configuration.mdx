@@ -155,6 +155,8 @@ published Rust、Haskell、Python file を再利用する前に、記録した b
 
 compiler cache は設定した `cacheDir` 内の `build-cache/rust-target`（Cargo）と `build-cache/haskell/<mode>-<ghc-version>`（Haskell）に置きます。runtime staging や compile failure 後も保持します。Haskell は安定した cached source path と未変更 source の timestamp を使い、GHC の module object 再利用を可能にします。mode と正確な compiler version ごとに cache を分離し、Cargo の dependency recompilation 判定は Cargo に任せます。
 
+Release Rust build は、実行可能な `wasm-opt` が `PATH` にある場合、`wasm-opt -O` の結果を `build-cache/wasm-opt` にも cache します。key は input の bytes と size、optimizer の version と executable hash、最適化引数、schema version、ソートした `BINARYEN_*` 環境変数です。optimizer の追加・削除・変更は Rust build の再利用を無効にします。dev build は最適化を行わず、`PATH` に optimizer がない場合は従来どおり wasm-pack が Binaryen を管理し、結果は cache しません。cache hit 時は content integrity を検証し、bytes を build stage にコピーします。破損した entry は自動再生成します。直近に使用した 16 件の結果を保持し、通常は build failure 後も残ります。`oxiquill clean` または `pnpm build:clean` で削除でき、verified download は保持します。
+
 Cargo target directory は `wasm-pack build` と `wasm-pack test` の両方に渡します。明示した `CARGO_TARGET_DIR` が優先され、user-owned の外部 target directory は clean で削除しません。compiler cache は published output、verified download cache と別に管理します。`oxiquill clean` は Oxiquill-owned compiler cache を削除し、verified download は保持します。
 
 ancestor の `.cargo` file、`$CARGO_HOME/config*`、config が参照する file など workspace root 外の設定は fingerprint に含みません。これらを変更した後は、repository では `pnpm build:clean`、consumer project では `oxiquill clean` の後に `oxiquill build` を実行してください。

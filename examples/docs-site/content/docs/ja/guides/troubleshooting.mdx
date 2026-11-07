@@ -67,6 +67,8 @@ browser failure では site rebuild、`public/oxiquill` 下の expected file、d
 
 Oxiquill repository の `pnpm build` は変更のない package output と runtime artifact を再利用し、Astro は static site output を作り直します。source と generated output が一致しない場合は `pnpm build:clean` を実行すると、verified download cache を保持しながら package、runtime、site を最初から再生成できます。consumer project では `oxiquill clean` 後に `oxiquill build` を実行します。特定の生成物だけが必要なら clean 後に対応する generation command を実行してください。
 
+Release Rust の再 build で optimizer-result cache が有効になるのは、`wasm-opt` が `PATH` にあり、最適化前の Wasm bytes が以前と同じ場合です。key はその bytes と size、optimizer の version と executable hash、引数、schema version、`BINARYEN_*` 環境変数です。dev build や新しい checkout の高速化にはなりません。破損した entry は自動再生成し、cache access error があっても cache を使わず最適化を続行します。`oxiquill clean` または `pnpm build:clean` で `cacheDir/build-cache/wasm-opt` を削除でき、verified download は保持します。
+
 `cacheDir/build-cache` の compiler cache は通常、cell 編集や build failure 後も保持します。Rust は永続 Cargo target（または明示した `CARGO_TARGET_DIR`）を使用し、Haskell は mode/compiler version ごとの cache と安定した source timestamp を使用します。編集・切り詰められた published file は自動再生成します。compiler cache の破損が疑われる場合や、ancestor/Cargo-home config など workspace 外の build input を変更した場合は clean rebuild を実行してください。外部の `CARGO_TARGET_DIR` を指定した場合、その user-owned cache は別途管理してください。Oxiquill clean では削除しません。
 
 `oxiquill build --force` が消去するのは Astro の content cache だけで、package や runtime の再ビルドを強制しません。generated ownership data は最後の cell が消えた language の stale output を除去します。manifest、ownership marker、Wasm、Pyodide file、license、`dist` を手動修正しないでください。

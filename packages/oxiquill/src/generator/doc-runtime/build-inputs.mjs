@@ -1,5 +1,6 @@
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { binaryenEnvironment } from './wasm-opt-cache.mjs';
 import { defaultFileSystem, listFiles } from './file-system.mjs';
 import { hashBytes, hashText, stableFingerprint } from './hashing.mjs';
 import { normalizePath } from './path-utils.mjs';
@@ -58,7 +59,13 @@ export async function readRustBuildInputs({ environment = process.env, fileSyste
       }
     })
   );
-  return hashText(stableFingerprint({ environment: rustBuildEnvironment(environment), configs }));
+  return hashText(
+    stableFingerprint({
+      environment: rustBuildEnvironment(environment),
+      binaryen: binaryenEnvironment(environment),
+      configs
+    })
+  );
 }
 
 export function artifactBuildFingerprint(inputs, mode) {

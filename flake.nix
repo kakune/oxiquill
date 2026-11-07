@@ -64,6 +64,27 @@
               license = pkgs.lib.licenses.mit;
             };
           });
+          # Match wasm-pack 0.15.0's managed optimizer without changing release bytes.
+          binaryen = pkgs.stdenvNoCC.mkDerivation {
+            pname = "binaryen";
+            version = "117";
+            src = pkgs.fetchurl {
+              url = "https://github.com/WebAssembly/binaryen/releases/download/version_117/binaryen-version_117-x86_64-linux.tar.gz";
+              hash = "sha256-PcZ3AGVVs1XqLaXoJgIGWhYdXoPq79P3Wa+gC5boMhI=";
+            };
+            dontConfigure = true;
+            dontBuild = true;
+            dontStrip = true;
+            installPhase = ''
+              runHook preInstall
+              install -Dm755 bin/wasm-opt "$out/bin/wasm-opt"
+              runHook postInstall
+            '';
+            doInstallCheck = true;
+            installCheckPhase = ''
+              test "$("$out/bin/wasm-opt" --version)" = "wasm-opt version 117 (version_117)"
+            '';
+          };
           haskellGhc = ghc-wasm-meta.packages.${system}."wasm32-wasi-ghc-9_14";
           # Coverage tools must match rustc's LLVM version, so use the toolchain's llvm-tools component.
           llvmToolsBin = "${rustToolchain}/lib/rustlib/${pkgs.stdenv.hostPlatform.rust.rustcTarget}/bin";
@@ -78,6 +99,7 @@
             pkgs.python3
             rustToolchain
             pkgs.wasm-pack
+            binaryen
             pkgs.cargo-llvm-cov
             haskellGhc
           ];
@@ -168,6 +190,7 @@
               *) echo "expected cargo 1.99.0, got $cargo_version" >&2; exit 1 ;;
             esac
             test "$(wasm-pack --version)" = "wasm-pack 0.15.0"
+            test "$(wasm-opt --version)" = "wasm-opt version 117 (version_117)"
 
             cargo llvm-cov --version
             "$LLVM_COV" --version
