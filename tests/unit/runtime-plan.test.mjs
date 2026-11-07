@@ -36,6 +36,36 @@ function plan(options = {}) {
 }
 
 describe('runtime generation plan', () => {
+  it('publishes reference-only snapshot changes while retaining compiled runtimes', () => {
+    const current = {
+      ...desired,
+      generationId: 'runtime',
+      referenceId: 'new-reference',
+      rust: { ...desired.rust, cellCount: 1 }
+    };
+    const state = {
+      schemaVersion: 1,
+      generationId: 'runtime',
+      manifestFingerprint: desired.manifestFingerprint,
+      snapshot: { referenceId: 'old-reference' },
+      languages: {
+        rust: {
+          ...current.rust,
+          buildFingerprint: artifactBuildFingerprint(current.rust.buildFingerprint, 'dev'),
+          mode: 'dev',
+          status: 'ready'
+        }
+      }
+    };
+    const selected = plan({
+      desired: current,
+      state,
+      outputComplete: { ...emptyOutputs, generated: true, rustSource: true, rustPublic: true }
+    });
+    expect(selected.generated).toBe('write');
+    expect(selected.languages.rust).toEqual({ source: 'keep', public: 'keep' });
+  });
+
   it('keeps every language absent for a new zero-cell project', () => {
     expect(plan()).toMatchObject({
       generated: 'write',

@@ -226,6 +226,7 @@ describe('defineOxiquillConfig', () => {
 
     expect(remarkPlugins.map(pluginName)).toEqual([
       'remarkMath',
+      'remarkReferences',
       'remarkPublicAssetBase',
       'remarkInteractiveCells',
       'remarkMermaidDiagrams',

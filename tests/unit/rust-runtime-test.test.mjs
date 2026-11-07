@@ -209,7 +209,7 @@ describe('command orchestration and output', () => {
     values: {},
     log: vi.fn(),
     progress: vi.fn(),
-    collect: vi.fn(async () => cells),
+    collect: vi.fn(async () => ({ cells, pages: [] })),
     readHelpers: vi.fn(async () => []),
     assertSnapshot: vi.fn(async () => {}),
     generateRuntime: vi.fn(async () => ({
@@ -228,6 +228,24 @@ describe('command orchestration and output', () => {
     options.testHaskell.mockClear();
     await runWasmTests(options);
     expect(options.testHaskell).not.toHaveBeenCalled();
+  });
+  it('includes page references in the source guard used by the test harness', async () => {
+    const options = setup();
+    const pages = [
+      {
+        pagePath: 'content/docs/guide.mdx',
+        entryPath: 'guide.mdx',
+        references: [{ name: 'guide', slug: 'heading', position: { line: 3, column: 3 } }],
+        cellReferences: [],
+        links: []
+      }
+    ];
+    options.collect.mockResolvedValue({ cells: [cell], pages });
+    await runWasmTests(options);
+    expect(options.assertSnapshot).toHaveBeenCalledWith(expect.objectContaining({ pages }), {
+      paths,
+      pythonOptions: undefined
+    });
   });
   it('rejects selectors before generating anything and emits a final JSON summary', async () => {
     const options = { ...setup(), values: { cell: ['absent'], format: 'json' } };

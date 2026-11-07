@@ -26,6 +26,7 @@ import { compatibilityManifest, compatibilityWorkspace, minimumDependencies } fr
 import { packRecords } from '../../.github/scripts/release-archive.mjs';
 import { loadDocumentedConsumerConfig } from '../docs/documented-config.mjs';
 import { assertMathDependencies } from './math-contract.mjs';
+import { assertPackedReferences } from './reference-fixture.mjs';
 
 const supportedPythonPackages = [
   'contourpy',
@@ -273,6 +274,11 @@ try {
   ]);
   const initialBuild = run(process.execPath, [installedCliPath, 'build'], consumerRoot, true, nodeOnlyEnvironment);
   assertNo404Warning(initialBuild);
+  await assertPackedReferences({
+    consumerRoot,
+    build: () => assertNo404Warning(run(process.execPath, [installedCliPath, 'build'], consumerRoot, true)),
+    testWasm: () => run(process.execPath, [installedCliPath, 'test-wasm'], consumerRoot)
+  });
   assertNo404Warning(run(packageManager, ['run', 'build'], consumerRoot, true));
   const productionHtml = await readFile(path.join(consumerRoot, 'dist/index.html'), 'utf8');
   assert.match(productionHtml, /id="starlight__search"/u);
