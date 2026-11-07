@@ -9,7 +9,9 @@ export async function assertPackedLinks({ consumerRoot, cliPath, environment }) 
   const original = await readFile(configPath, 'utf8');
   const pageDir = path.join(consumerRoot, 'pages');
   const publicFile = path.join(consumerRoot, 'public/link-fixture.pdf');
-  const outputDir = path.join(consumerRoot, 'link output');
+  // Keep custom output under the starter's excluded dist tree so subsequent
+  // Astro checks do not type-check generated JavaScript bundles.
+  const outputDir = path.join(consumerRoot, 'dist/link output');
   const invoke = (args, status = 0) => {
     const result = spawnSync(process.execPath, [cliPath, ...args], {
       cwd: consumerRoot,
