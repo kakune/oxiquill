@@ -12,6 +12,7 @@ const tempRoot = mkdtempSync(path.join(path.dirname(repoRoot), '.oxiquill-dev-hm
 const tempSiteRoot = path.join(tempRoot, 'examples/docs-site');
 const chromiumExecutablePath = process.env.PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH?.trim();
 const children = new Set();
+const basePath = '/registry-base';
 let browser;
 
 try {
@@ -46,7 +47,7 @@ try {
     ],
     tempSiteRoot
   );
-  await waitForHttp(`http://127.0.0.1:${port}/features/interactive-cells/`, 60_000, [runtime, astro]);
+  await waitForHttp(`http://127.0.0.1:${port}${basePath}/features/interactive-cells/`, 60_000, [runtime, astro]);
 
   browser = await chromium.launch({
     ...(chromiumExecutablePath ? { executablePath: chromiumExecutablePath } : {}),
@@ -66,7 +67,7 @@ try {
     console.log(`[browser:pageerror] ${diagnostic}`);
     browserErrors.push(diagnostic);
   });
-  await page.goto(`http://127.0.0.1:${port}/features/interactive-cells/`);
+  await page.goto(`http://127.0.0.1:${port}${basePath}/features/interactive-cells/`);
 
   const cell = page.getByTestId('cell-features__interactive-cells__python-controls');
   await cell.scrollIntoViewIfNeeded();
@@ -149,7 +150,7 @@ try {
 
   expect(browserErrors, 'Browser console and page errors').toEqual([]);
   console.log(
-    `Dev HMR source, input case, and Rust module replacement verified at http://127.0.0.1:${port}/features/interactive-cells/`
+    `Dev HMR source, input case, and Rust module replacement verified at http://127.0.0.1:${port}${basePath}/features/interactive-cells/`
   );
 } finally {
   try {
@@ -217,6 +218,7 @@ function startProcess(label, command, args, cwd) {
     detached: true,
     env: {
       ...process.env,
+      BASE_PATH: `${basePath}/`,
       // Keep Astro in our process group even when it detects an agent environment.
       ASTRO_DEV_BACKGROUND: '0',
       ASTRO_TELEMETRY_DISABLED: '1',

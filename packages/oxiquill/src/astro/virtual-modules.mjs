@@ -2,7 +2,7 @@ import { resolveRustRegistryUrls, validateRustRegistry } from '../lib/doc-runtim
 import { parseGeneratedCellManifest } from '../generator/doc-runtime/cell-manifest.mjs';
 import { sourceChangedError } from '../generator/doc-runtime/generation-snapshot.mjs';
 import { existsSync, readFileSync } from 'node:fs';
-import { normalizePath, pathFromUrl, relativePathFromUrl } from '../config/paths.mjs';
+import { assertPathWithin, normalizePath, pathFromUrl, pathInUrl, relativePathFromUrl } from '../config/paths.mjs';
 
 const moduleIds = new Map([
   ['virtual:oxiquill/cell', '\0virtual:oxiquill/cell'],
@@ -104,6 +104,28 @@ export function oxiquillVirtualModulesPlugin(paths, { generation } = {}) {
       server.watcher.add(watchedFiles);
       server.middlewares.use((request, response, next) => {
         const requestUrl = new URL(request.url ?? '/', 'http://localhost');
+        const rustPrefix = `${base.replace(/\/?$/u, '/')}${publicUrlPath(paths, paths.rustWasmPublicDir)}`;
+        const glueName = requestUrl.pathname.slice(rustPrefix.length);
+        if (
+          requestUrl.pathname.startsWith(rustPrefix) &&
+          /^[a-z0-9]+(?:-[a-z0-9]+)*-[a-f0-9]{64}\.js$/u.test(glueName)
+        ) {
+          // Vite rejects public/ imports. Serve immutable glue unchanged, including
+          // the previous generation while its registry is being replaced.
+          const moduleId = glueName.replace(/-[a-f0-9]{64}\.js$/u, '');
+          const file = pathInUrl(paths.rustWasmPublicDir, glueName);
+          assertPathWithin(paths.rustWasmPublicDir, file, `Rust module ${moduleId} glue`);
+          if (!existsSync(file)) {
+            response.statusCode = 404;
+            response.end(`Rust module ${moduleId} glue asset is missing.`);
+            return;
+          }
+          response.statusCode = 200;
+          response.setHeader('Cache-Control', 'public, max-age=31536000, immutable');
+          response.setHeader('Content-Type', 'text/javascript; charset=utf-8');
+          response.end(readFileSync(file));
+          return;
+        }
         if (requestUrl.pathname !== '/__oxiquill/manifest.json') {
           next();
           return;

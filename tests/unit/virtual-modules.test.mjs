@@ -128,6 +128,56 @@ describe('oxiquill virtual modules', () => {
     }
   });
 
+  it('serves registered public glue byte-for-byte before Vite import transforms, including under base', () => {
+    const root = mkdtempSync(path.join(os.tmpdir(), 'oxiquill-registry-glue-'));
+    try {
+      const paths = createDocRuntimePaths(root);
+      const cells = [{ id: 'rust-a', language: 'rust' }];
+      const assets = createRustModuleAssets({
+        id: 'site',
+        cells,
+        glue: 'export default async () => {};',
+        wasm: Buffer.from('wasm'),
+        publicPath: 'oxiquill/rust-wasm'
+      });
+      mkdirSync(path.dirname(paths.cellsJsonPath), { recursive: true });
+      mkdirSync(paths.rustWasmPublicDir, { recursive: true });
+      writeFileSync(paths.cellsJsonPath, JSON.stringify({ cells, rust: { version: 1, modules: [assets.module] } }));
+      const [name, content] = Object.entries(assets.files).find(([name]) => name.endsWith('.js'));
+      writeFileSync(path.join(paths.rustWasmPublicDir, name), content);
+      const plugin = oxiquillVirtualModulesPlugin(paths);
+      plugin.configResolved({ base: '/nested/base/' });
+      let middleware;
+      plugin.configureServer({
+        watcher: { add: vi.fn() },
+        middlewares: {
+          use: (handler) => {
+            middleware = handler;
+          }
+        }
+      });
+      const response = { statusCode: 0, end: vi.fn(), setHeader: vi.fn() };
+      const next = vi.fn();
+      middleware({ url: `/nested/base/${assets.module.glue.url}?import` }, response, next);
+      expect(response.statusCode).toBe(200);
+      expect(response.end.mock.calls[0][0].toString()).toBe(content);
+      expect(response.setHeader).toHaveBeenCalledWith('Content-Type', 'text/javascript; charset=utf-8');
+      expect(next).not.toHaveBeenCalled();
+      middleware({ url: '/unrelated.js' }, response, next);
+      expect(next).toHaveBeenCalledOnce();
+      rmSync(paths.cellsJsonPath);
+      middleware({ url: `/nested/base/${assets.module.glue.url}?import` }, response, next);
+      expect(response.statusCode).toBe(200);
+      expect(response.end.mock.lastCall[0].toString()).toBe(content);
+      rmSync(path.join(paths.rustWasmPublicDir, name));
+      middleware({ url: `/nested/base/${assets.module.glue.url}` }, response, next);
+      expect(response.statusCode).toBe(404);
+      expect(response.end).toHaveBeenLastCalledWith('Rust module site glue asset is missing.');
+    } finally {
+      rmSync(root, { force: true, recursive: true });
+    }
+  });
+
   it('serves one generated cell per page import', () => {
     const root = mkdtempSync(path.join(os.tmpdir(), 'oxiquill-virtual-cell-'));
 
