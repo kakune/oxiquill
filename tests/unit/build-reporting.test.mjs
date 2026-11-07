@@ -6,7 +6,8 @@ import { createRuntimeEvents } from '../../packages/oxiquill/src/generator/doc-r
 import {
   actionReasons,
   changedSources,
-  sourceFingerprints
+  sourceFingerprints,
+  pageSourceFingerprints
 } from '../../packages/oxiquill/src/generator/doc-runtime/plan-reasons.mjs';
 import { artifactBuildFingerprint } from '../../packages/oxiquill/src/generator/doc-runtime/build-inputs.mjs';
 import { createEventReporter } from '../../packages/oxiquill/src/cli/events.mjs';
@@ -146,6 +147,22 @@ describe('phase and plan reporting', () => {
       { page: 'b.mdx', cell: 'removed' }
     ]);
     expect(JSON.stringify(before)).not.toContain('secret-source');
+  });
+
+  it('stores deterministic page source fingerprints alongside cell fingerprints', () => {
+    const before = sourceFingerprints([
+      { id: 'a', pagePath: 'first.mdx', source: 'one' },
+      { id: 'b', pagePath: 'second.mdx', source: 'two' }
+    ]);
+    const after = sourceFingerprints([
+      { id: 'b', pagePath: 'second.mdx', source: 'two' },
+      { id: 'a', pagePath: 'first.mdx', source: 'changed' }
+    ]);
+    expect(pageSourceFingerprints(before)['second.mdx']).toBe(pageSourceFingerprints(after)['second.mdx']);
+    expect(pageSourceFingerprints(before)['first.mdx']).not.toBe(pageSourceFingerprints(after)['first.mdx']);
+    expect(pageSourceFingerprints(before)).toEqual(
+      pageSourceFingerprints(Object.fromEntries(Object.entries(before).reverse()))
+    );
   });
 
   it('reports every invalidation category and only changed option names', () => {

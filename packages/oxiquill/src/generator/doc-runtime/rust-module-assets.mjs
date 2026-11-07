@@ -19,19 +19,25 @@ export function createRustModuleAssets({ id, cells, glue, wasm, publicPath }) {
   return { module, files: { [glueName]: source, [wasmName]: wasm } };
 }
 
-export async function finalizeRustModule({ cells, paths, publicPaths = paths, fileSystem = defaultFileSystem }) {
+export async function finalizeRustModule({
+  id = 'site',
+  cells,
+  paths,
+  publicPaths = paths,
+  fileSystem = defaultFileSystem
+}) {
   const directory = paths.rustWasmPublicDir;
   const [glue, wasm] = await Promise.all([
     fileSystem.readFile(path.join(directory, 'doc_rust_cells.js'), 'utf8'),
     fileSystem.readFile(path.join(directory, 'doc_rust_cells_bg.wasm'))
   ]).catch((cause) => {
     throw new Error(
-      `Rust module site (cells: ${cells.map((cell) => cell.id).join(', ')}) has missing build assets: ${cause.message}`,
+      `Rust module ${id} (cells: ${cells.map((cell) => cell.id).join(', ')}) has missing build assets: ${cause.message}`,
       { cause }
     );
   });
   const assets = createRustModuleAssets({
-    id: 'site',
+    id,
     cells,
     glue,
     wasm,

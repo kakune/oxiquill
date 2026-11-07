@@ -1,4 +1,7 @@
-import { spawn, spawnSync } from 'node:child_process';
+import { createRuntimeEvents, summarizePhases } from '../generator/doc-runtime/runtime-events.mjs';
+import { runProcess } from '../generator/doc-runtime/process-runner.mjs';
+import { createEventReporter } from './events.mjs';
+import { spawnSync } from 'node:child_process';
 import { existsSync, readFileSync, realpathSync } from 'node:fs';
 import { createRequire } from 'node:module';
 import path from 'node:path';
@@ -11,11 +14,58 @@ import { cleanOxiquillWorkspace } from '../generator/clean.mjs';
 import { prepareCleanupOwnership } from '../generator/cleanup-ownership.mjs';
 import { runHelperCargo } from '../generator/run-helper-cargo.mjs';
 import { runWasmTests } from './test-wasm.mjs';
-import { formatCliHelp, parseCliArguments } from './arguments.mjs';
+import { debugRequested, formatCliError, formatCliHelp, parseCliArguments } from './arguments.mjs';
 import { initializeProject } from './init.mjs';
 import { acquireRuntimeLock, withRuntimeLock } from '../generator/runtime-lock.mjs';
 
 export async function runCli(commandOrArgs = [], argsOrOptions = {}, legacyOptions = {}) {
+  const { args, options } = normalizeRunCliArguments(commandOrArgs, argsOrOptions, legacyOptions);
+  let events;
+  let exitStatus = 0;
+  try {
+    const parsed = parseCliArguments(args);
+    const reporting = parsed.action === 'run' && ['build', 'check', 'docgen'].includes(parsed.commandName);
+    if (reporting)
+      events =
+        options.events ??
+        createRuntimeEvents({ report: createEventReporter({ format: parsed.values.format, write: options.log }) });
+    return await runCliCommand(args, { ...options, parsed, events, format: parsed.values?.format ?? 'human' });
+  } catch (error) {
+    exitStatus = error.exitCode ?? 1;
+    if (
+      !events &&
+      args.some((arg) => ['build', 'check', 'docgen'].includes(arg)) &&
+      (args.includes('--format=json') || args.some((arg, index) => arg === '--format' && args[index + 1] === 'json'))
+    ) {
+      events = createRuntimeEvents({ report: createEventReporter({ format: 'json', write: options.log }) });
+    }
+    if (events) {
+      events.report({ type: 'diagnostic', message: formatCliError(error, { debug: debugRequested(args) }) });
+      error.reported = true;
+    }
+    throw error;
+  } finally {
+    if (events) {
+      const command = args.find((arg) => ['build', 'check', 'docgen'].includes(arg));
+      const expected = [
+        'discovery',
+        'validation',
+        'generation',
+        'compile',
+        'optimize',
+        'publish',
+        ...(command !== 'docgen' ? ['astro-check'] : []),
+        ...(command === 'build' ? ['astro-build'] : [])
+      ];
+      for (const phase of expected)
+        if (!events.phases.some((entry) => entry.phase === phase))
+          events.skipped(phase, { reason: exitStatus ? 'upstream-failed' : 'not-required' });
+      events.report({ type: 'summary', phases: summarizePhases(events.phases), exitStatus });
+    }
+  }
+}
+
+async function runCliCommand(commandOrArgs = [], argsOrOptions = {}, legacyOptions = {}) {
   const { args, options } = normalizeRunCliArguments(commandOrArgs, argsOrOptions, legacyOptions);
   const {
     cwd = process.cwd(),
@@ -26,10 +76,12 @@ export async function runCli(commandOrArgs = [], argsOrOptions = {}, legacyOptio
     loadCheck,
     loadProjectConfig = loadOxiquillProjectConfig,
     log = console.log,
-    runCommand: executeCommand = runCommandWithInheritedStdio,
+    events,
+    format = 'human',
+    runCommand: executeCommand = runProcess,
     selectNode = frameworkNode
   } = options;
-  const parsed = parseCliArguments(args);
+  const parsed = options.parsed ?? parseCliArguments(args);
 
   if (parsed.action === 'help') {
     log(formatCliHelp(parsed.commandName));
@@ -50,24 +102,37 @@ export async function runCli(commandOrArgs = [], argsOrOptions = {}, legacyOptio
   const paths = projectConfig.paths;
   const astroArgs = [...projectConfig.astroConfigArgs, ...commandArgs];
 
-  const lease = ['build', 'check', 'docgen', 'clean', 'test-wasm'].includes(command)
-    ? await acquireLock({
-        paths,
-        configFile: projectConfig.configFile,
-        command,
-        timeout: values['lock-timeout'] === undefined ? 1800 : Number(values['lock-timeout'])
-      })
-    : undefined;
+  const lease =
+    !values.explain && ['build', 'check', 'docgen', 'clean', 'test-wasm'].includes(command)
+      ? await acquireLock({
+          paths,
+          configFile: projectConfig.configFile,
+          command,
+          timeout: values['lock-timeout'] === undefined ? 1800 : Number(values['lock-timeout'])
+        })
+      : undefined;
   const runCommand = (command, args, settings) =>
-    executeCommand(command, args, { ...settings, trackChild: lease?.trackChild });
+    executeCommand(command, args, { events, format, ...settings, trackChild: lease?.trackChild });
   const generateRuntime = (settings) =>
-    lease
-      ? generate({ ...settings, trackChild: lease.trackChild })
-      : withRuntimeLock({ paths, configFile: projectConfig.configFile, command, timeout: Infinity }, ({ trackChild }) =>
-          generate({ ...settings, trackChild })
-        );
+    values.explain
+      ? generate({ ...settings, events, format, explain: true })
+      : lease
+        ? generate({ ...settings, events, format, trackChild: lease.trackChild })
+        : withRuntimeLock(
+            { paths, configFile: projectConfig.configFile, command, timeout: Infinity },
+            ({ trackChild }) => generate({ ...settings, trackChild })
+          );
 
   try {
+    if (values.explain) {
+      await generateRuntime({
+        projectConfig,
+        wasmMode: command === 'build' ? 'build' : command === 'check' ? 'dev' : values.wasm
+      });
+      if (command !== 'docgen') events.skipped('astro-check', { reason: 'explain' });
+      if (command === 'build') events.skipped('astro-build', { reason: 'explain' });
+      return;
+    }
     switch (command) {
       case 'dev':
         await generateRuntime({ projectConfig, tolerateHaskellBuildFailure: true, wasmMode: 'dev' });
@@ -93,31 +158,37 @@ export async function runCli(commandOrArgs = [], argsOrOptions = {}, legacyOptio
           projectConfig,
           wasmMode: 'build'
         });
-        await runOxiquillCheck(projectConfig, [], {
-          generationId,
-          loadCheck,
-          lockToken: lease.token,
-          runCommand,
-          selectNode
-        });
-        await runAstro(projectConfig, ['build', ...astroArgs], {
-          generationId,
-          runCommand,
-          runtimeOwner: 'cli',
-          lockToken: lease.token,
-          selectNode
-        });
+        await events.phase('astro-check', {}, () =>
+          runOxiquillCheck(projectConfig, [], {
+            generationId,
+            loadCheck,
+            lockToken: lease.token,
+            runCommand,
+            selectNode
+          })
+        );
+        await events.phase('astro-build', {}, () =>
+          runAstro(projectConfig, ['build', ...astroArgs], {
+            generationId,
+            runCommand,
+            runtimeOwner: 'cli',
+            lockToken: lease.token,
+            selectNode
+          })
+        );
         return;
       }
       case 'check': {
         const { generationId } = await generateRuntime({ projectConfig, wasmMode: 'dev' });
-        await runOxiquillCheck(projectConfig, commandArgs, {
-          generationId,
-          lockToken: lease.token,
-          loadCheck,
-          runCommand,
-          selectNode
-        });
+        await events.phase('astro-check', {}, () =>
+          runOxiquillCheck(projectConfig, commandArgs, {
+            generationId,
+            lockToken: lease.token,
+            loadCheck,
+            runCommand,
+            selectNode
+          })
+        );
         return;
       }
       case 'docgen':
@@ -179,23 +250,39 @@ async function generateProjectRuntime({
   wasmMode,
   log = console.log,
   runtimeOptions = {},
+  events,
+  format,
+  explain = false,
   trackChild
 }) {
   const { paths } = projectConfig;
-  await prepareCleanupOwnership({
-    configFile: projectConfig.configFile,
-    fields: ownershipFields,
-    paths
+  if (!explain)
+    await prepareCleanupOwnership({
+      configFile: projectConfig.configFile,
+      fields: ownershipFields,
+      paths
+    });
+  const context = await createDocRuntimeContext({
+    paths,
+    pythonOptions: projectConfig.python,
+    rustOptions: projectConfig.rust
   });
-  const context = await createDocRuntimeContext({ paths, pythonOptions: projectConfig.python });
   const summary = await syncDocRuntime({
     ...context,
     ...runtimeOptions,
+    events,
+    format,
+    explain,
     trackChild,
     mode: wasmMode,
     tolerateHaskellBuildFailure
   });
-  log(`Generated ${summary.cellCount} interactive cell(s).`);
+  if (events)
+    events.report({
+      type: 'diagnostic',
+      message: `${explain ? 'Planned' : 'Generated'} ${summary.cellCount} interactive cell(s).`
+    });
+  else log(`Generated ${summary.cellCount} interactive cell(s).`);
   if (summary.haskellBuildResult) warnToleratedHaskellBuildFailure(summary.haskellBuildResult);
   return summary;
 }
@@ -229,15 +316,13 @@ async function runAstro(projectConfig, args, { generationId, lockToken, runComma
 
   await runCommand(nodePath, [frameworkBinScript(paths, 'astro'), ...args], {
     cwd: projectConfig.cwd,
+    source: 'astro',
+    phase: args[0] === 'build' ? 'astro-build' : 'astro-check',
     env: frameworkEnv(paths, { generationId, lockToken, nodePath, runtimeOwner })
   });
 }
 
-async function runOxiquillCheck(
-  projectConfig,
-  args,
-  { generationId, lockToken, loadCheck = importFromFramework, runCommand, selectNode }
-) {
+async function runOxiquillCheck(projectConfig, args, { generationId, lockToken, loadCheck, runCommand, selectNode }) {
   const { paths } = projectConfig;
   await runAstro(projectConfig, ['sync', ...projectConfig.astroConfigArgs], {
     generationId,
@@ -247,6 +332,20 @@ async function runOxiquillCheck(
     selectNode
   });
 
+  if (!loadCheck) {
+    const nodePath = selectNode(paths);
+    await runCommand(
+      nodePath,
+      [frameworkBinScript(paths, '@astrojs/check', 'astro-check'), '--root', paths.workspaceRoot, ...args],
+      {
+        cwd: projectConfig.cwd,
+        source: 'astro-check',
+        phase: 'astro-check',
+        env: frameworkEnv(paths, { generationId, lockToken, nodePath, runtimeOwner: 'cli' })
+      }
+    );
+    return;
+  }
   const { check, parseArgsAsCheckConfig } = await loadCheck(paths, '@astrojs/check');
   const config = parseArgsAsCheckConfig(['node', 'oxiquill-check', ...args]);
   config.root = pathFromUrl(paths.workspaceRoot);
@@ -272,10 +371,6 @@ async function runOxiquillCheck(
       else process.env[key] = value;
     });
   }
-}
-
-async function importFromFramework(paths, specifier) {
-  return import(pathToFileURL(resolveFromFramework(paths, specifier)).href);
 }
 
 function resolveFromFramework(paths, specifier) {
@@ -371,7 +466,22 @@ export function canLoadNativePackage(
 }
 
 function frameworkBinScript(paths, packageName, binName = packageName) {
-  const packageJsonPath = resolveFromWorkspaceOrFramework(paths, `${packageName}/package.json`);
+  let packageJsonPath;
+  try {
+    packageJsonPath = resolveFromWorkspaceOrFramework(paths, `${packageName}/package.json`);
+  } catch (error) {
+    if (error?.code !== 'ERR_PACKAGE_PATH_NOT_EXPORTED') throw error;
+    let directory = path.dirname(resolveFromWorkspaceOrFramework(paths, packageName));
+    while (directory !== path.dirname(directory)) {
+      const candidate = path.join(directory, 'package.json');
+      if (existsSync(candidate) && JSON.parse(readFileSync(candidate, 'utf8')).name === packageName) {
+        packageJsonPath = candidate;
+        break;
+      }
+      directory = path.dirname(directory);
+    }
+    if (!packageJsonPath) throw error;
+  }
   const packageJson = JSON.parse(readFileSync(packageJsonPath, 'utf8'));
   const binPath = typeof packageJson.bin === 'string' ? packageJson.bin : packageJson.bin?.[binName];
 
@@ -403,28 +513,6 @@ export function frameworkEnv(paths, { env = process.env, generationId, lockToken
   if (lockToken) nextEnv.OXIQUILL_LOCK_TOKEN = lockToken;
 
   return nextEnv;
-}
-
-function runCommandWithInheritedStdio(command, args, options) {
-  return new Promise((resolve, reject) => {
-    const detached = Boolean(options.trackChild) && process.platform !== 'win32';
-    const child = spawn(command, args, {
-      detached,
-      cwd: options.cwd,
-      env: options.env,
-      stdio: 'inherit'
-    });
-
-    options.trackChild?.(child, detached);
-    child.on('error', reject);
-    child.on('exit', (code, signal) => {
-      if (code === 0 || options.successfulSignals?.includes(signal)) {
-        resolve();
-      } else {
-        reject(new Error(`${command} exited with ${signal ?? code}`));
-      }
-    });
-  });
 }
 
 async function installedPackageVersion() {

@@ -106,6 +106,10 @@ export interface OxiquillFrameworkOptions<StarlightOptions extends object = obje
   starlight: IntegrationFactory<StarlightOptions>;
 }
 
+export interface OxiquillRustOptions {
+  grouping?: 'site' | 'page';
+}
+
 export interface OxiquillPythonOptions {
   experimentalSetup?: boolean;
   preload?: boolean;
@@ -138,6 +142,7 @@ export interface OxiquillConfig<StarlightOptions extends object = object> extend
   markdown?: OxiquillMarkdownConfig;
   paths?: OxiquillPathOptions;
   python?: OxiquillPythonOptions;
+  rust?: OxiquillRustOptions;
   sidebar?: StarlightOption<StarlightOptions, 'sidebar', unknown>;
   starlight?: Partial<StarlightOptions>;
   title?: StarlightOption<StarlightOptions, 'title', string>;
@@ -149,12 +154,14 @@ export interface OxiquillIntegrationOptions {
   markdown?: OxiquillMarkdownConfig;
   paths?: OxiquillPathOptions;
   python?: OxiquillPythonOptions;
+  rust?: OxiquillRustOptions;
   vite?: BaseAstroUserConfig['vite'];
 }
 
 const createDocRuntimeContextForPaths = createDocRuntimeContext as unknown as (options: {
   paths: OxiquillPaths;
   pythonOptions?: Readonly<OxiquillPythonOptions>;
+  rustOptions?: Readonly<OxiquillRustOptions>;
 }) => Promise<DocRuntimeContext>;
 const syncDocRuntimeForBuild = syncDocRuntime as unknown as (
   options: DocRuntimeContext & {
@@ -174,6 +181,7 @@ export function defineOxiquillConfig<StarlightOptions extends object>(
     markdown = {},
     paths,
     python,
+    rust,
     description,
     desktopTableOfContentsToggle = true,
     sidebar,
@@ -195,7 +203,7 @@ export function defineOxiquillConfig<StarlightOptions extends object>(
     ...starlightOptions
   } as OxiquillStarlightOptions;
 
-  const integration = createOxiquillIntegration({ base, markdown, paths, python, vite }, explicitAstroPaths);
+  const integration = createOxiquillIntegration({ base, markdown, paths, python, rust, vite }, explicitAstroPaths);
   const effectiveRoot = explicitAstroPaths.root ?? paths?.workspaceRoot;
   const effectivePublicDir = explicitAstroPaths.publicDir ?? paths?.publicDir ?? 'public';
   const effectiveCacheDir = explicitAstroPaths.cacheDir ?? paths?.cacheDir ?? '.oxiquill';
@@ -253,20 +261,22 @@ export function oxiquillIntegration({
   markdown = {},
   paths: pathOptions,
   python,
+  rust,
   vite = {}
 }: OxiquillIntegrationOptions = {}): AstroIntegration {
-  return createOxiquillIntegration({ base, markdown, paths: pathOptions, python, vite });
+  return createOxiquillIntegration({ base, markdown, paths: pathOptions, python, rust, vite });
 }
 
 function createOxiquillIntegration(
-  { base, markdown = {}, paths: pathOptions, python, vite = {} }: OxiquillIntegrationOptions = {},
+  { base, markdown = {}, paths: pathOptions, python, rust, vite = {} }: OxiquillIntegrationOptions = {},
   astroOptions: Record<string, string | URL> = {}
 ): AstroIntegration {
   rejectCustomMarkdownProcessor(markdown);
-  const metadata = createOxiquillIntegrationMetadata({ astro: astroOptions, paths: pathOptions, python });
+  const metadata = createOxiquillIntegrationMetadata({ astro: astroOptions, paths: pathOptions, python, rust });
   let paths: OxiquillPaths | undefined;
   let generation: ReturnType<typeof createBuildGeneration> | undefined;
   let pythonOptions: Readonly<OxiquillPythonOptions> | undefined;
+  let rustOptions: Readonly<OxiquillRustOptions> | undefined;
   let buildOwnership: Awaited<ReturnType<typeof prepareCleanupOwnership>> = Object.freeze([]);
   let buildLease: Awaited<ReturnType<typeof acquireRuntimeLock>> | undefined;
   const bundledModules = createBundledModuleCollector();
@@ -284,6 +294,7 @@ function createOxiquillIntegration(
         });
         paths = projectConfig.paths;
         pythonOptions = projectConfig.python;
+        rustOptions = projectConfig.rust;
         if (command === 'build' || process.env.OXIQUILL_GENERATION_ID) {
           generation = createBuildGeneration({
             paths,
@@ -350,7 +361,7 @@ function createOxiquillIntegration(
             generation?.start(process.env.OXIQUILL_GENERATION_ID);
             return;
           }
-          const context = await createDocRuntimeContextForPaths({ paths, pythonOptions });
+          const context = await createDocRuntimeContextForPaths({ paths, pythonOptions, rustOptions });
           const result = await syncDocRuntimeForBuild({
             ...context,
             mode: 'build',

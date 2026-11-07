@@ -31,7 +31,7 @@ export function createProcessRunner({
         env: options.env,
         detached,
         ...(options.signal ? { signal: options.signal } : {}),
-        stdio: ['ignore', 'pipe', 'pipe']
+        stdio: [format === 'json' ? 'ignore' : 'inherit', 'pipe', 'pipe']
       });
       trackChild?.(child, detached);
       const heartbeat = () => {

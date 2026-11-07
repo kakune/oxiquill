@@ -283,7 +283,14 @@ describe('wasm-pack integration', () => {
     const { root } = await fixture();
     const paths = createOxiquillPaths({ workspaceRoot: root });
     const runCommand = vi.fn();
-    await buildRustWasm({ mode, paths, environment: {}, runCommand, postprocess: vi.fn() });
+    await buildRustWasm({
+      mode,
+      paths,
+      environment: {},
+      runCommand,
+      postprocess: vi.fn(),
+      wasmOpt: { identity: 'managed-by-wasm-pack' }
+    });
     expect(runCommand).toHaveBeenCalledExactlyOnceWith(
       'wasm-pack',
       [
@@ -298,7 +305,7 @@ describe('wasm-pack integration', () => {
         'doc_rust_cells',
         '--locked'
       ],
-      { cwd: paths.workspaceRoot, env: { CARGO_TARGET_DIR: paths.rustTargetDir } }
+      expect.objectContaining({ cwd: paths.workspaceRoot, env: { CARGO_TARGET_DIR: paths.rustTargetDir } })
     );
   });
 

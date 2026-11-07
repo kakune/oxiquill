@@ -1,8 +1,23 @@
+import { readBuildFailures, recordRustBuildFailure, clearBuildFailures } from './doc-runtime/build-failures.mjs';
+import { runProcess } from './doc-runtime/process-runner.mjs';
+import { createRuntimeEvents } from './doc-runtime/runtime-events.mjs';
+import { explainRuntimePlan, pageSourceFingerprints, sourceFingerprints } from './doc-runtime/plan-reasons.mjs';
+import {
+  analyzeRustGroups,
+  applyRustGroupPlan,
+  prepareRustGroupSources,
+  finalizeRustGroups
+} from './doc-runtime/rust-group-service.mjs';
 import path from 'node:path';
 import { finalizeRustModule, validateRustModuleFiles } from './doc-runtime/rust-module-assets.mjs';
 import { parseGeneratedCellManifest } from './doc-runtime/cell-manifest.mjs';
 import { validateRustRegistry } from '../lib/doc-runtime/rust-registry.mjs';
-import { artifactBuildFingerprint, getGeneratorIdentity, readRustBuildInputs } from './doc-runtime/build-inputs.mjs';
+import {
+  artifactBuildFingerprint,
+  getGeneratorIdentity,
+  readRustBuildInputs,
+  readRustBuildOptionDigests
+} from './doc-runtime/build-inputs.mjs';
 import { recordedOutputIsComplete, recordOutputIntegrity } from './doc-runtime/output-integrity.mjs';
 import { createHighlighter } from 'shiki';
 import { createOxiquillPaths, pathFromUrl, pathInUrl } from '../config/paths.mjs';
@@ -48,7 +63,8 @@ import { readRuntimeInputs as defaultReadRuntimeInputs } from './doc-runtime/run
 import { preflightRequiredToolchains as defaultPreflightToolchains } from './doc-runtime/toolchain-preflight.mjs';
 import {
   buildHaskellWasm as defaultBuildHaskellWasm,
-  buildRustWasm as defaultBuildRustWasm
+  buildRustWasm as defaultBuildRustWasm,
+  buildRustGroups as defaultBuildRustGroups
 } from './doc-runtime/wasm-build.mjs';
 
 export { copyFileIfChanged, listFiles, writeIfChanged } from './doc-runtime/file-system.mjs';
@@ -124,6 +140,7 @@ export async function createDocRuntimeContext({
   paths: providedPaths,
   pathOptions,
   pythonOptions = Object.freeze({ offline: false }),
+  rustOptions = Object.freeze({ grouping: 'site' }),
   readManifests,
   readRuntimeInputs = defaultReadRuntimeInputs,
   root = process.cwd()
@@ -138,6 +155,7 @@ export async function createDocRuntimeContext({
       })),
     paths,
     pythonOptions,
+    rustOptions,
     helperCrates: await listHelperCrates({ fileSystem, paths, readManifests }),
     runtimeInputs: await readRuntimeInputs({ fileSystem, paths })
   };
@@ -146,6 +164,12 @@ export async function createDocRuntimeContext({
 export async function syncDocRuntime({
   buildHaskell = defaultBuildHaskellWasm,
   buildRust = defaultBuildRustWasm,
+  buildGroups = defaultBuildRustGroups,
+  explain = false,
+  events = createRuntimeEvents(),
+  format = 'human',
+  runCommand = runProcess,
+  rustOptions = Object.freeze({ grouping: 'site' }),
   environment = process.env,
   generatorIdentity = getGeneratorIdentity,
   fileSystem = defaultFileSystem,
@@ -166,7 +190,7 @@ export async function syncDocRuntime({
 }) {
   const snapshotOptions = { fileSystem, paths, pythonOptions };
   const [authoringCells, helpers] = await Promise.all([
-    collectAuthoringCells({ ...snapshotOptions, helperCrates }),
+    collectAuthoringCells({ ...snapshotOptions, helperCrates, events }),
     readHelperInputs(snapshotOptions)
   ]);
   const snapshot = createGenerationSnapshot(authoringCells, helpers);
@@ -176,7 +200,13 @@ export async function syncDocRuntime({
   const rustCells = cells.filter((cell) => cell.language === 'rust');
   const summary = summarizeCells(cells);
   const requestedPythonPackages = summary.pythonPackages;
+  const processOptions = { events, format, trackChild };
+  const execute = (command, args, options) => runCommand(command, args, { ...processOptions, ...options });
   const toolchains = await preflightToolchains({
+    explain,
+    paths,
+    grouping: rustOptions.grouping,
+    runCommand: execute,
     cwd: paths.workspaceRoot,
     environment,
     fileSystem,
@@ -186,6 +216,10 @@ export async function syncDocRuntime({
     rustCellCount: rustCells.length,
     tolerateHaskellFailure: tolerateHaskellBuildFailure,
     ...(trackChild ? { trackChild } : {})
+  }).catch((error) => {
+    if (!explain) throw error;
+    events.report({ type: 'diagnostic', message: `Toolchain unavailable while explaining: ${error.message}` });
+    return {};
   });
   const pyodideRuntimeInputs =
     pythonCells.length > 0 || Object.keys(pythonOptions.additionalPackages ?? {}).length > 0
@@ -199,10 +233,14 @@ export async function syncDocRuntime({
     rustCargo: generateRustCargoToml(rustCells, helperCrates, runtimeInputs),
     rustLib: generateRustLib(rustCells)
   };
-  const desired = createDesiredRuntime({
+  const identity = await generatorIdentity();
+  const rustBuildInputs =
+    rustCells.length > 0 ? await readRustBuildInputs({ environment, fileSystem, paths }) : undefined;
+  const buildOptions = rustCells.length > 0 ? await readRustBuildOptionDigests({ environment, fileSystem, paths }) : {};
+  let desired = createDesiredRuntime({
     snapshot,
-    generatorIdentity: await generatorIdentity(),
-    rustBuildInputs: rustCells.length > 0 ? await readRustBuildInputs({ environment, fileSystem, paths }) : undefined,
+    generatorIdentity: identity,
+    rustBuildInputs,
     generated,
     pythonCellCount: pythonCells.length,
     pyodideRuntimeInputs,
@@ -211,17 +249,132 @@ export async function syncDocRuntime({
     toolchains
   });
   const state = await readRuntimeOwnership({ fileSystem, paths });
-  const { outputComplete, outputPresent } = await runtimeOutputState({ fileSystem, paths, state });
-  const plan = createRuntimePlan({
+  const failures = await readBuildFailures({ fileSystem, paths });
+  const planningState =
+    failures.includes('site') && state
+      ? { ...state, languages: { ...state.languages, rust: { ...state.languages.rust, status: 'failed' } } }
+      : state;
+  const groupAnalysis =
+    rustOptions.grouping === 'page'
+      ? await analyzeRustGroups({
+          cells: rustCells,
+          paths,
+          helperCrates,
+          runtimeInputs,
+          fileSystem,
+          state,
+          mode,
+          buildInputs: rustBuildInputs,
+          buildOptions,
+          toolchain: toolchains.rust,
+          generatorIdentity: identity,
+          force: forceRustBuild,
+          failures
+        })
+      : undefined;
+  desired = {
+    ...desired,
+    ...Object.fromEntries(
+      ['rust', 'haskell', 'python'].map((language) => [
+        language,
+        {
+          ...desired[language],
+          sources: sourceFingerprints(cells.filter((cell) => cell.language === language)),
+          ...(language === 'rust' ? { buildOptions } : {})
+        }
+      ])
+    )
+  };
+  if (groupAnalysis)
+    desired.rust = {
+      ...desired.rust,
+      sourceFingerprint: hashText(
+        stableFingerprint(groupAnalysis.groups.map((group) => [group.id, group.desired.sourceFingerprint]))
+      ),
+      buildFingerprint: stableFingerprint(
+        groupAnalysis.groups.map((group) => [group.id, group.desired.buildFingerprint])
+      )
+    };
+  for (const language of ['rust', 'python', 'haskell'])
+    desired[language].pages = pageSourceFingerprints(desired[language].sources);
+  const { outputComplete, outputPresent, outputMissing } = await runtimeOutputState({
+    fileSystem,
+    paths,
+    state,
+    pageGrouping: Boolean(groupAnalysis)
+  });
+  let plan = createRuntimePlan({
     desired,
     forceRustBuild,
     mode,
     outputComplete,
     outputPresent,
-    state
+    state: planningState
   });
 
+  if (groupAnalysis) plan = applyRustGroupPlan(plan, groupAnalysis, state, mode);
+  const metadataUpgrade =
+    state &&
+    ['rust', 'python', 'haskell'].some(
+      (language) =>
+        desired[language].cellCount > 0 && (!state.languages[language]?.sources || !state.languages[language]?.pages)
+    );
+  if (metadataUpgrade) {
+    plan = { ...plan, generated: 'write', hasChanges: true };
+    events.report({ type: 'diagnostic', message: 'Stored page and cell source fingerprints need updating.' });
+  }
+  const reasons = explainRuntimePlan({
+    plan,
+    desired,
+    state: planningState,
+    mode,
+    outputComplete,
+    outputMissing,
+    forceRustBuild
+  });
+  if (groupAnalysis)
+    for (const target of ['source', 'public']) {
+      const entries = groupAnalysis.groups.flatMap((group) => group.reasons[target]);
+      if (entries.length)
+        reasons.rust[target] = [...new Map(entries.map((reason) => [JSON.stringify(reason), reason])).values()];
+    }
+  plan = { ...plan, reasons };
+  for (const [language, actions] of Object.entries(plan.languages)) {
+    for (const [target, action] of Object.entries(actions))
+      events.report({ type: 'plan', language, target, action, reasons: reasons[language][target] });
+  }
+  for (const group of plan.rustGroups ?? []) {
+    for (const target of ['source', 'public'])
+      events.report({
+        type: 'plan',
+        language: 'rust',
+        module: group.id,
+        page: group.page,
+        target,
+        action: group[target],
+        reasons: group.reasons[target]
+      });
+  }
+  for (const id of plan.removedRustGroups ?? [])
+    events.report({
+      type: 'plan',
+      language: 'rust',
+      module: id,
+      action: 'remove',
+      reasons: [
+        {
+          code: 'source-changed',
+          changes: [{ page: state.languages.rust.groups[id].page }]
+        }
+      ]
+    });
+  if (explain) {
+    for (const phase of ['generation', 'compile', 'optimize', 'publish']) events.skipped(phase, { reason: 'explain' });
+    return runtimeResult({ plan, snapshot, summary });
+  }
+
   if (!plan.hasChanges) {
+    for (const phase of ['generation', 'compile', 'optimize', 'publish']) events.skipped(phase, { cache: 'hit' });
     const licensesChanged = await syncLicenses({
       fileSystem,
       includeRustBuildFiles: false,
@@ -239,41 +392,84 @@ export async function syncDocRuntime({
 
   try {
     const stagedPaths = { ...paths };
-    await stageLanguageOutputs({
-      fileSystem,
-      generated,
-      paths,
-      plan,
-      pyodideRuntimeInputs,
-      pythonOptions,
-      requestedPythonPackages,
-      stagedPaths,
-      stages,
-      syncPyodide,
-      syncRustSupport
+    await events.phase('generation', {}, async () => {
+      if (
+        groupAnalysis &&
+        (plan.languages.rust.source !== 'keep' || plan.languages.rust.public === 'build') &&
+        rustCells.length > 0
+      ) {
+        await prepareRustGroupSources({ analysis: groupAnalysis, paths, fileSystem, syncRustSupport });
+      }
+      await stageLanguageOutputs({
+        pageGrouping: Boolean(groupAnalysis),
+        fileSystem,
+        generated,
+        paths,
+        plan,
+        pyodideRuntimeInputs,
+        pythonOptions,
+        requestedPythonPackages,
+        stagedPaths,
+        stages,
+        syncPyodide,
+        syncRustSupport
+      });
     });
 
     if (plan.languages.rust.public === 'build') {
-      await buildRust({
-        environment,
-        fileSystem,
-        mode,
-        paths: stagedPaths,
-        wasmOpt: toolchains.rust?.wasmOpt,
-        ...(trackChild ? { trackChild } : {})
-      });
+      try {
+        if (groupAnalysis)
+          await buildGroups({
+            ...processOptions,
+            environment,
+            fileSystem,
+            mode,
+            paths: stagedPaths,
+            groups: groupAnalysis.groups,
+            wasmOpt: toolchains.rust?.wasmOpt,
+            wasmBindgen: toolchains.rust?.wasmBindgen,
+            runCommand: execute
+          });
+        else
+          await buildRust({
+            ...processOptions,
+            runCommand: execute,
+            environment,
+            fileSystem,
+            mode,
+            paths: stagedPaths,
+            wasmOpt: toolchains.rust?.wasmOpt,
+            ...(trackChild ? { trackChild } : {})
+          });
+      } catch (error) {
+        await recordRustBuildFailure({
+          modules: groupAnalysis
+            ? groupAnalysis.groups.filter((group) => group.public === 'build').map((group) => group.id)
+            : ['site'],
+          paths,
+          fileSystem
+        }).catch(() => {});
+        throw error;
+      }
+    } else {
+      events.skipped('compile', { language: 'rust', cache: 'hit' });
+      events.skipped('optimize', { language: 'rust', reason: mode === 'build' ? 'cache-hit' : 'dev' });
     }
     if (plan.languages.haskell.public === 'build') {
-      haskellBuildResult = await buildHaskell({
-        compilerVersion: toolchains.haskell?.version,
-        environment,
-        fileSystem,
-        haskellFingerprint: summary.haskellFingerprint,
-        mode,
-        paths: stagedPaths,
-        tolerateFailure: tolerateHaskellBuildFailure,
-        ...(trackChild ? { trackChild } : {})
-      });
+      haskellBuildResult = await events.phase('compile', { language: 'haskell', module: 'site' }, () =>
+        buildHaskell({
+          ...processOptions,
+          runCommand: execute,
+          compilerVersion: toolchains.haskell?.version,
+          environment,
+          fileSystem,
+          haskellFingerprint: summary.haskellFingerprint,
+          mode,
+          paths: stagedPaths,
+          tolerateFailure: tolerateHaskellBuildFailure,
+          ...(trackChild ? { trackChild } : {})
+        })
+      );
       if (!haskellBuildResult.ok && outputComplete.haskellPublic) {
         // A tolerated dev failure must not replace a previously verified runtime.
         const publicStage = stages.find((stage) => stage.targetPath === paths.haskellWasmPublicDir);
@@ -282,8 +478,19 @@ export async function syncDocRuntime({
       }
     }
 
-    const rust =
-      plan.languages.rust.public === 'build'
+    const grouped =
+      groupAnalysis && plan.languages.rust.public === 'build'
+        ? await finalizeRustGroups({
+            groups: groupAnalysis.groups,
+            paths: stagedPaths,
+            mode,
+            publicPaths: paths,
+            fileSystem
+          })
+        : undefined;
+    const rust = grouped
+      ? grouped.registry
+      : plan.languages.rust.public === 'build'
         ? await finalizeRustModule({ cells: rustCells, paths: stagedPaths, publicPaths: paths, fileSystem })
         : plan.languages.rust.public === 'keep'
           ? state?.rust
@@ -313,6 +520,24 @@ export async function syncDocRuntime({
       state
     });
     if (rust) nextState.rust = rust;
+    if (groupAnalysis && nextState.languages.rust) {
+      nextState.languages.rust.grouping = 'page';
+      nextState.languages.rust.groups =
+        grouped?.states ??
+        Object.fromEntries(
+          groupAnalysis.groups.map((group) => [
+            group.id,
+            group.public === 'keep' && group.previous
+              ? group.previous
+              : {
+                  page: group.page,
+                  sourceFingerprint: group.desired.sourceFingerprint,
+                  sources: group.desired.sources,
+                  buildOptions: group.desired.buildOptions
+                }
+          ])
+        );
+    }
     nextState.ownedOutputs = createRuntimeOwnedOutputs(paths, rust ?? { version: 1, modules: [] }).filter(
       (entry) => desired[entry.language].cellCount > 0
     );
@@ -369,19 +594,26 @@ export async function syncDocRuntime({
         await fileSystem.rename(path.join(rustStage.stagePath, file), target);
       }
     }
-    await publishDirectoryStages(
-      [
-        ...stages.filter(({ type, targetPath }) => type === 'language' && targetPath !== paths.rustWasmPublicDir),
-        ...staleLanguageStages(paths, plan),
-        { stagePath: generatedStage, targetPath: paths.generatedDir }
-      ],
-      {
-        fileSystem,
-        onPublished: () => {
-          published = true;
+    await events.phase('publish', {}, () =>
+      publishDirectoryStages(
+        [
+          ...stages.filter(({ type, targetPath }) => type === 'language' && targetPath !== paths.rustWasmPublicDir),
+          ...staleLanguageStages(paths, plan),
+          { stagePath: generatedStage, targetPath: paths.generatedDir }
+        ],
+        {
+          fileSystem,
+          onPublished: () => {
+            published = true;
+          }
         }
-      }
+      )
     );
+    await clearBuildFailures({ paths, fileSystem });
+    if (groupAnalysis)
+      for (const id of plan.removedRustGroups ?? []) {
+        await fileSystem.rm(path.join(paths.rustCellsDir, 'pages', id), { recursive: true, force: true });
+      }
     const retainedRustFiles = new Set(nextState.languages.rust?.publicFiles ?? []);
     const previousRustFiles = state?.rust
       ? state.rust.modules.flatMap((module) => [module.glue, module.wasm].map((asset) => path.basename(asset.url)))
@@ -454,7 +686,7 @@ function createDesiredRuntime({
   });
 }
 
-async function runtimeOutputState({ fileSystem, paths, state }) {
+async function runtimeOutputState({ fileSystem, paths, state, pageGrouping = false }) {
   const manifest = fileSystem.existsSync(paths.cellsJsonPath)
     ? parseGeneratedCellManifest(await fileSystem.readFile(paths.cellsJsonPath, 'utf8'))
     : undefined;
@@ -471,6 +703,26 @@ async function runtimeOutputState({ fileSystem, paths, state }) {
   };
   return {
     outputPresent,
+    outputMissing: Object.fromEntries(
+      await Promise.all(
+        ['rust', 'python', 'haskell'].flatMap((language) => {
+          const directory =
+            language === 'rust'
+              ? paths.rustWasmPublicDir
+              : language === 'python'
+                ? paths.pyodidePublicDir
+                : paths.haskellWasmPublicDir;
+          const files = state?.languages?.[language]?.publicFiles;
+          return [
+            [`${language}Source`, !outputPresent[`${language}Source`]],
+            [
+              `${language}Public`,
+              !files?.length || files.some((name) => !fileSystem.existsSync(path.join(directory, name)))
+            ]
+          ];
+        })
+      )
+    ),
     outputComplete: {
       generated:
         Boolean(state) &&
@@ -481,8 +733,8 @@ async function runtimeOutputState({ fileSystem, paths, state }) {
         (state.ready === false || fileSystem.existsSync(paths.runtimeVersionPath)),
       rustSource:
         outputPresent.rustSource &&
-        ['Cargo.toml', 'Cargo.lock', 'LICENSE-MIT', 'LICENSE-APACHE', 'src/lib.rs'].every((fileName) =>
-          fileSystem.existsSync(pathInUrl(paths.rustCellsDir, fileName))
+        ['Cargo.toml', 'Cargo.lock', 'LICENSE-MIT', 'LICENSE-APACHE', ...(pageGrouping ? [] : ['src/lib.rs'])].every(
+          (fileName) => fileSystem.existsSync(pathInUrl(paths.rustCellsDir, fileName))
         ),
       rustPublic:
         Boolean(state?.rust) &&
@@ -499,6 +751,7 @@ async function runtimeOutputState({ fileSystem, paths, state }) {
 }
 
 async function stageLanguageOutputs({
+  pageGrouping = false,
   fileSystem,
   generated,
   paths,
@@ -511,7 +764,7 @@ async function stageLanguageOutputs({
   syncPyodide,
   syncRustSupport
 }) {
-  if (plan.languages.rust.source === 'write' || plan.languages.rust.public === 'build') {
+  if (!pageGrouping && (plan.languages.rust.source === 'write' || plan.languages.rust.public === 'build')) {
     const stagePath = await addDirectoryStage('rustCellsDir', paths, stagedPaths, stages, { fileSystem });
     await Promise.all([
       writeIfChanged(pathInUrl(stagePath, 'Cargo.toml'), generated.rustCargo, { fileSystem }),
@@ -579,10 +832,15 @@ async function createNextRuntimeState({
       sourceFingerprint: desired.rust.sourceFingerprint,
       status: 'ready'
     });
+    languages.rust.sources = desired.rust.sources;
+    languages.rust.pages = desired.rust.pages;
+    languages.rust.buildOptions = desired.rust.buildOptions;
   }
   if (desired.python.cellCount > 0) {
     languages.python = {
       assetFingerprint: desired.python.assetFingerprint,
+      sources: desired.python.sources,
+      pages: desired.python.pages,
       publicFileIntegrity:
         plan.languages.python.public === 'copy'
           ? await recordOutputIntegrity(stagedPaths.pyodidePublicDir, { fileSystem })
@@ -610,6 +868,8 @@ async function createNextRuntimeState({
       sourceFingerprint: desired.haskell.sourceFingerprint,
       status: haskellBuildResult.ok ? 'ready' : 'unavailable'
     });
+    languages.haskell.sources = desired.haskell.sources;
+    languages.haskell.pages = desired.haskell.pages;
   }
 
   return {

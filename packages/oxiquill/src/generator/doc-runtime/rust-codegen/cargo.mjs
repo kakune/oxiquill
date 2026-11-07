@@ -1,6 +1,11 @@
 import { generatedTomlBanner } from './banners.mjs';
 
-export function generateRustCargoToml(rustCells, helperCrates, runtimeInputs) {
+export function generateRustCargoToml(
+  rustCells,
+  helperCrates,
+  runtimeInputs,
+  { packageName = 'doc-rust-cells', workspace = true } = {}
+) {
   const packageMetadata = runtimeInputs.package;
   const rust = runtimeInputs.rust;
   const dependencyLines = rustCells
@@ -11,7 +16,7 @@ export function generateRustCargoToml(rustCells, helperCrates, runtimeInputs) {
   const localDependencies = dependencyLines.length > 0 ? `${dependencyLines.join('\n')}\n` : '';
 
   return `${generatedTomlBanner()}[package]
-name = "doc-rust-cells"
+name = ${JSON.stringify(packageName)}
 version = ${JSON.stringify(packageMetadata.version)}
 description = "Generated Rust cells for the documentation runtime."
 repository = ${JSON.stringify(packageMetadata.repository)}
@@ -20,7 +25,7 @@ rust-version = ${JSON.stringify(rust.minimumVersion.split('.').slice(0, 2).join(
 license = "MIT OR Apache-2.0"
 publish = false
 
-[workspace]
+${workspace ? '[workspace]' : ''}
 
 [lib]
 crate-type = ["cdylib", "rlib"]

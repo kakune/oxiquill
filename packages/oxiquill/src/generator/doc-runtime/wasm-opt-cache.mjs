@@ -3,6 +3,8 @@ import { constants } from 'node:fs';
 import path from 'node:path';
 import { defaultFileSystem } from './file-system.mjs';
 import { hashBytes, hashText, stableFingerprint } from './hashing.mjs';
+import { toolDownloadPlan } from './tool-downloads.mjs';
+import { createRuntimeEvents } from './runtime-events.mjs';
 
 export const WASM_OPT_CACHE_SCHEMA = 1;
 export const WASM_OPT_ARGS = Object.freeze(['-O']);
@@ -41,10 +43,12 @@ export async function resolveWasmOpt({
   platform = process.platform,
   fileSystem = defaultFileSystem,
   runCommand,
+  provision = false,
+  paths,
   memoize = false
 }) {
   const lookup = async () => {
-    const paths = platform === 'win32' ? path.win32 : path;
+    const pathApi = platform === 'win32' ? path.win32 : path;
     const envValue = (name) =>
       Object.entries(environment).find(([key]) =>
         platform === 'win32' ? key.toUpperCase() === name : key === name
@@ -53,7 +57,7 @@ export async function resolveWasmOpt({
     const candidates = (
       envValue('PATH') === undefined ? [] : envValue('PATH').split(platform === 'win32' ? ';' : ':')
     ).flatMap((directory) =>
-      extensions.map((extension) => paths.resolve(cwd, directory.replace(/^"|"$/gu, ''), `wasm-opt${extension}`))
+      extensions.map((extension) => pathApi.resolve(cwd, directory.replace(/^"|"$/gu, ''), `wasm-opt${extension}`))
     );
     for (const command of candidates) {
       try {
@@ -72,7 +76,9 @@ export async function resolveWasmOpt({
         identity: Object.freeze({ version: String(version), sha256: hashBytes(executable) })
       });
     }
-    return Object.freeze({ identity: 'managed-by-wasm-pack' });
+    return provision
+      ? toolDownloadPlan({ tool: 'wasm-opt', version: '117', paths, platform })
+      : Object.freeze({ identity: 'managed-by-wasm-pack' });
   };
   if (!memoize) return lookup();
   const key = stableFingerprint([
@@ -104,6 +110,8 @@ export async function optimizeRustWasmFiles({
   optimizer,
   environment,
   runCommand,
+  events = createRuntimeEvents(),
+  context = {},
   fileSystem = defaultFileSystem
 }) {
   let cacheEnabled = true;
@@ -148,6 +156,7 @@ export async function optimizeRustWasmFiles({
     });
     if (hit !== undefined) {
       await fileSystem.writeFile(inputPath, hit);
+      events.skipped('optimize', { ...context, cache: 'hit' });
       continue;
     }
     const temporaryName = `.tmp-${randomUUID()}`;
@@ -160,10 +169,14 @@ export async function optimizeRustWasmFiles({
     const temporaryPath = reserved ? cacheTemporaryPath : path.join(directory, temporaryName);
     try {
       try {
-        await runCommand(optimizer.command, [inputPath, '-o', temporaryPath, ...WASM_OPT_ARGS], {
-          env: environment,
-          cwd
-        });
+        await events.phase('optimize', { ...context, cache: 'miss' }, () =>
+          runCommand(optimizer.command, [inputPath, '-o', temporaryPath, ...WASM_OPT_ARGS], {
+            env: environment,
+            cwd,
+            ...context,
+            phase: 'optimize'
+          })
+        );
       } catch (error) {
         throw new Error(`Rust Wasm optimization failed with ${optimizer.command}: ${error.message}`, { cause: error });
       }

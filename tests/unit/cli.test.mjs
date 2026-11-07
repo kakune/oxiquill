@@ -106,6 +106,67 @@ afterEach(() => {
 });
 
 describe('oxiquill CLI', () => {
+  it.each(['build', 'check', 'docgen'])(
+    'explains %s without a lock, cleanup, or Astro subprocesses',
+    async (command) => {
+      const generate = vi.fn(async () => ({ cellCount: 1 }));
+      const runCommand = vi.fn();
+      const lines = [];
+      await runCli([command, '--explain', '--format', 'json'], {
+        generate,
+        runCommand,
+        log: (line) => lines.push(line)
+      });
+      expect(generate).toHaveBeenCalledWith(expect.objectContaining({ explain: true, format: 'json' }));
+      expect(cliMocks.acquireRuntimeLock).not.toHaveBeenCalled();
+      expect(cliMocks.prepareCleanupOwnership).not.toHaveBeenCalled();
+      expect(runCommand).not.toHaveBeenCalled();
+      const events = lines.map((line) => JSON.parse(line));
+      expect(events.at(-1)).toMatchObject({ type: 'summary', exitStatus: 0 });
+      expect(events.filter((event) => event.type === 'summary')).toHaveLength(1);
+    }
+  );
+
+  it.each(['--outDir=output', '--watch', '--lock-timeout=0', '--force'])(
+    'rejects execution-only explain options %s',
+    (option) => {
+      const command = option === '--watch' ? 'check' : 'build';
+      expect(() => parseCliArguments([command, '--explain', option])).toThrow('--explain cannot be combined');
+    }
+  );
+
+  it('strips reporting options before and after the Astro separator', () => {
+    expect(parseCliArguments(['build', '--format=json', '--', '--mode', 'production']).commandArgs).toEqual([
+      '--mode',
+      'production'
+    ]);
+    expect(parseCliArguments(['build', '--', '--format', 'json', '--outDir', 'output']).commandArgs).toEqual([
+      '--outDir',
+      'output'
+    ]);
+    expect(() => parseCliArguments(['docgen', '--format', 'yaml'])).toThrow('human, json');
+  });
+
+  it('ends JSON failures and usage errors with exactly one summary', async () => {
+    for (const args of [
+      ['build', '--format=json'],
+      ['docgen', '--format=json', '--unknown']
+    ]) {
+      const lines = [];
+      const generate = vi.fn(async () => {
+        const error = new Error('compile failed');
+        error.exitCode = 23;
+        throw error;
+      });
+      await expect(runCli(args, { generate, log: (line) => lines.push(line) })).rejects.toThrow();
+      const events = lines.map((line) => JSON.parse(line));
+      expect(events.at(-1).type).toBe('summary');
+      expect(events.filter((event) => event.type === 'summary')).toHaveLength(1);
+      expect(events.some((event) => event.type === 'diagnostic')).toBe(true);
+      if (args[0] === 'build') expect(events.at(-1).exitStatus).toBe(23);
+    }
+  });
+
   it.each(['build', 'check', 'docgen', 'clean', 'test-wasm'])('documents and parses %s lock timeout', (command) => {
     expect(formatCliHelp(command)).toContain('--lock-timeout <seconds>');
     expect(parseCliArguments([command, '--lock-timeout', '0']).values['lock-timeout']).toBe('0');

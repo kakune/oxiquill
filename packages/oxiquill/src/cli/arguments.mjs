@@ -14,6 +14,13 @@ const lockOptionDefinition = option(
 );
 const lockingCommands = new Set(['build', 'check', 'docgen', 'clean', 'test-wasm']);
 
+const reportingOptions = Object.freeze({
+  format: option('string', '--format <format>', 'Report human-readable lines or NDJSON events.', {
+    choices: ['human', 'json']
+  }),
+  explain: option('boolean', '--explain', 'Explain the runtime plan without writing or building.')
+});
+
 const astroDevOptions = Object.freeze({
   'allowed-hosts': optionalStringOption(
     '--allowed-hosts [hosts]',
@@ -63,6 +70,7 @@ const commandDefinitions = Object.freeze({
   build: command('build [options] [-- <astro-options>]', 'Generate runtimes, check, and build the site.', {
     astro: true,
     options: {
+      ...reportingOptions,
       devOutput: option('boolean', '--devOutput', 'Emit development-style output.'),
       force: option('boolean', '--force', 'Clear the content cache before building.'),
       mode: option('string', '--mode <name>', 'Set the Astro build mode.'),
@@ -73,6 +81,7 @@ const commandDefinitions = Object.freeze({
   check: command('check [options] [-- <check-options>]', 'Generate runtimes and run Astro diagnostics.', {
     astro: true,
     options: {
+      ...reportingOptions,
       minimumFailingSeverity: option(
         'string',
         '--minimumFailingSeverity <level>',
@@ -97,6 +106,7 @@ const commandDefinitions = Object.freeze({
   }),
   docgen: command('docgen [options]', 'Synchronize the interactive-cell manifest and optional runtimes.', {
     options: {
+      ...reportingOptions,
       wasm: option('string', '--wasm <mode>', 'Build language runtimes in dev or build mode.', {
         choices: ['dev', 'build']
       })
@@ -201,6 +211,17 @@ export function parseCliArguments(args = []) {
     throw new CliUsageError('--lock-timeout must be a finite nonnegative number of seconds.', commandName);
   }
 
+  if (values.explain) {
+    const incompatible = Object.keys(values).filter(
+      (name) => !['explain', 'format', 'config', 'debug', 'help', 'version', 'wasm'].includes(name)
+    );
+    if (incompatible.length)
+      throw new CliUsageError(
+        `--explain cannot be combined with ${incompatible.map((name) => `--${name}`).join(', ')}.`,
+        commandName
+      );
+  }
+
   if (values.version) return Object.freeze({ action: 'version' });
 
   if (commandName === 'help') {
@@ -229,7 +250,9 @@ export function parseCliArguments(args = []) {
     );
   }
 
-  const forwardedArgs = definition.astro ? [...stripGlobalOptions(beforeTerminator), ...afterTerminator] : [];
+  const forwardedArgs = definition.astro
+    ? [...stripGlobalOptions(beforeTerminator), ...stripGlobalOptions(afterTerminator)]
+    : [];
 
   return Object.freeze({
     action: 'run',
@@ -408,12 +431,13 @@ function stripGlobalOptions(args) {
   for (let index = 0; index < args.length; index += 1) {
     const argument = args[index];
     if (
-      ['--debug', '--help', '-h', '--version'].includes(argument) ||
+      ['--debug', '--help', '-h', '--version', '--explain'].includes(argument) ||
+      argument.startsWith('--format=') ||
       argument.startsWith('--config=') ||
       argument.startsWith('--lock-timeout=')
     )
       continue;
-    if (argument === '--config' || argument === '--lock-timeout') {
+    if (argument === '--config' || argument === '--lock-timeout' || argument === '--format') {
       index += 1;
       continue;
     }

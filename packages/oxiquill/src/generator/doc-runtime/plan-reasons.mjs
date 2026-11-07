@@ -30,6 +30,19 @@ export function changedSources(previous = {}, desired = {}) {
     );
 }
 
+export function pageSourceFingerprints(sources) {
+  return Object.fromEntries(
+    Object.entries(Object.groupBy(Object.entries(sources), ([, record]) => record.page))
+      .sort(([a], [b]) => a.localeCompare(b))
+      .map(([page, entries]) => [
+        page,
+        hashText(
+          stableFingerprint(entries.sort(([a], [b]) => a.localeCompare(b)).map(([id, record]) => [id, record.digest]))
+        )
+      ])
+  );
+}
+
 function storedInputs(value) {
   if (!value) return {};
   try {
@@ -48,7 +61,12 @@ export function actionReasons({ action, desired, previous, kind, mode, forced = 
   const after = storedInputs(JSON.stringify({ inputs: desired.buildFingerprint }));
   const changes = changedSources(previous?.sources, sources);
   if (previous?.sourceFingerprint !== desired.sourceFingerprint || changes.length || desired.cellCount === 0) {
-    add('source-changed', { changes });
+    const attributed = changes.length
+      ? changes
+      : Object.entries(sources ?? previous?.sources ?? {})
+          .map(([cell, record]) => ({ page: record.page, cell }))
+          .sort((a, b) => a.cell.localeCompare(b.cell));
+    add('source-changed', { changes: attributed });
   }
   if (forced) add('forced');
   if (kind === 'public' && desired.cellCount > 0) {
@@ -73,31 +91,45 @@ export function actionReasons({ action, desired, previous, kind, mode, forced = 
       add('build-options-changed', { variables });
     }
     if (previous?.assetFingerprint !== desired.assetFingerprint) add('package-changed');
-  } else if (kind === 'source' && missing && desired.cellCount > 0) add('output-missing');
+  } else if (kind === 'source' && desired.cellCount > 0) {
+    if (missing) add('output-missing');
+    else if (complete === false) add('integrity-mismatch');
+  }
   return reasons.length ? reasons : [{ code: 'output-missing' }];
 }
 
 export function explainRuntimePlan({ plan, desired, state, mode, outputComplete, outputMissing = {}, forceRustBuild }) {
   return Object.fromEntries(
-    Object.entries(plan.languages).map(([language, actions]) => [
-      language,
-      Object.fromEntries(
-        Object.entries(actions).map(([kind, action]) => [
-          kind,
-          actionReasons({
-            action,
-            desired: desired[language],
-            previous: state?.languages?.[language],
+    Object.entries(plan.languages).map(([language, actions]) => {
+      const recorded = state?.languages?.[language];
+      const previous = recorded
+        ? {
+            ...recorded,
+            sources:
+              recorded.sources ??
+              sourceFingerprints((state.snapshot?.cells ?? []).filter((cell) => cell.language === language))
+          }
+        : undefined;
+      return [
+        language,
+        Object.fromEntries(
+          Object.entries(actions).map(([kind, action]) => [
             kind,
-            mode,
-            forced: language === 'rust' && forceRustBuild,
-            complete: outputComplete[`${language}${kind === 'source' ? 'Source' : 'Public'}`],
-            missing:
-              outputMissing[`${language}${kind === 'source' ? 'Source' : 'Public'}`] ?? !state?.languages?.[language],
-            sources: desired[language].sources
-          })
-        ])
-      )
-    ])
+            actionReasons({
+              action,
+              desired: desired[language],
+              previous,
+              kind,
+              mode,
+              forced: language === 'rust' && forceRustBuild,
+              complete: outputComplete[`${language}${kind === 'source' ? 'Source' : 'Public'}`],
+              missing:
+                outputMissing[`${language}${kind === 'source' ? 'Source' : 'Public'}`] ?? !state?.languages?.[language],
+              sources: desired[language].sources
+            })
+          ])
+        )
+      ];
+    })
   );
 }

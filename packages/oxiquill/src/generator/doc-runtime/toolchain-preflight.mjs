@@ -3,12 +3,17 @@ import { spawn } from 'node:child_process';
 import { resolveWasmOpt } from './wasm-opt-cache.mjs';
 import { defaultFileSystem } from './file-system.mjs';
 import { compareVersions, parseToolVersion, parseVersion } from './toolchain-versions.mjs';
+import { resolveWasmBindgen } from './tool-downloads.mjs';
+import { parse } from 'smol-toml';
 
 export async function preflightRequiredToolchains({
   cwd = process.cwd(),
   environment = process.env,
   fileSystem = defaultFileSystem,
   haskellCellCount,
+  explain = false,
+  paths,
+  grouping = 'site',
   mode,
   platform = process.platform,
   runCommand = runCommandWithCapturedOutput,
@@ -18,7 +23,8 @@ export async function preflightRequiredToolchains({
   trackChild
 }) {
   if (mode === undefined) return Object.freeze({});
-  runCommand = trackRuntimeCommand(runCommand, trackChild);
+  const execute = trackRuntimeCommand(runCommand, trackChild);
+  runCommand = (command, args, options) => execute(command, args, { captureOutput: true, ...options });
 
   const [rust, haskell] = await Promise.all([
     rustCellCount > 0
@@ -28,7 +34,10 @@ export async function preflightRequiredToolchains({
           platform,
           fileSystem,
           runCommand,
-          runtimeInputs: runtimeInputs.rust
+          runtimeInputs: runtimeInputs.rust,
+          explain,
+          paths,
+          grouping
         })
       : undefined,
     haskellCellCount > 0
@@ -37,12 +46,26 @@ export async function preflightRequiredToolchains({
           platform,
           runCommand,
           runtimeInputs: runtimeInputs.haskell,
-          tolerateFailure: tolerateHaskellFailure
+          tolerateFailure: tolerateHaskellFailure,
+          explain
         })
       : undefined
   ]);
 
-  return Object.freeze({ ...(rust ? { rust } : {}), ...(haskell ? { haskell } : {}) });
+  const wasmBindgen =
+    rust && grouping === 'page'
+      ? await resolveWasmBindgen({
+          version: parse(runtimeInputs.rustLock).package.find((entry) => entry.name === 'wasm-bindgen').version,
+          paths,
+          runCommand,
+          environment,
+          platform
+        })
+      : undefined;
+  return Object.freeze({
+    ...(rust ? { rust: wasmBindgen ? { ...rust, wasmBindgen } : rust } : {}),
+    ...(haskell ? { haskell } : {})
+  });
 }
 
 export async function preflightRustToolchain({
@@ -50,6 +73,9 @@ export async function preflightRustToolchain({
   environment = process.env,
   platform = process.platform,
   fileSystem = defaultFileSystem,
+  explain = false,
+  paths,
+  grouping = 'site',
   runCommand,
   runtimeInputs
 }) {
@@ -57,7 +83,9 @@ export async function preflightRustToolchain({
   const commands = [
     ['rustc', runtimeInputs.minimumVersion, undefined],
     ['cargo', runtimeInputs.minimumVersion, undefined],
-    ['wasm-pack', runtimeInputs.wasmPackMinimumVersion, runtimeInputs.wasmPackMaximumVersionExclusive]
+    ...(grouping === 'page'
+      ? []
+      : [['wasm-pack', runtimeInputs.wasmPackMinimumVersion, runtimeInputs.wasmPackMaximumVersionExclusive]])
   ];
   const versions = Object.fromEntries(
     await Promise.all(
@@ -75,34 +103,36 @@ export async function preflightRustToolchain({
     )
   );
 
-  const targetCommand = ['rustc', ['--print', 'target-libdir', '--target', runtimeInputs.target]];
-  const targetLibdir = await runVersion(...targetCommand).catch((error) => {
-    throw preflightError(
-      targetCommand,
-      `support for ${runtimeInputs.target}`,
-      errorMessage(error),
-      rustSetupGuidance(runtimeInputs)
-    );
-  });
-  const targetPath = String(targetLibdir).trim();
-  let targetFiles;
-  try {
-    targetFiles = await fileSystem.readdir(targetPath);
-  } catch (error) {
-    throw preflightError(
-      targetCommand,
-      `installed target ${runtimeInputs.target}`,
-      errorMessage(error),
-      rustSetupGuidance(runtimeInputs)
-    );
-  }
-  if (!targetFiles.some((entry) => String(typeof entry === 'string' ? entry : entry.name).startsWith('libcore-'))) {
-    throw preflightError(
-      targetCommand,
-      `installed target ${runtimeInputs.target}`,
-      `no Rust core library was found in ${targetPath}`,
-      rustSetupGuidance(runtimeInputs)
-    );
+  if (!explain) {
+    const targetCommand = ['rustc', ['--print', 'target-libdir', '--target', runtimeInputs.target]];
+    const targetLibdir = await runVersion(...targetCommand).catch((error) => {
+      throw preflightError(
+        targetCommand,
+        `support for ${runtimeInputs.target}`,
+        errorMessage(error),
+        rustSetupGuidance(runtimeInputs)
+      );
+    });
+    const targetPath = String(targetLibdir).trim();
+    let targetFiles;
+    try {
+      targetFiles = await fileSystem.readdir(targetPath);
+    } catch (error) {
+      throw preflightError(
+        targetCommand,
+        `installed target ${runtimeInputs.target}`,
+        errorMessage(error),
+        rustSetupGuidance(runtimeInputs)
+      );
+    }
+    if (!targetFiles.some((entry) => String(typeof entry === 'string' ? entry : entry.name).startsWith('libcore-'))) {
+      throw preflightError(
+        targetCommand,
+        `installed target ${runtimeInputs.target}`,
+        `no Rust core library was found in ${targetPath}`,
+        rustSetupGuidance(runtimeInputs)
+      );
+    }
   }
 
   const wasmOpt = await resolveWasmOpt({
@@ -111,6 +141,8 @@ export async function preflightRustToolchain({
     platform,
     fileSystem,
     runCommand,
+    paths,
+    provision: Boolean(paths),
     memoize: fileSystem === defaultFileSystem && runCommand === runCommandWithCapturedOutput
   });
   return Object.freeze({ ...versions, wasmOpt, target: runtimeInputs.target });
@@ -121,15 +153,17 @@ export async function preflightHaskellToolchain({
   platform,
   runCommand,
   runtimeInputs,
-  tolerateFailure = false
+  tolerateFailure = false,
+  explain = false
 }) {
   const compiler = environment.OXIQUILL_HASKELL_GHC?.trim() || runtimeInputs.compiler;
-  const command = [compiler, ['--numeric-version']];
+  const command = [compiler, [explain ? '--version' : '--numeric-version']];
   try {
     if (platform === 'win32') {
       throw new Error('native Windows Haskell/WASI generation is unsupported');
     }
-    const version = String(await runCommand(...command)).trim();
+    const output = String(await runCommand(...command)).trim();
+    const version = explain ? (output.match(/\d+(?:\.\d+)+/u)?.[0] ?? output) : output;
     if (!version.startsWith(runtimeInputs.supportedVersionPrefix)) {
       throw new Error(`reported ${version || '(empty output)'}`);
     }
