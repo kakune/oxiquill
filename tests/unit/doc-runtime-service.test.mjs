@@ -1300,7 +1300,7 @@ describe('doc runtime service', () => {
     expect(fileSystem.existsSync('/repo/public/oxiquill/licenses/keep.txt')).toBe(true);
   });
 
-  it('builds Rust once for unchanged inputs and preserves old output without a ready marker on failure', async () => {
+  it('builds Rust once for unchanged inputs and preserves old output and readiness on failure', async () => {
     const paths = createDocRuntimePaths('/repo');
     const fileSystem = createMemoryFileSystem({
       '/repo/content/docs/index.mdx': '```rust\n//| id: rust\n//| crates: []\nprintln!("one");\n```'
@@ -1366,7 +1366,7 @@ describe('doc runtime service', () => {
     expect([...fileSystem.files.keys()].filter((file) => file.includes('/build-cache/wasm-opt/'))).toEqual([]);
     expect(fileSystem.files.get('/repo/public/oxiquill/rust-wasm/doc_rust_cells.js').toString()).toBe('old js');
     expect(fileSystem.files.get('/repo/public/oxiquill/rust-wasm/doc_rust_cells_bg.wasm').toString()).toBe('old wasm');
-    expect(fileSystem.existsSync('/repo/.oxiquill/generated/runtime-version.ts')).toBe(false);
+    expect(fileSystem.existsSync('/repo/.oxiquill/generated/runtime-version.ts')).toBe(true);
     await syncDocRuntime(options);
     expect(buildRust).toHaveBeenCalledTimes(3);
     expect(fileSystem.existsSync('/repo/.oxiquill/generated/runtime-version.ts')).toBe(true);
@@ -1641,6 +1641,192 @@ describe('doc runtime service', () => {
       status: 'unavailable',
       haskellFingerprintHash: hashText('current-haskell-fingerprint'),
       message: 'install wasm32-wasi-ghc and rerun pnpm wasm:dev.'
+    });
+  });
+});
+
+describe('production generation checkpoints', () => {
+  const original = '```rust\n//| id: rust\n//| crates: []\nprintln!("ok");\n```';
+  const page = '/repo/content/docs/index.mdx';
+  const cases = [
+    ['source', async (fs) => fs.writeFile(page, original.replace('ok', 'new'))],
+    ['added', async (fs) => fs.writeFile('/repo/content/docs/new.mdx', original.replace('id: rust', 'id: added'))],
+    ['removed', async (fs) => fs.rm(page)],
+    [
+      'moved',
+      async (fs) => {
+        await fs.writeFile('/repo/content/docs/moved.mdx', original);
+        await fs.rm(page);
+      }
+    ],
+    ['inputs', async (fs) => fs.writeFile(page, (await fs.readFile(page, 'utf8')).replace('value: 1', 'value: 2'))],
+    ['helper', async (fs) => fs.writeFile('/repo/crates/helper/src/lib.rs', 'pub fn changed() {}')]
+  ];
+
+  it.each(cases)('rejects a %s change behind a compilation barrier and rebuilds settled sources', async (_, edit) => {
+    const { buildRust, fileSystem, paths, sync } = createRustRuntimeHarness({
+      '/repo/crates/helper/src/lib.rs': 'pub fn original() {}'
+    });
+    if (_ === 'inputs')
+      await fileSystem.writeFile(
+        page,
+        original.replace('//| crates: []', '//| crates: []\n//| inputs:\n//|   count: { type: number, value: 1 }')
+      );
+    const first = await sync();
+    const previous = new Map(
+      [...fileSystem.files].filter(([file]) => file.includes('/generated/') || file.includes('/public/'))
+    );
+    const entered = Promise.withResolvers();
+    const resume = Promise.withResolvers();
+    const compile = buildRust.getMockImplementation();
+    buildRust.mockImplementationOnce(async (options) => {
+      await compile(options);
+      entered.resolve();
+      await resume.promise;
+    });
+    const attempt = sync({ forceRustBuild: true });
+    const rejected = expect(attempt).rejects.toThrow(
+      'Interactive cell sources changed after runtime generation started.'
+    );
+    await entered.promise;
+    await edit(fileSystem);
+    resume.resolve();
+    await rejected;
+    previous.forEach((bytes, file) => expect(fileSystem.files.get(file)).toEqual(bytes));
+    expect([...fileSystem.files.keys()].some((file) => file.includes('.oxiquill-'))).toBe(false);
+    const settled = await sync();
+    expect(settled.generationId).not.toBe(first.generationId);
+    const manifest = JSON.parse(await fileSystem.readFile(paths.cellsJsonPath, 'utf8'));
+    const state = JSON.parse(await fileSystem.readFile(paths.runtimeOwnershipPath, 'utf8'));
+    expect(manifest.generationId).toBe(settled.generationId);
+    expect(state.generationId).toBe(manifest.generationId);
+    expect(state.snapshot.generationId).toBe(manifest.generationId);
+    expect(await fileSystem.readFile(paths.runtimeVersionPath, 'utf8')).not.toBe(
+      previous.get(memoryPath(paths.runtimeVersionPath)).toString()
+    );
+    expect(manifest.cells.map(({ source }) => source)).toEqual(
+      (await collectCells({ fileSystem, highlighter, paths, helperCrates: new Map() })).map(({ source }) => source)
+    );
+  });
+
+  it.each(['unchanged', 'prose'])('accepts the %s control and preserves cached outputs', async (kind) => {
+    const { buildRust, fileSystem, sync } = createRustRuntimeHarness();
+    const first = await sync();
+    const entered = Promise.withResolvers();
+    const resume = Promise.withResolvers();
+    const compile = buildRust.getMockImplementation();
+    buildRust.mockImplementationOnce(async (options) => {
+      await compile(options);
+      entered.resolve();
+      await resume.promise;
+    });
+    const attempt = sync({ forceRustBuild: true });
+    await entered.promise;
+    if (kind === 'prose') await fileSystem.writeFile(page, `# Edited prose\n\n${original}`);
+    resume.resolve();
+    expect((await attempt).generationId).toBe(first.generationId);
+    const before = buildRust.mock.calls.length;
+    expect((await sync()).plan.hasChanges).toBe(false);
+    expect(buildRust).toHaveBeenCalledTimes(before);
+  });
+
+  it('checks the cache-reuse path before returning success', async () => {
+    const { fileSystem, sync } = createRustRuntimeHarness();
+    await sync();
+    await expect(
+      sync({
+        syncLicenses: async () => {
+          await fileSystem.writeFile(page, original.replace('ok', 'changed'));
+          return false;
+        }
+      })
+    ).rejects.toThrow('cell "rust": source');
+  });
+
+  it('never publishes readiness for a changed first generation', async () => {
+    const { buildRust, fileSystem, paths, sync } = createRustRuntimeHarness();
+    const entered = Promise.withResolvers();
+    const resume = Promise.withResolvers();
+    const compile = buildRust.getMockImplementation();
+    buildRust.mockImplementationOnce(async (options) => {
+      await compile(options);
+      entered.resolve();
+      await resume.promise;
+    });
+    const attempt = sync();
+    const rejected = expect(attempt).rejects.toThrow('cell "rust": source');
+    await entered.promise;
+    await fileSystem.writeFile(page, original.replace('ok', 'changed'));
+    resume.resolve();
+    await rejected;
+    expect(fileSystem.existsSync(paths.runtimeVersionPath)).toBe(false);
+    expect(fileSystem.existsSync(paths.cellsJsonPath)).toBe(false);
+    expect(fileSystem.existsSync(paths.runtimeOwnershipPath)).toBe(false);
+    expect(fileSystem.existsSync(paths.rustWasmPublicDir)).toBe(false);
+    expect([...fileSystem.files.keys()].some((file) => file.includes('.oxiquill-'))).toBe(false);
+  });
+
+  it('discards a cancelled private attempt and preserves the previous ready runtime', async () => {
+    const { buildRust, fileSystem, paths, sync } = createRustRuntimeHarness();
+    await sync();
+    const before = await fileSystem.readFile(paths.runtimeVersionPath, 'utf8');
+    const entered = Promise.withResolvers();
+    const resume = Promise.withResolvers();
+    buildRust.mockImplementationOnce(async () => {
+      entered.resolve();
+      await resume.promise;
+    });
+    const attempt = sync({ forceRustBuild: true });
+    const rejected = expect(attempt).rejects.toThrow('cancelled');
+    await entered.promise;
+    resume.reject(new Error('cancelled'));
+    await rejected;
+    expect(await fileSystem.readFile(paths.runtimeVersionPath, 'utf8')).toBe(before);
+    expect([...fileSystem.files.keys()].some((file) => file.includes('.oxiquill-'))).toBe(false);
+  });
+
+  it('withdraws readiness during publication and rolls back every output if promotion fails', async () => {
+    const { fileSystem, paths, sync } = createRustRuntimeHarness();
+    await sync();
+    const before = new Map(fileSystem.files);
+    const rename = fileSystem.rename;
+    let failed = false;
+    fileSystem.rename = async (from, to) => {
+      if (!failed && to === paths.rustWasmPublicDir) {
+        expect(fileSystem.existsSync(paths.runtimeVersionPath)).toBe(false);
+      }
+      if (!failed && to === paths.generatedDir) {
+        failed = true;
+        throw new Error('promotion failed');
+      }
+      await rename(from, to);
+    };
+    await expect(sync({ forceRustBuild: true })).rejects.toThrow('promotion failed');
+    expect(fileSystem.files).toEqual(before);
+    await expect(sync()).resolves.toMatchObject({ plan: { hasChanges: false } });
+  });
+});
+
+describe('staged runtime license inputs', () => {
+  it('collects notices from new outputs before promotion and preserves unrelated license files', async () => {
+    const { fileSystem, paths, sync } = createRustRuntimeHarness();
+    await fileSystem.writeFile(path.join(paths.licensesPublicDir, 'keep.txt'), 'keep');
+    const syncLicenses = async ({ paths: staged }) => {
+      expect(staged.rustWasmPublicDir).not.toBe(paths.rustWasmPublicDir);
+      expect(fileSystem.existsSync(path.join(staged.rustWasmPublicDir, 'doc_rust_cells_bg.wasm'))).toBe(true);
+      expect(fileSystem.existsSync(paths.runtimeVersionPath)).toBe(false);
+      await fileSystem.writeFile(path.join(staged.licensesPublicDir, 'notices.txt'), 'next notices');
+      return true;
+    };
+    await sync({ syncLicenses });
+    expect(await fileSystem.readFile(path.join(paths.licensesPublicDir, 'keep.txt'), 'utf8')).toBe('keep');
+    expect(await fileSystem.readFile(path.join(paths.licensesPublicDir, 'notices.txt'), 'utf8')).toBe('next notices');
+    await fileSystem.rm('/repo/content/docs/index.mdx');
+    await sync({
+      syncLicenses: async ({ paths: staged }) => {
+        expect(fileSystem.existsSync(path.join(staged.rustWasmPublicDir, 'doc_rust_cells_bg.wasm'))).toBe(false);
+        return false;
+      }
     });
   });
 });

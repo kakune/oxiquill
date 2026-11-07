@@ -38,6 +38,7 @@ import remarkInteractiveCells from '../lib/doc-runtime/remark-interactive-cells.
 import { pythonLicensePaths } from '../generator/doc-runtime/python-package-notices.mjs';
 import remarkMermaidDiagrams from '../lib/doc-runtime/remark-mermaid-diagrams.mjs';
 import remarkPublicAssetBase from '../lib/doc-runtime/remark-public-asset-base.mjs';
+import { createBuildGeneration } from './build-generation.mjs';
 import { oxiquillVirtualModulesPlugin } from './virtual-modules.mjs';
 
 type IntegrationFactory<Options> = (options: Options) => AstroIntegration;
@@ -156,7 +157,7 @@ const createDocRuntimeContextForPaths = createDocRuntimeContext as unknown as (o
 }) => Promise<DocRuntimeContext>;
 const syncDocRuntimeForBuild = syncDocRuntime as unknown as (
   options: DocRuntimeContext & { mode: 'build' }
-) => Promise<unknown>;
+) => Promise<{ generationId: string }>;
 
 export function defineOxiquillConfig<StarlightOptions extends object>(
   options: OxiquillConfig<StarlightOptions>
@@ -260,6 +261,7 @@ function createOxiquillIntegration(
   rejectCustomMarkdownProcessor(markdown);
   const metadata = createOxiquillIntegrationMetadata({ astro: astroOptions, paths: pathOptions, python });
   let paths: OxiquillPaths | undefined;
+  let generation: ReturnType<typeof createBuildGeneration> | undefined;
   let pythonOptions: Readonly<OxiquillPythonOptions> | undefined;
   let buildOwnership: Awaited<ReturnType<typeof prepareCleanupOwnership>> = Object.freeze([]);
   const bundledModules = createBundledModuleCollector();
@@ -268,7 +270,7 @@ function createOxiquillIntegration(
   const integration: AstroIntegration = {
     name: 'oxiquill',
     hooks: {
-      'astro:config:setup': ({ addWatchFile, config, updateConfig, injectScript }) => {
+      'astro:config:setup': ({ addWatchFile, command, config, updateConfig, injectScript }) => {
         const projectConfig = resolveOxiquillProjectConfig({
           astroConfig: config,
           astroExplicitFields: inferAstroDirectoryFields(config),
@@ -277,6 +279,13 @@ function createOxiquillIntegration(
         });
         paths = projectConfig.paths;
         pythonOptions = projectConfig.python;
+        if (command === 'build' || process.env.OXIQUILL_GENERATION_ID) {
+          generation = createBuildGeneration({
+            paths,
+            pythonOptions,
+            generationId: process.env.OXIQUILL_GENERATION_ID
+          });
+        }
         if (pythonOptions?.preload) {
           injectScript(
             'page',
@@ -291,10 +300,10 @@ function createOxiquillIntegration(
 
         const update = {
           cacheDir: astroDirectoryUrl(paths.cacheDir),
-          markdown: mergeMarkdownConfig(base, paths, markdown, pythonOptions),
+          markdown: mergeMarkdownConfig(base, paths, markdown, pythonOptions, generation),
           outDir: astroDirectoryUrl(paths.outDir),
           publicDir: astroDirectoryUrl(paths.publicDir),
-          vite: mergeViteConfig(paths, vite, bundledModules, browserBundle)
+          vite: mergeViteConfig(paths, vite, bundledModules, browserBundle, generation)
         } as unknown as Parameters<typeof updateConfig>[0];
 
         updateConfig(update);
@@ -306,6 +315,7 @@ function createOxiquillIntegration(
             'declare module "virtual:oxiquill/cells" {',
             '  import type { CellManifest } from "oxiquill/runtime/types";',
             '  export const cells: readonly CellManifest[];',
+            '  export const generationId: string;',
             '}',
             'declare module "virtual:oxiquill/cell?*" {',
             '  import type { CellManifest } from "oxiquill/runtime/types";',
@@ -331,10 +341,14 @@ function createOxiquillIntegration(
         buildOwnership = await prepareCleanupOwnership({ paths });
         bundledModules.reset();
         browserBundle.reset();
-        if (process.env.OXIQUILL_RUNTIME_OWNER === 'cli') return;
+        if (process.env.OXIQUILL_RUNTIME_OWNER === 'cli') {
+          generation?.start(process.env.OXIQUILL_GENERATION_ID);
+          return;
+        }
 
         const context = await createDocRuntimeContextForPaths({ paths, pythonOptions });
-        await syncDocRuntimeForBuild({ ...context, mode: 'build' });
+        const result = await syncDocRuntimeForBuild({ ...context, mode: 'build' });
+        generation?.start(result.generationId);
       },
       'astro:build:done': async ({ dir }) => {
         if (!paths) return;
@@ -352,6 +366,7 @@ function createOxiquillIntegration(
           workspaceRoot: paths.workspaceRoot
         });
         await maintainCleanupOwnership({ ownership: buildOwnership });
+        await generation?.checkSources();
       }
     }
   };
@@ -443,7 +458,8 @@ function mergeMarkdownConfig(
   base: BaseAstroUserConfig['base'],
   paths: OxiquillPaths,
   markdown: OxiquillMarkdownConfig,
-  pythonOptions?: Readonly<OxiquillPythonOptions>
+  pythonOptions?: Readonly<OxiquillPythonOptions>,
+  generation?: ReturnType<typeof createBuildGeneration>
 ) {
   const {
     gfm,
@@ -463,7 +479,7 @@ function mergeMarkdownConfig(
       remarkPlugins: [
         remarkMath,
         [remarkPublicAssetBase, { base }],
-        [remarkInteractiveCells, { root: pathFromUrl(paths.workspaceRoot), pythonOptions }],
+        [remarkInteractiveCells, { root: pathFromUrl(paths.workspaceRoot), pythonOptions, generation }],
         remarkMermaidDiagrams,
         ...remarkPlugins
       ],
@@ -491,7 +507,8 @@ function mergeViteConfig(
   paths: OxiquillPaths,
   vite: ViteUserConfig,
   bundledModules: BundledModuleCollector,
-  browserBundle: BrowserBundleCollector
+  browserBundle: BrowserBundleCollector,
+  generation?: ReturnType<typeof createBuildGeneration>
 ): ViteUserConfig {
   const worker = vite.worker ?? {};
   const server = vite.server ?? {};
@@ -528,7 +545,7 @@ function mergeViteConfig(
       ...worker,
       plugins: () => [
         oxiquillDependencyResolverPlugin(paths),
-        oxiquillVirtualModulesPlugin(paths),
+        oxiquillVirtualModulesPlugin(paths, { generation }),
         bundledModuleCollectorPlugin(bundledModules, 'worker'),
         browserBundleCollectorPlugin(browserBundle, 'worker'),
         ...resolveWorkerPlugins(worker.plugins as ViteWorkerPlugins | undefined)
@@ -540,7 +557,7 @@ function mergeViteConfig(
     },
     plugins: [
       oxiquillDependencyResolverPlugin(paths),
-      oxiquillVirtualModulesPlugin(paths),
+      oxiquillVirtualModulesPlugin(paths, { generation }),
       bundledModuleCollectorPlugin(bundledModules, 'main'),
       browserBundleCollectorPlugin(browserBundle, 'main'),
       ...(vite.plugins ?? [])

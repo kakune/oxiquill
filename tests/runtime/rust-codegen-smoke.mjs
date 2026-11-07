@@ -4,6 +4,11 @@ import { cp, mkdtemp, readFile, rm, stat, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { pathToFileURL } from 'node:url';
+import {
+  buildRustWasm,
+  createDocRuntimeContext,
+  syncDocRuntime
+} from '../../packages/oxiquill/dist/generator/doc-runtime-service.mjs';
 import { runCli } from '../../packages/oxiquill/dist/cli/commands.mjs';
 import { createOxiquillPaths } from '../../packages/oxiquill/dist/config/paths.mjs';
 import { listFiles } from '../../packages/oxiquill/dist/generator/doc-runtime/file-system.mjs';
@@ -22,12 +27,18 @@ try {
   });
   const runtime = await import(pathToFileURL(path.join(paths.rustWasmPublicDir, 'doc_rust_cells.js')).href);
   runtime.initSync({ module: await readFile(path.join(paths.rustWasmPublicDir, 'doc_rust_cells_bg.wasm')) });
-  const manifest = JSON.parse(await readFile(paths.cellsJsonPath, 'utf8'));
+  const manifest = JSON.parse(await readFile(paths.cellsJsonPath, 'utf8')).cells;
   const run = (name, inputs = {}) => {
     const cell = manifest.find((entry) => entry.id.endsWith(`__${name}`));
     assert.ok(cell, `${name} fixture must be generated`);
     return JSON.parse(runtime.run_rust_cell(cell.id, JSON.stringify(inputs)));
   };
+  assert.deepEqual(run('multiline-literals').outputs[0].value, {
+    text: 'first\nsecond',
+    raw: 'first\n  second',
+    bytes: [...Buffer.from('first\nsecond')],
+    raw_bytes: [...Buffer.from('first\n  second')]
+  });
   const contract = JSON.parse(await readFile(new URL('../fixtures/output-contract.json', import.meta.url), 'utf8'));
   for (const fixture of contract.filter((fixture) => fixture.artifact.kind === 'chart')) {
     const { spec, ...metadata } = structuredClone(fixture.artifact);
@@ -165,7 +176,44 @@ try {
   assert.ok(dependencyFiles.length > 0, 'warm build must produce cached registry artifacts');
   const dependencyTimes = await Promise.all(dependencyFiles.map(async (file) => [file, (await stat(file)).mtimeMs]));
   await verifyWasmOptCache({ paths });
-  const publishedWasm = await readFile(path.join(paths.rustWasmPublicDir, 'doc_rust_cells_bg.wasm'));
+  let publishedWasm = await readFile(path.join(paths.rustWasmPublicDir, 'doc_rust_cells_bg.wasm'));
+  const publishedReady = await readFile(paths.runtimeVersionPath);
+  const context = await createDocRuntimeContext({ paths });
+  const entered = Promise.withResolvers();
+  const resume = Promise.withResolvers();
+  const attempt = syncDocRuntime({
+    ...context,
+    mode: 'build',
+    forceRustBuild: true,
+    buildRust: async (options) => {
+      entered.resolve();
+      await resume.promise;
+      await buildRustWasm(options);
+    }
+  });
+  const rejected = assert.rejects(attempt, /Interactive cell sources changed after runtime generation started\./u);
+  await entered.promise;
+  const authoredPage = path.join(workspaceRoot, 'content/docs/index.mdx');
+  await writeFile(
+    authoredPage,
+    `${await readFile(authoredPage, 'utf8')}\n\n\`\`\`rust\n//| id: settled\n//| crates: []\nprintln!("settled cell");\n\`\`\`\n`
+  );
+  resume.resolve();
+  await rejected;
+  assert.deepEqual(await readFile(path.join(paths.rustWasmPublicDir, 'doc_rust_cells_bg.wasm')), publishedWasm);
+  assert.deepEqual(await readFile(paths.runtimeVersionPath), publishedReady);
+  const settled = await syncDocRuntime({ ...context, mode: 'dev' });
+  const settledManifest = JSON.parse(await readFile(paths.cellsJsonPath, 'utf8'));
+  assert.equal(settledManifest.generationId, settled.generationId);
+  const settledCell = settledManifest.cells.find((cell) => cell.id.endsWith('__settled'));
+  assert.ok(settledCell, 'settled rebuild must include the newly authored cell');
+  const settledRuntime = await import(
+    `${pathToFileURL(path.join(paths.rustWasmPublicDir, 'doc_rust_cells.js')).href}?settled`
+  );
+  settledRuntime.initSync({ module: await readFile(path.join(paths.rustWasmPublicDir, 'doc_rust_cells_bg.wasm')) });
+  assert.equal(JSON.parse(settledRuntime.run_rust_cell(settledCell.id, '{}')).outputs[0].content, 'settled cell\n');
+  publishedWasm = await readFile(path.join(paths.rustWasmPublicDir, 'doc_rust_cells_bg.wasm'));
+
   await writeFile(
     path.join(workspaceRoot, 'content/docs/index.mdx'),
     '```rust\n//| id: failure\nthis_is_not_valid_rust!();\n```\n'
@@ -177,7 +225,7 @@ try {
     })
   );
   assert.deepEqual(await readFile(path.join(paths.rustWasmPublicDir, 'doc_rust_cells_bg.wasm')), publishedWasm);
-  await assert.rejects(readFile(paths.runtimeVersionPath), { code: 'ENOENT' });
+  await readFile(paths.runtimeVersionPath);
 
   for (const [id, source, kind] of [
     ['area-only', 'emit_area_chart!(&[[0, 1]]);', 'chart'],
@@ -200,7 +248,7 @@ try {
       `${pathToFileURL(path.join(paths.rustWasmPublicDir, 'doc_rust_cells.js')).href}?${id}`
     );
     isolated.initSync({ module: await readFile(path.join(paths.rustWasmPublicDir, 'doc_rust_cells_bg.wasm')) });
-    const [cell] = JSON.parse(await readFile(paths.cellsJsonPath, 'utf8'));
+    const [cell] = JSON.parse(await readFile(paths.cellsJsonPath, 'utf8')).cells;
     const result = JSON.parse(isolated.run_rust_cell(cell.id, '{}'));
     assert.equal(result.outputs[0].kind, kind, id);
     assert.equal(validateOutputArtifacts(result.outputs)[0].status, 'valid', id);

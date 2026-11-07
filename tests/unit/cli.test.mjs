@@ -485,6 +485,37 @@ describe('oxiquill CLI', () => {
     );
   });
 
+  it.each([false, true])(
+    'propagates the build generation to sync, checking, and build and restores the environment (diagnostics: %s)',
+    async (hasDiagnostics) => {
+      const id = 'one-generation';
+      cliMocks.syncDocRuntime.mockResolvedValueOnce({ cellCount: 1, generationId: id });
+      const previous = process.env.OXIQUILL_GENERATION_ID;
+      const check = vi.fn(async () => {
+        expect(process.env.OXIQUILL_GENERATION_ID).toBe(id);
+        return hasDiagnostics;
+      });
+      const runCommand = vi.fn(async () => undefined);
+      const attempt = runCli(['build'], {
+        cwd: repoRoot,
+        loadCheck: async () => ({ check, parseArgsAsCheckConfig: () => ({}) }),
+        runCommand,
+        selectNode: () => 'node'
+      });
+      if (hasDiagnostics) await expect(attempt).rejects.toThrow('Astro check reported diagnostics.');
+      else await attempt;
+      expect(check).toHaveBeenCalledOnce();
+      expect(process.env.OXIQUILL_GENERATION_ID).toBe(previous);
+      expect(runCommand.mock.calls[0][2].env.OXIQUILL_GENERATION_ID).toBe(id);
+      if (!hasDiagnostics) {
+        expect(runCommand.mock.calls[1][2].env).toMatchObject({
+          OXIQUILL_GENERATION_ID: id,
+          OXIQUILL_RUNTIME_OWNER: 'cli'
+        });
+      } else expect(runCommand).toHaveBeenCalledOnce();
+    }
+  );
+
   it('does not start generation or Astro when build output ownership is invalid', async () => {
     const runCommand = vi.fn(async () => undefined);
     cliMocks.prepareCleanupOwnership.mockRejectedValueOnce(new Error('unowned outDir'));

@@ -1,3 +1,5 @@
+import { parseGeneratedCellManifest } from '../generator/doc-runtime/cell-manifest.mjs';
+import { sourceChangedError } from '../generator/doc-runtime/generation-snapshot.mjs';
 import { existsSync, readFileSync } from 'node:fs';
 import { normalizePath, pathFromUrl, pathInUrl, relativePathFromUrl } from '../config/paths.mjs';
 
@@ -9,7 +11,7 @@ const moduleIds = new Map([
   ['virtual:oxiquill/rust-wasm', '\0virtual:oxiquill/rust-wasm']
 ]);
 
-export function oxiquillVirtualModulesPlugin(paths) {
+export function oxiquillVirtualModulesPlugin(paths, { generation } = {}) {
   const cellsJsonFile = pathFromUrl(paths.cellsJsonPath);
   const generatedModules = new Map([
     [
@@ -43,12 +45,22 @@ export function oxiquillVirtualModulesPlugin(paths) {
     },
     load(id) {
       const baseId = baseVirtualModuleId(id);
+      const expected = generation?.current();
       if (baseId === '\0virtual:oxiquill/cell') {
         this.addWatchFile(cellsJsonFile);
         const cellId = new URLSearchParams(moduleQuery(id)).get('cellId');
-        const cell = readGeneratedCellsJson(cellsJsonFile).find((candidate) => candidate.id === cellId);
+        const requestedGeneration = new URLSearchParams(moduleQuery(id)).get('generationId');
+        if (expected && requestedGeneration !== expected.generationId) {
+          throw sourceChangedError([{ kind: 'changed', path: cellsJsonFile }]);
+        }
+        const cell = (expected?.cells ?? readGeneratedCellsJson(cellsJsonFile)).find(
+          (candidate) => candidate.id === cellId
+        );
         if (!cell) {
-          throw new Error(`Oxiquill could not find generated interactive cell ${JSON.stringify(cellId)}.`);
+          if (expected) throw sourceChangedError([{ kind: 'added', path: cellsJsonFile, cellId }]);
+          throw new Error(
+            `Interactive cell ${JSON.stringify(cellId)} is not generated yet. The runtime watcher will regenerate it.`
+          );
         }
 
         return `export const cell = ${JSON.stringify(cell)};\n`;
@@ -57,6 +69,9 @@ export function oxiquillVirtualModulesPlugin(paths) {
       const generated = generatedModules.get(baseId);
       if (generated) {
         this.addWatchFile(generated.file);
+        if (expected && baseId === '\0virtual:oxiquill/cells') {
+          return `export const generationId = ${JSON.stringify(expected.generationId)};\nexport const cells = ${JSON.stringify(expected.cells)};\n`;
+        }
         return existsSync(generated.file) ? readFileSync(generated.file, 'utf8') : generated.fallback;
       }
 
@@ -178,7 +193,7 @@ function virtualModuleName(resolvedId) {
 function readGeneratedCellsJson(file) {
   if (!existsSync(file)) return [];
 
-  return JSON.parse(readFileSync(file, 'utf8'));
+  return parseGeneratedCellManifest(readFileSync(file, 'utf8')).cells;
 }
 
 function readGeneratedRuntimeVersion(file) {

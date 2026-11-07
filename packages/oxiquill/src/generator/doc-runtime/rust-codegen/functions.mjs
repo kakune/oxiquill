@@ -6,7 +6,6 @@ import { outputArtifactLimits } from '../../../lib/doc-runtime/output-limits.mjs
 
 export function generateRustFunction(cell, invokedMacros = scanRustMacroInvocations(cell.source, cell)) {
   const inputBindings = cell.inputs.map((input) => `        ${generateRustInputBinding(input)}`).join('\n');
-  const escapedSource = indentRustSource(cell.source);
   const macros = generateRustPreludeMacros(cell.source, invokedMacros);
   const inputsParameter = cell.inputs.length > 0 ? 'inputs' : '_inputs';
 
@@ -16,7 +15,7 @@ export function generateRustFunction(cell, invokedMacros = scanRustMacroInvocati
 ${macros ? `\n${macros}\n` : ''}
 
     let _ = {
-${inputBindings ? `${inputBindings}\n` : ''}${escapedSource}
+${inputBindings ? `${inputBindings}\n` : ''}${cell.source}
     };
 
     Ok(finish_cell_output(
@@ -81,11 +80,4 @@ function generateRustTest(cell) {
             ${JSON.stringify(`generated Rust cell ${cell.id} output should include outputs`)}
         );
     }`;
-}
-
-function indentRustSource(source) {
-  return source
-    .split('\n')
-    .map((line) => `        ${line}`)
-    .join('\n');
 }

@@ -419,7 +419,7 @@ try {
   const generatedCells = JSON.parse(
     await readFile(path.join(projectRoot, 'state cache/generated runtime/cells.json'), 'utf8')
   );
-  const packedRustCell = generatedCells.find((cell) => cell.id.endsWith('__package-rust'));
+  const packedRustCell = generatedCells.cells.find((cell) => cell.id.endsWith('__package-rust'));
   assert.ok(packedRustCell, 'packed Rust cell must be generated');
   const rustResult = JSON.parse(rustRuntime.run_rust_cell(packedRustCell.id, '{}'));
   assert.ok(JSON.stringify(rustResult.outputs).includes('packed consumer'), 'registry helper dependency must execute');
@@ -590,7 +590,9 @@ async function runInstalledBrowserSmoke({ consumerRoot, installedCliPath, projec
       '',
       'packed consumer did not enable the configured desktop table-of-contents toggle'
     );
-    const manifest = JSON.parse(await readFile(path.join(projectRoot, 'state cache/generated runtime/cells.json')));
+    const { cells: manifest } = JSON.parse(
+      await readFile(path.join(projectRoot, 'state cache/generated runtime/cells.json'))
+    );
     const pythonCell = manifest.find((cell) => cell.id.endsWith('__package-python'));
     assert.deepEqual(pythonCell?.packages, configuredPythonPackages);
     const python = page.getByTestId(`cell-${pythonCell.id}`);

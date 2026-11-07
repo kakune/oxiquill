@@ -28,3 +28,42 @@ export async function replaceDirectory(stagePath, targetPath, { fileSystem = def
 export async function discardDirectoryStage(stagePath, { fileSystem = defaultFileSystem } = {}) {
   await fileSystem.rm(stagePath, { force: true, recursive: true });
 }
+
+// The generated directory goes last: withdraw its old ready marker first and
+// expose the new one only after all language outputs have been installed.
+export async function publishDirectoryStages(stages, { fileSystem = defaultFileSystem } = {}) {
+  const changes = stages.map(({ stagePath, targetPath }) => ({
+    stagePath,
+    targetPath,
+    backupPath: path.join(path.dirname(targetPath), `.${path.basename(targetPath)}.oxiquill-${randomUUID()}.previous`),
+    backedUp: false,
+    installed: false
+  }));
+  try {
+    for (const change of [...changes].reverse()) {
+      if (fileSystem.existsSync(change.targetPath)) {
+        await fileSystem.rename(change.targetPath, change.backupPath);
+        change.backedUp = true;
+      }
+    }
+    for (const change of changes) {
+      if (change.stagePath) {
+        await fileSystem.rename(change.stagePath, change.targetPath);
+        change.installed = true;
+      }
+    }
+  } catch (error) {
+    for (const change of [...changes].reverse()) {
+      if (change.installed) await fileSystem.rm(change.targetPath, { force: true, recursive: true });
+    }
+    for (const change of changes) {
+      if (change.backedUp) await fileSystem.rename(change.backupPath, change.targetPath);
+    }
+    throw error;
+  }
+  await Promise.all(
+    changes
+      .filter(({ backedUp }) => backedUp)
+      .map(({ backupPath }) => fileSystem.rm(backupPath, { force: true, recursive: true }))
+  );
+}
