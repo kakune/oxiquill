@@ -136,17 +136,15 @@ try {
   await expect(casesCell.getByRole('spinbutton', { name: 'Seed', exact: true })).toHaveValue('7');
   await expect(casesCell.getByTestId('run-output')).toContainText('samples = 800, noise = 0.05, seed = 7');
 
-  const rustCell = page.getByTestId('cell-features__interactive-cells__run-mode-button');
+  const rustCell = page.getByTestId('cell-features__interactive-cells__run-mode-autorun');
   await rustCell.scrollIntoViewIfNeeded();
-  await rustCell.getByRole('button', { name: 'Run', exact: true }).click();
-  await expect(rustCell.getByTestId('run-output')).toContainText('button value = 3');
+  await expect(rustCell.getByTestId('run-output')).toContainText('autorun ready');
   const currentPage = readFileSync(mdxPath, 'utf8');
-  const changedRust = currentPage.replace('button value = {value}', 'updated Rust value = {value}');
+  const changedRust = currentPage.replace('println!("autorun ready");', 'println!("updated Rust autorun ready");');
   if (changedRust === currentPage) throw new Error('Could not find the Rust output line to update.');
   writeFileSync(mdxPath, changedRust);
-  await expect(rustCell.getByTestId('cell-source')).toContainText('updated Rust value', { timeout: 60_000 });
-  await rustCell.getByRole('button', { name: 'Run', exact: true }).click();
-  await expect(rustCell.getByTestId('run-output')).toContainText('updated Rust value = 3', { timeout: 60_000 });
+  await expect(rustCell.getByTestId('cell-source')).toContainText('updated Rust autorun ready', { timeout: 60_000 });
+  await expect(rustCell.getByTestId('run-output')).toContainText('updated Rust autorun ready', { timeout: 60_000 });
 
   expect(browserErrors, 'Browser console and page errors').toEqual([]);
   console.log(
