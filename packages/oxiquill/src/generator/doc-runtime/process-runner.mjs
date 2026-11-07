@@ -13,6 +13,7 @@ export function createProcessRunner({
   return (command, args, options = {}) =>
     new Promise((resolve, reject) => {
       const { events, format = 'human', captureOutput, trackChild } = options;
+      const inherited = format === 'human' && !events && !captureOutput;
       const detached = Boolean(trackChild) && process.platform !== 'win32';
       const context = {
         phase: options.phase ?? 'compile',
@@ -31,7 +32,7 @@ export function createProcessRunner({
         env: options.env,
         detached,
         ...(options.signal ? { signal: options.signal } : {}),
-        stdio: [format === 'json' ? 'ignore' : 'inherit', 'pipe', 'pipe']
+        stdio: inherited ? 'inherit' : [format === 'json' ? 'ignore' : 'inherit', 'pipe', 'pipe']
       });
       trackChild?.(child, detached);
       const heartbeat = () => {
@@ -81,9 +82,8 @@ export function createProcessRunner({
           if (pending) line(pending);
         };
       });
-      child.once('error', finish);
-      child.once('exit', stopHeartbeat);
-      child.once('close', (code, signal) => {
+      const finishStatus = (code, signal) => {
+        if (settled) return;
         streams.forEach((flush) => flush());
         if (code === 0 || options.successfulSignals?.includes(signal)) finish();
         else {
@@ -94,8 +94,15 @@ export function createProcessRunner({
           if (captureOutput) error.stdout = Buffer.concat(captured).toString('utf8');
           finish(error);
         }
+      };
+      child.once('error', finish);
+      child.once('exit', (code, signal) => {
+        stopHeartbeat();
+        // Background commands can leave descendants alive after their launcher exits.
+        if (inherited) finishStatus(code, signal);
       });
-      timer = setTimer(heartbeat, 30_000);
+      child.once('close', finishStatus);
+      if (!inherited) timer = setTimer(heartbeat, 30_000);
     });
 }
 

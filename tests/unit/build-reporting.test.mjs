@@ -29,6 +29,14 @@ function processFixture() {
 }
 
 describe('runtime process reporting', () => {
+  it('keeps legacy inherited stdio and launcher-exit behavior outside reporting commands', async () => {
+    const fixture = processFixture();
+    const promise = fixture.run('astro', ['preview', '--background']);
+    expect(fixture.spawnProcess.mock.calls[0][2].stdio).toBe('inherit');
+    fixture.child.emit('exit', 0, null);
+    await expect(promise).resolves.toBe('');
+    expect(vi.getTimerCount()).toBe(0);
+  });
   it('waits for silence, repeats heartbeats, and stops on process exit', async () => {
     const fixture = processFixture();
     const promise = fixture.run('cargo', [], { events: fixture.events, language: 'rust', module: 'page-a' });
