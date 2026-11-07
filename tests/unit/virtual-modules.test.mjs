@@ -116,8 +116,8 @@ describe('oxiquill virtual modules', () => {
       );
       mkdirSync(path.dirname(paths.cellsJsonPath), { recursive: true });
       writeFileSync(paths.cellsJsonPath, JSON.stringify({ cells, rust: { version: 1, modules } }));
-      const plugin = oxiquillVirtualModulesPlugin(paths);
-      plugin.configResolved({ base: '/nested/base/' });
+      const plugin = oxiquillVirtualModulesPlugin(paths, { base: '/nested/base/' });
+      plugin.configResolved({ base: '/' });
       const source = plugin.load.call({ addWatchFile: vi.fn() }, '\0virtual:oxiquill/cell?cellId=rust-b');
       expect(source).toContain(`/nested/base/${modules[1].glue.url}`);
       expect(source).toContain(modules[1].fingerprint);
@@ -163,6 +163,13 @@ describe('oxiquill virtual modules', () => {
       expect(response.end.mock.calls[0][0].toString()).toBe(content);
       expect(response.setHeader).toHaveBeenCalledWith('Content-Type', 'text/javascript; charset=utf-8');
       expect(next).not.toHaveBeenCalled();
+      middleware(
+        { url: `/${assets.module.glue.url}?import`, originalUrl: `/nested/base/${assets.module.glue.url}?import` },
+        response,
+        next
+      );
+      expect(response.statusCode).toBe(200);
+      expect(response.end.mock.lastCall[0].toString()).toBe(content);
       middleware({ url: '/unrelated.js' }, response, next);
       expect(next).toHaveBeenCalledOnce();
       rmSync(paths.cellsJsonPath);

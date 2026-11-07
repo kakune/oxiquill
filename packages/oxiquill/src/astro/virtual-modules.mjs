@@ -11,8 +11,8 @@ const moduleIds = new Map([
   ['virtual:oxiquill/runtime-paths', '\0virtual:oxiquill/runtime-paths']
 ]);
 
-export function oxiquillVirtualModulesPlugin(paths, { generation } = {}) {
-  let base = '/';
+export function oxiquillVirtualModulesPlugin(paths, { generation, base: astroBase } = {}) {
+  let base = astroBase ?? '/';
   const cellsJsonFile = pathFromUrl(paths.cellsJsonPath);
   const generatedModules = new Map([
     [
@@ -40,7 +40,7 @@ export function oxiquillVirtualModulesPlugin(paths, { generation } = {}) {
   return {
     name: 'oxiquill-virtual-modules',
     configResolved(config) {
-      base = config.base;
+      base = astroBase ?? config.base;
     },
     resolveId(id) {
       return resolveVirtualModuleId(id);
@@ -103,7 +103,7 @@ export function oxiquillVirtualModulesPlugin(paths, { generation } = {}) {
     configureServer(server) {
       server.watcher.add(watchedFiles);
       server.middlewares.use((request, response, next) => {
-        const requestUrl = new URL(request.url ?? '/', 'http://localhost');
+        const requestUrl = new URL(request.originalUrl ?? request.url ?? '/', 'http://localhost');
         const rustPrefix = `${base.replace(/\/?$/u, '/')}${publicUrlPath(paths, paths.rustWasmPublicDir)}`;
         const glueName = requestUrl.pathname.slice(rustPrefix.length);
         if (
