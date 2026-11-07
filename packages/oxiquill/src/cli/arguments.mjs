@@ -71,6 +71,7 @@ const commandDefinitions = Object.freeze({
     astro: true,
     options: {
       ...reportingOptions,
+      'check-links': option('boolean', '--check-links', 'Check local routes and fragments after building.'),
       devOutput: option('boolean', '--devOutput', 'Emit development-style output.'),
       force: option('boolean', '--force', 'Clear the content cache before building.'),
       mode: option('string', '--mode <name>', 'Set the Astro build mode.'),
@@ -78,6 +79,14 @@ const commandDefinitions = Object.freeze({
     },
     project: true
   }),
+  'check-links': command(
+    'check-links [options]',
+    'Check local links in the existing built site without writing files.',
+    {
+      project: true,
+      options: { format: reportingOptions.format }
+    }
+  ),
   check: command('check [options] [-- <check-options>]', 'Generate runtimes and run Astro diagnostics.', {
     astro: true,
     options: {
@@ -431,7 +440,7 @@ function stripGlobalOptions(args) {
   for (let index = 0; index < args.length; index += 1) {
     const argument = args[index];
     if (
-      ['--debug', '--help', '-h', '--version', '--explain'].includes(argument) ||
+      ['--debug', '--help', '-h', '--version', '--explain', '--check-links'].includes(argument) ||
       argument.startsWith('--format=') ||
       argument.startsWith('--config=') ||
       argument.startsWith('--lock-timeout=')

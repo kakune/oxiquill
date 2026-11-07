@@ -43,6 +43,7 @@ import remarkMermaidDiagrams from '../lib/doc-runtime/remark-mermaid-diagrams.mj
 import remarkPublicAssetBase from '../lib/doc-runtime/remark-public-asset-base.mjs';
 import { acquireRuntimeLock, hasInheritedRuntimeLock } from '../generator/runtime-lock.mjs';
 import { createBuildGeneration } from './build-generation.mjs';
+import { writeBuildReport } from './build-report.mjs';
 import { oxiquillVirtualModulesPlugin } from './virtual-modules.mjs';
 
 type IntegrationFactory<Options> = (options: Options) => AstroIntegration;
@@ -283,6 +284,7 @@ function createOxiquillIntegration(
   let rustOptions: Readonly<OxiquillRustOptions> | undefined;
   let buildOwnership: Awaited<ReturnType<typeof prepareCleanupOwnership>> = Object.freeze([]);
   let buildLease: Awaited<ReturnType<typeof acquireRuntimeLock>> | undefined;
+  let buildConfig: AstroConfig | undefined;
   const bundledModules = createBundledModuleCollector();
   const browserBundle = createBrowserBundleCollector();
 
@@ -337,6 +339,7 @@ function createOxiquillIntegration(
         updateConfig(update);
       },
       'astro:config:done': ({ config, injectTypes }) => {
+        buildConfig = config;
         references?.configure(config);
         if (references && config.markdown.processor.name === 'unified') {
           const processor = config.markdown.processor as ReturnType<typeof unified>;
@@ -412,6 +415,7 @@ function createOxiquillIntegration(
           });
           await maintainCleanupOwnership({ ownership: buildOwnership });
           await generation?.checkSources();
+          if (buildConfig) await writeBuildReport({ cacheDir: paths.cacheDir, config: buildConfig, dir });
         } finally {
           buildLease?.release();
           buildLease = undefined;

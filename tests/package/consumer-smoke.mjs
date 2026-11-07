@@ -27,6 +27,7 @@ import { packRecords } from '../../.github/scripts/release-archive.mjs';
 import { loadDocumentedConsumerConfig } from '../docs/documented-config.mjs';
 import { assertMathDependencies } from './math-contract.mjs';
 import { assertPackedReferences } from './reference-fixture.mjs';
+import { assertPackedLinks } from './link-fixture.mjs';
 
 const supportedPythonPackages = [
   'contourpy',
@@ -274,9 +275,12 @@ try {
   ]);
   const initialBuild = run(process.execPath, [installedCliPath, 'build'], consumerRoot, true, nodeOnlyEnvironment);
   assertNo404Warning(initialBuild);
+  run(process.execPath, [installedCliPath, 'check-links'], consumerRoot, true, nodeOnlyEnvironment);
+  await assertPackedLinks({ consumerRoot, cliPath: installedCliPath, environment: nodeOnlyEnvironment });
   await assertPackedReferences({
     consumerRoot,
-    build: () => assertNo404Warning(run(process.execPath, [installedCliPath, 'build'], consumerRoot, true)),
+    build: () =>
+      assertNo404Warning(run(process.execPath, [installedCliPath, 'build', '--check-links'], consumerRoot, true)),
     testWasm: () => run(process.execPath, [installedCliPath, 'test-wasm'], consumerRoot)
   });
   assertNo404Warning(run(packageManager, ['run', 'build'], consumerRoot, true));
