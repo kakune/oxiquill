@@ -1,9 +1,20 @@
 import type { CellManifest, InputSpec, InputValues } from './types.js';
-import { effectiveNumericStep, numericStepGrid } from './numeric-step.mjs';
-import { isPortableInteger, PORTABLE_INTEGER_MAX, PORTABLE_INTEGER_MIN } from './portable-integer.mjs';
-
-export type NumericInputValidation =
-  'required' | 'number' | 'integer' | 'rangeUnderflow' | 'rangeOverflow' | 'stepMismatch';
+import { effectiveNumericStep } from './numeric-step.mjs';
+import {
+  effectiveMinimum,
+  effectiveMaximum,
+  isNumericInput,
+  validateNumericInputValue
+} from './input-value-validation.mjs';
+export {
+  effectiveMinimum,
+  effectiveMaximum,
+  isIntegerInput,
+  isNumericInput,
+  validateNumericInputValue
+} from './input-value-validation.mjs';
+export type { NumericInputValidation } from './input-value-validation.mjs';
+import type { NumericInputValidation } from './input-value-validation.mjs';
 
 export type ParsedNumericInput = { valid: false; validation: NumericInputValidation } | { valid: true; value: number };
 
@@ -13,18 +24,6 @@ export function parseNumericInput(input: InputSpec, rawValue: string): ParsedNum
   const value = Number(rawValue);
   const validation = validateNumericInputValue(input, value);
   return validation ? { valid: false, validation } : { valid: true, value };
-}
-
-export function validateNumericInputValue(input: InputSpec, value: unknown): NumericInputValidation | undefined {
-  if (typeof value !== 'number' || !Number.isFinite(value)) return 'number';
-  if (isIntegerInput(input) && !isPortableInteger(value)) return 'integer';
-
-  const minimum = effectiveMinimum(input);
-  const maximum = effectiveMaximum(input);
-  if (minimum !== undefined && value < minimum) return 'rangeUnderflow';
-  if (maximum !== undefined && value > maximum) return 'rangeOverflow';
-  if (numericStepGrid(input, value).stepMismatch) return 'stepMismatch';
-  return undefined;
 }
 
 export function assertValidInputValues(cell: CellManifest, values: InputValues): void {
@@ -57,14 +56,6 @@ export function formatInputValue(value: string | number | boolean, step?: number
   return precision === 0 ? value.toFixed(0) : value.toFixed(Math.min(precision, 100));
 }
 
-export function effectiveMinimum(input: InputSpec): number | undefined {
-  return isIntegerInput(input) ? Math.max(input.min ?? PORTABLE_INTEGER_MIN, PORTABLE_INTEGER_MIN) : input.min;
-}
-
-export function effectiveMaximum(input: InputSpec): number | undefined {
-  return isIntegerInput(input) ? Math.min(input.max ?? PORTABLE_INTEGER_MAX, PORTABLE_INTEGER_MAX) : input.max;
-}
-
 export function effectiveStep(input: InputSpec): number {
   return effectiveNumericStep(input);
 }
@@ -76,14 +67,6 @@ export function stepNumericInputValue(input: InputSpec, value: number, direction
   );
   const stepped = Number((value + direction * effectiveStep(input)).toFixed(precision));
   return Math.min(effectiveMaximum(input) ?? stepped, Math.max(effectiveMinimum(input) ?? stepped, stepped));
-}
-
-export function isIntegerInput(input: InputSpec): boolean {
-  return input.type === 'integer' || input.integer === true;
-}
-
-export function isNumericInput(input: InputSpec): boolean {
-  return input.type === 'range' || input.type === 'number' || input.type === 'integer';
 }
 
 function decimalPlaces(value: number): number {
