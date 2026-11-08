@@ -114,8 +114,20 @@ export interface OxiquillFrameworkOptions<StarlightOptions extends object = obje
   starlight: IntegrationFactory<StarlightOptions>;
 }
 
+/** A page with Rust cells, identified by its POSIX path relative to the docs directory (including any locale prefix). */
+export interface OxiquillRustGroupingPage {
+  readonly path: string;
+}
+
+/**
+ * How Rust cells are partitioned into compiled modules. `page` (default) builds one module per page,
+ * `directory` one per parent directory, `site` one for the whole site, and a function returns a group
+ * key (a non-empty string of at most 256 characters) for each page.
+ */
+export type OxiquillRustGrouping = 'page' | 'directory' | 'site' | ((page: OxiquillRustGroupingPage) => string);
+
 export interface OxiquillRustOptions {
-  grouping?: 'site' | 'page';
+  grouping?: OxiquillRustGrouping;
 }
 
 export interface OxiquillPythonOptions {

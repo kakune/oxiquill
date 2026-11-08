@@ -35,12 +35,15 @@ export function createOxiquillIntegrationMetadata({ astro = {}, paths = {}, pyth
   });
 }
 
+export const defaultRustOptions = Object.freeze({ grouping: 'page' });
+
 export function normalizeRustOptions(options = {}) {
   if (!options || typeof options !== 'object' || Array.isArray(options)) throw new TypeError('rust must be an object.');
   const unknown = Object.keys(options).filter((key) => key !== 'grouping');
   if (unknown.length) throw new TypeError(`Unknown rust option: ${unknown.sort().join(', ')}.`);
-  const grouping = options.grouping === undefined ? 'site' : options.grouping;
-  if (!['site', 'page'].includes(grouping)) throw new TypeError('rust.grouping must be one of: site, page.');
+  const grouping = options.grouping === undefined ? 'page' : options.grouping;
+  if (typeof grouping !== 'function' && !['page', 'directory', 'site'].includes(grouping))
+    throw new TypeError("rust.grouping must be 'page', 'directory', 'site', or a function ({ path }) => string.");
   return Object.freeze({ grouping });
 }
 
