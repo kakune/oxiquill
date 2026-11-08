@@ -1,0 +1,51 @@
+---
+title: Data dependency runtime tests
+---
+
+These cells exercise execution diagnostics and worker recovery.
+
+```rust
+//| id: failable-producer
+//| title: Failable producer
+//| run: button
+//| exports: [value]
+//| cache: inputs
+//| inputs:
+//|   fail: { type: checkbox, label: Reject export, value: false }
+if !fail {
+    export!(value, &7);
+}
+println!("Producer output");
+```
+
+```rust
+//| id: failure-consumer
+//| title: Failure consumer
+//| run: button
+//| dependsOn:
+//|   data: failable-producer
+println!("Derived {}", data["value"].as_i64().ok_or("integer required")? + 1);
+```
+
+```rust
+//| id: timeout-producer
+//| title: Timeout producer
+//| run: button
+//| timeoutMs: 1000
+//| exports: [value]
+//| inputs:
+//|   hang: { type: checkbox, label: Wait indefinitely, value: false }
+while hang {
+    std::hint::spin_loop();
+}
+export!(value, &1);
+```
+
+```rust
+//| id: timeout-consumer
+//| title: Timeout consumer
+//| run: button
+//| dependsOn:
+//|   data: timeout-producer
+println!("Recovered {}", data["value"]);
+```

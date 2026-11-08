@@ -338,3 +338,84 @@ Consumers inherit helper crates from all reachable definitions. Unused definitio
 Outputs remember the inputs that produced them. Editing an input, selecting a case, restoring inputs, or starting another run marks retained output with a previous-input banner and `data-stale="true"`. Invalid numeric edits also mark results stale. Reactive cells keep the mark throughout debounce and execution; button cells keep it until Run succeeds. Restoring matching inputs alone does not clear it. Cancellation, superseded responses, and failed runs do not clear it either; runtime errors remain visible and previous results remain marked. A current successful run clears the mark. Source and runtime updates invalidate retained results too.
 
 Authors can emit an [outcome](/features/rich-output/#column-formats-and-computation-outcomes) to state whether a successful execution met its computational criterion. Outcomes are marked stale together with tables, charts, and text. They do not replace execution errors.
+
+## Page-local data dependencies
+
+A producer declares `exports` and writes each value with `export!(name, value)`. A consumer's `dependsOn` binds the producer's complete export object. A plain cell ID gives an immutable `&serde_json::Value`; `{ cell, type }` deserializes into a Rust type, including a type from `uses`. These metadata fields currently support Rust only.
+
+```rust
+//| id: data-model
+//| kind: definitions
+#[derive(serde::Deserialize)]
+pub(crate) struct Dataset {
+    pub(crate) points: Vec<i32>,
+    pub(crate) truth: i32,
+}
+```
+
+```rust
+//| id: generate-data
+//| title: Generate data
+//| run: button
+//| exports: [points, truth]
+//| cache: inputs
+//| inputs:
+//|   samples: { type: integer, label: Samples, value: 20, min: 1, max: 100, share: true }
+//|   seed: { type: integer, label: Seed, value: 1, min: 0, max: 100, share: true }
+let points: Vec<i32> = (0..samples).map(|n| (n + seed) % 17).collect();
+let truth = seed;
+println!("Generated {} points with seed {seed}", points.len());
+export!(points, &points);
+export!(truth, &truth);
+```
+
+```rust
+//| id: summarize-data
+//| title: Summarize data
+//| run: button
+//| uses: [data-model]
+//| dependsOn:
+//|   data: { cell: generate-data, type: Dataset }
+//| exports: [total]
+//| cache: inputs
+let total: i32 = data.points.iter().sum::<i32>() + data.truth;
+println!("Total: {total}");
+export!(total, &total);
+```
+
+```rust
+//| id: analyze-data
+//| title: Analyze data
+//| run: reactive
+//| dependsOn:
+//|   data: summarize-data
+//| inputs:
+//|   bias: { type: integer, label: Bias, value: 0, min: 0, max: 100 }
+//| cases:
+//|   - id: adjusted
+//|     label: Adjusted
+//|     inputs: { bias: 5 }
+//| tests:
+//|   - case: default
+//|     expect: [{ path: /outputs/0/content, equals: "Analysis: 143\n" }]
+//|   - case: adjusted
+//|     expect: [{ path: /outputs/0/content, equals: "Analysis: 148\n" }]
+let total = data["total"].as_i64().ok_or("total must be an integer")?;
+println!("Analysis: {}", total + i64::from(bias));
+```
+
+Dependencies must form an acyclic graph on one page. Running a cell evaluates its complete upstream closure in deterministic order, once per node, using each node's current complete inputs. Offscreen producers use restored or default inputs, and their results appear when they hydrate. Named cases change only their own cell; `oxiquill test-wasm` runs prerequisites at their defaults.
+
+Changing a producer input recomputes the producer and its reactive descendants. Button descendants show **Upstream changed** and wait for Run, except when needed as prerequisites of a reactive descendant. Results publish together only while their input snapshots remain current. Failed, timed-out, or cancelled producers prevent dependent execution; consumers link to the producer and its diagnostic. Previous exports are never a fallback.
+
+Exports are separate from rendered outputs: they are never displayed automatically or encoded into share URLs. Every declared export must be written. Undeclared exports, non-finite numbers at any serialization depth, and export objects larger than **4 MiB** fail the run without passing partial data onward. Export names match `^[a-z][a-z0-9_]*$`; dependency bindings use the same pattern and cannot collide with inputs, generated names, or Rust keywords.
+
+### Opt-in producer caching
+
+`cache: inputs` is valid only on a Rust producer with declared exports. It declares that the result is determined by normalized source, used definitions, the runtime-module fingerprint, complete typed inputs, declared exports, and direct dependency result fingerprints. Expose seeds and every other varying quantity as inputs; caching does not detect purity.
+
+Changing only Bias in the example reuses both producers. Switching between previously used seeds can reuse earlier results. Each producer retains at most **four** results, and all producers on a page share **32 MiB**, measured as serialized normalized results and evicted least recently used first. Entries include both displayed output and exports. Failures, cancellations, timeouts, rejected exports, invalid outputs, and truncated results are never cached.
+
+A cache hit shows **Reused result for these inputs**. **Recompute** bypasses that producer's cache and replaces its entry after success. Pressing Run on a cached button-mode producer also forces recomputation. Concurrent requests share matching in-flight computations; cancelling one request leaves work needed by another running.
+
+Source, helper, definitions, or module changes invalidate affected keys. Invalidation follows compilation-module boundaries: with site grouping, a rebuilt site module invalidates its producers; page grouping retains producers in unchanged page modules. Cache data stays in memory and is cleared when leaving the page or ending the session.
