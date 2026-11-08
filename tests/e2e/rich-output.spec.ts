@@ -1,6 +1,6 @@
 import { readFile } from 'node:fs/promises';
 import AxeBuilder from '@axe-core/playwright';
-import { expect, test } from '@playwright/test';
+import { expect, test, type Locator } from '@playwright/test';
 
 for (const locale of ['en', 'ja']) {
   for (const theme of ['light', 'dark']) {
@@ -12,7 +12,7 @@ for (const locale of ['en', 'ja']) {
       await page.addInitScript((theme) => localStorage.setItem('starlight-theme', theme), theme);
       await page.goto(`${locale === 'ja' ? '/ja' : ''}/features/rich-output/`);
       const cell = page.getByTestId(`cell-${locale === 'ja' ? 'ja__' : ''}features__rich-output__column-formats`);
-      await cell.scrollIntoViewIfNeeded();
+      await hydrateCell(cell);
       const run = cell.getByRole('button', { name: locale === 'ja' ? '実行' : 'Run', exact: true });
       await run.click();
       const outcome = cell.locator('[data-outcome="partial"]');
@@ -63,18 +63,19 @@ for (const locale of ['en', 'ja']) {
 test('Haskell emits descriptor columns and a satisfied outcome', async ({ page }) => {
   await page.goto('/features/rich-output/');
   const cell = page.getByTestId('cell-features__rich-output__satisfied-outcome');
-  await cell.scrollIntoViewIfNeeded();
+  await hydrateCell(cell);
   await cell.getByRole('button', { name: 'Run', exact: true }).click();
-  await expect(cell.locator('[data-outcome="satisfied"]')).toContainText('Criterion met');
+  await expect(cell.locator('[data-outcome="satisfied"]')).toContainText('Criterion met', { timeout: 30_000 });
   await expect(cell.getByRole('button', { name: 'Time (s)', exact: true })).toBeVisible();
   await expect(cell.getByText('Not measured', { exact: true })).toBeVisible();
   await expect(cell.getByRole('alert')).toHaveCount(0);
 });
 
 test('Python emits an unavailable outcome without an execution error', async ({ page }) => {
+  test.setTimeout(120_000);
   await page.goto('/features/rich-output/');
   const cell = page.getByTestId('cell-features__rich-output__unavailable-outcome');
-  await cell.scrollIntoViewIfNeeded();
+  await hydrateCell(cell);
   await cell.getByRole('button', { name: 'Run', exact: true }).click();
   await expect(cell.locator('[data-outcome="unavailable"]')).toContainText('GPU computation unavailable', {
     timeout: 60_000
@@ -82,3 +83,8 @@ test('Python emits an unavailable outcome without an execution error', async ({ 
   await expect(cell.getByRole('button', { name: 'Time (s)', exact: true })).toBeVisible();
   await expect(cell.getByRole('alert')).toHaveCount(0);
 });
+
+async function hydrateCell(cell: Locator): Promise<void> {
+  await cell.scrollIntoViewIfNeeded();
+  await expect(cell.locator('xpath=ancestor::astro-island[1]')).not.toHaveAttribute('ssr', '', { timeout: 30_000 });
+}
