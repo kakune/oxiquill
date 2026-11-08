@@ -8,6 +8,13 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ### Added
 
+- Opt-in `missingTranslations: 'omit'` generates only translated pages for each locale and limits the language select, sidebar, previous/next links, and `hreflang` alternates to them; the default `'fallback'` keeps Starlight's fallback pages.
+- `docRedirects` maps moved pages to base-relative documentation paths, prefixes them with `base`, and fails the build when a destination produced no page.
+- Pages can set `contentWidth: full` in frontmatter to drop the reading measure while keeping both navigation columns.
+- The `outputLayout: columns` cell field pairs charts and images in a row when each keeps at least `--oq-output-column-min-width`; other outputs keep the full width.
+- `--oq-output-max-height` bounds text, JSON, and error outputs, which are keyboard-focusable and print in full.
+- Opt-in `oxiquill/styles/japanese.css` applies strict line breaking and adjustable line height and letter spacing to Japanese pages.
+
 - Bounded `scene3d` point-and-edge output with a lazy Canvas viewer, orbit/zoom, accessible point selection and distance measurement, complete tables/CSV, PNG export, and Rust/Python/Haskell helpers.
 
 - Rust cells share computed data through page-local `exports`, `export!`, and typed or JSON `dependsOn` bindings, with atomic graph execution, offscreen producer state, propagation, and linked upstream diagnostics.
@@ -40,6 +47,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 - Mixed `xy` charts overlay ordered line, scatter, and band layers on shared axes, with stable layer IDs, accessible data, annotations, legends, and PNG/SVG export through all three language emitters.
 
 ### Changed
+
+- The desktop table of contents uses `--oq-toc-width`, narrower by default on smaller desktops. Its entries use the column width and wrap, and its toggle sits on the column border at every width.
+- Input controls choose their column count from the cell width (`--oq-input-column-min-width`) instead of the viewport.
+- Long display equations scroll horizontally inside a keyboard-focusable frame instead of widening the page. Cells and output regions can shrink to their container.
 
 - `test-wasm` reuses generated Rust Wasm and browser output normalization instead of running `wasm-pack test` or compiling a separate test build.
 

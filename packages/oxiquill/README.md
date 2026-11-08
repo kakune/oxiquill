@@ -71,6 +71,8 @@ Write pages under `content/docs`. Generated internals go under `.oxiquill`, brow
 
 On desktop, pages with a table of contents include an accessible collapse control that releases the complete right column. The per-tab preference is stored independently from the left sidebar. Set `desktopTableOfContentsToggle: false` in `defineOxiquillConfig()` to keep Starlight's desktop table of contents always visible; mobile, splash, and `tableOfContents: false` behavior is unchanged.
 
+Multilingual sites can set `missingTranslations: 'omit'` to generate and link only translated pages, and `docRedirects` points moved pages at documentation paths below `base`. A page can drop the reading measure with `contentWidth: full` in its frontmatter. See [Project configuration](https://kakune.github.io/oxiquill/guides/project-configuration/) for layout properties and the optional Japanese typography stylesheet.
+
 Static projects need only Node.js and a package manager. Rust cells additionally need Rust/Cargo 1.85.0 or newer, the `wasm32-unknown-unknown` target, and `wasm-pack >=0.15.0 <0.16.0` (tested with Rust 1.99.0 and wasm-pack 0.15.0). Rust beta/nightly channels are accepted but untested; Haskell generation needs `wasm32-wasi-ghc` on Linux or macOS. Generated sites run in current Chromium, Firefox, and WebKit.
 
 ## Documentation and Support

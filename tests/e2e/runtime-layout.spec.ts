@@ -338,3 +338,73 @@ for (const fixture of ['default', 'fixed', 'fluid']) {
     await expectMeasure(1);
   });
 }
+
+test('bounded text output scrolls by keyboard and prints in full', async ({ page }) => {
+  await page.setViewportSize({ width: 390, height: 844 });
+  await layoutFixture(page, { 'data-test-output-height': 'bounded' });
+  const cell = await sourceCell(page);
+  await cell.getByRole('button', { name: 'Run', exact: true }).click();
+  const output = cell.getByTestId('run-output');
+  await expect(output).toContainText('maximum: 8');
+  await expect(output).toHaveCSS('max-height', '64px');
+  expect(await output.evaluate((element) => element.scrollHeight - element.clientHeight)).toBeGreaterThan(0);
+
+  await cell.getByTestId('cell-source').locator('pre').focus();
+  await page.keyboard.press('Tab');
+  await expect(output).toBeFocused();
+  expect(await output.evaluate((element) => element.matches(':focus-visible'))).toBe(true);
+  await expect(output).toHaveCSS('outline-style', 'solid');
+  await page.keyboard.press('ArrowDown');
+  await expect.poll(() => output.evaluate((element) => element.scrollTop)).toBeGreaterThan(0);
+  await expectNoPageOverflow(page);
+
+  await page.emulateMedia({ media: 'print' });
+  try {
+    await expect(output).toHaveCSS('max-height', 'none');
+    await expect(output).toHaveCSS('white-space', 'pre-wrap');
+    expect(
+      await output.evaluate((element) => [
+        element.scrollHeight - element.clientHeight,
+        element.scrollWidth - element.clientWidth
+      ])
+    ).toEqual([0, 0]);
+  } finally {
+    await page.emulateMedia({ media: null });
+  }
+});
+
+test('input columns follow the cell width rather than the viewport', async ({ page }) => {
+  const grid = page.getByTestId('cell-features__interactive-cells__python-controls').locator('.doc-input-grid');
+  // Count the inputs that share the first row.
+  const columns = () =>
+    grid.locator(':scope > .doc-input').evaluateAll((inputs) => {
+      const top = Math.round(inputs[0]?.getBoundingClientRect().top ?? 0);
+      return inputs.filter((input) => Math.round(input.getBoundingClientRect().top) === top).length;
+    });
+
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.goto('/features/interactive-cells/');
+  await expect.poll(columns).toBe(1);
+  await page.setViewportSize({ width: 1280, height: 900 });
+  await expect.poll(columns).toBe(2);
+  await page.setViewportSize({ width: 2400, height: 1200 });
+  await page.locator('starlight-sidebar-toggle button').click();
+  await page.locator('starlight-table-of-contents-toggle button').click();
+  await expect.poll(columns).toBeGreaterThanOrEqual(3);
+});
+
+for (const width of [1152, 1280, 2400]) {
+  test(`table-of-contents toggle sits on the column border at ${width}px`, async ({ page }) => {
+    await page.setViewportSize({ width, height: 900 });
+    await page.goto('/features/math/');
+    const geometry = await page.evaluate(() => {
+      const column = document.querySelector('.right-sidebar-container')?.getBoundingClientRect();
+      const toggle = document.querySelector('.table-of-contents-toggle-button')?.getBoundingClientRect();
+      const text = document.querySelector('.right-sidebar-panel > .sl-container')?.getBoundingClientRect();
+      if (!column || !toggle || !text) throw new Error('Table of contents is missing');
+      return { border: column.left, toggle: toggle.left + toggle.width / 2, text: text.right - column.right };
+    });
+    expect(Math.abs(geometry.toggle - geometry.border)).toBeLessThanOrEqual(1);
+    expect(geometry.text).toBeLessThanOrEqual(0);
+  });
+}

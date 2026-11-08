@@ -33,22 +33,24 @@ export const collections = createOxiquillCollections({ defineCollection, docsLoa
 
 ## 設定 field
 
-| Field                             | 意味                                                                                       |
-| --------------------------------- | ------------------------------------------------------------------------------------------ |
-| `title`, `description`, `sidebar` | 対応する Starlight setting の shorthand。                                                  |
-| `desktopTableOfContentsToggle`    | 永続化される desktop 目次 control を有効にします。default は `true` です。                 |
-| `starlight`                       | その他の Starlight option。同じ setting はこちらが shorthand より優先されます。            |
-| `framework.starlight`             | `@astrojs/starlight` から import する必須の Starlight integration factory。                |
-| `framework.preact`                | 組み込み用途向けの optional Preact integration-factory override。                          |
-| `integrations`                    | Oxiquill、Preact、Starlight の後に追加する Astro integration。                             |
-| `markdown`                        | 対応する Astro Markdown setting/plugin。Oxiquill 必須 plugin が先に動きます。              |
-| `vite`                            | 追加の Vite setting。必須 alias、dedupe、worker plugin、filesystem access は保持されます。 |
-| `paths`                           | 下記の source/cache/generated/public path。                                                |
-| `python`                          | Pyodide download の `preload`、`offline` と optional `packageMirror`。                     |
-| `rust`                            | Rust のコンパイル単位。`site`（既定値）または `page`。                                     |
-| その他の Astro field              | Astro に渡されます。Oxiquill の output は常に static です。                                |
+| Field                             | 意味                                                                                                                                                                |
+| --------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `title`, `description`, `sidebar` | 対応する Starlight setting の shorthand。                                                                                                                           |
+| `desktopTableOfContentsToggle`    | 永続化される desktop 目次 control を有効にします。default は `true` です。                                                                                          |
+| `starlight`                       | その他の Starlight option。同じ setting はこちらが shorthand より優先されます。                                                                                     |
+| `framework.starlight`             | `@astrojs/starlight` から import する必須の Starlight integration factory。                                                                                         |
+| `framework.preact`                | 組み込み用途向けの optional Preact integration-factory override。                                                                                                   |
+| `integrations`                    | Oxiquill、Preact、Starlight の後に追加する Astro integration。                                                                                                      |
+| `markdown`                        | 対応する Astro Markdown setting/plugin。Oxiquill 必須 plugin が先に動きます。                                                                                       |
+| `vite`                            | 追加の Vite setting。必須 alias、dedupe、worker plugin、filesystem access は保持されます。                                                                          |
+| `paths`                           | 下記の source/cache/generated/public path。                                                                                                                         |
+| `python`                          | Pyodide download の `preload`、`offline` と optional `packageMirror`。                                                                                              |
+| `rust`                            | Rust のコンパイル単位。`site`（既定値）または `page`。                                                                                                              |
+| `missingTranslations`             | `fallback`（既定値）は Starlight のフォールバックページを維持し、`omit` は翻訳したページだけを生成・リンクします。[多言語サイト](#多言語サイト)を参照してください。 |
+| `docRedirects`                    | 転送先を `base` からの相対パスの文書ページで指定するリダイレクト。[文書のリダイレクト](#文書のリダイレクト)を参照してください。                                     |
+| その他の Astro field              | Astro に渡されます。Oxiquill の output は常に static です。                                                                                                         |
 
-Astro config を手動で組み立てる場合だけ `oxiquillIntegration()` を使います。受け取る option は `base`、`markdown`、`paths`、`python`、`rust`、`vite` で、Preact と Starlight は caller が追加します。
+Astro config を手動で組み立てる場合だけ `oxiquillIntegration()` を使います。受け取る option は `base`、`markdown`、`paths`、`python`、`rust`、`vite` で、Preact と Starlight は caller が追加します。`missingTranslations` と `docRedirects` は Starlight と Astro の設定も変更するため、`defineOxiquillConfig()` だけが受け取ります。
 
 interactive cell、Mermaid、KaTeX、public-asset base path には Oxiquill の unified pipeline が必要なため、`markdown.processor` は Oxiquill が管理します。custom processor は未対応で `TypeError` になり、代わりに対応する Markdown field と追加の `remarkPlugins` / `rehypePlugins` を設定します。
 
@@ -68,9 +70,19 @@ export default defineOxiquillConfig({
 
 `tableOfContents: false` のページと splash page には control を出力しません。`starlight.components` に consumer が指定した entry は Oxiquill の default より優先され、`PageFrame`、`TableOfContents`、`TwoColumnContent` の override も保持されます。
 
+目次の列幅は `--oq-toc-width` です。既定値の `clamp(14rem, 18vw, var(--sl-sidebar-width))` は、小さなデスクトップ画面では列を狭めて本文の幅を確保し、大きな画面ではサイドバーと同じ幅になります。さらに広い画面では、残りの幅を本文と目次に分けて両方を中央付近に保ちます。長い項目は列の中で折り返し、開閉ボタンはどの幅でも列の境界に表示されます。固定幅にするには `:root` に指定します。
+
+```css
+:root {
+  --oq-toc-width: 16rem;
+}
+```
+
+このプロパティはOxiquillの開閉レイアウトに適用されます。`desktopTableOfContentsToggle: false` では、Starlight自体の列幅の計算を使います。
+
 ## 本文の幅
 
-デスクトップのナビゲーション列を折りたたむと、現在の `--sl-content-width` に `--sl-sidebar-width` が加わります。両方の列を折りたたむと2列分が加わります。両方を展開したときの既定の本文幅は変わりません。
+左のサイドバーを折りたたむと現在の `--sl-content-width` に `--sl-sidebar-width` が加わり、目次を折りたたむと目次の列幅 `--oq-toc-width` が加わります。両方を展開したときの既定の本文幅は変わりません。
 
 本文幅と列幅を変更するには、`starlight: { customCss: ['./styles/custom.css'] }` のように `starlight.customCss` にスタイルシートを登録します。このCSSはOxiquillのCSSの後に読み込まれます。両方のプロパティを `:root` に指定してください。
 
@@ -83,7 +95,82 @@ export default defineOxiquillConfig({
 
 `--sl-content-width: 100%` のような可変幅は、どの折りたたみ状態でも可変幅のままです。Starlightは、スプラッシュページを含むサイドバーのないページに別の基準幅を指定します。必要に応じて `:root:not([data-has-sidebar]) { --sl-content-width: 100%; }` で上書きしてください。
 
+サイト全体を変えずに、特定のページだけ本文幅の制限を外せます。frontmatter に `contentWidth: full` を指定すると、本文が左右のナビゲーション列の間をすべて使い、どちらの開閉ボタンもそのまま使えます。列の多いリファレンス表や複数のグラフを載せるページに向いています。文章中心のページは既定の幅のままにしてください。
+
+```mdx
+---
+title: API Index
+contentWidth: full
+---
+```
+
+`createOxiquillCollections()` は docs schema に `contentWidth`（`default` または `full`）を追加します。独自の docs schema を使うプロジェクトでは、同じ省略可能な field を追加してください。
+
 独自の `PageFrame` を使っても、Oxiquillの `TwoColumnContent` による目次の折りたたみ時の拡幅は有効です。サイドバーの折りたたみ時の拡幅にはOxiquillの `PageFrame` が必要です。
+
+## 多言語サイト
+
+Starlightは、翻訳のないページを既定の言語の内容で補います。このフォールバックページにより、どの言語にもすべてのルートが存在します。翻訳したページだけを各言語に含めるには `missingTranslations: 'omit'` を指定します。
+
+```js
+export default defineOxiquillConfig({
+  framework: { starlight },
+  missingTranslations: 'omit',
+  starlight: {
+    defaultLocale: 'root',
+    locales: {
+      root: { label: 'English', lang: 'en' },
+      ja: { label: '日本語', lang: 'ja' }
+    }
+  }
+});
+```
+
+OxiquillはAstroがページを生成する前にフォールバックのルートを取り除きます。そのため、これらのルートはHTML、サイトマップの項目、検索データのいずれも生成せず、開発サーバーでは404を返します。ナビゲーションも生成したページに合わせます。
+
+- 言語選択には、現在のページがある言語だけを表示します。ほかの言語にページがない場合は表示しません。
+- サイドバーから、翻訳のないページへのリンクと、それによって空になったグループを除きます。
+- 前後のページへのリンクは翻訳のないページを飛ばします。frontmatter の `prev` と `next` も引き続き適用します。
+- `hreflang` の代替リンクとサイト名のリンクは、生成したページだけを指します。
+
+既定値の `'fallback'` はStarlightの動作を維持します。`'omit'` にはプリレンダリングするStarlightページが必要です（既定の設定）。このモードはOxiquillの `LanguageSelect` コンポーネントとルートミドルウェアを追加します。`starlight.components` の `LanguageSelect` が優先され、`starlight.routeMiddleware` の項目はOxiquillの後に実行されて、絞り込んだナビゲーションを受け取ります。
+
+## 文書のリダイレクト
+
+Astroは `redirects` の転送元を `base` の下で照合しますが、対応するルートが見つからない転送先には `base` を付けません。Starlightが表示するページはこの転送先に当たります。移動した文書ページには `docRedirects` を使ってください。転送先には `base` からの相対パスで文書ページを指定し、Oxiquillが `base` を付けます。
+
+```js
+export default defineOxiquillConfig({
+  base: '/docs/',
+  docRedirects: {
+    '/guides/setup/': '/guides/getting-started/',
+    '/ja/old-guide/': { status: 301, destination: '/ja/guide/' }
+  },
+  framework: { starlight }
+});
+```
+
+この例では `/docs/guides/setup/` が `/docs/guides/getting-started/` に転送されます。転送先は一つの `/` で始め、ルートのパラメーターを含めることはできません。転送先のページが生成されない場合、たとえば入力ミスや、`missingTranslations: 'omit'` で翻訳のない転送先を指定した場合は、ビルドが失敗します。外部サイトや文書以外の転送先はAstroの `redirects` に指定してください。同じ転送元を両方に指定することはできません。
+
+## 日本語の組版
+
+`oxiquill/styles/japanese.css` は、言語が日本語（`lang="ja"` または `ja-` で始まるタグ）のページに組版の設定を適用します。厳格な禁則処理により小書きの仮名や長音符を行頭に置かず、本文と見出しの行間と字間を調整します。ほかの言語のページには影響しません。`starlight.customCss` に追加してください。
+
+```js
+starlight: {
+  customCss: ['oxiquill/styles/japanese.css', './styles/custom.css'];
+}
+```
+
+値を調整するには、このファイルの後に読み込むスタイルシートで `:root` に次のプロパティを指定します。
+
+| プロパティ                       | 既定値   | 対象                                                         |
+| -------------------------------- | -------- | ------------------------------------------------------------ |
+| `--oq-ja-line-height`            | `1.9`    | 段落、リスト項目、定義、引用、表のセル、キャプション         |
+| `--oq-ja-letter-spacing`         | `normal` | 上と同じ本文の要素                                           |
+| `--oq-ja-heading-line-height`    | `1.4`    | ページタイトルと見出し                                       |
+| `--oq-ja-heading-letter-spacing` | `0.01em` | ページタイトルと見出し                                       |
+| `--oq-ja-word-break`             | `normal` | 本文。`auto-phrase` は対応ブラウザーで文節の区切りで改行する |
 
 ## Path field
 
@@ -174,7 +261,7 @@ ancestor の `.cargo` file、`$CARGO_HOME/config*`、config が参照する file
 
 ## Base path と public asset
 
-subpath 配下へ公開するときは Astro の `base` を設定します。Oxiquill は interactive-cell manifest、language runtime、diagram、`/media/...` reference に適用します。`base` 自体が `/media` または同じ prefix で始まる場合も、authoring ではすべての public URL を root-relative の `/media/...` 形式で記述します。configured base は手動で追加せず、通常の Markdown pass に authored URL を prefix させます。
+subpath 配下へ公開するときは Astro の `base` を設定します。Oxiquill は interactive-cell manifest、language runtime、diagram、`/media/...` reference に適用します。`base` 自体が `/media` または同じ prefix で始まる場合も、authoring ではすべての public URL を root-relative の `/media/...` 形式で記述します。configured base は手動で追加せず、通常の Markdown pass に authored URL を prefix させます。文書ページへのリダイレクトには、同じく base を付ける [`docRedirects`](#文書のリダイレクト) を使います。
 
 生成 runtime は `.oxiquill` と `public/oxiquill`、verified download cache は `.cache/oxiquill/downloads/v1`、最終 static site は Astro の `outDir`（通常 `dist`）に置かれます。生成 directory と ownership marker を直接編集しないでください。download cache は build や output 再生成をまたいで保持できますが、file は利用前に毎回検証されます。
 

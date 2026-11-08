@@ -11,3 +11,7 @@
 :root:where([data-test-source-height='bounded']) {
   --oq-source-max-height: 12rem;
 }
+
+:root:where([data-test-output-height='bounded']) {
+  --oq-output-max-height: 4rem;
+}
