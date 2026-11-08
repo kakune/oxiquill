@@ -41,7 +41,7 @@ try {
     JSON.stringify(
       {
         revision: execFileSync('git', ['rev-parse', 'HEAD'], { encoding: 'utf8' }).trim(),
-        dirty: true,
+        dirty: Boolean(execFileSync('git', ['status', '--porcelain'], { encoding: 'utf8' }).trim()),
         date: new Date().toISOString(),
         node: process.version,
         browser: browser.version(),

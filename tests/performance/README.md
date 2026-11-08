@@ -1,5 +1,11 @@
 # Python startup measurements
 
+## Scene3d rendering
+
+Run `pnpm exec node tests/performance/scene3d-rendering.mjs` without other builds or test suites running. The report defaults to `test-results/scene3d-rendering.json`; an optional first argument selects another destination. Set `PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH` when using a system/Nix Chromium.
+
+The harness uses the actual Canvas renderer with 4, 1,000, and 10,000 deterministic points and 5, 1,997, and 20,000 undirected edges. Each condition discards one warmup and records five samples. Initial drawing and a 15° orbit include projection, sorting, Canvas calls, and a one-pixel readback to flush drawing. Projection plus picking is measured separately. DOM layout, lazy module loading, and worker execution are excluded. Reports include the source revision, working-tree status, browser, CPU, viewport, canvas dimensions, and device pixel ratio. Correctness tests have no timing thresholds.
+
 Issue #133 was measured on 2026-09-05 against production output served locally with gzip, at the same-origin `/oxiquill/` base path. The browser was headless Chromium 149.0.7827.55 from the development environment's Nix Playwright package. Hardware: Intel Core i7-12700F, 16 available CPUs, 25,199,001,600 bytes of RAM; Linux, Node 24.19.0, pnpm 11.2.2. Neither network nor CPU throttling was enabled. HTTP responses used `Cache-Control: public, max-age=600`.
 
 Each example has five fresh browser contexts, five reloads of the same context, and five repeated executions on the same page. Fresh and reload latency runs from navigation start to Preact's committed output; repeat latency runs from the input/button trigger to output. The viewport was 1280 × 900 with full motion. Reactive repeats include the existing 150 ms debounce. The gzip server remains running throughout each measurement set, but browser contexts do not share an HTTP cache.

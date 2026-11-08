@@ -1,6 +1,17 @@
 import { readFile } from 'node:fs/promises';
 import AxeBuilder from '@axe-core/playwright';
-import { expect, test } from '@playwright/test';
+import { expect, test, type Locator } from '@playwright/test';
+
+async function waitForCanvas(canvas: Locator) {
+  await expect
+    .poll(() =>
+      canvas.evaluate((element) => {
+        const width = element.getBoundingClientRect().width;
+        return width > 0 && (element as HTMLCanvasElement).width === Math.round(width * devicePixelRatio);
+      })
+    )
+    .toBe(true);
+}
 
 test('touch picking and pinch zoom use CSS coordinates at mobile width', async ({ browser, browserName }) => {
   test.skip(browserName !== 'chromium', 'Chromium CDP supplies real multi-touch gestures.');
@@ -10,6 +21,7 @@ test('touch picking and pinch zoom use CSS coordinates at mobile width', async (
     await page.goto('http://127.0.0.1:4323/scene3d.html');
     const canvas = page.getByTestId('scene3d-canvas');
     await expect(canvas).toBeVisible();
+    await waitForCanvas(canvas);
     const box = await canvas.boundingBox();
     if (!box) throw new Error('Scene canvas has no bounds');
     // Independent projection oracle for point b=(1,0,0), centered at (.5,.5,.5).
@@ -53,7 +65,7 @@ for (const width of [390, 1000]) {
       const scene = page.getByTestId('scene3d-output');
       await expect(scene).toBeVisible();
       const canvas = scene.getByTestId('scene3d-canvas');
-      await expect.poll(() => canvas.evaluate((element) => (element as HTMLCanvasElement).width)).toBeGreaterThan(0);
+      await waitForCanvas(canvas);
       const image = () => canvas.evaluate((element) => (element as HTMLCanvasElement).toDataURL());
       const initial = await image();
       const view = scene.getByRole('group', { name: 'Tetrahedron' });

@@ -42,6 +42,7 @@ export default function Scene3dOutput({
   resultIdentity
 }: Props) {
   const text = scene3dLabels(labels.locale);
+  const title = artifact.title?.trim() ? artifact.title : text.title;
   const mounted = useRef({});
   const identity = resultIdentity ?? mounted.current;
   const ids = useMemo(() => JSON.stringify([artifact.id, scenePointIds(artifact)]), [artifact]);
@@ -188,10 +189,15 @@ export default function Scene3dOutput({
   }
   const distance = sceneDistance(artifact, view.selected);
   return (
-    <figure class="doc-scene3d" aria-labelledby={`${idPrefix}-title`} data-testid="scene3d-output">
-      <figcaption id={`${idPrefix}-title`}>
-        <strong>{artifact.title ?? text.title}</strong>
-        {artifact.caption ? <p>{artifact.caption}</p> : null}
+    <figure
+      class="doc-scene3d"
+      aria-labelledby={`${idPrefix}-title`}
+      aria-describedby={artifact.caption ? `${idPrefix}-caption` : undefined}
+      data-testid="scene3d-output"
+    >
+      <figcaption>
+        <strong id={`${idPrefix}-title`}>{title}</strong>
+        {artifact.caption ? <p id={`${idPrefix}-caption`}>{artifact.caption}</p> : null}
       </figcaption>
       <div class="doc-scene3d__actions">
         <button type="button" onClick={() => updateCamera(() => authoredCamera(artifact))}>

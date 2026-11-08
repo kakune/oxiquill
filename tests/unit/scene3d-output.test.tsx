@@ -68,6 +68,12 @@ afterEach(() => {
   vi.unstubAllGlobals();
 });
 
+it.each(['', '  '])('keeps a labelled view for a blank authored title %j', (title) => {
+  render(<Scene3dOutput artifact={{ ...tetrahedron, title, caption: 'Context' }} idPrefix="scene" />);
+  expect(screen.getByRole('figure', { name: '3D scene' })).toHaveAccessibleDescription('Context');
+  expect(screen.getByRole('group', { name: '3D scene' })).toHaveAttribute('tabindex', '0');
+});
+
 it('offers keyboard and table measurement without interpreting labels as markup', async () => {
   const result = render(<Scene3dOutput artifact={tetrahedron} idPrefix="scene" />);
   const viewport = screen.getByRole('group', { name: 'Tetrahedron' });

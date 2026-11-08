@@ -66,8 +66,10 @@ Object.assign(window, {
     const camera = authoredCamera(scene);
     const started = performance.now();
     drawScene(canvas, scene, camera, new Set(), [], chrome, 720, 360, 1);
+    canvas.getContext('2d')?.getImageData(0, 0, 1, 1);
     const rendered = performance.now();
     drawScene(canvas, scene, { ...camera, yaw: 45 }, new Set(), [], chrome, 720, 360, 1);
+    canvas.getContext('2d')?.getImageData(0, 0, 1, 1);
     const rotated = performance.now();
     const points = projectScene(scene, camera, 720, 360);
     pickPoint(points, 360, 180);

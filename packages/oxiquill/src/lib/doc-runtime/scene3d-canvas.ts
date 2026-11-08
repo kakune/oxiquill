@@ -20,8 +20,10 @@ export function drawScene(
 ): boolean {
   const context = canvas.getContext('2d');
   if (!context) return false;
-  canvas.width = Math.max(1, Math.round(width * ratio));
-  canvas.height = Math.max(1, Math.round(height * ratio));
+  const pixelWidth = Math.max(1, Math.round(width * ratio));
+  const pixelHeight = Math.max(1, Math.round(height * ratio));
+  if (canvas.width !== pixelWidth) canvas.width = pixelWidth;
+  if (canvas.height !== pixelHeight) canvas.height = pixelHeight;
   context.setTransform(ratio, 0, 0, ratio, 0, 0);
   context.fillStyle = chrome.background;
   context.fillRect(0, 0, width, height);
