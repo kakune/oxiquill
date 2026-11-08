@@ -26,7 +26,10 @@ export async function recordOutputIntegrity(directory, { fileSystem = defaultFil
   );
 }
 
-export async function recordedOutputIsComplete(state, directory, fileSystem = defaultFileSystem) {
+// Like file-digests.mjs, outputs kept outside production builds are verified by
+// existence and size; production builds compare SHA-256 as well.
+export async function recordedOutputIsComplete(state, directory, fileSystem = defaultFileSystem, { mode } = {}) {
+  const quick = mode !== 'build' && typeof fileSystem.stat === 'function';
   const files = state?.publicFiles;
   if (!Array.isArray(files) || files.length === 0) return false;
   const results = await Promise.all(
@@ -42,6 +45,10 @@ export async function recordedOutputIsComplete(state, directory, fileSystem = de
       if (!Number.isSafeInteger(expected?.size) || expected.size < 0 || !/^[a-f0-9]{64}$/u.test(expected?.sha256))
         return false;
       try {
+        if (quick) {
+          const info = await fileSystem.stat(path.join(directory, name));
+          return info.isFile() && info.size === expected.size;
+        }
         const actual = await fileIntegrity(path.join(directory, name), fileSystem);
         return actual.size === expected.size && actual.sha256 === expected.sha256;
       } catch (error) {

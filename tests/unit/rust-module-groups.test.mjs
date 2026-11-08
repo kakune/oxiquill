@@ -317,6 +317,19 @@ describe('Rust module groups', () => {
     expect(project.resolveRustLock).not.toHaveBeenCalled();
   });
 
+  it('re-resolves the workspace lock when a helper adds a dependency its lock does not pin', async () => {
+    const project = await fixture({ helpers: true });
+    await project.sync();
+    project.resolveRustLock.mockClear();
+    await project.put(
+      'crates/beta/Cargo.toml',
+      '[package]\nname = "beta"\nversion = "0.1.0"\n[dependencies]\nnum = "0.4"\n'
+    );
+    const result = await project.sync();
+    expect(project.resolveRustLock).toHaveBeenCalledTimes(1);
+    expect(project.rebuilt(result)).toEqual(['first.mdx', 'second.mdx']);
+  });
+
   it('treats a helper manifest edit as a change to every module through unified features', async () => {
     const project = await fixture({ helpers: true });
     await project.sync();
@@ -428,6 +441,47 @@ describe('Rust module groups', () => {
     const fixed = await project.sync(tolerant);
     expect(fixed.rustBuildResult).toBeUndefined();
     expect((await project.manifest()).cells.find((cell) => cell.id === 'a__example').source).toBe('println!("fixed");');
+  });
+
+  it('compiles a cell with an unterminated literal so that only its module fails', async () => {
+    const project = await fixture({
+      pages: Object.fromEntries(['a', 'b'].map((name) => [`content/docs/${name}.mdx`, page(`println!("${name}");`)]))
+    });
+    const tolerant = { tolerateRustModuleFailures: true, session: project.session };
+    await project.sync(tolerant);
+    await project.put('content/docs/a.mdx', page('let text = "unfinished;'));
+    await project.put('content/docs/b.mdx', page('println!("b updated");'));
+    // The mocked compiler stands in for rustc rejecting the unterminated literal.
+    project.fail({ a__example: compileError('a__example') });
+    const result = await project.sync(tolerant);
+    expect(result.rustBuildResult.ok).toBe(false);
+    expect(project.buildRust.mock.lastCall[0].groups.flatMap((group) => group.pages).sort()).toEqual([
+      'a.mdx',
+      'b.mdx'
+    ]);
+    expect((await project.manifest()).cells.find((cell) => cell.id === 'b__example').source).toBe(
+      'println!("b updated");'
+    );
+  });
+
+  it('does not keep a failing module whose published files were deleted', async () => {
+    const project = await fixture({
+      pages: Object.fromEntries(['a', 'b'].map((name) => [`content/docs/${name}.mdx`, page(`println!("${name}");`)]))
+    });
+    const tolerant = { tolerateRustModuleFailures: true, session: project.session };
+    await project.sync(tolerant);
+    const failingModule = (await project.manifest()).rust.modules.find((module) => module.cells.includes('a__example'));
+    await rm(project.paths.rustWasmPublicDir, { recursive: true, force: true });
+    await project.put('content/docs/a.mdx', page('broken();'));
+    project.fail({ a__example: compileError('a__example') });
+    const result = await project.sync(tolerant);
+    expect(result.rustBuildResult.ok).toBe(false);
+    const after = await project.manifest();
+    expect(after.rust.modules.some((module) => module.id === failingModule.id)).toBe(false);
+    expect(after.cells.some((cell) => cell.id === 'a__example')).toBe(false);
+    const published = await readdir(project.paths.rustWasmPublicDir);
+    for (const module of after.rust.modules)
+      for (const asset of [module.glue, module.wasm]) expect(published).toContain(path.basename(asset.url));
   });
 
   it('prunes moved and deleted page outputs only after successful publication', async () => {

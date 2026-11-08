@@ -1849,6 +1849,7 @@ describe('staged runtime license inputs', () => {
     await sync({ syncLicenses });
     expect(await fileSystem.readFile(path.join(paths.licensesPublicDir, 'keep.txt'), 'utf8')).toBe('keep');
     expect(await fileSystem.readFile(path.join(paths.licensesPublicDir, 'notices.txt'), 'utf8')).toBe('next notices');
+    expect(fileSystem.existsSync(paths.rustWasmPublicDir)).toBe(true);
     await fileSystem.rm('/repo/content/docs/index.mdx');
     await sync({
       syncLicenses: async ({ paths: staged }) => {
@@ -1856,5 +1857,7 @@ describe('staged runtime license inputs', () => {
         return false;
       }
     });
+    // Removing the last Rust cell also removes the published modules.
+    expect(fileSystem.existsSync(paths.rustWasmPublicDir)).toBe(false);
   });
 });

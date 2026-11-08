@@ -2,7 +2,10 @@
 import { EventEmitter } from 'node:events';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { createProcessRunner } from '../../packages/oxiquill/src/generator/doc-runtime/process-runner.mjs';
-import { createRuntimeEvents } from '../../packages/oxiquill/src/generator/doc-runtime/runtime-events.mjs';
+import {
+  createRuntimeEvents,
+  summarizePhases
+} from '../../packages/oxiquill/src/generator/doc-runtime/runtime-events.mjs';
 import {
   actionReasons,
   changedSources,
@@ -158,6 +161,29 @@ describe('phase and plan reporting', () => {
       ['skipped', 0]
     ]);
     expect(output.filter((event) => event.state === 'start')).toHaveLength(2);
+  });
+
+  it('summarizes nested and concurrent phases by wall-clock time', async () => {
+    let time = 0;
+    const events = createRuntimeEvents({ now: () => time });
+    const gate = (at) => new Promise((resolve) => setTimeout(() => resolve((time = at)), 0));
+    await events.phase('generation', {}, async () => {
+      await events.phase('generation', { language: 'rust' }, () => gate(10));
+      await gate(20);
+    });
+    // Two modules optimized concurrently from 20 to 50 and from 30 to 40.
+    let finishFirst;
+    const first = events.phase('optimize', { module: 'a' }, () => new Promise((resolve) => (finishFirst = resolve)));
+    time = 30;
+    await events.phase('optimize', { module: 'b' }, () => gate(40));
+    time = 50;
+    finishFirst();
+    await first;
+    events.skipped('optimize', { cache: 'hit' });
+    const summary = Object.fromEntries(summarizePhases(events.phases).map((entry) => [entry.phase, entry]));
+    expect(summary.generation.elapsedMs).toBe(20);
+    expect(summary.optimize).toMatchObject({ elapsedMs: 30, cache: { hits: 1, misses: 0 } });
+    expect(Object.keys(events.phases[0])).not.toContain('interval');
   });
 
   it('attributes changed, added and removed cell sources without storing source text', () => {

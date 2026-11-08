@@ -118,6 +118,10 @@ export function createHelperClosureReader({ paths, helperCrates, fileSystem, dig
         )
       );
     const packageVersion = typeof manifest.package.version === 'string' ? manifest.package.version : inherited.version;
+    // Path packages appear in the resolved lock without a source; Cargo defaults a missing version.
+    const locals = new Map([
+      [manifest.package.name, { name: manifest.package.name, version: packageVersion ?? '0.0.0' }]
+    ]);
     const lockPath = path.join(workspace?.directory ?? directory, 'Cargo.lock');
     const lock = await readToml(lockPath);
     if (lock) {
@@ -143,8 +147,9 @@ export function createHelperClosureReader({ paths, helperCrates, fileSystem, dig
     for (const child of merged) {
       child.inputs.forEach((value, key) => inputs.set(key, value));
       child.packages.forEach((value, key) => packages.set(key, value));
+      child.locals.forEach((value, key) => locals.set(key, value));
     }
-    return { inputs, packages };
+    return { inputs, packages, locals };
   };
   const readHelper = (name) => {
     const helper = helperCrates.get(name);
@@ -156,16 +161,19 @@ export function createHelperClosureReader({ paths, helperCrates, fileSystem, dig
     async closure(crateNames) {
       const inputs = new Map();
       const packages = new Map();
+      const locals = new Map();
       for (const name of [...new Set(crateNames)].sort()) {
         const result = await readHelper(name);
         result.inputs.forEach((value, key) => inputs.set(key, value));
         result.packages.forEach((value, key) => packages.set(key, value));
+        result.locals.forEach((value, key) => locals.set(key, value));
       }
       return {
         inputs: [...inputs]
           .sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0))
           .map(([inputPath, digestValue]) => ({ path: inputPath, digest: digestValue })),
-        packages: sortLockPackages([...packages.values()])
+        packages: sortLockPackages([...packages.values()]),
+        localPackages: [...locals.values()].sort((a, b) => (a.name < b.name ? -1 : a.name > b.name ? 1 : 0))
       };
     }
   });

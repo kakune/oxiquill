@@ -4,7 +4,6 @@ import {
   mapRustSpan,
   mapRustDiagnostic,
   formatRustDiagnostic,
-  compilerMessages,
   formatRustFailure,
   mapRustCompilerMessages
 } from '../../packages/oxiquill/src/generator/doc-runtime/rust-diagnostics.mjs';
@@ -14,6 +13,18 @@ import {
   joinFragments
 } from '../../packages/oxiquill/src/generator/doc-runtime/rust-codegen/source-map.mjs';
 import { cellCompileErrors } from '../../packages/oxiquill/src/generator/doc-runtime/dev-diagnostics.mjs';
+import {
+  isErrorMessage,
+  parseCargoMessage
+} from '../../packages/oxiquill/src/generator/doc-runtime/cargo-messages.mjs';
+
+// Error messages as the module build collects them from Cargo's JSON stream.
+const compilerMessages = (output) =>
+  String(output)
+    .split('\n')
+    .map(parseCargoMessage)
+    .filter((message) => message && isErrorMessage(message))
+    .map((message) => ({ ...message.message, targetFile: message.target?.src_path }));
 
 const cell = {
   id: 'demo__example',
