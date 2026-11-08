@@ -303,6 +303,8 @@ jobs:
           test "$(rustc --version | cut -d ' ' -f 2)" = "$RUST_TOOLCHAIN"
           test "$(cargo --version | cut -d ' ' -f 2)" = "$RUST_TOOLCHAIN"
       - name: Install pinned Binaryen
+        env:
+          GH_TOKEN: ${{ github.token }}
         shell: bash
         run: bash .github/scripts/install-binaryen.sh
       # Smoke workspaces are temporary; a PATH CLI avoids one verified download per workspace.

@@ -10,9 +10,10 @@ const canary = parse(readFileSync('.github/workflows/rust-canary.yml', 'utf8'));
 
 describe('Rust compatibility CI', () => {
   it('provides pinned Binaryen for the real optimizer-cache smoke test', () => {
-    expect(ci.jobs.runtime.steps.some((step) => step.run === 'bash .github/scripts/install-binaryen.sh')).toBe(true);
+    const step = ci.jobs.runtime.steps.find((entry) => entry.run === 'bash .github/scripts/install-binaryen.sh');
+    expect(step?.env).toEqual({ GH_TOKEN: '${{ github.token }}' });
     const installer = readFileSync('.github/scripts/install-binaryen.sh', 'utf8');
-    expect(installer).toContain('version_117');
+    expect(installer).toContain('gh release download version_117');
     expect(installer).toContain('sha256sum --check --strict');
     expect(installer).toContain('wasm-opt version 117 (version_117)');
   });
