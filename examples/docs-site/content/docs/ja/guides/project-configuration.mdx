@@ -154,7 +154,7 @@ export default defineOxiquillConfig({
 
 ## 日本語の組版
 
-`oxiquill/styles/japanese.css` は、言語が日本語（`lang="ja"` または `ja-` で始まるタグ）のページに組版の設定を適用します。厳格な禁則処理により小書きの仮名や長音符を行頭に置かず、本文と見出しの行間と字間を調整します。ほかの言語のページには影響しません。`starlight.customCss` に追加してください。
+`oxiquill/styles/japanese.css` は、言語が日本語（`lang="ja"` または `ja-` で始まるタグ）のコンテンツに組版の設定を適用します。厳格な禁則処理により小書きの仮名や長音符を行頭に置かず、本文と見出しの行間と字間を調整します。日本語のルートで表示される未翻訳のフォールバックページを含め、ほかの言語のコンテンツには影響しません。`starlight.customCss` に追加してください。
 
 ```js
 starlight: {
@@ -309,6 +309,6 @@ export default defineOxiquillConfig({
 
 Rust の生成には Cargo と `wasm32-unknown-unknown` ターゲットが必要です。Oxiquill は固定されたランタイム crate と一致する `wasm-bindgen` CLI を `PATH` から使い、なければ公式のホスト向け配布物をダウンロードして固定 SHA-256 を検証し、`paths.downloadCacheDir` に保存します。バージョンの異なる `PATH` 上のバイナリは使いません。本番の最適化も同様に、`PATH` 上の `wasm-opt` または検証済みの Binaryen 117 を `-O` で使います。展開には `tar` が必要です。検証の失敗や未対応のホストでは、期待するバージョンとキャッシュのパスを表示します。一致するツールを `PATH` にインストールしても構いません。
 
-生成される workspace の lock は、ランタイムの完全固定バージョンと、helper workspace が lock している通常依存およびビルド依存のバージョンを出発点にします。helper の dev-dependencies は無視します。Cargo は workspace の依存関係が変わったときに一度だけこれを解決し、ローカルにキャッシュされていないパッケージがある場合だけネットワークを使います。以降のビルドはすべて `--locked` で実行します。解決に失敗した場合は[トラブルシューティング](/ja/guides/troubleshooting/)を参照してください。
+生成される workspace の lock は、ランタイムの完全固定バージョンと、helper workspace が lock している通常依存およびビルド依存のバージョンを出発点にします。helper の dev-dependencies は無視します。Cargo は workspace の依存関係が変わったとき（helper の通常依存やビルド依存の編集を含む）に一度だけこれを解決し、ローカルにキャッシュされていないパッケージがある場合だけネットワークを使います。以降のビルドはすべて `--locked` で実行します。解決に失敗した場合は[トラブルシューティング](/ja/guides/troubleshooting/)を参照してください。
 
 生成されるモジュール crate のソースは `paths.rustCellsDir/modules` 以下の安定したパスに置かれます。ページの削除やグループ変更で不要になったモジュールのソースとアセットは公開後に削除し、以前の単一 crate やページ単位のレイアウトの出力も、`oxiquill clean` なしで次回の生成時に置き換えます。`oxiquill clean` は生成物とコンパイラキャッシュを削除しますが、検証済みのダウンロードは保持します。

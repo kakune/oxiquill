@@ -402,7 +402,7 @@ Rust セルでは明示的な `emit_*` macro を使います。対応 macro:
 - `emit_chart!`、`emit_area_chart!`、`emit_line_chart!`、`emit_scatter_chart!`、`emit_bar_chart!`、`emit_histogram!`、`emit_heatmap!`
 - 互換用の `emit_line_plot!`。新規利用では座標を明示的に変換し、`emit_line_chart!` を使ってください。
 
-`emit_chart!(spec)` は対応するすべての種類のチャートを受け付けます。`metadata = ...` の `id/title/caption` は artifact に属し、spec の `title/xLabel/yLabel` とは別です。表示タイトルは artifact の title を優先します。metadata の null は省略として扱い、それ以外のフィールドはその出力の診断になります。`emit_area_chart!` は line と同じ点列・系列、軸ラベル、末尾 style、`options = ...` 形式を使えます。既存マクロの引数形式は維持されます。不正な spec は有効な隣接出力を残して、その出力の診断として表示されます。
+`emit_chart!(spec)` は対応するすべての種類のチャートを受け付けます。`metadata = ...` の `id/title/caption` は artifact に属し、spec の `title/xLabel/yLabel` とは別です。表示タイトルは artifact の title を優先します。metadata の null は省略として扱い、それ以外のフィールドはその出力の診断になります。`emit_table!`、`emit_table_with_columns!`、`emit_records_table!` も末尾に同じ `metadata = ...`（`id/title/caption`）を受け付けます。表に `id` を付けると、[宣言的テスト](/ja/guides/validation/)では出力の位置ではなく `artifact:` で表を選べます。`emit_area_chart!` は line と同じ点列・系列、軸ラベル、末尾 style、`options = ...` 形式を使えます。既存マクロの引数形式は維持されます。不正な spec は有効な隣接出力を残して、その出力の診断として表示されます。
 
 ```rust
 emit_chart!(serde_json::json!({
@@ -622,7 +622,7 @@ table interaction state は一つの execution result に限定されます。�
 
 ## 列の表示形式と計算結果
 
-表とグラフは `NumberFormat` を共有します。`significantDigits`（1–17）と `fractionDigits`（0–20）は併用できません。`notation` は `auto`、`standard`、`scientific`、`si`、`unit` はプレーンテキストです。`ChartNumberFormat` は別名として残ります。`standard` は指数を使わず、`scientific` はゼロ以外を指数表示します。SI はヨクトからヨタまでの接頭辞を使い、その範囲外は指数表示します。表ではセルごと、グラフでは軸全体で接頭辞を選びます。既定の表示は変わりません。
+表とグラフは `NumberFormat` を共有します。`significantDigits`（1–17）と `fractionDigits`（0–20）は併用できません。`notation` は `auto`、`standard`、`scientific`、`si`、`unit` はプレーンテキストです。`ChartNumberFormat` は別名として残ります。`standard` は指数を使わず、`scientific` はゼロ以外を指数表示します。SI はヨクトからヨタまでの接頭辞を使い、その範囲外は指数表示します。表ではセルごと、グラフでは軸全体で接頭辞を選びます。`fractionDigits` を指定した `auto` 表記では、表もグラフも通常の表記を維持するため、大きな値は整数部をすべて表示し、小さな値は 0 に丸められることがあります。既定の表示は変わりません。
 
 表の列は `{ key, label, type?, format?, nullText? }` です。`format` は `number` と `integer` 列だけに指定できます。`nullText` はすべての列で使えます。単位は画面と CSV の見出しに `Label (unit)` と表示され、セルには付かず、値の変換もしません。null は `nullText`（既定は `null`）で表示し、CSV では空欄です。表のゼロと負のゼロは `0`、既存の固定小数点グラフは末尾のゼロを維持します。精度指定は倍精度数の値を丸め、余分な桁を作りません。並べ替え、数値のツールチップ、コピー、CSV は元の値と数式対策を維持します。
 
@@ -663,7 +663,7 @@ emit_outcome!(outcome.diagnostic("residual", residual, None));
 
 Rust の `emit_table_with_columns!` は serde で直列化できる列記述子、従来のラベル文字列、キーとラベルのタプルに対応します。`Outcome::satisfied`、`::partial`、`::failed`、`::unavailable` を作り、`.explanation(...)`、`.status(...)`、`.diagnostic(name, value, unit)` を連結して `emit_outcome!` に渡します。
 
-Python の `display_table(value, columns=...)` にはラベル一覧、または列キー・ラベルから記述子フィールドへのマッピングを渡せます。キーがラベルより優先されます。通常の行一覧では推定型が `unknown` なので、数値形式を指定する列には `type: "number"` も指定します。次の例は環境の制限も明示します。
+Python の `display_table(value, columns=...)` にはラベル一覧、または列キー・ラベルから記述子フィールドへのマッピングを渡せます。キーがラベルより優先され、どの列にも一致しないマッピングのエントリはエラー出力になります。通常の行一覧では推定型が `unknown` なので、数値形式を指定する列には `type: "number"` も指定します。次の例は環境の制限も明示します。
 
 ```python
 #| id: unavailable-outcome
@@ -697,13 +697,13 @@ displayOutcome ((outcome "satisfied" "Criterion met")
 
 必須フィールドは `kind: "scene3d"` と `points` です。`edges`、`groups`、`axes`、`camera`、`id`、`title`、`caption` は任意です。
 
-| フィールド | 制約                                                                                                                   |
-| ---------- | ---------------------------------------------------------------------------------------------------------------------- |
-| `points`   | 0〜10,000件。一意の `id`（UTF-8で1〜64バイト）、有限数3個の `position`、任意の平文 `label`（256バイト）と `group` ID。 |
-| `edges`    | 0〜20,000件の `{from, to}`。異なる既存の点を参照します。同じ組と逆順の組は重複です。                                   |
-| `groups`   | 順序付きの `{id, label?}`。IDは空でなく一意です。未宣言の使用グループは初出順で続き、IDをラベルにします。              |
-| `axes`     | 任意の `x`、`y`、`z` に平文 `label` と `unit`（32バイト）を指定できます。                                              |
-| `camera`   | 有限の角度 `yaw`、−90〜90の `pitch`、有限の正数 `zoom`。既定値は30°、20°、1です。                                      |
+| フィールド | 制約                                                                                                                           |
+| ---------- | ------------------------------------------------------------------------------------------------------------------------------ |
+| `points`   | 0〜10,000件。一意の `id`（UTF-8で1〜64バイト）、有限数3個の `position`、任意の平文 `label`（256バイト）と空でない `group` ID。 |
+| `edges`    | 0〜20,000件の `{from, to}`。異なる既存の点を参照します。同じ組と逆順の組は重複です。                                           |
+| `groups`   | 順序付きの `{id, label?}`。IDは空でなく一意です。未宣言の使用グループは初出順で続き、IDをラベルにします。                      |
+| `axes`     | 任意の `x`、`y`、`z` に平文 `label` と `unit`（32バイト）を指定できます。                                                      |
+| `camera`   | 有限の角度 `yaw`、−90〜90の `pitch`、有限の正数 `zoom`。既定値は30°、20°、1です。                                              |
 
 その他のテキストメタデータは各16 KiBまでです。シーン全体は既存の実行・ワーカーレスポンス上限16 MiBに含まれます。不正な値、未知のフィールド、件数・バイト上限違反は該当する出力だけの診断になります。シーンを暗黙に切り詰めません。マークアップは文字として表示します。
 
@@ -745,7 +745,7 @@ emit_scene3d!(serde_json::json!({
 }), metadata = serde_json::json!({"id": "tetrahedron", "title": "Tetrahedron"}));
 ```
 
-Rust の `emit_scene3d!(scene, metadata = ...)` と Haskell の `displayScene3d scene` には `kind` を除いたシーンを渡します。Python は `display_scene3d(points, *, edges=None, groups=None, axes=None, camera=None, title=None, caption=None)` を使います。3言語とも `kind` を追加し、同じ検証を受けます。
+Rust の `emit_scene3d!(scene, metadata = ...)` と Haskell の `displayScene3d scene` には `kind` を除いたシーンを渡します。Python は `display_scene3d(points, *, edges=None, groups=None, axes=None, camera=None, id=None, title=None, caption=None)` を使います。3言語とも `kind` を追加し、同じ検証を受けます。
 
 ```python
 #| id: python-scene3d

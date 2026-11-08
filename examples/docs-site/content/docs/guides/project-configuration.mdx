@@ -154,7 +154,7 @@ Here `/docs/guides/setup/` redirects to `/docs/guides/getting-started/`. A desti
 
 ## Japanese Typography
 
-`oxiquill/styles/japanese.css` styles pages whose language is Japanese (`lang="ja"` or a `ja-` tag). It applies strict line breaking, so small kana and prolonged sound marks do not start a line, and sets line height and letter spacing for prose and headings. Pages in other languages are unaffected. Add it to `starlight.customCss`:
+`oxiquill/styles/japanese.css` styles content whose language is Japanese (`lang="ja"` or a `ja-` tag). It applies strict line breaking, so small kana and prolonged sound marks do not start a line, and sets line height and letter spacing for prose and headings. Content in other languages is unaffected, including an untranslated fallback page under a Japanese route. Add it to `starlight.customCss`:
 
 ```js
 starlight: {
@@ -311,6 +311,6 @@ A production build fails and publishes nothing when any module fails. The `oxiqu
 
 Rust generation requires Cargo and the `wasm32-unknown-unknown` target. Oxiquill uses a `wasm-bindgen` CLI matching the pinned runtime crate from `PATH`, or downloads the official host release, verifies its pinned SHA-256, and caches it under `paths.downloadCacheDir`; a mismatching `PATH` binary is not used. Production optimization similarly uses `wasm-opt` from `PATH` or a verified Binaryen 117 release with `-O`. Archive extraction requires `tar`. Failed verification or an unsupported host reports the expected tool version and cache path; installing the matching tool on `PATH` is an alternative.
 
-The generated workspace lock starts from the runtime's exact pins and from the normal and build dependency versions locked by helper workspaces; helper dev-dependencies are ignored. Cargo resolves this seed once whenever the workspace's dependencies change, reaching the network only for packages that are not cached locally, and every build then uses `--locked`. See [Troubleshooting](/guides/troubleshooting/) if resolution fails.
+The generated workspace lock starts from the runtime's exact pins and from the normal and build dependency versions locked by helper workspaces; helper dev-dependencies are ignored. Cargo resolves this seed once whenever the workspace's dependencies change, including edits to a helper's normal or build dependencies, reaching the network only for packages that are not cached locally, and every build then uses `--locked`. See [Troubleshooting](/guides/troubleshooting/) if resolution fails.
 
 Generated module crates have stable source paths below `paths.rustCellsDir/modules`. Removing or regrouping pages prunes obsolete module sources and assets after publication, and outputs of earlier single-crate or per-page layouts are replaced on the next generation without `oxiquill clean`. `oxiquill clean` removes generated and compiler outputs while retaining verified tool downloads.

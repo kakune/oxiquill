@@ -145,7 +145,7 @@ emit_json!(&(n * n));
 | `{ path: "/outputs/0/value", range: { min: 1, max: 10 } }`         | 有限数が境界を含む範囲内であること。上下限の少なくとも一方が必要です。                                                              |
 | `{ path: "/outputs/0/value", approx: { value: 0, atol: 1.0e-8 } }` | `abs(actual - value) <= atol + rtol * abs(value)`。許容誤差の既定値はゼロで、有限かつ非負、少なくとも一方は正である必要があります。 |
 
-`path` は正規化後の `{ "outputs": [...] }` に対する RFC 6901 JSON Pointer です。空文字列はルート、`~0` は `~`、`~1` は `/` を表します。`artifact: <id>` を追加すると、その安定 id を持つ artifact を起点にします。例は `{ artifact: plot, path: /spec/kind, equals: line }` です。パスや artifact がなければ失敗します。文字列と `null` を数値に変換しません。
+`path` は正規化後の `{ "outputs": [...] }` に対する RFC 6901 JSON Pointer です。空文字列はルート、`~0` は `~`、`~1` は `/` を表します。`artifact: <id>` を追加すると、その安定 id を持つ artifact を起点にします。例は `{ artifact: plot, path: /spec/kind, equals: line }` です。Rust のグラフ、シーン、表はこの id を `metadata = ...` から受け取るため、`emit_table_with_columns!(columns, rows, metadata = json!({ "id": "scores" }))` は、出力内の位置にかかわらず `{ artifact: scores, path: /rows/0/1, equals: 3 }` で検査できます。パスや artifact がなければ失敗します。文字列と `null` を数値に変換しません。
 
 ハーネスはブラウザーと同じ出力制限と artifact 検証を適用し、宣言された条件だけを判定します。`iteration-limit` などのステータス値や artifact 検証診断は実行エラーではありません。実行ごとに新しい Wasm インスタンスを使い、セルの `timeoutMs` を適用します。タイムアウトは、エラーを期待するテストでも失敗します。
 
