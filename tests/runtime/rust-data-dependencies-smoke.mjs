@@ -26,6 +26,20 @@ const blocks = [
     { id: 'model', kind: 'definitions' },
     '#[derive(serde::Deserialize)]\npub(crate) struct Data { pub(crate) value: i32 }'
   ),
+  fence(
+    { id: 'borrowed-model', kind: 'definitions' },
+    "#[derive(serde::Deserialize)]\npub(crate) struct Borrowed<'a> { pub(crate) value: &'a str }"
+  ),
+  producer('text', 'export!(value, &"borrowed");'),
+  fence(
+    {
+      id: 'borrowed',
+      uses: ['borrowed-model'],
+      dependsOn: { data: { cell: 'text', type: "Borrowed<'_>" } },
+      tests: [{ case: 'default', expect: [{ path: '/outputs/0/content', equals: 'Borrowed borrowed\n' }] }]
+    },
+    'println!("Borrowed {}", data.value);'
+  ),
   producer('source', 'export!(value, &seed);', undefined, {
     cache: 'inputs',
     inputs: { seed: { type: 'integer', value: 7 } }

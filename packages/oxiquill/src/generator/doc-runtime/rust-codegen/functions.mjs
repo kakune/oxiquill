@@ -17,7 +17,7 @@ export function generateRustFunctionMapped(cell, invokedMacros = scanRustMacroIn
     .map(([name, dependency]) => {
       const value = `dependencies.get(${JSON.stringify(name)}).ok_or_else(|| ${JSON.stringify(`Upstream producer ${dependency.cell} provided no exports`)}.to_owned())?`;
       return dependency.type
-        ? `        let ${name}: ${dependency.type} = serde_json::from_value(${value}.clone()).map_err(|error| format!("Producer ${dependency.cell} could not deserialize binding ${name}: {error}"))?;`
+        ? `        let ${name}: ${dependency.type} = serde::Deserialize::deserialize(${value}).map_err(|error| format!("Producer ${dependency.cell} could not deserialize binding ${name}: {error}"))?;`
         : `        let ${name}: &serde_json::Value = ${value};`;
     })
     .join('\n');

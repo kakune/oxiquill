@@ -39,7 +39,7 @@ describe('cell data authoring', () => {
       producerFingerprint: a.producerFingerprint
     });
     expect(normalizeCell(b).dependsOn).toEqual(b.dependsOn);
-    expect(generateRustFunction(b)).toContain('let typed: Dataset = serde_json::from_value');
+    expect(generateRustFunction(b)).toContain('let typed: Dataset = serde::Deserialize::deserialize');
     expect(generateRustFunction(b)).toContain('let raw: &serde_json::Value');
   });
   it.each([
