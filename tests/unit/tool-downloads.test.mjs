@@ -1,7 +1,7 @@
 // @vitest-environment node
 import path from 'node:path';
 import { tmpdir } from 'node:os';
-import { mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
+import { mkdir, mkdtemp, readdir, readFile, rm, writeFile } from 'node:fs/promises';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import {
   ensureToolDownload,
@@ -38,7 +38,8 @@ async function fixture(tool = 'wasm-bindgen') {
     expect(args).toEqual(['--version']);
     return `${tool} ${plan.version}`;
   });
-  return { plan, paths, fetchImplementation, runCommand };
+  const wait = vi.fn(async () => {});
+  return { plan, paths, fetchImplementation, runCommand, wait };
 }
 
 describe('verified runtime tools', () => {
@@ -59,6 +60,7 @@ describe('verified runtime tools', () => {
       });
       expect(plan.sha256).toMatch(/^[a-f0-9]{64}$/u);
       expect(plan.url).toMatch(/^https:\/\/github.com\//u);
+      expect(plan.fallbackUrl).toMatch(/^https:\/\/api\.github\.com\/repos\/[\w-]+\/[\w-]+\/releases\/assets\/\d+$/u);
       expect(plan.command.endsWith('.exe')).toBe(platform === 'win32');
     }
   });
@@ -140,9 +142,89 @@ describe('verified runtime tools', () => {
     expect(options.runCommand).not.toHaveBeenCalled();
   });
 
+  it('retries transient download failures with backoff', async () => {
+    const options = await fixture();
+    const archive = await options.fetchImplementation().then((response) => response.arrayBuffer());
+    options.fetchImplementation.mockClear();
+    options.fetchImplementation
+      .mockResolvedValueOnce({ ok: false, status: 504 })
+      .mockRejectedValueOnce(new TypeError('fetch failed'))
+      .mockResolvedValueOnce({ ok: true, arrayBuffer: async () => archive });
+    expect(await ensureToolDownload(options.plan, options)).toBe(options.plan.command);
+    expect(options.fetchImplementation).toHaveBeenCalledTimes(3);
+    expect(options.wait.mock.calls).toEqual([[1_000], [3_000]]);
+  });
+
+  it('falls back to the release API asset after the download host keeps failing', async () => {
+    const options = await fixture();
+    const archive = await options.fetchImplementation().then((response) => response.arrayBuffer());
+    options.fetchImplementation.mockReset();
+    options.fetchImplementation.mockImplementation(async (url) =>
+      url === options.plan.fallbackUrl ? { ok: true, arrayBuffer: async () => archive } : { ok: false, status: 504 }
+    );
+    expect(await ensureToolDownload(options.plan, options)).toBe(options.plan.command);
+    expect(options.fetchImplementation.mock.calls.map(([url]) => url)).toEqual([
+      ...Array(4).fill(options.plan.url),
+      options.plan.fallbackUrl
+    ]);
+    expect(options.fetchImplementation.mock.calls.at(-1)[1].headers).toEqual({ accept: 'application/octet-stream' });
+    expect(options.plan.fallbackUrl).toBe(
+      'https://api.github.com/repos/wasm-bindgen/wasm-bindgen/releases/assets/587769529'
+    );
+  });
+
+  it('reports both sources once retries are exhausted and never retries permanent failures', async () => {
+    const options = await fixture();
+    options.fetchImplementation.mockResolvedValue({ ok: false, status: 503 });
+    await expect(ensureToolDownload(options.plan, options)).rejects.toThrow(
+      /HTTP 503 downloading https:\/\/github\.com\/.*; fallback: HTTP 503 downloading https:\/\/api\.github\.com\//u
+    );
+    expect(options.fetchImplementation).toHaveBeenCalledTimes(8);
+    options.fetchImplementation.mockClear();
+    options.fetchImplementation.mockResolvedValue({ ok: false, status: 404 });
+    await expect(ensureToolDownload(options.plan, options)).rejects.toThrow(/HTTP 404 downloading/u);
+    expect(options.fetchImplementation).toHaveBeenCalledTimes(2);
+  });
+
+  it('keeps staged and installed executables on short paths for Windows MAX_PATH', async () => {
+    const options = await fixture();
+    await ensureToolDownload(options.plan, options);
+    const stage = options.runCommand.mock.calls[0][1].at(-1);
+    expect(path.dirname(stage)).toBe(options.plan.cacheDir);
+    expect(path.basename(stage)).toMatch(/^\.t[a-f0-9]{8}$/u);
+    const probed = options.runCommand.mock.calls[1][0];
+    expect(path.relative(options.plan.cacheDir, probed)).toMatch(/^\.c[a-f0-9]{8}[\\/]wasm-bindgen$/u);
+    expect(options.plan.command).toBe(path.join(options.plan.cacheDir, 'unpacked', 'wasm-bindgen'));
+    expect(await readdir(options.plan.cacheDir)).toEqual(
+      expect.not.arrayContaining([expect.stringMatching(/^\.[tc][a-f0-9]{8}/u)])
+    );
+    const windows = toolDownloadPlan({
+      tool: 'wasm-bindgen',
+      version: '0.2.129',
+      paths: { downloadCacheDir: '/cache' },
+      platform: 'win32',
+      arch: 'x64'
+    });
+    expect(windows.command).toBe(
+      path.join('/cache', 'tools/wasm-bindgen/0.2.129/x86_64-pc-windows-msvc/unpacked/wasm-bindgen.exe')
+    );
+  });
+
+  it('re-extracts a cache from the archive-root layout of earlier releases without downloading', async () => {
+    const options = await fixture();
+    await ensureToolDownload(options.plan, options);
+    const record = path.join(options.plan.cacheDir, 'integrity.json');
+    const legacy = JSON.parse(await readFile(record, 'utf8'));
+    legacy.files = legacy.files.map((entry) => ({ ...entry, name: path.join(options.plan.root, entry.name) }));
+    await writeFile(record, JSON.stringify(legacy));
+    expect(await ensureToolDownload(options.plan, options)).toBe(options.plan.command);
+    expect(options.fetchImplementation).toHaveBeenCalledOnce();
+    expect(options.runCommand).toHaveBeenCalledTimes(4);
+  });
+
   it.each(['HTTP', 'version', 'extract'])('preserves actionable %s failures', async (kind) => {
     const options = await fixture();
-    if (kind === 'HTTP') options.fetchImplementation.mockResolvedValue({ ok: false, status: 503 });
+    if (kind === 'HTTP') options.fetchImplementation.mockResolvedValue({ ok: false, status: 403 });
     if (kind === 'version')
       options.runCommand
         .mockImplementationOnce(async (command, args) => {

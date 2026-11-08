@@ -69,6 +69,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 - Production builds validate one interactive cell generation across runtime compilation, MDX transforms, and build completion, reporting source changes with affected paths and preserving the previous complete runtime on failure.
 - Generated Rust embeds cell source verbatim, preserving multiline string, raw string, and byte string contents and authored source columns.
+- Verified `wasm-bindgen` and `wasm-opt` downloads retry transient failures, fall back to the GitHub release API when the release download host keeps failing, and start from deep Windows project paths.
 - The generated Rust workspace lock is valid for helper workspaces whose `Cargo.lock` contains dev-dependencies or semver-compatible alternatives of runtime-pinned crates: only normal and build dependencies are seeded, runtime pins win, and Cargo resolves the seed once before `--locked` builds. Changing only a helper's dev-dependencies no longer rebuilds Rust modules.
 
 ### Security

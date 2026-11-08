@@ -1,5 +1,6 @@
 import path from 'node:path';
-import { randomUUID } from 'node:crypto';
+import { randomBytes } from 'node:crypto';
+import { setTimeout as sleep } from 'node:timers/promises';
 import { readFileSync } from 'node:fs';
 import { defaultFileSystem, writeIfChanged } from './file-system.mjs';
 import { hashBytes } from './hashing.mjs';
@@ -41,10 +42,8 @@ export function toolDownloadPlan({ tool, version, paths, platform = process.plat
   }
   const root = tool === 'wasm-bindgen' ? `wasm-bindgen-${version}-${host}` : `binaryen-version_${version}`;
   const archive = tool === 'wasm-bindgen' ? `${root}.tar.gz` : `binaryen-version_${version}-${host}.tar.gz`;
-  const url =
-    tool === 'wasm-bindgen'
-      ? `https://github.com/wasm-bindgen/wasm-bindgen/releases/download/${version}/${archive}`
-      : `https://github.com/WebAssembly/binaryen/releases/download/version_${version}/${archive}`;
+  const tag = tool === 'wasm-bindgen' ? version : `version_${version}`;
+  const { sha256, asset } = release.hosts[host];
   const executable =
     tool === 'wasm-opt'
       ? `bin/wasm-opt${platform === 'win32' ? '.exe' : ''}`
@@ -54,13 +53,47 @@ export function toolDownloadPlan({ tool, version, paths, platform = process.plat
     version,
     host,
     cacheDir,
-    url,
-    sha256: release.hosts[host],
+    url: `https://github.com/${release.repository}/releases/download/${tag}/${archive}`,
+    // The release API serves the same asset when the download host is degraded.
+    fallbackUrl: `https://api.github.com/repos/${release.repository}/releases/assets/${asset}`,
+    sha256,
     root,
     executable,
-    command: path.join(cacheDir, 'unpacked', root, executable),
-    identity: { version, sha256: release.hosts[host] }
+    // The archive root is flattened away so the command path stays short on Windows.
+    command: path.join(cacheDir, 'unpacked', executable),
+    identity: { version, sha256 }
   });
+}
+
+// Release hosts occasionally answer with gateway errors or reset connections.
+const transientStatuses = new Set([408, 425, 429, 500, 502, 503, 504]);
+const defaultRetryDelays = Object.freeze([1_000, 3_000, 9_000]);
+
+async function fetchWithRetries(url, headers, { fetchImplementation, retryDelays, wait }) {
+  for (let attempt = 0; ; attempt += 1) {
+    let failure;
+    let transient = true;
+    try {
+      const response = await fetchImplementation(url, { headers, signal: AbortSignal.timeout(120_000) });
+      if (response.ok) return { bytes: Buffer.from(await response.arrayBuffer()) };
+      failure = new Error(`HTTP ${response.status} downloading ${url}`);
+      transient = transientStatuses.has(response.status);
+    } catch (error) {
+      // Connection resets, DNS failures, and timeouts are retried.
+      failure = error;
+    }
+    if (!transient || attempt >= retryDelays.length) return { failure };
+    await wait(retryDelays[attempt]);
+  }
+}
+
+// Both sources serve the pinned archive, whose SHA-256 is verified by the caller.
+async function downloadArchive(plan, options) {
+  const primary = await fetchWithRetries(plan.url, {}, options);
+  if (primary.bytes) return primary.bytes;
+  const fallback = await fetchWithRetries(plan.fallbackUrl, { accept: 'application/octet-stream' }, options);
+  if (fallback.bytes) return fallback.bytes;
+  throw new Error(`${primary.failure.message}; fallback: ${fallback.failure.message}`, { cause: primary.failure });
 }
 
 export async function ensureToolDownload(
@@ -69,7 +102,9 @@ export async function ensureToolDownload(
     fileSystem = defaultFileSystem,
     fetchImplementation = globalThis.fetch,
     runCommand = runProcess,
-    processOptions = {}
+    processOptions = {},
+    retryDelays = defaultRetryDelays,
+    wait = sleep
   } = {}
 ) {
   const archivePath = path.join(plan.cacheDir, 'archive.tar.gz');
@@ -81,7 +116,7 @@ export async function ensureToolDownload(
         record?.archive === plan.sha256 &&
         Array.isArray(record.files) &&
         record.files.length > 0 &&
-        record.files.some((entry) => entry.name === path.join(plan.root, plan.executable)) &&
+        record.files.some((entry) => entry.name === path.join(plan.executable)) &&
         (
           await Promise.all(
             record.files.map(async (entry) => {
@@ -100,7 +135,11 @@ export async function ensureToolDownload(
   };
   if (await verified()) return plan.command;
   await fileSystem.mkdir(plan.cacheDir, { recursive: true });
-  const temporary = path.join(plan.cacheDir, `.tmp-${randomUUID()}`);
+  // Windows cannot start executables whose path exceeds MAX_PATH (260), so the
+  // staging directories are short and the archive root is flattened away.
+  const suffix = randomBytes(4).toString('hex');
+  const temporary = path.join(plan.cacheDir, `.t${suffix}`);
+  const candidate = path.join(plan.cacheDir, `.c${suffix}`);
   try {
     let bytes;
     try {
@@ -109,9 +148,7 @@ export async function ensureToolDownload(
       if (error?.code !== 'ENOENT') throw error;
     }
     if (!bytes || hashBytes(bytes) !== plan.sha256) {
-      const response = await fetchImplementation(plan.url, { signal: AbortSignal.timeout(120_000) });
-      if (!response.ok) throw new Error(`HTTP ${response.status} downloading ${plan.url}`);
-      bytes = Buffer.from(await response.arrayBuffer());
+      bytes = await downloadArchive(plan, { fetchImplementation, retryDelays, wait });
       if (hashBytes(bytes) !== plan.sha256) throw new Error(`SHA-256 verification failed (expected ${plan.sha256})`);
       await fileSystem.writeFile(`${temporary}.tar.gz`, bytes);
       await fileSystem.rename(`${temporary}.tar.gz`, archivePath);
@@ -119,8 +156,8 @@ export async function ensureToolDownload(
     await fileSystem.mkdir(temporary, { recursive: true });
     // Only an archive with a pinned official checksum reaches the extractor.
     await runCommand('tar', ['-xzf', archivePath, '-C', temporary], { ...processOptions, source: 'tar' });
-    const executable = path.join(temporary, plan.root, plan.executable);
-    const output = await runCommand(executable, ['--version'], {
+    await fileSystem.rename(path.join(temporary, plan.root), candidate);
+    const output = await runCommand(path.join(candidate, plan.executable), ['--version'], {
       ...processOptions,
       captureOutput: true,
       source: plan.tool
@@ -129,13 +166,13 @@ export async function ensureToolDownload(
     if (version !== plan.version) throw new Error(`downloaded executable reports ${version ?? '(unknown)'}`);
     const { listFiles } = await import('./file-system.mjs');
     const files = await Promise.all(
-      (await listFiles(temporary, { fileSystem })).map(async (file) => ({
-        name: path.relative(temporary, file),
+      (await listFiles(candidate, { fileSystem })).map(async (file) => ({
+        name: path.relative(candidate, file),
         sha256: hashBytes(await fileSystem.readFile(file))
       }))
     );
     await fileSystem.rm(path.join(plan.cacheDir, 'unpacked'), { recursive: true, force: true });
-    await fileSystem.rename(temporary, path.join(plan.cacheDir, 'unpacked'));
+    await fileSystem.rename(candidate, path.join(plan.cacheDir, 'unpacked'));
     await writeIfChanged(recordPath, JSON.stringify({ archive: plan.sha256, files }), { fileSystem });
     return plan.command;
   } catch (cause) {
@@ -145,6 +182,7 @@ export async function ensureToolDownload(
     );
   } finally {
     await fileSystem.rm(temporary, { recursive: true, force: true });
+    await fileSystem.rm(candidate, { recursive: true, force: true });
     await fileSystem.rm(`${temporary}.tar.gz`, { force: true });
   }
 }
