@@ -102,10 +102,23 @@ try {
   await writeFile(sourcePath, original);
   await invoke(['docgen', '--wasm', 'dev', '--format', 'json']);
   if (!process.argv.includes('--benchmark')) {
-    const registry = (await state()).rust;
+    // Development builds use rustc incremental compilation, whose output is not
+    // guaranteed to be byte-identical to a clean build (Rust 1.85 differs after an
+    // edit is reverted), so they are compared by build inputs. Release output is
+    // compared byte for byte below.
+    const buildInputs = (current) => ({
+      modules: current.rust.modules.map(({ id, cells }) => ({ id, cells })),
+      groups: Object.fromEntries(
+        Object.entries(current.languages.rust.groups).map(([id, group]) => [
+          id,
+          { sourceFingerprint: group.sourceFingerprint, buildFingerprint: group.buildFingerprint }
+        ])
+      )
+    });
+    const incremental = buildInputs(await state());
     await runCli(['clean'], { cwd });
     await invoke(['docgen', '--wasm', 'dev', '--format', 'json']);
-    assert.deepEqual((await state()).rust, registry);
+    assert.deepEqual(buildInputs(await state()), incremental);
 
     for (const [grouping, modules] of [
       ['directory', 1],
@@ -133,6 +146,12 @@ try {
       releases.push((await state()).rust);
     }
     assert.deepEqual(releases[1], releases[0]);
+    // Rebuilding an edited and then restored page reproduces the clean release.
+    await writeFile(secondPath, originalSecond.replace('second ready', 'second updated'));
+    await invoke(['docgen', '--wasm', 'build', '--format', 'json']);
+    await writeFile(secondPath, originalSecond);
+    await invoke(['docgen', '--wasm', 'build', '--format', 'json']);
+    assert.deepEqual((await state()).rust, releases[0]);
   }
 
   if (process.argv.includes('--benchmark')) {
@@ -141,7 +160,7 @@ try {
     console.log(benchmarkTable(result));
   } else
     console.log(
-      'Rust module groups, transitive invalidation, partial development publication, rollback, every grouping mode, and clean determinism across pool sizes passed.'
+      'Rust module groups, transitive invalidation, partial development publication, rollback, every grouping mode, and release determinism across pool sizes and incremental rebuilds passed.'
     );
 } finally {
   await writeFile(sourcePath, original);

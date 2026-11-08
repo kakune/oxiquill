@@ -991,7 +991,12 @@ function run(command, args, cwd, capture = false, environment = consumerEnvironm
     stdio: capture ? ['ignore', 'pipe', 'pipe'] : 'inherit'
   });
   assert.ifError(result.error);
-  assert.equal(result.status, 0, capture ? result.stderr || result.stdout : `${command} failed`);
+  // Oxiquill reports its own errors on stdout, so a failure shows both streams.
+  assert.equal(
+    result.status,
+    0,
+    capture ? [result.stderr, result.stdout].filter(Boolean).join('\n') || `${command} failed` : `${command} failed`
+  );
   return result;
 }
 
