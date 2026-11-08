@@ -20,6 +20,7 @@ import { markRuntimeEvent } from './runtime-timing.js';
 type PendingRequest = {
   rustModule?: RustRuntimeModule;
   cell?: CellManifest;
+  graph?: boolean;
   reject: (reason: Error) => void;
   timeout: ReturnType<typeof setTimeout>;
   worker: Worker;
@@ -111,6 +112,10 @@ export function createInteractiveCellRunner(dependencies: RuntimeClientDependenc
         )
       )
         continue;
+      if (request.graph) {
+        failWorker(request.worker, new Error(`Rust module ${request.rustModule.id} has an obsolete fingerprint.`));
+        continue;
+      }
       pending.delete(id);
       dependencies.clearTimeout(request.timeout);
       request.removeAbortListener();
@@ -233,6 +238,7 @@ export function createInteractiveCellRunner(dependencies: RuntimeClientDependenc
         pending.set(requestId, {
           rustModule,
           cell,
+          graph: dependencyData !== undefined,
           type: 'execute',
           onPhase,
           resolve,

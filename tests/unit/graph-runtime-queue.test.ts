@@ -118,6 +118,7 @@ describe('serialized graph worker dispatch', () => {
     await vi.advanceTimersByTimeAsync(0);
     runner.updateRustRegistry({ version: 1, modules: [{ ...module, fingerprint: 'v2' }] });
     await rejected;
+    expect(workers[0].terminate).toHaveBeenCalledOnce();
     expect(workers[0].messages).toHaveLength(1);
   });
 });
