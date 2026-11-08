@@ -33,22 +33,24 @@ export const collections = createOxiquillCollections({ defineCollection, docsLoa
 
 ## Configuration Fields
 
-| Field                             | Meaning                                                                                                              |
-| --------------------------------- | -------------------------------------------------------------------------------------------------------------------- |
-| `title`, `description`, `sidebar` | Shorthand for the corresponding Starlight settings.                                                                  |
-| `desktopTableOfContentsToggle`    | Enables the persistent desktop table-of-contents control. Defaults to `true`.                                        |
-| `starlight`                       | Any other Starlight option. A value here overrides the matching shorthand.                                           |
-| `framework.starlight`             | Required Starlight integration factory imported from `@astrojs/starlight`.                                           |
-| `framework.preact`                | Optional Preact integration-factory override for embedded/framework consumers.                                       |
-| `integrations`                    | Additional Astro integrations, appended after Oxiquill, Preact, and Starlight.                                       |
-| `markdown`                        | Supported Astro Markdown settings and plugins. Oxiquill's required plugins run first.                                |
-| `vite`                            | Additional Vite settings. Oxiquill preserves required aliases, deduplication, worker plugins, and filesystem access. |
-| `paths`                           | Oxiquill-owned source, cache, generated, and public paths described below.                                           |
-| `python`                          | Pyodide download behavior: `preload`, `offline`, and the optional `packageMirror`.                                   |
-| `rust`                            | Rust compilation grouping: `site` (default) or `page`.                                                               |
-| Other Astro fields                | Passed through to Astro. Oxiquill always produces static output.                                                     |
+| Field                             | Meaning                                                                                                                                                 |
+| --------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `title`, `description`, `sidebar` | Shorthand for the corresponding Starlight settings.                                                                                                     |
+| `desktopTableOfContentsToggle`    | Enables the persistent desktop table-of-contents control. Defaults to `true`.                                                                           |
+| `starlight`                       | Any other Starlight option. A value here overrides the matching shorthand.                                                                              |
+| `framework.starlight`             | Required Starlight integration factory imported from `@astrojs/starlight`.                                                                              |
+| `framework.preact`                | Optional Preact integration-factory override for embedded/framework consumers.                                                                          |
+| `integrations`                    | Additional Astro integrations, appended after Oxiquill, Preact, and Starlight.                                                                          |
+| `markdown`                        | Supported Astro Markdown settings and plugins. Oxiquill's required plugins run first.                                                                   |
+| `vite`                            | Additional Vite settings. Oxiquill preserves required aliases, deduplication, worker plugins, and filesystem access.                                    |
+| `paths`                           | Oxiquill-owned source, cache, generated, and public paths described below.                                                                              |
+| `python`                          | Pyodide download behavior: `preload`, `offline`, and the optional `packageMirror`.                                                                      |
+| `rust`                            | Rust compilation grouping: `site` (default) or `page`.                                                                                                  |
+| `missingTranslations`             | `fallback` (default) keeps Starlight's fallback pages; `omit` generates and links only translated pages. See [Multilingual Sites](#multilingual-sites). |
+| `docRedirects`                    | Redirects whose destinations are base-relative documentation paths. See [Document Redirects](#document-redirects).                                      |
+| Other Astro fields                | Passed through to Astro. Oxiquill always produces static output.                                                                                        |
 
-Use `oxiquillIntegration()` only when composing an Astro configuration manually. It accepts `base`, `markdown`, `paths`, `python`, `rust`, and `vite`; the caller is then responsible for adding Preact and Starlight.
+Use `oxiquillIntegration()` only when composing an Astro configuration manually. It accepts `base`, `markdown`, `paths`, `python`, `rust`, and `vite`; the caller is then responsible for adding Preact and Starlight. `missingTranslations` and `docRedirects` also configure Starlight and Astro, so only `defineOxiquillConfig()` accepts them.
 
 Oxiquill owns `markdown.processor` because interactive cells, Mermaid, KaTeX, and public-asset base paths require its unified pipeline. A custom processor is not supported and throws a `TypeError`; configure supported Markdown fields and append `remarkPlugins` or `rehypePlugins` instead.
 
@@ -68,9 +70,19 @@ export default defineOxiquillConfig({
 
 The control is not rendered for `tableOfContents: false` or splash pages. Consumer entries in `starlight.components` take precedence over Oxiquill's defaults, including `PageFrame`, `TableOfContents`, and `TwoColumnContent` overrides.
 
+The table-of-contents column is `--oq-toc-width` wide. The default, `clamp(14rem, 18vw, var(--sl-sidebar-width))`, narrows the column on small desktops so the content keeps more of its measure and reaches the sidebar width on large screens. Wider screens divide the remaining space between the content and the table of contents, keeping both near the center. Long entries wrap inside the column, and the toggle sits on the column border at every width. Set the property on `:root` to choose a fixed width:
+
+```css
+:root {
+  --oq-toc-width: 16rem;
+}
+```
+
+The property applies to Oxiquill's toggle layout. With `desktopTableOfContentsToggle: false`, Starlight's own column sizing remains.
+
 ## Content Width
 
-Collapsing either desktop navigation column adds `--sl-sidebar-width` to the current `--sl-content-width`. Collapsing both adds it twice. The default reading measure stays the same when both columns are expanded.
+Collapsing the left sidebar adds `--sl-sidebar-width` to the current `--sl-content-width`, and collapsing the table of contents adds its column width, `--oq-toc-width`. The default reading measure stays the same when both columns are expanded.
 
 To customize the measure and column size, register a stylesheet with `starlight.customCss`, for example `starlight: { customCss: ['./styles/custom.css'] }`. It loads after Oxiquill's CSS. Set both properties on `:root`:
 
@@ -83,7 +95,82 @@ To customize the measure and column size, register a stylesheet with `starlight.
 
 Fluid values such as `--sl-content-width: 100%` stay fluid through every toggle state. Starlight gives pages without a sidebar, including splash pages, a separate base measure. Override that measure with `:root:not([data-has-sidebar]) { --sl-content-width: 100%; }` when needed.
 
+A page can drop the reading measure without changing the rest of the site. Set `contentWidth: full` in its frontmatter; the content then fills the space between the navigation columns, and both toggles keep working. Use it for wide reference tables or several charts, and keep prose pages at the default measure.
+
+```mdx
+---
+title: API Index
+contentWidth: full
+---
+```
+
+`createOxiquillCollections()` adds `contentWidth` (`default` or `full`) to the docs schema. A project with its own docs schema needs the same optional field.
+
 A custom `PageFrame` keeps table-of-contents widening through Oxiquill's `TwoColumnContent`, but sidebar widening requires Oxiquill's `PageFrame`.
+
+## Multilingual Sites
+
+Starlight fills untranslated pages with default-locale content, called fallback pages, so every locale has every route. Set `missingTranslations: 'omit'` when a locale should contain only translated pages:
+
+```js
+export default defineOxiquillConfig({
+  framework: { starlight },
+  missingTranslations: 'omit',
+  starlight: {
+    defaultLocale: 'root',
+    locales: {
+      root: { label: 'English', lang: 'en' },
+      ja: { label: '日本語', lang: 'ja' }
+    }
+  }
+});
+```
+
+Oxiquill removes fallback routes before Astro generates pages, so they produce no HTML, sitemap entry, or search record, and the development server answers them with 404. Navigation follows the generated pages:
+
+- The language select lists only locales that have the current page and is hidden when no other locale does.
+- The sidebar drops links to untranslated pages and the groups that become empty.
+- Previous and next links skip untranslated pages; `prev` and `next` frontmatter still applies.
+- `hreflang` alternates and the site title link point only at generated pages.
+
+The default, `'fallback'`, keeps Starlight's behavior. Omit mode requires prerendered Starlight pages, which is the default. It adds Oxiquill's `LanguageSelect` component and a route middleware: a `LanguageSelect` entry in `starlight.components` takes precedence, and entries in `starlight.routeMiddleware` run after Oxiquill's and see the filtered navigation.
+
+## Document Redirects
+
+Astro matches `redirects` sources below `base`, but it leaves a destination unprefixed when it cannot see a matching route. Pages served by Starlight are such destinations. Use `docRedirects` for moved documentation pages. Each destination is a base-relative documentation path, and Oxiquill adds `base`:
+
+```js
+export default defineOxiquillConfig({
+  base: '/docs/',
+  docRedirects: {
+    '/guides/setup/': '/guides/getting-started/',
+    '/ja/old-guide/': { status: 301, destination: '/ja/guide/' }
+  },
+  framework: { starlight }
+});
+```
+
+Here `/docs/guides/setup/` redirects to `/docs/guides/getting-started/`. A destination must start with a single `/` and cannot contain route parameters. The build fails when a destination produces no page, for example after a typo or when `missingTranslations: 'omit'` leaves the target untranslated. Keep external and other non-documentation destinations in Astro's `redirects`; a source cannot appear in both.
+
+## Japanese Typography
+
+`oxiquill/styles/japanese.css` styles pages whose language is Japanese (`lang="ja"` or a `ja-` tag). It applies strict line breaking, so small kana and prolonged sound marks do not start a line, and sets line height and letter spacing for prose and headings. Pages in other languages are unaffected. Add it to `starlight.customCss`:
+
+```js
+starlight: {
+  customCss: ['oxiquill/styles/japanese.css', './styles/custom.css'];
+}
+```
+
+To tune the preset, set these properties on `:root` in a stylesheet listed after it:
+
+| Property                         | Default  | Applies to                                                                 |
+| -------------------------------- | -------- | -------------------------------------------------------------------------- |
+| `--oq-ja-line-height`            | `1.9`    | Paragraphs, list items, definitions, quotations, table cells, and captions |
+| `--oq-ja-letter-spacing`         | `normal` | The same prose elements                                                    |
+| `--oq-ja-heading-line-height`    | `1.4`    | The page title and headings                                                |
+| `--oq-ja-heading-letter-spacing` | `0.01em` | The page title and headings                                                |
+| `--oq-ja-word-break`             | `normal` | Content; `auto-phrase` breaks at phrase boundaries in supporting browsers  |
 
 ## Path Fields
 
@@ -174,7 +261,7 @@ Cargo configuration outside the workspace root, including ancestor `.cargo` file
 
 ## Base Paths and Public Assets
 
-Set Astro's `base` when publishing below a subpath. Oxiquill applies it to interactive-cell manifests, language runtimes, diagrams, and `/media/...` references. Keep every authored public URL in root-relative `/media/...` form, even when `base` itself is `/media` or starts the same way. Do not add the configured base manually; the normal Markdown pass prefixes the authored URL.
+Set Astro's `base` when publishing below a subpath. Oxiquill applies it to interactive-cell manifests, language runtimes, diagrams, and `/media/...` references. Keep every authored public URL in root-relative `/media/...` form, even when `base` itself is `/media` or starts the same way. Do not add the configured base manually; the normal Markdown pass prefixes the authored URL. Redirects to documentation pages use [`docRedirects`](#document-redirects), which also adds the base.
 
 Generated runtime files belong under `.oxiquill` and `public/oxiquill`; the verified download cache belongs under `.cache/oxiquill/downloads/v1`; and the final static site belongs under Astro's `outDir` (normally `dist`). Generated directories and their ownership markers must not be edited directly. The download cache may be retained across builds and reconstructed outputs, but its files are verified before every use.
 

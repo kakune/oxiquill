@@ -44,7 +44,7 @@ function renderMath({ displayMode, element, scope }, ancestors, file) {
   const value = textContent(scope);
 
   try {
-    return htmlChildren(katex.renderToString(value, { displayMode, throwOnError: true }));
+    return focusableDisplay(htmlChildren(katex.renderToString(value, { displayMode, throwOnError: true })));
   } catch (error) {
     file?.message('Could not render math with KaTeX', {
       ancestors: [...ancestors, element],
@@ -55,7 +55,9 @@ function renderMath({ displayMode, element, scope }, ancestors, file) {
     });
 
     try {
-      return htmlChildren(katex.renderToString(value, { displayMode, strict: 'ignore', throwOnError: false }));
+      return focusableDisplay(
+        htmlChildren(katex.renderToString(value, { displayMode, strict: 'ignore', throwOnError: false }))
+      );
     } catch {
       return [
         {
@@ -67,6 +69,15 @@ function renderMath({ displayMode, element, scope }, ancestors, file) {
       ];
     }
   }
+}
+
+// Display equations scroll horizontally when they are wider than the page, so keyboard users need
+// to be able to focus them, like highlighted code blocks.
+function focusableDisplay(nodes) {
+  for (const node of nodes) {
+    if (node.type === 'element' && hasClass(node, 'katex-display')) node.properties.tabIndex = 0;
+  }
+  return nodes;
 }
 
 function htmlChildren(html) {

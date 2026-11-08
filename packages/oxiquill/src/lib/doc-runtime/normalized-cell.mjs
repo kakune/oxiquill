@@ -33,6 +33,7 @@ export function normalizeCell(cell) {
     timeoutMs: cell.timeoutMs,
     showSource: cell.showSource,
     editable: cell.editable,
+    ...(cell.outputLayout ? { outputLayout: cell.outputLayout } : {}),
     pagePath: cell.pagePath
   };
 }

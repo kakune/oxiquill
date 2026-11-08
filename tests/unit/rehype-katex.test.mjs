@@ -27,6 +27,8 @@ describe('rehype KaTeX', () => {
     expect(paragraph.children[0]).toEqual(text('Inline '));
     expect(classes(paragraph.children[1])).toEqual(['katex']);
     expect(classes(displayResult)).toEqual(['katex-display']);
+    expect(displayResult.properties.tabIndex).toBe(0);
+    expect(paragraph.children[1].properties.tabIndex).toBeUndefined();
     expect(JSON.stringify(tree)).toContain('katex-sizing');
   });
 

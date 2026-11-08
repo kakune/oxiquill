@@ -20,6 +20,22 @@ Oxiquill renders these output kinds:
 
 Every artifact may have optional string `id`, `title`, and `caption` fields. Values received from workers are untrusted: Oxiquill validates discriminators, fields, plain-record structure, array shapes, finite numbers, row widths, MIME/base64 data, and nested values before a renderer receives them. One rejected or failing artifact shows a local diagnostic without removing valid siblings.
 
+## Output Layout
+
+Outputs stack in emission order by default. Set `outputLayout: columns` on a cell to let charts and images share a row when the cell is wide enough. At most two figures share a row, each at least `--oq-output-column-min-width` wide (default `18rem`); a lone or final odd figure takes the full width. Tables, text, JSON, HTML, 3D scenes, and outcomes always use the full width, and narrow cells stack every output.
+
+```rust
+//| id: paired-figures
+//| title: Compare two views side by side
+//| run: autorun
+//| crates: []
+//| outputLayout: columns
+emit_line_chart!(&[[0, 1], [1, 3], [2, 2], [3, 5], [4, 4]], "Step", "Signal");
+emit_bar_chart!(&["low", "middle", "high"], &[2, 5, 3],
+    options = &serde_json::json!({ "xLabel": "Band", "yLabel": "Count" }));
+emit_text!("Text outputs keep the full width below the paired charts.");
+```
+
 ## Artifact Schema
 
 | Kind      | Required fields                                                | Optional behavior                                                                                   |

@@ -12,3 +12,10 @@ declare module 'virtual:oxiquill/runtime-paths' {
   export const haskellWasmPath: string;
   export const pyodidePath: string;
 }
+
+declare module 'virtual:oxiquill/starlight-translations' {
+  import type { TranslationIndex } from './lib/starlight/translations.js';
+
+  export const paths: readonly unknown[];
+  export const translations: TranslationIndex;
+}

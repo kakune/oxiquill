@@ -20,5 +20,8 @@ describe('oxiquill/content', () => {
     expect(extend.parse({ references: { demo: 'heading' } })).toEqual({ references: { demo: 'heading' } });
     expect(extend.parse({})).toEqual({});
     expect(extend.safeParse({ references: { demo: 1 } }).success).toBe(false);
+    expect(extend.parse({ contentWidth: 'full' })).toEqual({ contentWidth: 'full' });
+    expect(extend.parse({ contentWidth: 'default' })).toEqual({ contentWidth: 'default' });
+    expect(extend.safeParse({ contentWidth: 'wide' }).success).toBe(false);
   });
 });

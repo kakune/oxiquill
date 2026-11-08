@@ -15,20 +15,21 @@ interactive fence は `rust`、`python`、`haskell`（Markdown の `{.rust}` for
 
 許可される top-level field は次だけで、unknown field は error です。
 
-| Field        | Type と rule                                                                                                          | Default  |
-| ------------ | --------------------------------------------------------------------------------------------------------------------- | -------- |
-| `ref`        | 任意の安定した参照名。64文字以内の lowercase kebab-case。同じ locale のセルと見出し全体で一意。                       | None     |
-| `id`         | 必須の lowercase kebab-case `^[a-z][a-z0-9]*(?:-[a-z0-9]+)*$`。page 内と route scope 後で unique。                    | —        |
-| `title`      | cell header に表示する non-empty string。明示した値は前後の空白を除去。                                               | `id`     |
-| `run`        | `button`、`reactive`、`autorun`。                                                                                     | `button` |
-| `inputs`     | `^[a-z][a-z0-9_]*$` に一致する lowercase cross-language identifier から input spec への mapping。`autorun` では禁止。 | `{}`     |
-| `cases`      | 名前付き入力プリセットの配列。`autorun` では指定できません。                                                          | `[]`     |
-| `packages`   | unique non-empty Pyodide package name。Python 専用。                                                                  | `[]`     |
-| `crates`     | `cratesDir` 直下の helper package name の unique non-empty list。Rust 専用。                                          | `[]`     |
-| `timeoutMs`  | `1` 以上 `2147483647` 以下の integer millisecond。                                                                    | `30000`  |
-| `showSource` | initial source visibility を指定する boolean。                                                                        | `true`   |
-| `editable`   | 読者がローカルの draft を編集・実行できるかを指定する boolean。Python 専用。                                          | `true`   |
-| `setup`      | 入力を持たない同じページの Python セル ID を一つ指定。`python.experimentalSetup: true` が必要。                       | なし     |
+| Field          | Type と rule                                                                                                          | Default  |
+| -------------- | --------------------------------------------------------------------------------------------------------------------- | -------- |
+| `ref`          | 任意の安定した参照名。64文字以内の lowercase kebab-case。同じ locale のセルと見出し全体で一意。                       | None     |
+| `id`           | 必須の lowercase kebab-case `^[a-z][a-z0-9]*(?:-[a-z0-9]+)*$`。page 内と route scope 後で unique。                    | —        |
+| `title`        | cell header に表示する non-empty string。明示した値は前後の空白を除去。                                               | `id`     |
+| `run`          | `button`、`reactive`、`autorun`。                                                                                     | `button` |
+| `inputs`       | `^[a-z][a-z0-9_]*$` に一致する lowercase cross-language identifier から input spec への mapping。`autorun` では禁止。 | `{}`     |
+| `cases`        | 名前付き入力プリセットの配列。`autorun` では指定できません。                                                          | `[]`     |
+| `packages`     | unique non-empty Pyodide package name。Python 専用。                                                                  | `[]`     |
+| `crates`       | `cratesDir` 直下の helper package name の unique non-empty list。Rust 専用。                                          | `[]`     |
+| `timeoutMs`    | `1` 以上 `2147483647` 以下の integer millisecond。                                                                    | `30000`  |
+| `showSource`   | initial source visibility を指定する boolean。                                                                        | `true`   |
+| `outputLayout` | `stack`、または幅の広いセルでグラフと画像を同じ行に並べる `columns`（[出力の配置](../rich-output/#出力の配置)）。     | `stack`  |
+| `editable`     | 読者がローカルの draft を編集・実行できるかを指定する boolean。Python 専用。                                          | `true`   |
+| `setup`        | 入力を持たない同じページの Python セル ID を一つ指定。`python.experimentalSetup: true` が必要。                       | なし     |
 
 source には metadata 以外の code が必要です。malformed YAML、wrong scalar/collection type、duplicate normalized ID/binding/function、unknown package/crate、language-mismatched dependency field は output を書く前に失敗します。diagnostic は page path、fence start line、可能なら cell ID、正確な field path を含みます。
 
@@ -99,6 +100,8 @@ Pythonセルでは「Pythonを編集」でtextareaを開けます。セルに`ed
 
 入力のあるセルには「入力を初期値に戻す」があります。すべての既定値を復元し、入力途中の文字列と検証エラーを消去します。reactive セルは一度だけ再計算し、button セルは実行操作を待ちます。次の結果を待つ間は前の成功結果を表示します。
 
+入力欄はセル自身の幅に収まる数の列に並びます。左右のナビゲーションを表示している場合は、画面が広くても一列になることがあります。各列の最小幅は `--oq-input-column-min-width`（既定値 `16rem`）です。列数を変えるには、`starlight.customCss` に登録したスタイルシートで `:root` に設定します。
+
 新しい共有リンクは `v: 2` を使い、各セルを `{ values, case? }` として保存します。`values` は引き続き `share: true` の差分だけです。現在値がケースと完全に一致する場合だけ `case` ID を含めます。既知のケースは著者の全入力値を復元するため、`share: false` の入力も適用します。未知のケース ID は検証済みの共有値にフォールバックします。従来の `v: 1` リンクも復元できます。
 
 ## 名前付き入力ケース
@@ -146,6 +149,14 @@ println!("samples = {samples}, noise = {noise:.2}, seed = {seed}, model = {model
 ```
 
 上限は構文強調されたソースの枠自体に適用されます。以前 `.doc-source` の高さを直接制限していたサイトは、代わりに `--oq-source-max-height` を使ってください。印刷時には上限を解除して長い行を折り返し、ソース全体を表示します。画面がダークテーマでも、印刷にはライトテーマの構文色を使います。
+
+テキスト、JSON、エラーの出力にも同じ仕組みの `--oq-output-max-height` があり、既定では上限がありません。上限を設定した出力は枠の内側でスクロールし、キーボードでフォーカスでき、印刷時には全文を表示します。
+
+```css
+:root {
+  --oq-output-max-height: 20rem;
+}
+```
 
 ## Rust とグラフ
 

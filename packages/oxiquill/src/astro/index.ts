@@ -24,6 +24,8 @@ import {
   createOxiquillIntegrationMetadata
 } from '../config/metadata.mjs';
 import { resolveOxiquillProjectConfig } from '../config/project-config.mjs';
+import { missingDocRedirectTargets, resolveDocRedirects } from '../config/doc-redirects.mjs';
+import { starlightTranslationsPlugin } from './starlight-translations.mjs';
 import {
   collectBundleModuleIds,
   createBundledModuleCollector,
@@ -76,6 +78,8 @@ type BundledModuleCollector = ReturnType<typeof createBundledModuleCollector>;
 type BrowserBundleCollector = ReturnType<typeof createBrowserBundleCollector>;
 type StarlightOption<Options, Name extends PropertyKey, Fallback> =
   Options extends Partial<Record<Name, infer Value>> ? Value : Fallback;
+type AstroRedirects = NonNullable<BaseAstroUserConfig['redirects']>;
+export type OxiquillMissingTranslations = 'fallback' | 'omit';
 
 const frameworkPackageNames = ['astro', '@astrojs/markdown-remark', '@astrojs/preact', '@astrojs/starlight'];
 const viteManagedPackageNames = [
@@ -130,6 +134,8 @@ interface OxiquillStarlightOptions {
   components?: Record<string, string>;
   customCss?: string[];
   description?: string;
+  prerender?: boolean;
+  routeMiddleware?: string | string[];
   sidebar?: unknown;
   title?: string;
   [option: string]: unknown;
@@ -141,9 +147,13 @@ export interface OxiquillConfig<StarlightOptions extends object = object> extend
 > {
   description?: StarlightOption<StarlightOptions, 'description', string>;
   desktopTableOfContentsToggle?: boolean;
+  /** Redirects whose destinations are base-relative documentation paths; Oxiquill adds `base`. */
+  docRedirects?: AstroRedirects;
   framework: OxiquillFrameworkOptions<StarlightOptions>;
   integrations?: AstroIntegrations;
   markdown?: OxiquillMarkdownConfig;
+  /** `omit` generates and links only pages that exist in each locale. Defaults to `fallback`. */
+  missingTranslations?: OxiquillMissingTranslations;
   paths?: OxiquillPathOptions;
   python?: OxiquillPythonOptions;
   rust?: OxiquillRustOptions;
@@ -161,6 +171,14 @@ export interface OxiquillIntegrationOptions {
   rust?: OxiquillRustOptions;
   vite?: BaseAstroUserConfig['vite'];
 }
+
+// Set only by defineOxiquillConfig, which also installs the matching Starlight options.
+interface OxiquillSiteIntegrationOptions extends OxiquillIntegrationOptions {
+  docRedirectTargets?: readonly string[];
+  missingTranslations?: OxiquillMissingTranslations;
+}
+
+const translationRouteMiddleware = 'oxiquill/components/starlight/translation-route-middleware';
 
 const createDocRuntimeContextForPaths = createDocRuntimeContext as unknown as (options: {
   paths: OxiquillPaths;
@@ -188,12 +206,17 @@ export function defineOxiquillConfig<StarlightOptions extends object>(
     rust,
     description,
     desktopTableOfContentsToggle = true,
+    docRedirects,
+    missingTranslations = 'fallback',
     sidebar,
     starlight: starlightOptions = {},
     title,
     vite = {},
     ...astroOptions
   } = options;
+  if (missingTranslations !== 'fallback' && missingTranslations !== 'omit') {
+    throw new TypeError("missingTranslations must be 'fallback' or 'omit'.");
+  }
   const preactIntegration = resolveIntegrationFactory<PreactIntegrationOptions | undefined>(
     framework?.preact,
     preact,
@@ -206,8 +229,18 @@ export function defineOxiquillConfig<StarlightOptions extends object>(
     ...(title == null ? {} : { title }),
     ...starlightOptions
   } as OxiquillStarlightOptions;
+  if (missingTranslations === 'omit' && mergedStarlightOptions.prerender === false) {
+    throw new TypeError("missingTranslations: 'omit' requires prerendered Starlight pages.");
+  }
+  const { redirects, targets: docRedirectTargets } = resolveDocRedirects(docRedirects, {
+    base,
+    redirects: astroOptions.redirects
+  });
 
-  const integration = createOxiquillIntegration({ base, markdown, paths, python, rust, vite }, explicitAstroPaths);
+  const integration = createOxiquillIntegration(
+    { base, docRedirectTargets, markdown, missingTranslations, paths, python, rust, vite },
+    explicitAstroPaths
+  );
   const effectiveRoot = explicitAstroPaths.root ?? paths?.workspaceRoot;
   const effectivePublicDir = explicitAstroPaths.publicDir ?? paths?.publicDir ?? 'public';
   const effectiveCacheDir = explicitAstroPaths.cacheDir ?? paths?.cacheDir ?? '.oxiquill';
@@ -217,6 +250,7 @@ export function defineOxiquillConfig<StarlightOptions extends object>(
     output: 'static',
     srcDir: '.',
     ...astroOptions,
+    ...(redirects === undefined ? {} : { redirects }),
     ...(effectiveRoot === undefined ? {} : { root: astroDirectoryValue(effectiveRoot) }),
     publicDir: astroDirectoryValue(effectivePublicDir),
     cacheDir: astroDirectoryValue(effectiveCacheDir),
@@ -227,7 +261,7 @@ export function defineOxiquillConfig<StarlightOptions extends object>(
       preactIntegration(undefined),
       callStarlightIntegration(
         starlightIntegration,
-        createStarlightOptions(mergedStarlightOptions, desktopTableOfContentsToggle)
+        createStarlightOptions(mergedStarlightOptions, { desktopTableOfContentsToggle, missingTranslations })
       ),
       ...integrations
     ]
@@ -272,10 +306,20 @@ export function oxiquillIntegration({
 }
 
 function createOxiquillIntegration(
-  { base, markdown = {}, paths: pathOptions, python, rust, vite = {} }: OxiquillIntegrationOptions = {},
+  {
+    base,
+    docRedirectTargets = [],
+    markdown = {},
+    missingTranslations = 'fallback',
+    paths: pathOptions,
+    python,
+    rust,
+    vite = {}
+  }: OxiquillSiteIntegrationOptions = {},
   astroOptions: Record<string, string | URL> = {}
 ): AstroIntegration {
   rejectCustomMarkdownProcessor(markdown);
+  const translations = missingTranslations === 'omit' ? starlightTranslationsPlugin() : undefined;
   const metadata = createOxiquillIntegrationMetadata({ astro: astroOptions, paths: pathOptions, python, rust });
   let paths: OxiquillPaths | undefined;
   let generation: ReturnType<typeof createBuildGeneration> | undefined;
@@ -328,7 +372,14 @@ function createOxiquillIntegration(
           publicDir: astroDirectoryUrl(paths.publicDir),
           vite: mergeViteConfig(
             paths,
-            { ...vite, plugins: [references.vitePlugin(), ...(vite.plugins ?? [])] },
+            {
+              ...vite,
+              plugins: [
+                references.vitePlugin(),
+                ...(translations ? [translations.plugin as Plugin] : []),
+                ...(vite.plugins ?? [])
+              ]
+            },
             bundledModules,
             browserBundle,
             generation,
@@ -402,6 +453,15 @@ function createOxiquillIntegration(
         if (!paths) return;
 
         try {
+          if (translations && !translations.wasStaticRouteIntercepted()) {
+            throw new Error(
+              "missingTranslations: 'omit' could not replace Starlight's static documentation paths. Use a supported @astrojs/starlight version."
+            );
+          }
+          const missingTargets = await missingDocRedirectTargets(dir, docRedirectTargets);
+          if (missingTargets.length > 0) {
+            throw new Error(`docRedirects destinations did not produce pages: ${missingTargets.join(', ')}.`);
+          }
           await syncLicenseArtifacts({
             moduleGroups: bundledModules.snapshot(),
             outputDirectory: pathInUrl(dir, relativePathFromUrl(paths.publicDir, paths.licensesPublicDir)),
@@ -477,7 +537,10 @@ function callStarlightIntegration<StarlightOptions extends object>(
 
 function createStarlightOptions(
   options: OxiquillStarlightOptions,
-  desktopTableOfContentsToggle: boolean
+  {
+    desktopTableOfContentsToggle,
+    missingTranslations
+  }: { desktopTableOfContentsToggle: boolean; missingTranslations: OxiquillMissingTranslations }
 ): OxiquillStarlightOptions {
   const {
     components = {},
@@ -486,15 +549,21 @@ function createStarlightOptions(
     title = 'Oxiquill',
     ...rest
   } = options;
+  const omitMissingTranslations = missingTranslations === 'omit';
 
   return {
     title,
     description,
     ...rest,
+    // Oxiquill's route middleware runs first so consumer middleware sees the filtered navigation.
+    ...(omitMissingTranslations
+      ? { routeMiddleware: [translationRouteMiddleware, ...[rest.routeMiddleware ?? []].flat()] }
+      : {}),
     customCss: ['oxiquill/styles/katex.css', 'oxiquill/styles/custom.css', ...customCss],
     components: {
       PageFrame: 'oxiquill/components/starlight/PageFrame',
       ...(desktopTableOfContentsToggle ? { TwoColumnContent: 'oxiquill/components/starlight/TwoColumnContent' } : {}),
+      ...(omitMissingTranslations ? { LanguageSelect: 'oxiquill/components/starlight/LanguageSelect' } : {}),
       ...components
     }
   };

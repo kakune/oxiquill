@@ -88,3 +88,40 @@ async function hydrateCell(cell: Locator): Promise<void> {
   await cell.scrollIntoViewIfNeeded();
   await expect(cell.locator('xpath=ancestor::astro-island[1]')).not.toHaveAttribute('ssr', '', { timeout: 30_000 });
 }
+
+test('column layouts pair charts only when the cell has room', async ({ page }) => {
+  await page.setViewportSize({ width: 1280, height: 900 });
+  await page.goto('/features/rich-output/');
+  const cell = page.getByTestId('cell-features__rich-output__paired-figures');
+  await hydrateCell(cell);
+  const outputs = cell.locator('.doc-cell__outputs[data-layout="columns"]');
+  const charts = outputs.locator(':scope > .doc-chart-output');
+  await expect(charts).toHaveCount(2);
+  await expect(outputs.locator(':scope > .doc-output-artifact')).toContainText('Text outputs keep the full width');
+  const boxes = () =>
+    outputs.locator(':scope > *').evaluateAll((elements) =>
+      elements.map((element) => {
+        const box = element.getBoundingClientRect();
+        return { top: Math.round(box.top), left: Math.round(box.left), width: Math.round(box.width) };
+      })
+    );
+
+  const [first, second, text] = await boxes();
+  expect(second.top).toBe(first.top);
+  expect(second.left).toBeGreaterThan(first.left + first.width - 1);
+  expect(text.top).toBeGreaterThan(first.top);
+  expect(text.width).toBeGreaterThan(first.width + second.width);
+
+  await page.setViewportSize({ width: 390, height: 844 });
+  await expect
+    .poll(async () => {
+      const [chart, nextChart] = await boxes();
+      return nextChart.top > chart.top;
+    })
+    .toBe(true);
+  const [narrowFirst, narrowSecond] = await boxes();
+  expect(narrowSecond.width).toBe(narrowFirst.width);
+  expect(await page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth)).toBe(
+    0
+  );
+});

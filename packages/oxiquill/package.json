@@ -67,8 +67,15 @@
     },
     "./components/starlight/PageFrame": "./dist/components/starlight/PageFrame.astro",
     "./components/starlight/TwoColumnContent": "./dist/components/starlight/TwoColumnContent.astro",
+    "./components/starlight/LanguageSelect": "./dist/components/starlight/LanguageSelect.astro",
+    "./components/starlight/translation-route-middleware": {
+      "types": "./dist/components/starlight/translation-route-middleware.d.ts",
+      "import": "./dist/components/starlight/translation-route-middleware.js",
+      "default": "./dist/components/starlight/translation-route-middleware.js"
+    },
     "./styles/katex.css": "./dist/styles/katex.css",
     "./styles/custom.css": "./dist/styles/custom.css",
+    "./styles/japanese.css": "./dist/styles/japanese.css",
     "./tsconfigs/strict": "./dist/tsconfigs/strict.json",
     "./env": {
       "types": "./dist/env.d.ts"

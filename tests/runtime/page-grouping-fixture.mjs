@@ -5,7 +5,12 @@ import path from 'node:path';
 export const pageGroupingRoot = fileURLToPath(new URL('../fixtures/page-grouping/', import.meta.url));
 
 export async function preparePageGroupingFixture() {
-  const dependencies = path.join(pageGroupingRoot, 'node_modules');
+  return prepareLinkedFixture(pageGroupingRoot);
+}
+
+// Fixture sites reuse the docs site's installed Starlight, Astro, and linked Oxiquill package.
+export async function prepareLinkedFixture(fixtureRoot) {
+  const dependencies = path.join(fixtureRoot, 'node_modules');
   const source = fileURLToPath(new URL('../../examples/docs-site/node_modules/', import.meta.url));
   try {
     if ((await lstat(dependencies)).isSymbolicLink() && (await realpath(dependencies)) === (await realpath(source)))
@@ -23,5 +28,5 @@ export async function preparePageGroupingFixture() {
       await symlink(path.join(source, name), target, process.platform === 'win32' ? 'junction' : 'dir');
     }
   }
-  return pageGroupingRoot;
+  return fixtureRoot;
 }

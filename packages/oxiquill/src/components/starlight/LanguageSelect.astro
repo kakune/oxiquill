@@ -1,0 +1,37 @@
+---
+import Select from '@astrojs/starlight/components/Select.astro';
+import { translations } from 'virtual:oxiquill/starlight-translations';
+import { languageOptions } from '../../lib/starlight/translations.js';
+
+// Offers only the locales that have this page; Starlight would also list fallback pages.
+const options = languageOptions(Astro.locals.starlightRoute, Astro.url.pathname, translations);
+---
+
+{options.length > 1 && (
+  <oxiquill-language-select>
+    <Select icon="translate" label={Astro.locals.t('languageSelect.accessibleLabel')} options={options} width="7em" />
+  </oxiquill-language-select>
+)}
+
+<script>
+  class OxiquillLanguageSelect extends HTMLElement {
+    constructor() {
+      super();
+      const select = this.querySelector('select');
+      if (!select) return;
+
+      select.addEventListener('change', (event) => {
+        if (event.currentTarget instanceof HTMLSelectElement) window.location.pathname = event.currentTarget.value;
+      });
+      // A page restored from the back/forward cache can keep another option selected.
+      window.addEventListener('pageshow', (event) => {
+        if (!event.persisted) return;
+        const markupSelectedIndex = select.querySelector<HTMLOptionElement>('option[selected]')?.index;
+        if (markupSelectedIndex !== select.selectedIndex) select.selectedIndex = markupSelectedIndex ?? 0;
+      });
+    }
+  }
+
+  if (!customElements.get('oxiquill-language-select'))
+    customElements.define('oxiquill-language-select', OxiquillLanguageSelect);
+</script>

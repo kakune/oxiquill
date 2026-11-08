@@ -20,6 +20,22 @@ Oxiquill は次の出力を表示します。
 
 各 artifact は optional string の `id`、`title`、`caption` を持てます。worker から受け取る value は untrusted です。Oxiquill は renderer に渡す前に discriminator、field、plain-record structure、array shape、finite number、row width、MIME/base64 data、nested value を検証します。reject/render failure になった一つの artifact は local diagnostic を表示し、valid sibling を消しません。
 
+## 出力の配置
+
+既定では出力を生成順に縦に並べます。セルに `outputLayout: columns` を指定すると、セルの幅が十分なときにグラフと画像を同じ行に並べます。一行に並べる図は二つまでで、各図の幅は `--oq-output-column-min-width`（既定値 `18rem`）以上です。一つだけの図や奇数個目の最後の図は全幅を使います。表、テキスト、JSON、HTML、3Dシーン、計算結果は常に全幅で表示し、幅の狭いセルではすべての出力を縦に並べます。
+
+```rust
+//| id: paired-figures
+//| title: 二つの見方を並べて比較する
+//| run: autorun
+//| crates: []
+//| outputLayout: columns
+emit_line_chart!(&[[0, 1], [1, 3], [2, 2], [3, 5], [4, 4]], "Step", "Signal");
+emit_bar_chart!(&["low", "middle", "high"], &[2, 5, 3],
+    options = &serde_json::json!({ "xLabel": "Band", "yLabel": "Count" }));
+emit_text!("Text outputs keep the full width below the paired charts.");
+```
+
 ## Artifact schema
 
 | Kind      | Required field                                                 | Optional behavior                                                                                  |

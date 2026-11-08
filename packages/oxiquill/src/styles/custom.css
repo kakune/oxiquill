@@ -23,6 +23,8 @@
 .doc-cell select:focus-visible,
 .doc-cell textarea:focus-visible,
 .doc-source .shiki:focus-visible,
+.run-output:focus-visible,
+.error-output:focus-visible,
 .doc-table-output button:focus-visible,
 .doc-table-output select:focus-visible {
   outline: 3px solid var(--rn-focus);
@@ -128,6 +130,7 @@
 }
 
 .run-output {
+  max-height: var(--oq-output-max-height, none);
   overflow: auto;
   margin: 0;
   border-radius: 6px;
@@ -139,6 +142,11 @@
   border: 1px solid var(--sl-color-gray-5);
 }
 
+.doc-source {
+  min-inline-size: 0;
+}
+
+/* The highlighted pre is the only scroll container, so the frame and theme background stay fixed. */
 .doc-source .shiki {
   max-height: var(--oq-source-max-height, none);
   margin: 0;
@@ -182,6 +190,7 @@
 }
 
 .error-output {
+  max-height: var(--oq-output-max-height, none);
   overflow: auto;
   margin: 0;
   padding: 0.85rem;
@@ -191,9 +200,10 @@
   font-size: var(--sl-text-code);
 }
 
+/* Columns follow the cell's own width, which differs from the viewport beside the sidebars. */
 .doc-input-grid {
   display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, var(--oq-input-column-min-width, 16rem)), 1fr));
   gap: 0.85rem;
   min-width: 0;
   margin: 0;
@@ -270,6 +280,27 @@
   display: grid;
   grid-template-columns: minmax(0, 1fr);
   gap: 0.85rem;
+  min-inline-size: 0;
+}
+
+/*
+ * `outputLayout: columns` pairs charts and images when each still has room for its axes. A lone or
+ * odd figure grows to the full width; tables, text, HTML, scenes, and outcomes always span the row.
+ */
+.doc-cell__outputs[data-layout='columns'] {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: start;
+}
+
+.doc-cell__outputs[data-layout='columns'] > * {
+  flex: 1 1 100%;
+  min-inline-size: 0;
+}
+
+.doc-cell__outputs[data-layout='columns']
+  > :is(.doc-chart-output, .doc-chart-output__loading, .doc-chart-output__error, .doc-image-output) {
+  flex-basis: min(100%, max(var(--oq-output-column-min-width, 18rem), calc(50% - 0.85rem)));
 }
 
 .doc-cell__output-region {
@@ -277,6 +308,7 @@
   display: grid;
   grid-template-columns: minmax(0, 1fr);
   gap: 0.85rem;
+  min-inline-size: 0;
 }
 
 .doc-cell__updating {
@@ -429,7 +461,9 @@
     display: block;
     width: 100%;
   }
-  .doc-source .shiki {
+  .doc-source .shiki,
+  .run-output,
+  .error-output {
     max-height: none;
     overflow: visible;
     white-space: pre-wrap;
@@ -755,7 +789,6 @@
 @media (max-width: 48rem) {
   .doc-cell__header,
   .interactive-panel__header,
-  .doc-input-grid,
   .plot-controls {
     grid-template-columns: 1fr;
   }

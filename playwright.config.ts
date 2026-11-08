@@ -33,6 +33,13 @@ export default defineConfig({
       reuseExistingServer: !process.env.CI
     },
     {
+      command: 'node tests/e2e/locale-routing-server.mjs',
+      env: { ASTRO_PREVIEW_BACKGROUND: '0' },
+      url: 'http://127.0.0.1:4326/localized/',
+      timeout: 120_000,
+      reuseExistingServer: !process.env.CI
+    },
+    {
       command: 'pnpm exec vite --config tests/fixtures/rust-registry/vite.config.mjs --host 127.0.0.1',
       url: 'http://127.0.0.1:4324/registry-base/',
       reuseExistingServer: !process.env.CI

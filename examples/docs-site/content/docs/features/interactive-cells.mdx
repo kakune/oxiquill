@@ -15,20 +15,21 @@ Interactive fences use `rust`, `python`, or `haskell` (including Markdown's `{.r
 
 Only these top-level fields are accepted; unknown fields are errors:
 
-| Field        | Type and rule                                                                                                              | Default  |
-| ------------ | -------------------------------------------------------------------------------------------------------------------------- | -------- |
-| `ref`        | Optional stable lowercase kebab-case name, at most 64 characters; unique across cells and headings per locale.             | None     |
-| `id`         | Required lowercase kebab-case matching `^[a-z][a-z0-9]*(?:-[a-z0-9]+)*$`; unique within the page and after route scoping.  | —        |
-| `title`      | Non-empty string shown in the cell header; explicit values are trimmed.                                                    | `id`     |
-| `run`        | `button`, `reactive`, or `autorun`.                                                                                        | `button` |
-| `inputs`     | Mapping from lowercase cross-language identifiers matching `^[a-z][a-z0-9_]*$` to input specs. Not allowed with `autorun`. | `{}`     |
-| `cases`      | List of named input presets. Not allowed with `autorun`.                                                                   | `[]`     |
-| `packages`   | Unique non-empty Pyodide package names; Python only.                                                                       | `[]`     |
-| `crates`     | Unique non-empty helper package names from direct children of `cratesDir`; Rust only.                                      | `[]`     |
-| `timeoutMs`  | Integer milliseconds from `1` through `2147483647`, inclusive.                                                             | `30000`  |
-| `showSource` | Boolean controlling initial source visibility.                                                                             | `true`   |
-| `editable`   | Boolean allowing readers to edit and run a local draft; Python only.                                                       | `true`   |
-| `setup`      | One page-local Python cell ID without inputs; requires `python.experimentalSetup: true`.                                   | None     |
+| Field          | Type and rule                                                                                                               | Default  |
+| -------------- | --------------------------------------------------------------------------------------------------------------------------- | -------- |
+| `ref`          | Optional stable lowercase kebab-case name, at most 64 characters; unique across cells and headings per locale.              | None     |
+| `id`           | Required lowercase kebab-case matching `^[a-z][a-z0-9]*(?:-[a-z0-9]+)*$`; unique within the page and after route scoping.   | —        |
+| `title`        | Non-empty string shown in the cell header; explicit values are trimmed.                                                     | `id`     |
+| `run`          | `button`, `reactive`, or `autorun`.                                                                                         | `button` |
+| `inputs`       | Mapping from lowercase cross-language identifiers matching `^[a-z][a-z0-9_]*$` to input specs. Not allowed with `autorun`.  | `{}`     |
+| `cases`        | List of named input presets. Not allowed with `autorun`.                                                                    | `[]`     |
+| `packages`     | Unique non-empty Pyodide package names; Python only.                                                                        | `[]`     |
+| `crates`       | Unique non-empty helper package names from direct children of `cratesDir`; Rust only.                                       | `[]`     |
+| `timeoutMs`    | Integer milliseconds from `1` through `2147483647`, inclusive.                                                              | `30000`  |
+| `showSource`   | Boolean controlling initial source visibility.                                                                              | `true`   |
+| `outputLayout` | `stack`, or `columns` to let charts and images share a row in a wide cell ([Output Layout](../rich-output/#output-layout)). | `stack`  |
+| `editable`     | Boolean allowing readers to edit and run a local draft; Python only.                                                        | `true`   |
+| `setup`        | One page-local Python cell ID without inputs; requires `python.experimentalSetup: true`.                                    | None     |
 
 The source must contain non-metadata code. Malformed YAML, a wrong scalar/collection type, duplicate normalized ID/binding/function, unknown package/crate, or language-mismatched dependency field fails before output is written. Diagnostics include page path, fence start line, cell ID when available, and the exact field path.
 
@@ -101,6 +102,8 @@ To include an input in **Copy input link**, add `share: true` to that input's me
 
 Cells with inputs provide **Reset inputs**. It restores all defaults and clears incomplete edits and validation errors. Reactive cells recalculate once; button cells wait for Run. The previous successful output remains visible while the next result is pending.
 
+Input controls fill as many columns as the cell's own width allows, so a cell beside both navigation columns can show one column even on a wide screen. Each column is at least `--oq-input-column-min-width` wide (default `16rem`); set it on `:root` in a stylesheet registered through `starlight.customCss` to change the count.
+
 New sharing links use `v: 2` and store each cell as `{ values, case? }`. The `values` map still contains only opted-in differences. A `case` ID is included only for an exact match. A known case restores its complete authored values, including `share: false` inputs; an unknown case ID falls back to validated shared values. Legacy `v: 1` links continue to restore.
 
 ## Named Input Cases
@@ -148,6 +151,14 @@ Source panes have no height cap by default. To bound them on screen, add this to
 ```
 
 The limit applies to the highlighted source frame itself. Sites that previously bounded `.doc-source` directly should use `--oq-source-max-height` instead. Printing removes the limit and shows the full source with long lines wrapped, using light syntax colors even when the screen theme is dark.
+
+Text, JSON, and error outputs follow the same model with `--oq-output-max-height`, which is also unset by default. A bounded output scrolls inside its frame, is keyboard focusable, and prints in full:
+
+```css
+:root {
+  --oq-output-max-height: 20rem;
+}
+```
 
 ## Rust and Plots
 
