@@ -254,6 +254,32 @@ export const chartFixtures: Record<string, ChartSpec> = {
     ],
     series: [{ values: [6, 5, 4, 3, 2, 1] }]
   },
+  compactLegend: {
+    kind: 'line',
+    title: 'Twelve series',
+    series: Array.from({ length: 12 }, (_, i) => ({
+      id: `s${i}`,
+      name: `Series ${i + 1}`,
+      points: [
+        [0, i],
+        [1, i + 2],
+        [2, i + 1]
+      ]
+    }))
+  },
+  paginatedLegend: {
+    kind: 'line',
+    title: 'Paginated series',
+    series: Array.from({ length: 26 }, (_, i) => ({
+      id: `s${i}`,
+      name: `Series ${i + 1}`,
+      points: [
+        [0, i],
+        [1, i + 2],
+        [2, i + 1]
+      ]
+    }))
+  },
   legend: {
     kind: 'line',
     title: 'Long series names',

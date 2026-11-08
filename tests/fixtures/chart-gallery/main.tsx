@@ -18,6 +18,7 @@ const locale = query.get('locale') === 'ja' ? 'ja' : 'en';
 const width = Number(query.get('width') ?? 720);
 
 function Gallery() {
+  const [resultIdentity, setResultIdentity] = useState({});
   const [revision, setRevision] = useState(0);
   const [clearAnnotations, setClearAnnotations] = useState(false);
   const [formatted, setFormatted] = useState(true);
@@ -42,6 +43,7 @@ function Gallery() {
           }}
         />
       ) : null}
+      <button onClick={() => setResultIdentity({})}>Replace result</button>
       <button onClick={() => setClearAnnotations(true)}>Clear annotations</button>
       <button onClick={() => setRange('changed')}>Change range</button>
       <button onClick={() => setRange('auto')}>Clear range</button>
@@ -85,6 +87,7 @@ function Gallery() {
                 },
                 caption: query.get('caption') === 'none' ? undefined : `Revision ${revision}`
               }}
+              resultIdentity={resultIdentity}
               idPrefix={name}
               labels={labelsForLanguage(locale)}
             />
