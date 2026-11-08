@@ -1,5 +1,6 @@
 import { devDiagnosticsPath } from '../generator/doc-runtime/dev-diagnostics.mjs';
 import { resolveRustRegistryUrls, validateRustRegistry } from '../lib/doc-runtime/rust-registry.mjs';
+import { isGraphCell } from '../lib/doc-runtime/cell-graph.mjs';
 import { parseGeneratedCellManifest } from '../generator/doc-runtime/cell-manifest.mjs';
 import { sourceChangedError } from '../generator/doc-runtime/generation-snapshot.mjs';
 import { existsSync, readFileSync } from 'node:fs';
@@ -81,9 +82,13 @@ export function oxiquillVirtualModulesPlugin(paths, { generation, base: astroBas
         const rustModule =
           cell.language === 'rust' ? rust?.modules.find((module) => module.cells.includes(cell.id)) : undefined;
         if (new URLSearchParams(moduleQuery(id)).get('page') === '1') {
-          const pageCells = manifest.cells.filter((candidate) => candidate.pagePath === cell.pagePath);
+          // Only graph cells use the page store. Their highlighted source is already in
+          // the island props, so the descriptor omits it.
+          const pageCells = manifest.cells.filter(
+            (candidate) => candidate.pagePath === cell.pagePath && isGraphCell(candidate)
+          );
           const page = {
-            cells: pageCells,
+            cells: pageCells.map((candidate) => ({ ...candidate, sourceHtml: '' })),
             ...(rust
               ? {
                   rust: {

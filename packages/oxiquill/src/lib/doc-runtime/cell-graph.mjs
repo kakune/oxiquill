@@ -43,3 +43,12 @@ export function dependentIds(cells, id) {
   visit(id);
   return [...result].sort();
 }
+
+/**
+ * Cells that exchange data with other cells run through the page-local graph store.
+ * @param {{ exports?: readonly string[], dependsOn?: Readonly<Record<string, unknown>> }} cell
+ * @returns {boolean}
+ */
+export function isGraphCell(cell) {
+  return Boolean(cell.exports || cell.dependsOn);
+}

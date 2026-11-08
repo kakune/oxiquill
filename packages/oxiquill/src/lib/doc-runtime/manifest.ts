@@ -171,9 +171,16 @@ export function applyGeneratedSnapshot(nextSnapshot: ManifestSnapshot): void {
   syncRenderedSourceBlocks();
 }
 
+// Each listener is isolated: one failing subscriber (for example a page store)
+// must not keep cells subscribed after it from receiving the update.
 function notifyManifestListeners(): void {
   for (const listener of listeners) {
-    listener();
+    try {
+      listener();
+    } catch (error) {
+      if (typeof globalThis.reportError === 'function') globalThis.reportError(error);
+      else console.error(error);
+    }
   }
 }
 

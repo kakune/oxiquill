@@ -55,6 +55,26 @@ describe('generated manifest state', () => {
     expect(getManifestSnapshot().version).toBe('test-runtime-version');
   });
 
+  it('keeps notifying later subscribers when one subscriber throws', () => {
+    const failure = new Error('page store failed');
+    const reportError = vi.fn();
+    vi.stubGlobal('reportError', reportError);
+    const failing = subscribeManifest(() => {
+      throw failure;
+    });
+    const listener = vi.fn();
+    const unsubscribe = subscribeManifest(listener);
+    try {
+      applyRuntimeVersionSnapshot('isolated-listener-version');
+      expect(listener).toHaveBeenCalledOnce();
+      expect(reportError).toHaveBeenCalledWith(failure);
+    } finally {
+      failing();
+      unsubscribe();
+      vi.unstubAllGlobals();
+    }
+  });
+
   it('tracks cells, versions, subscriptions, and rendered source blocks', () => {
     document.body.innerHTML = [
       '<div class="doc-cell" data-cell-id="first">',

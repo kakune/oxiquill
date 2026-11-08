@@ -1,4 +1,4 @@
-import { getPageCellStore } from '../../lib/doc-runtime/page-cell-store.js';
+import { isGraphCell } from '../../lib/doc-runtime/cell-graph.mjs';
 import { usePageCellRun } from './usePageCellRun.js';
 import { useEffect, useLayoutEffect, useRef, useState } from 'preact/hooks';
 import { createInputShareUrl, registerSharedInputs, sharedInputMetadata } from '../../lib/doc-runtime/input-sharing.js';
@@ -67,7 +67,7 @@ export default function InteractiveCell({
 
   return (
     <InteractiveCellPanel
-      key={`${cell.id}:${cell.language}:${Boolean(cell.exports || cell.dependsOn)}`}
+      key={`${cell.id}:${cell.language}:${isGraphCell(cell)}`}
       cell={cell}
       labels={labels}
       runtimeVersion={version}
@@ -152,7 +152,7 @@ function InteractiveCellPanel({
   errors: readonly CellCompileError[];
 }) {
   const [isSourceVisible, setIsSourceVisible] = useState(cell.showSource);
-  const useCellRun = cell.exports || cell.dependsOn ? usePageCellRun : useIndependentRun;
+  const useCellRun = isGraphCell(cell) ? usePageCellRun : useIndependentRun;
   const runtime = useCellRun(
     cell,
     cell.language === 'rust' ? (rustModule?.fingerprint ?? 'not-ready') : runtimeVersion,
@@ -395,26 +395,8 @@ function interactiveCellIds(cellId: string) {
 }
 
 function useIndependentRun(...args: Parameters<typeof useInteractiveCellRun>) {
-  const runtime = useInteractiveCellRun(...args);
-  const cell = args[0];
-  useLayoutEffect(() => {
-    const hasDescriptor = [...document.querySelectorAll<HTMLScriptElement>('script[data-oxiquill-page]')].some(
-      (element) => element.dataset.oxiquillPage === cell.pagePath
-    );
-    if (hasDescriptor) getPageCellStore(cell).recordIndependent(cell.id, runtime);
-  }, [
-    cell,
-    runtime.values,
-    runtime.result,
-    runtime.error,
-    runtime.isRunning,
-    runtime.isComplete,
-    runtime.inputsValid,
-    runtime.isStale,
-    runtime.inputRevision
-  ]);
   return {
-    ...runtime,
+    ...useInteractiveCellRun(...args),
     reused: false,
     upstreamChanged: false,
     upstreamFailure: undefined,
