@@ -13,7 +13,8 @@ export default defineConfig({
       mermaid: testFile('./tests/unit/mocks/mermaid.ts'),
       'virtual:oxiquill/cells': testFile('./tests/unit/mocks/virtual-runtime.ts'),
       'virtual:oxiquill/runtime-paths': testFile('./tests/unit/mocks/runtime-paths.ts'),
-      'virtual:oxiquill/runtime-version': testFile('./tests/unit/mocks/virtual-runtime.ts')
+      'virtual:oxiquill/runtime-version': testFile('./tests/unit/mocks/virtual-runtime.ts'),
+      'virtual:oxiquill/starlight-translations': testFile('./tests/unit/mocks/starlight-translations.ts')
     }
   },
   test: {

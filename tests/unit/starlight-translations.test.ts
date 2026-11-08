@@ -24,6 +24,7 @@ import {
   starlightTranslationsPlugin
 } from '../../packages/oxiquill/src/astro/starlight-translations.mjs';
 import { missingDocRedirectTargets } from '../../packages/oxiquill/src/config/doc-redirects.mjs';
+import { onRequest } from '../../packages/oxiquill/src/components/starlight/translation-route-middleware';
 
 const rootIndex: TranslationIndex = {
   routeIds: new Set(['', 'guide', 'english-only', 'ja', 'ja/guide']),
@@ -250,5 +251,27 @@ describe('doc redirect targets', () => {
     } finally {
       await rm(root, { recursive: true, force: true });
     }
+  });
+});
+
+describe('translation route middleware', () => {
+  it('filters Starlight route data before later middleware runs', async () => {
+    const starlightRoute = route('ja/guide', 'ja', [
+      link('Guide', '/ja/guide/', true),
+      link('English only', '/ja/english-only/')
+    ]);
+    starlightRoute.siteTitleHref = '/ja/';
+    const seen: string[][] = [];
+    const next = vi.fn(async () => {
+      seen.push(starlightRoute.sidebar.map((entry) => String(entry.label)));
+    });
+
+    await onRequest({ locals: { starlightRoute } }, next);
+    expect(seen).toEqual([['Guide']]);
+    expect(starlightRoute.pagination).toEqual({ prev: undefined, next: undefined });
+
+    const withoutRoute = vi.fn(async () => undefined);
+    await onRequest({ locals: {} }, withoutRoute);
+    expect(withoutRoute).toHaveBeenCalledOnce();
   });
 });

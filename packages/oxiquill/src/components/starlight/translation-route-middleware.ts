@@ -1,5 +1,6 @@
 import { translations } from 'virtual:oxiquill/starlight-translations';
-import { applyTranslatedRouteData, type TranslatableRouteData } from '../../lib/starlight/translations.js';
+import { applyTranslatedRouteData } from '../../lib/starlight/translations.js';
+import type { TranslatableRouteData } from '../../lib/starlight/translations.js';
 
 /**
  * Starlight route middleware for `missingTranslations: 'omit'`. It removes sidebar links, previous
