@@ -1,3 +1,4 @@
+import { resolveDataDependencies } from './cell-data-dependencies.mjs';
 import { relativePagePath } from './authoring-ids.mjs';
 import { resolveRustDefinitions } from './rust-definitions.mjs';
 import {
@@ -27,7 +28,9 @@ export default function remarkInteractiveCells({ root = process.cwd(), pythonOpt
 
     throwInteractiveCellDiagnostics(diagnostics);
     throwInteractiveCellDiagnostics(uniqueCellIdDiagnostics(cells.map(({ cell }) => cell)));
-    const normalizedCells = resolveRustDefinitions(resolvePythonSetups(cells.map(({ cell }) => cell)));
+    const normalizedCells = resolveDataDependencies(
+      resolveRustDefinitions(resolvePythonSetups(cells.map(({ cell }) => cell)))
+    );
     const generationId = generation?.validatePage(pagePath, normalizedCells);
 
     return generationId instanceof Promise ? generationId.then(transform) : transform(generationId);
@@ -35,6 +38,9 @@ export default function remarkInteractiveCells({ root = process.cwd(), pythonOpt
     function transform(generationId) {
       const reservedIdentifiers = collectReservedMdxIdentifiers(tree);
       const componentIdentifier = allocateMdxIdentifier(reservedIdentifiers, '__OxiquillInteractiveCell');
+      const hasData = normalizedCells.some((cell) => cell.exports || cell.dependsOn);
+      const pageIdentifier = allocateMdxIdentifier(reservedIdentifiers, '__oxiquillPage');
+      const pageComponent = allocateMdxIdentifier(reservedIdentifiers, '__OxiquillPageData');
       const cellIdentifiers = cells.map((_, index) =>
         allocateMdxIdentifier(reservedIdentifiers, interactiveCellIdentifier(index))
       );
@@ -69,15 +75,26 @@ export default function remarkInteractiveCells({ root = process.cwd(), pythonOpt
               cellId: cell.id,
               identifier: cellIdentifiers[index],
               rustIdentifier: rustIdentifiers[index]
-            }))
-          )
+            })),
+            hasData ? { pageIdentifier, pageComponent } : undefined
+          ),
+          ...(hasData
+            ? [
+                {
+                  type: 'mdxJsxFlowElement',
+                  name: pageComponent,
+                  attributes: [identifierAttribute('page', pageIdentifier)],
+                  children: []
+                }
+              ]
+            : [])
         );
       }
     }
   };
 }
 
-function createInteractiveCellImports(componentIdentifier, generationId, cells) {
+function createInteractiveCellImports(componentIdentifier, generationId, cells, page) {
   const componentImport = createImportDeclaration(componentIdentifier, 'oxiquill/runtime/InteractiveCell', true);
   const cellImports = cells.map(({ cellId, identifier }) =>
     createImportDeclaration(
@@ -94,7 +111,22 @@ function createInteractiveCellImports(componentIdentifier, generationId, cells) 
       'rustModule'
     )
   );
-  const declarations = [componentImport, ...cellImports, ...rustImports];
+  const declarations = [
+    componentImport,
+    ...cellImports,
+    ...rustImports,
+    ...(page
+      ? [
+          createImportDeclaration(page.pageComponent, 'oxiquill/runtime/InteractiveCell', false, 'PageCellData'),
+          createImportDeclaration(
+            page.pageIdentifier,
+            `virtual:oxiquill/cell?cellId=${encodeURIComponent(cells[0].cellId)}&page=1${generationId ? `&generationId=${encodeURIComponent(generationId)}` : ''}`,
+            false,
+            'page'
+          )
+        ]
+      : [])
+  ];
 
   return {
     type: 'mdxjsEsm',
