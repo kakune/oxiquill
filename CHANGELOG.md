@@ -32,7 +32,9 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 - Stable `oxref:` links resolve locale-scoped cell `ref` and heading `references` names across page moves, with build diagnostics and development updates.
 
-- Opt-in `rust.grouping: 'page'` compiles page modules in one Cargo workspace, reuses unaffected modules, and publishes the registry atomically with verified tool downloads.
+- `rust.grouping` selects Rust module groups: `page` (default), `directory`, `site`, or a function `({ path }) => string`. Every mode shares one pipeline that compiles stale groups in one Cargo workspace, starts wasm-bindgen and wasm-opt for each module as soon as Cargo emits it in a bounded pool, and publishes the registry atomically with verified tool downloads.
+- Development and production work stays proportional to the changed groups: unchanged modules are neither read, copied, nor re-verified by hash in development, a no-op development sync starts no process, and the development runtime reuses parsed pages, highlighted sources, and toolchain probes.
+- The development runtime publishes every Rust module that builds and keeps a failing module's last working build for its pages, reporting every failing page in one run without recompiling an unchanged failure.
 - Runtime builds explain cache decisions and report phase timings, silent-process heartbeats, and summaries. `build`, `check`, and `docgen` support NDJSON through `--format json` and read-only planning through `--explain`.
 
 - A versioned Rust module registry routes cells to lazily loaded, content-addressed assets with Wasm integrity checks, selective development updates, and shared `test-wasm` routing.
@@ -52,7 +54,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 - Input controls choose their column count from the cell width (`--oq-input-column-min-width`) instead of the viewport.
 - Long display equations scroll horizontally inside a keyboard-focusable frame instead of widening the page. Cells and output regions can shrink to their container.
 
-- `test-wasm` reuses generated Rust Wasm and browser output normalization instead of running `wasm-pack test` or compiling a separate test build.
+- `test-wasm` reuses generated Rust Wasm and browser output normalization instead of compiling a separate test build.
+
+- **Breaking:** `rust.grouping` defaults to `page`, and Rust builds no longer require `wasm-pack`: Cargo, the `wasm32-unknown-unknown` target, the pinned `wasm-bindgen` CLI, and Binaryen `wasm-opt` (both used from `PATH` or downloaded and verified) are sufficient. Rust compiler diagnostics come from the build itself without a second `cargo check`. Outputs of earlier layouts are replaced on the next generation without `oxiquill clean`. Plan events report `key` and `pages` instead of `page`.
+- `CARGO_BUILD_JOBS` and `BINARYEN_CORES` no longer invalidate Rust builds or optimizer-cache entries, and the optimizer cache retains enough entries for every module of a site.
 
 - **Breaking dependency migration:** consumers now own Astro (`^7.3.8`) and Starlight (`~0.42.6`) as required peers. Install them alongside Oxiquill. Vite is loaded from Astro, and supported internal dependencies accept compatible updates. Pyodide and KaTeX remain exact pins; starter framework and pnpm pins are unchanged.
 
@@ -64,6 +69,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 - Production builds validate one interactive cell generation across runtime compilation, MDX transforms, and build completion, reporting source changes with affected paths and preserving the previous complete runtime on failure.
 - Generated Rust embeds cell source verbatim, preserving multiline string, raw string, and byte string contents and authored source columns.
+- The generated Rust workspace lock is valid for helper workspaces whose `Cargo.lock` contains dev-dependencies or semver-compatible alternatives of runtime-pinned crates: only normal and build dependencies are seeded, runtime pins win, and Cargo resolves the seed once before `--locked` builds. Changing only a helper's dev-dependencies no longer rebuilds Rust modules.
 
 ### Security
 

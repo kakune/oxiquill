@@ -84,7 +84,7 @@ consumer command は `oxiquill` を pack し、tarball を一時的な standalon
 
 pull request では Linux、macOS、Windows の compatibility job、Linux/macOS の Haskell runtime job、Linux の packed Chromium job、Chromium、Firefox、WebKit の full browser job が必須です。supported matrix の全 cell が merge-blocking です。
 
-必須の Rust minimum job は Rust 1.85.0 と wasm-pack 0.15.0 で全 generated Rust cell と npm/pnpm packed consumer を検証し、`ci-ok` に含めます。別の非必須 canary は最新 stable Rust と最新 wasm-pack 0.15.x で同じ検証を行い、関連 PR、毎週月曜 03:00 UTC、手動実行で動作します。packed helper fixture は bundled lock にない registry dependency も使用します。
+必須の Rust minimum job は Rust 1.85.0 で全 generated Rust cell と npm/pnpm packed consumer を検証し、`ci-ok` に含めます。別の非必須 canary は最新 stable Rust で同じ検証を行い、関連 PR、毎週月曜 03:00 UTC、手動実行で動作します。packed helper fixture は bundled lock にない registry dependency も使用し、`tests/runtime/rust-helper-lock-smoke.mjs` は dev 専用の package と runtime pin とは別 version の crate を lock に含む helper workspace を build します。
 
 ## Rust helper check
 

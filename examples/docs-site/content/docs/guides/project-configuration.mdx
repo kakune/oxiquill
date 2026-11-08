@@ -45,7 +45,7 @@ export const collections = createOxiquillCollections({ defineCollection, docsLoa
 | `vite`                            | Additional Vite settings. Oxiquill preserves required aliases, deduplication, worker plugins, and filesystem access.                                    |
 | `paths`                           | Oxiquill-owned source, cache, generated, and public paths described below.                                                                              |
 | `python`                          | Pyodide download behavior: `preload`, `offline`, and the optional `packageMirror`.                                                                      |
-| `rust`                            | Rust compilation grouping: `site` (default) or `page`.                                                                                                  |
+| `rust`                            | Rust module grouping: `page` (default), `directory`, `site`, or a function returning a group key.                                                       |
 | `missingTranslations`             | `fallback` (default) keeps Starlight's fallback pages; `omit` generates and links only translated pages. See [Multilingual Sites](#multilingual-sites). |
 | `docRedirects`                    | Redirects whose destinations are base-relative documentation paths. See [Document Redirects](#document-redirects).                                      |
 | Other Astro fields                | Passed through to Astro. Oxiquill always produces static output.                                                                                        |
@@ -198,9 +198,9 @@ Astro's `root`, `publicDir`, `outDir`, and `cacheDir` and Oxiquill's explicit pa
 
 ## Generated Rust Assets
 
-Runnable manifests in `.oxiquill/generated/cells.json` include a version 1 `rust` registry. Each Rust cell belongs to exactly one module; generation currently produces a single module named `site`.
+Runnable manifests in `.oxiquill/generated/cells.json` include a version 1 `rust` registry. Each Rust cell belongs to exactly one module, and each module is one [Rust module group](#rust-module-groups) named `<mode>-<hash>`, such as `page-3f2a9c41d07b5e68`.
 
-Each module records its build fingerprint, JavaScript glue URL, Wasm URL, Wasm SHA-384 integrity, byte length, and cell IDs. Files under `public/oxiquill/rust-wasm/` use names such as `site-<hash>.js` and `site-<hash>.wasm`. Their content-addressed URLs are immutable. The registry stores paths relative to `publicDir`; Astro resolves browser URLs under its configured `base`, including custom runtime directories.
+Each module records its build fingerprint, JavaScript glue URL, Wasm URL, Wasm SHA-384 integrity, byte length, and cell IDs. Files under `public/oxiquill/rust-wasm/` use names such as `page-3f2a9c41d07b5e68-<hash>.js` and `page-3f2a9c41d07b5e68-<hash>.wasm`. Their content-addressed URLs are immutable. The registry stores paths relative to `publicDir`; Astro resolves browser URLs under its configured `base`, including custom runtime directories.
 
 The Rust worker loads a module when one of its cells first runs and verifies Wasm integrity while fetching it. Text-only and Python-only pages fetch no Rust module assets. Development updates invalidate changed module fingerprints; cancellation and timeout still reset the whole Rust worker. Generation publishes the new registry before removing obsolete registered module assets.
 
@@ -245,17 +245,17 @@ Oxiquill canonicalizes existing paths and symlinked ancestors before comparing o
 
 Runtime fingerprints contain semantic build inputs rather than machine-local paths. Python fingerprints include the Pyodide version, lockfile SHA-256, verified core-file hashes, selected package metadata, and requested package set. Haskell build fingerprints include the cells, generated source, supported compiler-version prefix, and the compiler's exact reported version (or its unavailable state). The Haskell compiler command, executable path, and diagnostic text are excluded, so moving an equivalent toolchain does not force a rebuild; changing its reported version or supported-version policy does.
 
-Rust and Haskell build fingerprints also include the installed generator's content hash and package identity. This detects codegen, build-flag, postprocessing, staging, and runtime-data changes even when a workspace package version stays unchanged. Rust additionally hashes `RUSTFLAGS`, `CARGO_ENCODED_RUSTFLAGS`, every `CARGO_PROFILE_*`, `CARGO_BUILD_*`, and `CARGO_TARGET_*` variable, and the workspace's `.cargo/config` and `.cargo/config.toml`. Unrelated environment variables are excluded. Artifact mode is recorded: production output may satisfy a dev request, while dev output must rebuild for production.
+Rust and Haskell build fingerprints also include the installed generator's content hash and package identity. This detects codegen, build-flag, postprocessing, staging, and runtime-data changes even when a workspace package version stays unchanged. Rust additionally hashes `RUSTFLAGS`, `CARGO_ENCODED_RUSTFLAGS`, every `CARGO_PROFILE_*`, `CARGO_BUILD_*`, and `CARGO_TARGET_*` variable, every `BINARYEN_*` variable, and the workspace's `.cargo/config` and `.cargo/config.toml`. `CARGO_BUILD_JOBS` and `BINARYEN_CORES` only choose parallelism and are excluded, as are unrelated environment variables. Each module also fingerprints its resolved dependency closure and the helper manifests that take part in the workspace build. Artifact mode is recorded: production output may satisfy a dev request, while dev output must rebuild for production.
 
-Before reusing published Rust, Haskell, or Python files, Oxiquill checks their recorded byte sizes and SHA-256 digests. Missing, edited, or truncated files trigger regeneration. Older runtime state without integrity records is regenerated automatically.
+Before reusing published Rust, Haskell, or Python files, Oxiquill checks their recorded byte sizes and SHA-256 digests. Development syncs check content-addressed Rust module files and generated module sources by existence and size, so an unchanged sync reads no module bytes; production builds always verify SHA-256. Missing, edited, or truncated files trigger regeneration. Older runtime state without integrity records is regenerated automatically.
 
 ## Compiler Caches
 
 Compiler caches live below the configured `cacheDir`: `build-cache/rust-target` for Cargo and `build-cache/haskell/<mode>-<ghc-version>` for Haskell. They survive runtime staging and failed compilation. Haskell uses stable cached source paths and preserves unchanged source timestamps so GHC can reuse module objects; mode and exact compiler version select separate caches. Cargo manages dependency recompilation itself.
 
-Release Rust builds also cache `wasm-opt -O` results in `build-cache/wasm-opt` when an executable `wasm-opt` is on `PATH`. The cache keys the input bytes and size, optimizer version and executable hash, optimization arguments, schema version, and sorted `BINARYEN_*` environment variables. Installing, removing, or changing the optimizer invalidates Rust build reuse. Dev builds skip optimization; without a `PATH` optimizer, wasm-pack keeps managing Binaryen without result caching. Hits verify content integrity and copy bytes into the build stage. Corrupt entries regenerate automatically. The cache retains the 16 most recently used results and normally survives failed builds. `oxiquill clean` or `pnpm build:clean` clears it while preserving verified downloads.
+Release Rust builds cache `wasm-opt -O` results in `build-cache/wasm-opt`. The optimizer is `wasm-opt` from `PATH` or the verified Binaryen 117 download. The cache keys the input bytes and size, optimizer version and executable hash, optimization arguments, schema version, and sorted `BINARYEN_*` environment variables except `BINARYEN_CORES`. Changing the optimizer invalidates Rust build reuse. Dev builds skip optimization. Hits verify content integrity and copy bytes into the build stage. Corrupt entries regenerate automatically. The cache retains at least the 16 most recently used results, and twice the number of Rust modules for larger sites; it normally survives failed builds. `oxiquill clean` or `pnpm build:clean` clears it while preserving verified downloads.
 
-Oxiquill passes the Cargo target directory to both `wasm-pack build` and `wasm-pack test`. An explicit `CARGO_TARGET_DIR` takes precedence and remains user-owned; clean does not delete an external target directory. Compiler caches are separate from published output and the verified download cache. `oxiquill clean` removes Oxiquill-owned compiler caches but preserves verified downloads.
+Oxiquill passes the Cargo target directory to every Cargo invocation. An explicit `CARGO_TARGET_DIR` takes precedence and remains user-owned; clean does not delete an external target directory. Compiler caches are separate from published output and the verified download cache. `oxiquill clean` removes Oxiquill-owned compiler caches but preserves verified downloads.
 
 Cargo configuration outside the workspace root, including ancestor `.cargo` files, `$CARGO_HOME/config*`, and files referenced by configuration, is not fingerprinted. After changing these inputs, run the repository's `pnpm build:clean`, or `oxiquill clean` followed by `oxiquill build` in a consumer project.
 
@@ -273,20 +273,44 @@ When you customize generated directories, update `tsconfig.json` exclusions to t
 
 `python.experimentalSetup` defaults to `false`. Enable it to allow page-local Python setup references that execute afresh before each cell. See [Experimental Setup](/guides/python-runtime/#experimental-setup).
 
-## Rust Compilation Groups
+## Rust Module Groups
 
-Set `rust: { grouping: 'page' }` in `defineOxiquillConfig()` or `oxiquillIntegration()` to compile each page's Rust cells into a separate module. Allowed values are `'site'` (the default, one module) and `'page'`. Pages without Rust cells create no Rust module.
+`rust.grouping` decides which pages share a compiled Rust module. Every grouping uses the same pipeline: one Cargo workspace below `paths.rustCellsDir`, one member crate per group, and one content-addressed Wasm module per group. Pages without Rust cells create no module. A page never spans modules, so page-local `definitions`, `uses`, `exports`, and `dependsOn` always stay within one crate.
+
+| Value                  | Group key                   | Choose it when                                                                                                                            |
+| ---------------------- | --------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------- |
+| `'page'` (default)     | The page path               | Most sites and large books: an edit rebuilds one page's module, and readers download only the modules of the pages they use.              |
+| `'directory'`          | The page's parent directory | Readers work through chapters section by section and the chapter's pages share helpers; fewer, larger modules reduce per-module overhead. |
+| `'site'`               | One key for the whole site  | Many small pages that are read together: one module is downloaded once and cached, but every Rust edit rebuilds it.                       |
+| `({ path }) => string` | The returned string         | Any other partition, such as one module per top-level part of a book.                                                                     |
+
+Paths are POSIX paths relative to `paths.docsDir`, including any locale prefix, so `guides/a.mdx` and `ja/guides/a.mdx` never share a `directory` group. Keys are normalized to Unicode NFC, so checkouts on file systems that store decomposed names produce the same modules. A grouping function must be pure. It receives a frozen `{ path }`, runs once per page with Rust cells in each generation, and must synchronously return a non-empty, well-formed string of at most 256 characters; any other result fails generation and names the page. The function lives in the project configuration, so the CLI, Astro, and the development runtime use it alike, and saving the configuration file regroups the development runtime.
 
 ```js
 export default defineOxiquillConfig({
   framework: { starlight },
-  title: 'My Docs',
-  rust: { grouping: 'page' }
+  title: 'My Book',
+  // One module per top-level part, such as `part-1/...` or `ja/part-1/...`.
+  rust: {
+    grouping: ({ path }) =>
+      path
+        .split('/')
+        .slice(0, path.startsWith('ja/') ? 2 : 1)
+        .join('/')
+  }
 });
 ```
 
-Page grouping rebuilds only modules whose source, helper dependency closure, toolchain, or build options changed. Readers download only the modules needed by cells they run. Shared dependencies are compiled once in the generated Cargo workspace but appear in each module that needs them, so total download/storage bytes can increase. Small sites often benefit from the default single module; page grouping bounds individual rebuild and page-download costs as a site grows. Use `oxiquill build --explain` to inspect the plan.
+Module ids combine the mode with a 16-character digest of the key (`page-…`, `directory-…`, `site-…`, or `custom-…`). They stay lowercase on case-insensitive file systems and keep Cargo's target paths short on Windows. After `rust.grouping` changes, modules whose id, pages, and sources are unchanged are kept.
 
-Page mode uses Cargo directly and requires a wasm-bindgen CLI version exactly matching the generated Cargo.lock. Oxiquill uses a matching binary on PATH or downloads the official host release, verifies its pinned SHA-256, and caches it under `paths.downloadCacheDir`. A mismatching PATH binary is replaced by the verified cached/downloaded choice for this build. Release optimization similarly uses wasm-opt from PATH or a verified Binaryen 117 release, retaining the existing `-O` optimization. Archive extraction requires `tar`. Failed verification or an unsupported host reports the expected tool version and cache path; installing the matching tool on PATH is an alternative.
+Each build compiles only modules whose sources, helper closure, resolved dependencies, toolchain, or build options changed. Cargo compiles every stale module in one invocation and shares dependencies in `build-cache/rust-target`. As each module finishes, wasm-bindgen and, for production, wasm-opt run in a bounded pool sized by a positive `CARGO_BUILD_JOBS` or the available CPUs. Unless `BINARYEN_CORES` is set, wasm-opt divides the CPUs among the modules optimized at the same time. Output does not depend on scheduling: clean builds are byte-identical for every pool size. Use `oxiquill build --explain` to inspect the plan.
 
-Generated page crates have stable source paths below `paths.rustCellsDir`; compiler and optimizer caches stay shared. The runtime registry is published only after every required group succeeds. Failure retains the previous complete registry. Moving or deleting pages prunes obsolete owned modules after publication. `oxiquill clean` removes generated/compiler outputs while retaining verified tool downloads.
+Readers download only the modules needed by the cells they run. Shared dependencies are compiled once but are linked into every module that needs them, so total download and storage bytes grow with the number of modules.
+
+A production build fails and publishes nothing when any module fails. The `oxiquill dev` runtime publishes every module that builds: a failing module keeps its last working build, its pages keep their previous Rust cells and show the compiler errors, and it is not recompiled until its inputs change. One-shot commands such as `oxiquill docgen --wasm dev` fail without publishing instead.
+
+Rust generation requires Cargo and the `wasm32-unknown-unknown` target. Oxiquill uses a `wasm-bindgen` CLI matching the pinned runtime crate from `PATH`, or downloads the official host release, verifies its pinned SHA-256, and caches it under `paths.downloadCacheDir`; a mismatching `PATH` binary is not used. Production optimization similarly uses `wasm-opt` from `PATH` or a verified Binaryen 117 release with `-O`. Archive extraction requires `tar`. Failed verification or an unsupported host reports the expected tool version and cache path; installing the matching tool on `PATH` is an alternative.
+
+The generated workspace lock starts from the runtime's exact pins and from the normal and build dependency versions locked by helper workspaces; helper dev-dependencies are ignored. Cargo resolves this seed once whenever the workspace's dependencies change, reaching the network only for packages that are not cached locally, and every build then uses `--locked`. See [Troubleshooting](/guides/troubleshooting/) if resolution fails.
+
+Generated module crates have stable source paths below `paths.rustCellsDir/modules`. Removing or regrouping pages prunes obsolete module sources and assets after publication, and outputs of earlier single-crate or per-page layouts are replaced on the next generation without `oxiquill clean`. `oxiquill clean` removes generated and compiler outputs while retaining verified tool downloads.

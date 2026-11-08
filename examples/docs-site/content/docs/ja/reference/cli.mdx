@@ -108,7 +108,7 @@ pnpm exec oxiquill test-wasm --page ja/guides/validation.mdx --cell tested-squar
 
 同じオプション内の値は選択肢として扱い、page、cell、case はすべての条件を満たす対象を選びます。各セレクターに一致が必要で、空の選択は使用方法エラーです。Rust 以外のセルを明示選択すると、その言語のケーステストが未対応であると表示します。フィルター指定時は従来の Haskell スモーク検証を省略します。
 
-セレクターなしでは全 Rust 既定入力と宣言テストを実行します。セルとケースの組み合わせごとに一度実行し、宣言された期待値をスモーク検証の代わりに適用します。生成済み Wasm を一度コンパイルし、実行ごとに新しいインスタンスを初期化します。`wasm-pack test` や別のテストビルドは実行しません。
+セレクターなしでは全 Rust 既定入力と宣言テストを実行します。セルとケースの組み合わせごとに一度実行し、宣言された期待値をスモーク検証の代わりに適用します。生成済み Wasm を一度コンパイルし、実行ごとに新しいインスタンスを初期化します。別のテストビルドは実行しません。
 
 JSON の `test` イベントは `page`、`line`（フェンス行）、`cell`、`case`、`status`（`pass` / `fail`）、`durationMs`、`failures` を持ちます。各失敗は `reason`、`fieldPath`、`location`（`line`、`column`）、長さ制限付き文字列 `actual` と `expected`、該当時は `path` と `artifact` を持ちます。実行エラー、タイムアウト、ハーネスエラー、パスや artifact の欠落、比較失敗を区別します。致命的エラーは `message` を持つ `diagnostic` イベントです。最後の `summary` は `total`、`passed`、`failed`、`exitStatus` と、該当時は `status` と `cellCount` を持つ `haskell` を含みます。Haskell の件数は Rust テスト総数と別です。
 
@@ -150,7 +150,7 @@ JSON 形式は stdout に 1 行 1 イベントの NDJSON を出力します。�
 | `type`       | フィールド                                                                                                                                           |
 | ------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `phase`      | `phase`、`state`、`elapsedMs`。該当時に `language`、`module`、`cache`（`hit` / `miss`）、`reason`。状態は `start`、`success`、`failure`、`skipped`。 |
-| `plan`       | `language`、`action`、`reasons`。該当時に `module`、`page`、`target`（`source` / `public`）。                                                        |
+| `plan`       | `language`、`action`、`reasons`。該当時に `module`、`key`、`pages`、`target`（`source` / `public`）。                                                |
 | `heartbeat`  | `phase`、`elapsedMs`。該当時に `language`、`module`。                                                                                                |
 | `output`     | ツール名の `source`、`stream`（`stdout` / `stderr`）、`line`。                                                                                       |
 | `diagnostic` | `message`。                                                                                                                                          |
@@ -158,7 +158,7 @@ JSON 形式は stdout に 1 行 1 イベントの NDJSON を出力します。�
 
 フェーズは `discovery`、`validation`、`generation`、`compile`、`optimize`、`publish`、`astro-check`、`astro-build` です。最適化イベントは Oxiquill 自身の処理境界から発行し、検証済み最適化キャッシュの再利用も報告します。集計の時間は同じフェーズの処理時間の合計です。
 
-理由の `code` は `source-changed`（`changes: [{ page, cell }]`）、`helper-inputs-changed`、`toolchain-changed`、`build-options-changed`（変更された `variables` の名前だけ）、`generator-changed`、`package-changed`、`mode-upgrade`、`output-missing`、`integrity-mismatch`、`previous-build-failed`、`forced` です。`cache-hit` は検証済み再利用、`absent` は言語の出力が既に不要な状態です。fingerprint や設定値は表示せず、telemetry やベンチマーク履歴は保存しません。
+理由の `code` は `source-changed`（`changes: [{ page, cell }]`）、`helper-inputs-changed`、`toolchain-changed`、`build-options-changed`（変更された `variables` の名前だけ）、`generator-changed`、`package-changed`、`dependencies-changed`、`mode-upgrade`、`output-missing`、`integrity-mismatch`、`previous-build-failed`、`failure-unchanged`、`forced` です。`cache-hit` は検証済み再利用、`absent` は言語の出力が既に不要な状態です。fingerprint や設定値は表示せず、telemetry やベンチマーク履歴は保存しません。
 
 ## ビルド済みサイトのリンク検証
 

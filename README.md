@@ -32,12 +32,11 @@ English is the root documentation language. Japanese pages are published under `
 - Nix with flakes enabled, or equivalent manual tools
 - Node.js 24.21.0 or newer and `pnpm` 12.10.1
 - Rust toolchain `1.99.0` with `wasm32-unknown-unknown`
-- `wasm-pack`
 - `cargo-llvm-cov`
 - `wasm32-wasi-ghc` 9.14 when authoring Haskell cells
 - Chromium, Firefox, and WebKit for the full Playwright e2e suite
 
-On NixOS or any Linux system with Nix, use the checked-in flake to enter a shell with Node, pnpm, Rust, `wasm-pack`, `cargo-llvm-cov`, `wasm32-wasi-ghc`, and the Chromium/Firefox/WebKit Playwright bundle already wired up:
+On NixOS or any Linux system with Nix, use the checked-in flake to enter a shell with Node, pnpm, Rust, Binaryen, `cargo-llvm-cov`, `wasm32-wasi-ghc`, and the Chromium/Firefox/WebKit Playwright bundle already wired up:
 
 ```sh
 nix develop
@@ -360,12 +359,11 @@ Oxiquill は、MDX で書いた技術ノートを静的サイトとして公開�
 - Nix flakes、または同等の手動 tool
 - Node.js 24.21.0 以上と `pnpm` 12.10.1
 - `wasm32-unknown-unknown` を含む Rust toolchain `1.99.0`
-- `wasm-pack`
 - `cargo-llvm-cov`
 - Haskell セルを書く場合は `wasm32-wasi-ghc` 9.14
 - Playwright e2e full suite 用の Chromium、Firefox、WebKit
 
-NixOS または Nix を使える Linux では、このリポジトリの flake で shell に入ると、Node、pnpm、Rust、`wasm-pack`、`cargo-llvm-cov`、`wasm32-wasi-ghc`、Playwright 用 Chromium/Firefox/WebKit bundle が設定済みになります。
+NixOS または Nix を使える Linux では、このリポジトリの flake で shell に入ると、Node、pnpm、Rust、Binaryen、`cargo-llvm-cov`、`wasm32-wasi-ghc`、Playwright 用 Chromium/Firefox/WebKit bundle が設定済みになります。
 
 ```sh
 nix develop

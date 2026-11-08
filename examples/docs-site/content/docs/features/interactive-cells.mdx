@@ -342,7 +342,7 @@ A definitions block accepts only `id`, `kind`, `title`, `crates`, `uses`, and `s
 
 Imports follow normal Rust glob rules: local items can shadow imported names, ambiguous names are compiler errors, and imports are not automatically re-exported. The third cell lists both blocks because it calls the helper and names the model function directly.
 
-Consumers inherit helper crates from all reachable definitions. Unused definitions are checked for valid metadata and references but are not compiled and add no Rust dependencies. Editing a used block rebuilds its consuming site or page compilation units; editing an unused block only updates its displayed source.
+Consumers inherit helper crates from all reachable definitions. Unused definitions are checked for valid metadata and references but are not compiled and add no Rust dependencies. Editing a used block rebuilds the Rust modules of its consuming pages; editing an unused block only updates its displayed source.
 
 ## Results of previous inputs
 
@@ -429,4 +429,4 @@ Changing only Bias in the example reuses both producers. Switching between previ
 
 A cache hit shows **Reused result for these inputs**. **Recompute** bypasses that producer's cache and replaces its entry after success. Pressing Run on a cached button-mode producer also forces recomputation. Concurrent requests share matching in-flight computations; cancelling one request leaves work needed by another running.
 
-Source, helper, definitions, or module changes invalidate affected keys. Invalidation follows compilation-module boundaries: with site grouping, a rebuilt site module invalidates its producers; page grouping retains producers in unchanged page modules. Cache data stays in memory and is cleared when leaving the page or ending the session.
+Source, helper, definitions, or module changes invalidate affected keys. Invalidation follows Rust module boundaries: a rebuilt module invalidates the producers it contains, while producers in unchanged modules keep their results. Coarser groupings such as `site` therefore invalidate more pages at once. Cache data stays in memory and is cleared when leaving the page or ending the session.
