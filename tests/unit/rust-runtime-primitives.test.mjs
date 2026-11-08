@@ -37,6 +37,10 @@ import {
   referencedRustFiles
 } from '../../packages/oxiquill/src/generator/doc-runtime/rust-module-publish.mjs';
 import { createTaskPool } from '../../packages/oxiquill/src/generator/doc-runtime/task-pool.mjs';
+import {
+  reusePreviousHighlights,
+  sourceHighlightFingerprint
+} from '../../packages/oxiquill/src/generator/doc-runtime/source-highlights.mjs';
 
 const roots = [];
 afterEach(async () => {
@@ -403,5 +407,30 @@ describe('Rust build records', () => {
         }
       })
     ).rejects.toThrow('denied');
+  });
+});
+
+describe('source highlight reuse', () => {
+  it('reuses previous HTML only for the same highlighter and unchanged language and source', async () => {
+    const first = await sourceHighlightFingerprint({ generatorIdentity: 'a', version: async () => '4.5.0' });
+    expect(await sourceHighlightFingerprint({ generatorIdentity: 'a', version: async () => '4.5.0' })).toBe(first);
+    expect(await sourceHighlightFingerprint({ generatorIdentity: 'a', version: async () => '4.6.0' })).not.toBe(first);
+    expect(await sourceHighlightFingerprint({ generatorIdentity: 'b', version: async () => '4.5.0' })).not.toBe(first);
+    expect(await sourceHighlightFingerprint({ generatorIdentity: 'a' })).toMatch(/^[a-f0-9]{64}$/u);
+    const highlighter = { codeToHtml: vi.fn(async (source) => `<new>${source}`) };
+    const previousManifest = {
+      cells: [
+        { language: 'rust', source: 'a', sourceHtml: '<old>a' },
+        { language: 'rust', source: 'x' }
+      ],
+      definitions: [{ language: 'rust', source: 'd', sourceHtml: '<old>d' }]
+    };
+    const reused = reusePreviousHighlights({ highlighter, previousManifest, reusable: true });
+    expect(await reused.codeToHtml('a', { lang: 'rust' })).toBe('<old>a');
+    expect(await reused.codeToHtml('d', { lang: 'rust' })).toBe('<old>d');
+    expect(await reused.codeToHtml('a', { lang: 'python' })).toBe('<new>a');
+    expect(await reused.codeToHtml('b', { lang: 'rust' })).toBe('<new>b');
+    expect(reusePreviousHighlights({ highlighter, previousManifest, reusable: false })).toBe(highlighter);
+    expect(reusePreviousHighlights({ highlighter, reusable: true })).toBe(highlighter);
   });
 });

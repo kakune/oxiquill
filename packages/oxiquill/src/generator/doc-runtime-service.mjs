@@ -83,6 +83,7 @@ import {
 } from './doc-runtime/rust-module-publish.mjs';
 import { finalizeRustModuleOutput, rustModulePublicPath } from './doc-runtime/rust-module-assets.mjs';
 import { toolchainProbeKey } from './doc-runtime/runtime-session.mjs';
+import { reusePreviousHighlights, sourceHighlightFingerprint } from './doc-runtime/source-highlights.mjs';
 
 export { copyFileIfChanged, listFiles, writeIfChanged } from './doc-runtime/file-system.mjs';
 export { listHelperCrates, readHelperManifests } from './doc-runtime/helper-crate-service.mjs';
@@ -245,7 +246,18 @@ export async function syncDocRuntime({
     ]);
     const authoringCells = content.cells;
     const snapshot = createGenerationSnapshot(authoringCells, helpers, content.pages);
-    const allBlocks = await Promise.all(authoringCells.map((cell) => createCellManifest(cell, highlighter)));
+    const [identity, state, previousManifest] = await Promise.all([
+      generatorIdentity(),
+      readRuntimeOwnership({ fileSystem, paths }),
+      readGeneratedManifest({ fileSystem, paths })
+    ]);
+    const highlightFingerprint = await sourceHighlightFingerprint({ generatorIdentity: identity });
+    const blockHighlighter = reusePreviousHighlights({
+      highlighter,
+      previousManifest,
+      reusable: state?.highlightFingerprint === highlightFingerprint
+    });
+    const allBlocks = await Promise.all(authoringCells.map((cell) => createCellManifest(cell, blockHighlighter)));
     const definitions = allBlocks.filter(isDefinitionsBlock);
     const cells = allBlocks.filter((cell) => !isDefinitionsBlock(cell));
     const haskellCells = cells.filter((cell) => cell.language === 'haskell');
@@ -301,12 +313,10 @@ export async function syncDocRuntime({
       haskellMain: generateHaskellMain(haskellCells),
       haskellOutput: generateHaskellOutput()
     };
-    const identity = await generatorIdentity();
     const rustBuildInputs =
       rustCells.length > 0 ? await readRustBuildInputs({ environment, fileSystem, paths }) : undefined;
     const buildOptions =
       rustCells.length > 0 ? await readRustBuildOptionDigests({ environment, fileSystem, paths }) : {};
-    const state = await readRuntimeOwnership({ fileSystem, paths });
     let rustPlan =
       rustCells.length > 0
         ? await events.phase('validation', { language: 'rust' }, () =>
@@ -356,7 +366,12 @@ export async function syncDocRuntime({
     };
     for (const language of ['rust', 'python', 'haskell'])
       desired[language].pages = pageSourceFingerprints(desired[language].sources);
-    const { outputComplete, outputPresent, outputMissing } = await runtimeOutputState({ fileSystem, paths, state });
+    const { outputComplete, outputPresent, outputMissing } = await runtimeOutputState({
+      fileSystem,
+      paths,
+      state,
+      manifest: previousManifest
+    });
     const planOptions = { desired, forceRustBuild, mode, outputComplete, outputPresent, state };
     const languagePlan = (rust) => createRuntimePlan({ ...planOptions, rust: rust && rustPlanActions(rust) });
     if (explain && rustPlan) rustPlan = await explainRustPlan(rustPlan, { digests, paths });
@@ -370,6 +385,9 @@ export async function syncDocRuntime({
     if (metadataUpgrade) {
       plan = { ...plan, generated: 'write', hasChanges: true };
       events.report({ type: 'diagnostic', message: 'Stored page and cell source fingerprints need updating.' });
+    } else if (state && state.highlightFingerprint !== highlightFingerprint) {
+      // Records the highlighter identity so later runs can reuse unchanged sources.
+      plan = { ...plan, generated: 'write', hasChanges: true };
     }
     const reportPlan = () => {
       const reasons = explainRuntimePlan({
@@ -589,6 +607,7 @@ export async function syncDocRuntime({
       );
       generated.cellsModule = generateCellsModule(publishedCells, snapshot.generationId, rust, publishedDefinitions);
       const nextState = await createNextRuntimeState({
+        highlightFingerprint,
         desired,
         snapshot,
         fileSystem,
@@ -701,7 +720,6 @@ export async function syncDocRuntime({
         if (failed.has(group.id)) return { ...group, status: 'failed' };
         return { ...group, status: 'kept', module: group.descriptor };
       });
-      const previousManifest = failed.size ? await readPreviousManifest({ fileSystem, paths }) : undefined;
       const composition = composeRustManifest({
         cells,
         definitions,
@@ -735,11 +753,11 @@ export async function syncDocRuntime({
   }
 }
 
-async function readPreviousManifest({ fileSystem, paths }) {
+async function readGeneratedManifest({ fileSystem, paths }) {
   try {
     return parseGeneratedCellManifest(await fileSystem.readFile(paths.cellsJsonPath, 'utf8'));
   } catch (error) {
-    if (error?.code === 'ENOENT' || error instanceof SyntaxError) return undefined;
+    if (error?.code === 'ENOENT') return undefined;
     throw error;
   }
 }
@@ -779,10 +797,7 @@ function createDesiredRuntime({
   });
 }
 
-async function runtimeOutputState({ fileSystem, paths, state }) {
-  const manifest = fileSystem.existsSync(paths.cellsJsonPath)
-    ? parseGeneratedCellManifest(await fileSystem.readFile(paths.cellsJsonPath, 'utf8'))
-    : undefined;
+async function runtimeOutputState({ fileSystem, paths, state, manifest }) {
   if (manifest?.rust) validateRustRegistry(manifest.rust, manifest.cells);
   const registryCurrent = !state?.rust || stableFingerprint(state.rust) === stableFingerprint(manifest?.rust);
   const outputPresent = {
@@ -870,6 +885,7 @@ async function addDirectoryStage(pathName, paths, stagedPaths, stages, { fileSys
 }
 
 async function createNextRuntimeState({
+  highlightFingerprint,
   snapshot,
   desired,
   fileSystem,
@@ -920,6 +936,7 @@ async function createNextRuntimeState({
   return {
     schemaVersion: 1,
     generationId: snapshot.generationId,
+    highlightFingerprint,
     snapshot,
     manifestFingerprint: desired.manifestFingerprint,
     ready: haskellBuildResult.ok,
