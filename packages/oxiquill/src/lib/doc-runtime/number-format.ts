@@ -53,7 +53,15 @@ export function numberFormatter(
   const precision = format.significantDigits ?? (ticks ? 17 : 6);
   const localeTag = locale === 'ja' ? 'ja-JP' : 'en-US';
   const zeroTolerance =
-    !table && !ticks && bounds && bounds.minimum < 0 && bounds.maximum > 0 ? magnitude * Number.EPSILON : 0;
+    !table &&
+    !ticks &&
+    format.notation !== 'scientific' &&
+    format.notation !== 'standard' &&
+    bounds &&
+    bounds.minimum < 0 &&
+    bounds.maximum > 0
+      ? magnitude * Number.EPSILON
+      : 0;
   const digits =
     fixed === undefined
       ? { maximumSignificantDigits: precision }

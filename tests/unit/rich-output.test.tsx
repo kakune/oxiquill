@@ -51,6 +51,8 @@ it.each(['en', 'ja'] as const)('formats table numbers and explicit chart notatio
     expect(formatTableNumber(value, locale, false, format)).toBe(expected);
   expect(chartNumberFormatter([1e6, 1e6 + 1], locale, true, { notation: 'scientific' })(1e6)).toBe('1×10⁶');
   expect(chartNumberFormatter([1e-7], locale, false, { notation: 'standard' })(1e-7)).toBe('0.0000001');
+  expect(chartNumberFormatter([-1, 1], locale, false, { notation: 'scientific' })(1e-20)).toBe('1×10⁻²⁰');
+  expect(chartNumberFormatter([-1, 1], locale, false, { notation: 'standard' })(1e-20)).toBe('0.00000000000000000001');
   expect(chartNumberFormatter([0], locale, false, { fractionDigits: 2 })(-0)).toBe('0.00');
   expect(chartNumberFormatter([1.005], locale, false, { fractionDigits: 2 })(1.005)).toBe('1.00');
   expect(formatTableNumber(1.005, locale, false, { fractionDigits: 2 })).toBe('1.01');
