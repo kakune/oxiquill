@@ -224,7 +224,7 @@ describe('pure geometry and scene data', () => {
       ok: true,
       csv: expect.stringContaining('a,<b>Origin</b>,core,0,0,0')
     });
-    expect(sceneTables(largeScene(10000), { points: 'P', edges: 'E' }).edges.rows).toHaveLength(19997);
+    expect(sceneTables(largeScene(10000), { points: 'P', edges: 'E' }).edges.rows).toHaveLength(20000);
     expect(authoredCamera({ kind: 'scene3d', points: [] })).toEqual({ yaw: 30, pitch: 20, zoom: 1 });
     expect(rotateCamera({ yaw: 350, pitch: 80, zoom: 2 }, 20, 15)).toEqual({ yaw: 10, pitch: 90, zoom: 2 });
     expect(rotateCamera({ yaw: 0, pitch: -90, zoom: 1 }, -15, -15).pitch).toBe(-90);

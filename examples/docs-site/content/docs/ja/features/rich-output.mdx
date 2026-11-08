@@ -670,3 +670,83 @@ displayTableWith [quantity] [[JsonNumber 1.234], [JsonNull]]
 displayOutcome ((outcome "satisfied" "Criterion met")
   { outcomeDiagnostics = [OutcomeDiagnostic "residual" 0.00001 Nothing] })
 ```
+
+## インタラクティブな3D点シーン
+
+`scene3d` は点集合と任意の無向辺を、遅延読み込みされる依存ライブラリ不要の Canvas 2D ビューアーで表示します。カメラは正投影です。メッシュ、モデルの読み込み、スクリプト、透視投影には対応しません。
+
+必須フィールドは `kind: "scene3d"` と `points` です。`edges`、`groups`、`axes`、`camera`、`id`、`title`、`caption` は任意です。
+
+| フィールド | 制約                                                                                                                   |
+| ---------- | ---------------------------------------------------------------------------------------------------------------------- |
+| `points`   | 0〜10,000件。一意の `id`（UTF-8で1〜64バイト）、有限数3個の `position`、任意の平文 `label`（256バイト）と `group` ID。 |
+| `edges`    | 0〜20,000件の `{from, to}`。異なる既存の点を参照します。同じ組と逆順の組は重複です。                                   |
+| `groups`   | 順序付きの `{id, label?}`。IDは空でなく一意です。未宣言の使用グループは初出順で続き、IDをラベルにします。              |
+| `axes`     | 任意の `x`、`y`、`z` に平文 `label` と `unit`（32バイト）を指定できます。                                              |
+| `camera`   | 有限の角度 `yaw`、−90〜90の `pitch`、有限の正数 `zoom`。既定値は30°、20°、1です。                                      |
+
+その他のテキストメタデータは各16 KiBまでです。シーン全体は既存の実行・ワーカーレスポンス上限16 MiBに含まれます。不正な値、未知のフィールド、件数・バイト上限違反は該当する出力だけの診断になります。シーンを暗黙に切り詰めません。マークアップは文字として表示します。
+
+ドラッグで回転、ホイールやピンチで拡大・縮小します。ビューにフォーカスして矢印キーで15°回転、**+ / −** で拡大・縮小、**0** で最新の指定カメラに戻せます。**操作方法** を開くと説明を確認できます。グループは既存のチャート配色と丸・四角・三角・ひし形で区別され、凡例で表示切替・単独表示・全表示ができます。アニメーションはありません。
+
+点から12 CSSピクセル以内をクリックまたはタップすると、元の座標と単位を表示します。2点を選ぶとユークリッド距離を測定し、3点目は古い選択を置き換えます。選択済みの点を再び選ぶと解除します。3軸すべてに同一の空白でない単位がある場合だけ距離を表示し、それ以外は計算できない理由を示します。単位は推測しません。
+
+**データを表で表示** から全点と全辺を並べ替え・ページ送りし、生の値をCSVで保存できます。点の表にある選択ボタンでも距離を測定でき、凡例で非表示のグループも選べます。PNGは現在のビュー、印刷は全グループの指定初期投影を使います。サイズやテーマ変更ではビューを保持します。同じセルの再実行でも、出力の識別子と点ID集合が同じならカメラと選択を保持し、いずれかが変わるとリセットします。複数出力の並べ替えには明示的な出力IDを使ってください。
+
+以下の四面体では原点から各軸への距離は `scale` nm、他の辺は `sqrt(2) × scale` nmです。Scaleを変更してもカメラと選択IDを保持します。
+
+```rust
+//| id: scene3d-tetrahedron
+//| title: Tetrahedron
+//| run: reactive
+//| crates: []
+//| inputs:
+//|   scale: { type: range, label: Scale, min: 0.5, max: 3, step: 0.5, value: 1 }
+//| tests:
+//|   - { case: default, expect: [{ path: /outputs/0/kind, equals: scene3d }] }
+let points = [
+    ("a", [0.0, 0.0, 0.0], "core"),
+    ("b", [scale, 0.0, 0.0], "shell"),
+    ("c", [0.0, scale, 0.0], "shell"),
+    ("d", [0.0, 0.0, scale], "shell"),
+].into_iter().map(|(id, position, group)| serde_json::json!({
+    "id": id, "position": position, "group": group
+})).collect::<Vec<_>>();
+emit_scene3d!(serde_json::json!({
+    "points": points,
+    "edges": [
+        {"from": "a", "to": "b"}, {"from": "a", "to": "c"},
+        {"from": "a", "to": "d"}, {"from": "b", "to": "c"},
+        {"from": "b", "to": "d"}, {"from": "c", "to": "d"}
+    ],
+    "groups": [{"id": "core", "label": "Core"}, {"id": "shell", "label": "Shell"}],
+    "axes": {"x": {"unit": "nm"}, "y": {"unit": "nm"}, "z": {"unit": "nm"}},
+    "camera": {"yaw": 30, "pitch": 20, "zoom": 1}
+}), metadata = serde_json::json!({"id": "tetrahedron", "title": "Tetrahedron"}));
+```
+
+Rust の `emit_scene3d!(scene, metadata = ...)` と Haskell の `displayScene3d scene` には `kind` を除いたシーンを渡します。Python は `display_scene3d(points, *, edges=None, groups=None, axes=None, camera=None, title=None, caption=None)` を使います。3言語とも `kind` を追加し、同じ検証を受けます。
+
+```python
+#| id: python-scene3d
+#| title: Python 3D points
+#| run: button
+display_scene3d([
+    {"id": "a", "position": [0, 0, 0], "label": "Origin"},
+    {"id": "b", "position": [1, 0, 0]},
+], edges=[{"from": "a", "to": "b"}],
+   axes={axis: {"unit": "nm"} for axis in ("x", "y", "z")}, title="Python scene")
+```
+
+```haskell
+--| id: haskell-scene3d
+--| title: Haskell 3D points
+--| run: button
+import Oxiquill.Output
+let point name x = JsonObject [("id", JsonString name),
+      ("position", JsonArray [JsonNumber x, JsonNumber 0, JsonNumber 0])]
+displayScene3d (JsonObject [
+    ("title", JsonString "Haskell scene"),
+    ("points", JsonArray [point "a" 0, point "b" 1]),
+    ("edges", JsonArray [JsonObject [("from", JsonString "a"), ("to", JsonString "b")]])])
+```

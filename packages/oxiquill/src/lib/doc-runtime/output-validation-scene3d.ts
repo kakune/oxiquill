@@ -68,6 +68,12 @@ export function validateScene3dArtifact(record: Record<string, unknown>, remaini
     'Scene3d'
   );
   const base = artifactMetadata(validateBaseArtifact(record));
+  let payloadBytes = utf8ByteLength(JSON.stringify(base));
+  const charge = (value: unknown, field: string) => {
+    payloadBytes += utf8ByteLength(JSON.stringify(value));
+    if (payloadBytes > remainingBytes)
+      throw new ArtifactValidationError(`${field} exceeds the remaining run byte limit.`);
+  };
   const ids = new Set<string>();
   const points = items(record, 'points', outputArtifactLimits.scene3dPoints, true).map((value, index) => {
     const context = `Scene3d.points[${index}]`;
@@ -85,7 +91,14 @@ export function validateScene3dArtifact(record: Record<string, unknown>, remaini
     ];
     const label = text(point, 'label', context, 256);
     const group = optionalString(point, 'group', context);
-    return { id, position, ...(label === undefined ? {} : { label }), ...(group === undefined ? {} : { group }) };
+    const pointValue = {
+      id,
+      position,
+      ...(label === undefined ? {} : { label }),
+      ...(group === undefined ? {} : { group })
+    };
+    charge(pointValue, context);
+    return pointValue;
   });
   const edgeKeys = new Set<string>();
   const edges = items(record, 'edges', outputArtifactLimits.scene3dEdges).map((value, index) => {
@@ -104,10 +117,10 @@ export function validateScene3dArtifact(record: Record<string, unknown>, remaini
     const key = JSON.stringify([from, to].sort());
     if (edgeKeys.has(key)) throw new ArtifactValidationError(`${context} is a duplicate undirected edge.`);
     edgeKeys.add(key);
+    charge({ from, to }, context);
     return { from, to };
   });
   const groupIds = new Set<string>();
-  let groupBytes = 0;
   const groups = items(record, 'groups', Math.max(0, remainingBytes)).map((value, index) => {
     const context = `Scene3d.groups[${index}]`;
     const group = plainRecord(value, context);
@@ -116,10 +129,9 @@ export function validateScene3dArtifact(record: Record<string, unknown>, remaini
     if (groupIds.has(id)) throw new ArtifactValidationError(`${context}.id is a duplicate group id.`);
     groupIds.add(id);
     const label = optionalString(group, 'label', context);
-    groupBytes += utf8ByteLength(id) + utf8ByteLength(label ?? '');
-    if (groupBytes > remainingBytes)
-      throw new ArtifactValidationError('Scene3d.groups exceeds the remaining run byte limit.');
-    return { id, ...(label === undefined ? {} : { label }) };
+    const groupValue = { id, ...(label === undefined ? {} : { label }) };
+    charge(groupValue, context);
+    return groupValue;
   });
   let axes: Scene3dArtifact['axes'];
   if (Object.hasOwn(record, 'axes')) {

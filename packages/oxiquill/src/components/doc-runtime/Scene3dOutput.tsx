@@ -92,10 +92,15 @@ export default function Scene3dOutput({
     if (!root) return;
     const resize = () => {
       const width = root.getBoundingClientRect().width || 640;
-      setSize({ width, height: Math.max(240, Math.min(420, width * 0.6)) });
+      const height = Math.max(240, Math.min(420, width * 0.6));
+      setSize((current) => (current.width === width && current.height === height ? current : { width, height }));
     };
     resize();
-    const observer = new ResizeObserver(resize);
+    let resizeFrame = 0;
+    const observer = new ResizeObserver(() => {
+      cancelAnimationFrame(resizeFrame);
+      resizeFrame = requestAnimationFrame(resize);
+    });
     observer.observe(root);
     const themeObserver = new MutationObserver(() => setTheme(document.documentElement.dataset.theme));
     themeObserver.observe(document.documentElement, { attributes: true, attributeFilter: ['data-theme'] });
@@ -107,6 +112,7 @@ export default function Scene3dOutput({
     root.addEventListener('wheel', wheel, { passive: false });
     return () => {
       observer.disconnect();
+      cancelAnimationFrame(resizeFrame);
       themeObserver.disconnect();
       root.removeEventListener('wheel', wheel);
       pointers.current.forEach((_, id) => {
@@ -118,7 +124,7 @@ export default function Scene3dOutput({
 
   useEffect(() => {
     const frame = requestAnimationFrame(() => {
-      if (!canvas.current || !viewport.current || !printCanvas.current) return;
+      if (!canvas.current || !viewport.current) return;
       const style = getComputedStyle(viewport.current);
       const chrome = {
         background: style.getPropertyValue('--sl-color-bg').trim() || (theme === 'dark' ? '#18181b' : '#fff'),
@@ -129,6 +135,18 @@ export default function Scene3dOutput({
         setAvailable(
           drawScene(canvas.current, artifact, view.camera, view.hidden, view.selected, chrome, size.width, size.height)
         );
+      } catch (caught) {
+        setAvailable(false);
+        setError(boundedErrorMessage(caught));
+      }
+    });
+    return () => cancelAnimationFrame(frame);
+  }, [artifact, view.camera, view.hidden, view.selected, theme, size]);
+
+  useEffect(() => {
+    const frame = requestAnimationFrame(() => {
+      if (!printCanvas.current) return;
+      try {
         drawScene(
           printCanvas.current,
           artifact,
@@ -140,12 +158,11 @@ export default function Scene3dOutput({
           size.height
         );
       } catch (caught) {
-        setAvailable(false);
         setError(boundedErrorMessage(caught));
       }
     });
     return () => cancelAnimationFrame(frame);
-  }, [artifact, view.camera, view.hidden, view.selected, theme, size]);
+  }, [artifact, size]);
 
   useEffect(() => {
     generation.current += 1;

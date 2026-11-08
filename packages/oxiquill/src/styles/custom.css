@@ -868,8 +868,11 @@
   max-width: 100%;
   overflow-wrap: anywhere;
 }
-.doc-scene3d button[aria-pressed='false'] {
-  opacity: 0.55;
+.doc-scene3d__legend button[aria-pressed='false'] {
+  text-decoration: line-through;
+}
+.doc-scene3d__legend button[aria-pressed='false'] .doc-scene3d__symbol {
+  opacity: 0.4;
 }
 .doc-scene3d button:focus-visible,
 .doc-scene3d__viewport:focus-visible,

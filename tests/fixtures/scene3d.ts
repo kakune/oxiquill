@@ -35,5 +35,6 @@ export function largeScene(count: number): Scene3dArtifact {
   const edges = points.flatMap(({ id }, index) =>
     [1, 2].flatMap((offset) => (index + offset < count ? [{ from: id, to: String(index + offset) }] : []))
   );
+  if (count === 10_000) edges.push(...[0, 1, 2].map((index) => ({ from: String(index), to: String(count - 1) })));
   return { kind: 'scene3d', points, edges };
 }
