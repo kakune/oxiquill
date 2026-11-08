@@ -1,0 +1,20 @@
+/*
+ * Optional Japanese typography for pages whose language is Japanese (`lang="ja"` or `ja-*`).
+ * Add `oxiquill/styles/japanese.css` to `starlight.customCss`. Every value is a fallback, so a
+ * stylesheet listed later can tune it by setting the custom property on `:root`.
+ */
+:root:lang(ja) .sl-markdown-content {
+  /* Apply strict kinsoku: small kana and prolonged sound marks do not start a line. */
+  line-break: strict;
+  word-break: var(--oq-ja-word-break, normal);
+}
+
+:root:lang(ja) .sl-markdown-content :is(p, li, dt, dd, blockquote, td, th, figcaption):not(:where(.not-content *)) {
+  line-height: var(--oq-ja-line-height, 1.9);
+  letter-spacing: var(--oq-ja-letter-spacing, normal);
+}
+
+:root:lang(ja) :is(#_top, .sl-markdown-content :is(h1, h2, h3, h4, h5, h6):not(:where(.not-content *))) {
+  line-height: var(--oq-ja-heading-line-height, 1.4);
+  letter-spacing: var(--oq-ja-heading-letter-spacing, 0.01em);
+}

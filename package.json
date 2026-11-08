@@ -40,7 +40,7 @@
     "test:e2e": "pnpm build:package && playwright test",
     "test:bundle": "node tests/bundle/client-bundle.mjs",
     "test:docs": "pnpm build:package && node tests/docs/check-documentation.mjs",
-    "lint:package": "pnpm build:package && publint packages/oxiquill && attw packages/oxiquill --pack --profile esm-only --entrypoints . ./astro ./content ./runtime/InteractiveCell ./runtime/MermaidDiagram ./runtime/types ./env",
+    "lint:package": "pnpm build:package && publint packages/oxiquill && attw packages/oxiquill --pack --profile esm-only --entrypoints . ./astro ./content ./runtime/InteractiveCell ./runtime/MermaidDiagram ./runtime/types ./components/starlight/translation-route-middleware ./env",
     "test:package": "node tests/package/package-contents.mjs && pnpm lint:package",
     "test:consumer": "pnpm test:consumer:npm && pnpm test:consumer:pnpm",
     "test:consumer:npm": "node tests/package/consumer-smoke.mjs --package-manager npm",

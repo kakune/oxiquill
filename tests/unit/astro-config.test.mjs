@@ -424,6 +424,83 @@ flowchart LR
     );
   });
 
+  it('keeps Starlight fallback pages unless missing translations are omitted', () => {
+    const fallback = vi.fn(() => ({ hooks: {}, name: 'fallback-starlight' }));
+    const update = runConfigSetup(
+      defineOxiquillConfig({ framework: { starlight: fallback }, starlight: { routeMiddleware: './a.ts' } })
+    );
+    expect(fallback.mock.calls[0][0].routeMiddleware).toBe('./a.ts');
+    expect(fallback.mock.calls[0][0].components).not.toHaveProperty('LanguageSelect');
+    expect(update.vite.plugins.map((plugin) => plugin.name)).not.toContain('oxiquill-starlight-translations');
+
+    const omit = vi.fn(() => ({ hooks: {}, name: 'omit-starlight' }));
+    const omitted = runConfigSetup(
+      defineOxiquillConfig({
+        framework: { starlight: omit },
+        missingTranslations: 'omit',
+        starlight: { routeMiddleware: ['./a.ts', './b.ts'] }
+      })
+    );
+    expect(omit).toHaveBeenCalledWith(
+      expect.objectContaining({
+        routeMiddleware: ['oxiquill/components/starlight/translation-route-middleware', './a.ts', './b.ts'],
+        components: expect.objectContaining({ LanguageSelect: 'oxiquill/components/starlight/LanguageSelect' })
+      })
+    );
+    expect(omitted.vite.plugins.map((plugin) => plugin.name)).toContain('oxiquill-starlight-translations');
+
+    const replaced = vi.fn(() => ({ hooks: {}, name: 'replaced-starlight' }));
+    defineOxiquillConfig({
+      framework: { starlight: replaced },
+      missingTranslations: 'omit',
+      starlight: { components: { LanguageSelect: './Languages.astro' } }
+    });
+    expect(replaced.mock.calls[0][0].components.LanguageSelect).toBe('./Languages.astro');
+    expect(replaced.mock.calls[0][0].routeMiddleware).toEqual([
+      'oxiquill/components/starlight/translation-route-middleware'
+    ]);
+  });
+
+  it('rejects unsupported missing-translation modes', () => {
+    expect(() => defineOxiquillConfig({ missingTranslations: 'hide' })).toThrow(
+      new TypeError("missingTranslations must be 'fallback' or 'omit'.")
+    );
+    expect(() => defineOxiquillConfig({ missingTranslations: 'omit', starlight: { prerender: false } })).toThrow(
+      new TypeError("missingTranslations: 'omit' requires prerendered Starlight pages.")
+    );
+  });
+
+  it('prefixes doc redirect destinations with the base path', () => {
+    const config = defineOxiquillConfig({
+      base: '/docs/',
+      docRedirects: {
+        '/ja/old/': '/ja/new/',
+        '/moved/': { status: 301, destination: '/guides/start/' }
+      },
+      redirects: { '/external/': 'https://example.com/' }
+    });
+
+    expect(config.redirects).toEqual({
+      '/external/': 'https://example.com/',
+      '/ja/old/': '/docs/ja/new/',
+      '/moved/': { status: 301, destination: '/docs/guides/start/' }
+    });
+    expect(defineOxiquillConfig({ docRedirects: { '/old/': '/new/' } }).redirects).toEqual({ '/old/': '/new/' });
+    expect(defineOxiquillConfig({})).not.toHaveProperty('redirects');
+  });
+
+  it.each([
+    [{ '/old/': 'new/' }, 'docRedirects destination for /old/ must be a base-relative documentation path'],
+    [{ '/old/': '//example.com/new/' }, 'docRedirects destination for /old/'],
+    [{ '/old/': 'https://example.com/' }, 'docRedirects destination for /old/'],
+    [{ '/old/': '/posts/[slug]/' }, 'docRedirects destination for /old/'],
+    [{ '/old/': { status: 301 } }, 'docRedirects destination for /old/'],
+    [{ '/same/': '/new/' }, 'docRedirects source /same/ is also configured in redirects.'],
+    [['/old/'], 'docRedirects must be an object of source paths to destinations.']
+  ])('rejects invalid doc redirects %j', (docRedirects, message) => {
+    expect(() => defineOxiquillConfig({ docRedirects, redirects: { '/same/': '/elsewhere/' } })).toThrow(message);
+  });
+
   it('keeps explicit integration factory overrides for tests and advanced consumers', () => {
     const preact = vi.fn(() => ({ hooks: {}, name: 'custom-preact' }));
     const starlight = vi.fn(() => ({ hooks: {}, name: 'custom-starlight' }));

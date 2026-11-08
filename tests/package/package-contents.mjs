@@ -142,10 +142,12 @@ async function expectedPackageFiles() {
   );
   const copiedFiles = [
     'dist/components/starlight/ArrowIcon.astro',
+    'dist/components/starlight/LanguageSelect.astro',
     'dist/components/starlight/PageFrame.astro',
     'dist/components/starlight/TwoColumnContent.astro',
     'dist/env.d.ts',
     'dist/styles/custom.css',
+    'dist/styles/japanese.css',
     'dist/styles/katex.css',
     'dist/tsconfigs/strict.json'
   ];
