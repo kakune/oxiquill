@@ -332,3 +332,9 @@ A definitions block accepts only `id`, `kind`, `title`, `crates`, `uses`, and `s
 Imports follow normal Rust glob rules: local items can shadow imported names, ambiguous names are compiler errors, and imports are not automatically re-exported. The third cell lists both blocks because it calls the helper and names the model function directly.
 
 Consumers inherit helper crates from all reachable definitions. Unused definitions are checked for valid metadata and references but are not compiled and add no Rust dependencies. Editing a used block rebuilds its consuming site or page compilation units; editing an unused block only updates its displayed source.
+
+## Results of previous inputs
+
+Outputs remember the inputs that produced them. Editing an input, selecting a case, restoring inputs, or starting another run marks retained output with a previous-input banner and `data-stale="true"`. Invalid numeric edits also mark results stale. Reactive cells keep the mark throughout debounce and execution; button cells keep it until Run succeeds. Restoring matching inputs alone does not clear it. Cancellation, superseded responses, and failed runs do not clear it either; runtime errors remain visible and previous results remain marked. A current successful run clears the mark. Source and runtime updates invalidate retained results too.
+
+Authors can emit an [outcome](/features/rich-output/#column-formats-and-computation-outcomes) to state whether a successful execution met its computational criterion. Outcomes are marked stale together with tables, charts, and text. They do not replace execution errors.
