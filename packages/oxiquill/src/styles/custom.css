@@ -694,9 +694,10 @@
   border-inline-start: 3px solid var(--sl-color-gray-3);
   background: var(--sl-color-bg-inline-code);
 }
+/* Keep retained canvas and table dimensions stable while marking old results. */
 .doc-cell__retained-output[data-stale='true'] .doc-cell__outputs {
-  border-inline-start: 2px dashed var(--sl-color-gray-3);
-  padding-inline-start: 0.75rem;
+  outline: 1px dashed var(--sl-color-gray-3);
+  outline-offset: -1px;
 }
 .doc-outcome {
   padding: 0.75rem;

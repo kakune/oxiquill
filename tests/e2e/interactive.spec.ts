@@ -358,6 +358,7 @@ test('Rust cells run from MDX code fences and redraw plots', async ({ page }) =>
   await expect(page.getByTestId('r-value')).toHaveText('3.70');
   await expect.poll(() => page.evaluate('globalThis.__heldChartResults.length')).toBe(1);
   await expect(cell.locator('.doc-cell__output-region')).toHaveAttribute('aria-busy', 'true');
+  await expect(cell.locator('.doc-cell__retained-output')).toHaveAttribute('data-stale', 'true');
   await expect(canvas).toBeVisible();
   expect(await canvas.evaluate((node, previous) => node === previous, originalCanvas)).toBe(true);
   expect(await canvas.evaluate((node) => (node as HTMLCanvasElement).toDataURL())).toBe(initialImage);
