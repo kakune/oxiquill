@@ -546,12 +546,10 @@ function createStarlightOptions(
     components = {},
     customCss = [],
     description = 'A static documentation workspace for Rust, Python, math, diagrams, and media-rich MDX notes.',
-    routeMiddleware,
     title = 'Oxiquill',
     ...rest
   } = options;
   const omitMissingTranslations = missingTranslations === 'omit';
-  const consumerRouteMiddleware = routeMiddleware === undefined ? [] : [routeMiddleware].flat();
 
   return {
     title,
@@ -559,10 +557,8 @@ function createStarlightOptions(
     ...rest,
     // Oxiquill's route middleware runs first so consumer middleware sees the filtered navigation.
     ...(omitMissingTranslations
-      ? { routeMiddleware: [translationRouteMiddleware, ...consumerRouteMiddleware] }
-      : routeMiddleware === undefined
-        ? {}
-        : { routeMiddleware }),
+      ? { routeMiddleware: [translationRouteMiddleware, ...[rest.routeMiddleware ?? []].flat()] }
+      : {}),
     customCss: ['oxiquill/styles/katex.css', 'oxiquill/styles/custom.css', ...customCss],
     components: {
       PageFrame: 'oxiquill/components/starlight/PageFrame',

@@ -208,7 +208,7 @@ describe('Starlight translations plugin', () => {
 
   it("loads Starlight's routing module through the public static route export", async () => {
     const { plugin } = starlightTranslationsPlugin();
-    const resolve = vi.fn(async (source: string) =>
+    const resolve = vi.fn(async (source: string): Promise<{ id: string } | null> =>
       source.startsWith('@astrojs') ? { id: staticRoute } : { id: '/repo/starlight/utils/routing/index.js' }
     );
     const load = plugin.load as (this: { resolve: typeof resolve }, id: string) => Promise<string | undefined>;

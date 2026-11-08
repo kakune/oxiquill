@@ -300,7 +300,7 @@
 
 .doc-cell__outputs[data-layout='columns']
   > :is(.doc-chart-output, .doc-chart-output__loading, .doc-chart-output__error, .doc-image-output) {
-  flex-basis: min(100%, max(var(--oq-output-column-min-width, 20rem), calc(50% - 0.85rem)));
+  flex-basis: min(100%, max(var(--oq-output-column-min-width, 18rem), calc(50% - 0.85rem)));
 }
 
 .doc-cell__output-region {
