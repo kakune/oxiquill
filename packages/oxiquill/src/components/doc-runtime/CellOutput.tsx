@@ -5,7 +5,7 @@ import {
   normalizeCellExecutionResult,
   type NormalizedCellExecutionResult
 } from '../../lib/doc-runtime/output-artifacts.js';
-import type { CellExecutionResult, CellManifest } from '../../lib/doc-runtime/types.js';
+import type { CellExecutionResult, CellManifest, OutputLayout } from '../../lib/doc-runtime/types.js';
 import OutputRenderer from './OutputRenderer.js';
 
 type RuntimeLabels = ReturnType<typeof labelsForLanguage>;
@@ -22,6 +22,7 @@ export function CellOutput({
   isPreparing = false,
   labels,
   outputId,
+  outputLayout = 'stack',
   result,
   partialResult,
   retry,
@@ -39,6 +40,7 @@ export function CellOutput({
   isPreparing?: boolean;
   labels: RuntimeLabels;
   outputId: string;
+  outputLayout?: OutputLayout;
   result?: CellExecutionResult | NormalizedCellExecutionResult;
   partialResult?: NormalizedCellExecutionResult;
   retry?: () => void;
@@ -144,7 +146,7 @@ export function CellOutput({
               {labels.previousInputsOutput}
             </p>
           ) : null}
-          <div class="doc-cell__outputs">
+          <div class="doc-cell__outputs" data-layout={outputLayout === 'columns' ? 'columns' : undefined}>
             {error !== undefined ? <p>{labels.previousSuccessfulOutput}</p> : null}
             <OutputRenderer
               idPrefix={outputId}

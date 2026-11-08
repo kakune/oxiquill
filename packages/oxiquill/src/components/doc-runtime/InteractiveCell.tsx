@@ -374,6 +374,7 @@ function InteractiveCellPanel({
         canRetry={runtime.inputsValid}
         labels={labels}
         outputId={ids.output}
+        outputLayout={cell.outputLayout}
         runMode={cell.run}
       />
     </section>

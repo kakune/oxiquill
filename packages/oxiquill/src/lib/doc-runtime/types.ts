@@ -59,8 +59,12 @@ export interface CellManifest {
   timeoutMs: number;
   showSource: boolean;
   editable: boolean;
+  /** `columns` lets charts and images share rows when the cell is wide enough. */
+  outputLayout?: OutputLayout;
   pagePath: string;
 }
+
+export type OutputLayout = 'stack' | 'columns';
 
 export interface DefinitionsBlockManifest {
   kind: 'definitions';

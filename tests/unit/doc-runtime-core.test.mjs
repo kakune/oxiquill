@@ -6,6 +6,7 @@ import {
   relativePagePath,
   scopedCellId
 } from '../../packages/oxiquill/src/lib/doc-runtime/authoring-ids.mjs';
+import { normalizeCell } from '../../packages/oxiquill/src/lib/doc-runtime/normalized-cell.mjs';
 import { scanRustMacroInvocations } from '../../packages/oxiquill/src/generator/doc-runtime/rust-codegen/macro-invocations.mjs';
 import {
   rustOutputCapabilities,
@@ -580,6 +581,29 @@ describe('doc runtime core', () => {
       'p.mdx'
     );
     expect(haskell.cells[0].editable).toBe(false);
+  });
+
+  it('accepts an output layout for figures and keeps the default stack out of manifests', () => {
+    const cell = (metadata) => ['```rust', '//| id: figures', ...metadata, 'println!("ok");', '```'].join('\n');
+    const parse = (metadata) => parseCellsFromMarkdown(cell(metadata), 'content/docs/page.mdx');
+
+    expect(parse([]).cells[0]).not.toHaveProperty('outputLayout');
+    expect(parse(['//| outputLayout: stack']).cells[0]).not.toHaveProperty('outputLayout');
+    const columns = parse(['//| outputLayout: columns']);
+    expect(columns.diagnostics).toEqual([]);
+    expect(columns.cells[0].outputLayout).toBe('columns');
+    expect(normalizeCell(columns.cells[0]).outputLayout).toBe('columns');
+    expect(normalizeCell(parse([]).cells[0])).not.toHaveProperty('outputLayout');
+    expect(parse(['//| outputLayout: grid']).diagnostics).toContainEqual(
+      expect.objectContaining({ fieldPath: 'outputLayout', message: 'Expected one of: stack, columns.' })
+    );
+    const definitions = parseCellsFromMarkdown(
+      ['```rust', '//| id: shared', '//| kind: definitions', '//| outputLayout: columns', 'pub fn f() {}', '```'].join(
+        '\n'
+      ),
+      'content/docs/page.mdx'
+    );
+    expect(definitions.diagnostics).toContainEqual(expect.objectContaining({ fieldPath: 'outputLayout' }));
   });
 
   it.each([1, 2_147_483_647])('accepts the timeout boundary %s', (timeoutMs) => {

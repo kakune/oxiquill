@@ -11,6 +11,7 @@ import { isPortableInteger, PORTABLE_INTEGER_MAX, PORTABLE_INTEGER_MIN } from '.
 
 export const inputTypes = ['range', 'number', 'integer', 'text', 'textarea', 'checkbox', 'select', 'radio'];
 export const runModes = ['button', 'reactive', 'autorun'];
+export const outputLayouts = ['stack', 'columns'];
 export const supportedLanguages = new Map([
   ['rust', 'rust'],
   ['rs', 'rust'],
@@ -40,7 +41,8 @@ const cellFields = new Set([
   'uses',
   'exports',
   'dependsOn',
-  'cache'
+  'cache',
+  'outputLayout'
 ]);
 const definitionFields = new Set(['id', 'kind', 'title', 'crates', 'uses', 'showSource']);
 const inputFields = new Set([
@@ -121,6 +123,7 @@ export function parseInteractiveCellNode(node, pagePath, pythonOptions = {}, aut
   const run = normalizeRunMode(metadata, context, diagnostics);
   const timeoutMs = normalizeTimeout(metadata, context, diagnostics);
   const showSource = normalizeBoolean(metadata, 'showSource', true, context, diagnostics);
+  const outputLayout = normalizeOutputLayout(metadata, context, diagnostics);
   if (language !== 'python' && hasOwn(metadata, 'editable')) {
     diagnostics.push(diagnostic(context, 'editable', 'Only Python cells support reader editing.'));
   }
@@ -222,6 +225,7 @@ export function parseInteractiveCellNode(node, pagePath, pythonOptions = {}, aut
       timeoutMs,
       showSource,
       editable,
+      ...(outputLayout === 'columns' ? { outputLayout } : {}),
       pagePath: pagePath ?? '',
       fenceStartLine: location.fenceStartLine
     }
@@ -395,6 +399,14 @@ function normalizeRunMode(metadata, context, diagnostics) {
   if (typeof metadata.run === 'string' && runModes.includes(metadata.run)) return metadata.run;
   diagnostics.push(diagnostic(context, 'run', `Expected one of: ${runModes.join(', ')}.`));
   return 'button';
+}
+
+function normalizeOutputLayout(metadata, context, diagnostics) {
+  if (!hasOwn(metadata, 'outputLayout')) return 'stack';
+  if (typeof metadata.outputLayout === 'string' && outputLayouts.includes(metadata.outputLayout))
+    return metadata.outputLayout;
+  diagnostics.push(diagnostic(context, 'outputLayout', `Expected one of: ${outputLayouts.join(', ')}.`));
+  return 'stack';
 }
 
 function normalizeTimeout(metadata, context, diagnostics) {

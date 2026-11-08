@@ -206,3 +206,24 @@ it.each(['satisfied', 'partial', 'failed', 'unavailable'] as const)(
     await waitFor(() => expect(screen.getAllByRole('status')[1]).toHaveTextContent(/^$/u));
   }
 );
+
+it('marks only column layouts and keeps scrollable text outputs focusable', () => {
+  const labels = labelsForLanguage('en');
+  const result: CellExecutionResult = {
+    outputs: [
+      { kind: 'text', stream: 'stdout', content: 'standard output' },
+      { kind: 'text', stream: 'stderr', content: 'diagnostic output' },
+      { kind: 'json', value: { ok: true } }
+    ]
+  };
+  const props = { cellTitle: 'Figures', labels, runMode: 'button' as const, isRunning: false, result };
+  const view = render(<CellOutput {...props} outputId="figures" />);
+  const outputs = () => view.container.querySelector('.doc-cell__outputs');
+
+  expect(outputs()).not.toHaveAttribute('data-layout');
+  for (const pre of view.container.querySelectorAll('pre')) expect(pre).toHaveAttribute('tabindex', '0');
+  view.rerender(<CellOutput {...props} outputId="figures" outputLayout="columns" />);
+  expect(outputs()).toHaveAttribute('data-layout', 'columns');
+  view.rerender(<CellOutput {...props} outputId="figures" outputLayout="stack" />);
+  expect(outputs()).not.toHaveAttribute('data-layout');
+});

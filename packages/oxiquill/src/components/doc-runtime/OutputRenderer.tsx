@@ -162,7 +162,7 @@ export function LazyChartOutput({
 
   if (state.status === 'loading') {
     return (
-      <p class="empty-state" data-testid="chart-loading" role="status">
+      <p class="empty-state doc-chart-output__loading" data-testid="chart-loading" role="status">
         {labels.chartLoading}
       </p>
     );
@@ -199,7 +199,7 @@ function TextOutput({ labels, output }: { labels: RuntimeLabels; output: TextArt
 
   return (
     <OutputWithTruncation labels={labels} truncated={output.truncated}>
-      <pre class={className} data-testid={isError ? undefined : 'run-output'}>
+      <pre class={className} data-testid={isError ? undefined : 'run-output'} tabIndex={0}>
         <code>{output.content}</code>
       </pre>
     </OutputWithTruncation>
@@ -209,7 +209,7 @@ function TextOutput({ labels, output }: { labels: RuntimeLabels; output: TextArt
 function JsonOutput({ labels, output }: { labels: RuntimeLabels; output: ValidatedJsonArtifact }) {
   return (
     <OutputWithTruncation labels={labels} truncated={output.truncated}>
-      <pre class="run-output" data-testid="value-output">
+      <pre class="run-output" data-testid="value-output" tabIndex={0}>
         <code>{output.formattedValue}</code>
       </pre>
     </OutputWithTruncation>
