@@ -42,6 +42,18 @@ describe('cell data authoring', () => {
     expect(generateRustFunction(b)).toContain('let typed: Dataset = serde::Deserialize::deserialize');
     expect(generateRustFunction(b)).toContain('let raw: &serde_json::Value');
   });
+  it('keeps inputs named inputs or dependencies apart from the generated wrapper parameters', () => {
+    const producer = cell('id: producer\nexports: [points]');
+    const consumer = cell(
+      'id: consumer\ninputs:\n  inputs: { type: number, value: 1 }\n  dependencies: { type: number, value: 2 }\ndependsOn:\n  data: producer'
+    );
+    const [, resolved] = resolveDataDependencies([producer, consumer]);
+    const generated = generateRustFunction(resolved);
+    expect(generated).toContain('(__inputs: &Value, __dependencies: &Value)');
+    expect(generated).toContain('let inputs = read_f64(__inputs, "inputs")?;');
+    expect(generated).toContain('let dependencies = read_f64(__inputs, "dependencies")?;');
+    expect(generated).toContain('let data: &serde_json::Value = __dependencies.get("data")');
+  });
   it.each([
     ['exports: []', 'exports'],
     ['exports: invalid', 'exports'],

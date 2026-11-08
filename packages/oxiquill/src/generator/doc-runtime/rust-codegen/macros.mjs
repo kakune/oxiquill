@@ -142,38 +142,49 @@ function generatePngBase64Macro() {
     }`;
 }
 
-function generateTableMacro() {
-  return `    macro_rules! emit_table {
-        ($rows:expr) => {{
-            let artifact = table_artifact_from_value(
-                serde_json::to_value(&$rows).map_err(|error| error.to_string())?,
-            )?;
-            __outputs.borrow_mut().push(OutputArtifact::Table(artifact));
+// Every table macro accepts an optional `metadata = ...` with artifact id/title/caption,
+// like emit_chart! and emit_scene3d!, so tests can select a table by id.
+function tableMetadataArms(name, parameters, build) {
+  // The artifact is complete before __outputs is borrowed, in argument order.
+  return `    macro_rules! ${name} {
+        (${parameters}) => {{
+            let artifact = table_artifact_with_metadata(${build}, Value::Null);
+            __outputs.borrow_mut().push(artifact);
+        }};
+        (${parameters}, metadata = $metadata:expr) => {{
+            let artifact = ${build};
+            let metadata = serde_json::to_value(&$metadata).map_err(|error| error.to_string())?;
+            let artifact = table_artifact_with_metadata(artifact, metadata);
+            __outputs.borrow_mut().push(artifact);
         }};
     }`;
+}
+
+function generateTableMacro() {
+  return tableMetadataArms(
+    'emit_table',
+    '$rows:expr',
+    'table_artifact_from_value(serde_json::to_value(&$rows).map_err(|error| error.to_string())?)?'
+  );
 }
 
 function generateTableWithColumnsMacro() {
-  return `    macro_rules! emit_table_with_columns {
-        ($columns:expr, $rows:expr) => {{
-            let artifact = table_artifact_with_columns(
+  return tableMetadataArms(
+    'emit_table_with_columns',
+    '$columns:expr, $rows:expr',
+    `table_artifact_with_columns(
                 serde_json::to_value(&$columns).map_err(|error| error.to_string())?,
                 serde_json::to_value(&$rows).map_err(|error| error.to_string())?,
-            )?;
-            __outputs.borrow_mut().push(OutputArtifact::Table(artifact));
-        }};
-    }`;
+            )?`
+  );
 }
 
 function generateRecordsTableMacro() {
-  return `    macro_rules! emit_records_table {
-        ($records:expr) => {{
-            let artifact = table_artifact_from_value(
-                serde_json::to_value(&$records).map_err(|error| error.to_string())?,
-            )?;
-            __outputs.borrow_mut().push(OutputArtifact::Table(artifact));
-        }};
-    }`;
+  return tableMetadataArms(
+    'emit_records_table',
+    '$records:expr',
+    'table_artifact_from_value(serde_json::to_value(&$records).map_err(|error| error.to_string())?)?'
+  );
 }
 
 function generateXyChartMacro(kind) {

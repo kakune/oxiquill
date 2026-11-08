@@ -16,7 +16,7 @@ export function generateRustReaders(rustCells) {
 export function generateRustInputBinding(input) {
   const key = JSON.stringify(input.name);
   const variable = rustIdentifier(input.name);
-  return `let ${variable} = ${rustReaderName(input)}(inputs, ${key})?;`;
+  return `let ${variable} = ${rustReaderName(input)}(__inputs, ${key})?;`;
 }
 
 function rustReadF64() {

@@ -5,6 +5,30 @@ const whitespace = /\p{Pattern_White_Space}/u;
 // A capability scan, not a parser: visit each token once without expanding macros.
 export function scanRustMacroInvocations(source, cell) {
   const macros = new Set();
+  scanInto(macros, source, cell);
+  return macros;
+}
+
+/**
+ * Macros of an authored cell for code generation. An unterminated literal or
+ * comment swallows the rest of the source for rustc too, so the invocations
+ * before it are the ones rustc resolves. Generation continues, and the compiler
+ * reports the error at the authored cell like any other compile error, failing
+ * only that module.
+ */
+export function authoredMacroInvocations(cell) {
+  const macros = new Set();
+  try {
+    scanInto(macros, cell.source, cell);
+  } catch (error) {
+    if (!(error instanceof UnterminatedTokenError)) throw error;
+  }
+  return macros;
+}
+
+class UnterminatedTokenError extends Error {}
+
+function scanInto(macros, source, cell) {
   let identifier;
   let index = 0;
 
@@ -50,8 +74,6 @@ export function scanRustMacroInvocations(source, cell) {
       index += character.length;
     }
   }
-
-  return macros;
 }
 
 function codePointAt(source, index) {
@@ -139,7 +161,7 @@ function skipCharacterOrLifetime(source, start, cell, byte = false) {
 function unterminated(source, start, kind, cell) {
   const lines = source.slice(0, start).split('\n');
   const context = cell ? `Rust cell "${cell.id}"${cell.pagePath ? ` in ${cell.pagePath}` : ''}` : 'Rust source';
-  return new Error(
+  return new UnterminatedTokenError(
     `${context} has an unterminated ${kind} at line ${lines.length}, column ${Array.from(lines.at(-1)).length + 1}.`
   );
 }
