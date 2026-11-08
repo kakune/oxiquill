@@ -42,7 +42,9 @@ export function rustBuildEnvironment(environment) {
     Object.entries(environment)
       .filter(
         ([name, value]) =>
-          value !== undefined && /^(?:RUSTFLAGS$|CARGO_ENCODED_RUSTFLAGS$|CARGO_(?:PROFILE|BUILD|TARGET)_)/u.test(name)
+          value !== undefined &&
+          name !== 'CARGO_BUILD_JOBS' &&
+          /^(?:RUSTFLAGS$|CARGO_ENCODED_RUSTFLAGS$|CARGO_(?:PROFILE|BUILD|TARGET)_)/u.test(name)
       )
       .sort(([left], [right]) => left.localeCompare(right))
   );

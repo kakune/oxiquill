@@ -21,13 +21,13 @@ import {
 import {
   haskellCacheDirectory,
   syncHaskellCacheSources,
-  wasmPackEnvironment
+  cargoEnvironment
 } from '../../packages/oxiquill/src/generator/doc-runtime/compiler-cache.mjs';
 import {
   recordedOutputIsComplete,
   recordOutputIntegrity
 } from '../../packages/oxiquill/src/generator/doc-runtime/output-integrity.mjs';
-import { buildHaskellWasm, buildRustWasm } from '../../packages/oxiquill/src/generator/doc-runtime/wasm-build.mjs';
+import { buildHaskellWasm } from '../../packages/oxiquill/src/generator/doc-runtime/wasm-build.mjs';
 
 const roots = [];
 afterEach(async () => {
@@ -77,7 +77,7 @@ describe('runtime build inputs', () => {
     'RUSTFLAGS',
     'CARGO_ENCODED_RUSTFLAGS',
     'CARGO_PROFILE_RELEASE_LTO',
-    'CARGO_BUILD_JOBS',
+    'CARGO_BUILD_TARGET',
     'CARGO_TARGET_WASM32_UNKNOWN_UNKNOWN_RUSTFLAGS',
     'CARGO_TARGET_DIR'
   ])('keys %s and ignores unrelated variables', async (name) => {
@@ -89,6 +89,15 @@ describe('runtime build inputs', () => {
       rustBuildEnvironment({ CARGO_BUILD_JOBS: '2', RUSTFLAGS: 'a' })
     );
     expect(rustBuildEnvironment({ RUSTFLAGS: undefined })).toEqual({});
+  });
+
+  it('ignores parallelism settings that never change compiled output', async () => {
+    const paths = await fixture();
+    const original = await readRustBuildInputs({ environment: {}, paths });
+    expect(await readRustBuildInputs({ environment: { CARGO_BUILD_JOBS: '4', BINARYEN_CORES: '2' }, paths })).toBe(
+      original
+    );
+    expect(await readRustBuildInputs({ environment: { BINARYEN_PASS_DEBUG: '1' }, paths })).not.toBe(original);
   });
 
   it.each(['config', 'config.toml'])('keys Cargo %s presence, contents and removal', async (file) => {
@@ -117,19 +126,14 @@ describe('persistent compiler caches', () => {
     await write(targetFile);
     await write(path.join(paths.rustCellsDir, 'old.rs'));
     const stage = await createDirectoryStage(paths.rustCellsDir);
-    const runCommand = vi.fn();
-    await buildRustWasm({
-      environment: { NODE_PATH: 'excluded', PATH: 'keep' },
-      paths: { ...paths, rustCellsDir: stage },
-      mode: 'dev',
-      runCommand,
-      postprocess: vi.fn()
+    expect(cargoEnvironment({ environment: { NODE_PATH: 'excluded', PATH: 'keep' }, paths })).toEqual({
+      PATH: 'keep',
+      CARGO_TARGET_DIR: paths.rustTargetDir
     });
-    expect(runCommand.mock.calls[0][2].env).toEqual({ PATH: 'keep', CARGO_TARGET_DIR: paths.rustTargetDir });
     await replaceDirectory(stage, paths.rustCellsDir);
     expect(await readFile(targetFile, 'utf8')).toBe('sentinel');
     expect(
-      wasmPackEnvironment({ environment: { CARGO_TARGET_DIR: '../user-cache', NODE_PATH: 'excluded' }, paths })
+      cargoEnvironment({ environment: { CARGO_TARGET_DIR: '../user-cache', NODE_PATH: 'excluded' }, paths })
     ).toEqual({ CARGO_TARGET_DIR: '../user-cache' });
   });
 

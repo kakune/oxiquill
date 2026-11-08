@@ -1,7 +1,8 @@
 import path from 'node:path';
 import { defaultFileSystem, listFiles, writeIfChanged } from './file-system.mjs';
 
-export function wasmPackEnvironment({ environment = process.env, paths }) {
+// Cargo and post-link tools share one target directory; NODE_PATH never reaches them.
+export function cargoEnvironment({ environment = process.env, paths }) {
   const env = { ...environment };
   delete env.NODE_PATH;
   return { ...env, CARGO_TARGET_DIR: environment.CARGO_TARGET_DIR ?? paths.rustTargetDir };

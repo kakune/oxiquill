@@ -1,32 +1,6 @@
-import { readFile, rm, writeFile } from 'node:fs/promises';
-import path from 'node:path';
-
-const defaultFileSystem = {
-  readFile,
-  rm,
-  writeFile
-};
-
-export async function postprocessRustWasm({ fileSystem = defaultFileSystem, rustWasmDir }) {
-  await Promise.all([
-    fileSystem.rm(path.join(rustWasmDir, '.gitignore'), { force: true }),
-    fileSystem.rm(path.join(rustWasmDir, 'doc_rust_cells.d.ts'), { force: true }),
-    fileSystem.rm(path.join(rustWasmDir, 'doc_rust_cells_bg.wasm.d.ts'), { force: true }),
-    fileSystem.rm(path.join(rustWasmDir, 'package.json'), { force: true }),
-    stripUnusedWasmPackState(path.join(rustWasmDir, 'doc_rust_cells.js'), { fileSystem })
-  ]);
-}
-
-export async function stripUnusedWasmPackState(filePath, { fileSystem = defaultFileSystem } = {}) {
-  const source = await fileSystem.readFile(filePath, 'utf8');
-  const processed = removeUnusedWasmPackState(source);
-
-  if (processed !== source) {
-    await fileSystem.writeFile(filePath, processed, 'utf8');
-  }
-}
-
-export function removeUnusedWasmPackState(source) {
+// wasm-bindgen glue keeps module and instance handles that the documentation
+// runtime never reads; dropping them keeps each module's glue minimal.
+export function removeUnusedGlueState(source) {
   return source.replace(
     [
       'let wasmModule, wasmInstance, wasm;',
