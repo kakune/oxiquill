@@ -26,12 +26,16 @@ export function createGenerationSnapshot(cells, helpers, pages = []) {
   });
 }
 
-export async function readHelperInputs({ fileSystem = defaultFileSystem, paths }) {
+export async function readHelperInputs({
+  fileSystem = defaultFileSystem,
+  paths,
+  digest = async (file) => hashBytes(await fileSystem.readFile(file))
+}) {
   const files = await listAuthoredHelperInputFiles(paths.cratesDir, { fileSystem });
   return Promise.all(
     files.map(async ({ filePath }) => ({
       path: normalizePath(path.relative(pathFromUrl(paths.workspaceRoot), filePath)),
-      digest: hashBytes(await fileSystem.readFile(filePath))
+      digest: await digest(filePath)
     }))
   );
 }
