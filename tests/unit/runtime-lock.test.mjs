@@ -43,10 +43,12 @@ async function fixture(overrides = {}) {
   return { root, paths, lockPath, options, acquire, writeHolder };
 }
 
+// A live process other than this one: a record with this process's PID and a
+// foreign token is treated as left behind by a crashed process.
 function holder(overrides = {}) {
   return {
     token: 'old-token',
-    pid: process.pid,
+    pid: process.ppid,
     host: hostname(),
     command: 'other build',
     startedAt: '2020-01-01T00:00:00.000Z',
@@ -231,6 +233,35 @@ describe('project runtime lock', () => {
     }
   });
 
+  it('stops processes started after the signal and waits for them before exiting', async () => {
+    const { acquire, lockPath } = await fixture();
+    const processInterface = fakeProcess();
+    const lease = await acquire({ process: processInterface });
+    const first = Object.assign(new EventEmitter(), { kill: vi.fn() });
+    const late = Object.assign(new EventEmitter(), { kill: vi.fn() });
+    lease.trackChild(first);
+    processInterface.emit('SIGINT');
+    expect(first.kill).toHaveBeenCalledWith('SIGINT');
+    lease.trackChild(late);
+    expect(late.kill).toHaveBeenCalledWith('SIGINT');
+    first.emit('close');
+    for (let index = 0; index < 5; index += 1) await Promise.resolve();
+    expect(fs.existsSync(lockPath)).toBe(true);
+    expect(processInterface.kill).not.toHaveBeenCalledWith(4321, 'SIGINT');
+    late.emit('close');
+    await vi.waitFor(() => expect(fs.existsSync(lockPath)).toBe(false));
+    expect(processInterface.kill).toHaveBeenCalledWith(4321, 'SIGINT');
+  });
+
+  it('reclaims a record whose PID this process reuses, but never its own lease', async () => {
+    const { acquire, writeHolder, lockPath } = await fixture();
+    writeHolder(holder({ pid: process.pid, token: 'crashed-token' }));
+    const lease = await acquire({ timeout: 0 });
+    expect(readRuntimeLock(lockPath).record.token).toBe(lease.token);
+    await expect(acquire({ timeout: 0 })).rejects.toThrow('Timed out');
+    lease.release();
+  });
+
   it('notifies signal exit only after tracked children have drained', async () => {
     const { acquire } = await fixture();
     const processInterface = fakeProcess();
@@ -330,6 +361,7 @@ describe('project runtime lock', () => {
         }
       })
     ).toEqual({ exists: true, record: undefined });
-    expect(isDeadRuntimeOwner(holder({ pid: 4321 }), { host: hostname(), process: fakeProcess() })).toBe(false);
+    const prober = Object.assign(fakeProcess(), { pid: 99 });
+    expect(isDeadRuntimeOwner(holder({ pid: 4321 }), { host: hostname(), process: prober })).toBe(false);
   });
 });

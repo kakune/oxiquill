@@ -26,5 +26,5 @@ export function describeRuntimeLock(lockPath, record, host) {
   if (!record || record.host !== host) {
     return `Runtime lock ${lockPath} is held by an unknown owner.${details ? ` Recorded holder: ${details}.` : ''} If no Oxiquill process is running, remove ${lockPath} manually.`;
   }
-  return `Runtime lock ${lockPath} is held by ${details}.`;
+  return `Runtime lock ${lockPath} is held by ${details}. If that process is not an Oxiquill command, remove ${lockPath} manually.`;
 }

@@ -178,8 +178,13 @@ export async function ensureToolDownload(
       await fileSystem.rename(`${temporary}.tar.gz`, archivePath);
     }
     await fileSystem.mkdir(temporary, { recursive: true });
-    // Only an archive with a pinned official checksum reaches the extractor.
-    await runCommand('tar', ['-xzf', archivePath, '-C', temporary], { ...processOptions, source: 'tar' });
+    // Only an archive with a pinned official checksum reaches the extractor. Relative
+    // paths keep GNU tar (as in Git Bash) from reading `C:` as a remote host.
+    await runCommand('tar', ['-xzf', path.basename(archivePath), '-C', path.basename(temporary)], {
+      ...processOptions,
+      cwd: plan.cacheDir,
+      source: 'tar'
+    });
     await fileSystem.rename(path.join(temporary, plan.root), candidate);
     const output = await runCommand(path.join(candidate, plan.executable), ['--version'], {
       ...processOptions,

@@ -1,6 +1,7 @@
 // @vitest-environment node
 import path from 'node:path';
 import { tmpdir } from 'node:os';
+import { readFileSync } from 'node:fs';
 import { mkdir, mkdtemp, readdir, readFile, rm, writeFile } from 'node:fs/promises';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import {
@@ -27,9 +28,12 @@ async function fixture(tool = 'wasm-bindgen') {
   const archive = Buffer.from('official archive fixture');
   const plan = { ...original, sha256: hashBytes(archive) };
   const fetchImplementation = vi.fn(async () => ({ ok: true, arrayBuffer: async () => archive }));
-  const runCommand = vi.fn(async (command, args) => {
+  const runCommand = vi.fn(async (command, args, options) => {
     if (command === 'tar') {
-      const stage = args[args.indexOf('-C') + 1];
+      // Extraction runs in the cache directory with relative paths only.
+      expect(options.cwd).toBe(plan.cacheDir);
+      expect(args.every((argument) => !path.isAbsolute(argument))).toBe(true);
+      const stage = path.resolve(options.cwd, args[args.indexOf('-C') + 1]);
       const executable = path.join(stage, plan.root, plan.executable);
       await mkdir(path.dirname(executable), { recursive: true });
       await writeFile(executable, 'executable fixture');
@@ -62,6 +66,34 @@ describe('verified runtime tools', () => {
       expect(plan.url).toMatch(/^https:\/\/github.com\//u);
       expect(plan.fallbackUrl).toMatch(/^https:\/\/api\.github\.com\/repos\/[\w-]+\/[\w-]+\/releases\/assets\/\d+$/u);
       expect(plan.command.endsWith('.exe')).toBe(platform === 'win32');
+    }
+  });
+
+  it('pins exactly the release assets that some supported host downloads', () => {
+    const releases = JSON.parse(
+      readFileSync(
+        new URL('../../packages/oxiquill/src/generator/runtime-data/tool-downloads.json', import.meta.url),
+        'utf8'
+      )
+    );
+    const hosts = [
+      ['linux', 'x64'],
+      ['linux', 'arm64'],
+      ['darwin', 'x64'],
+      ['darwin', 'arm64'],
+      ['win32', 'x64']
+    ];
+    for (const [tool, release] of Object.entries(releases)) {
+      const reachable = hosts.map(
+        ([platform, arch]) =>
+          toolDownloadPlan({ tool, version: release.version, paths: { downloadCacheDir: '/cache' }, platform, arch })
+            .sha256
+      );
+      expect(
+        Object.values(release.hosts)
+          .map((host) => host.sha256)
+          .sort()
+      ).toEqual(reachable.sort());
     }
   });
 
@@ -215,7 +247,8 @@ describe('verified runtime tools', () => {
   it('keeps staged and installed executables on short paths for Windows MAX_PATH', async () => {
     const options = await fixture();
     await ensureToolDownload(options.plan, options);
-    const stage = options.runCommand.mock.calls[0][1].at(-1);
+    const [, tarArgs, tarOptions] = options.runCommand.mock.calls[0];
+    const stage = path.resolve(tarOptions.cwd, tarArgs.at(-1));
     expect(path.dirname(stage)).toBe(options.plan.cacheDir);
     expect(path.basename(stage)).toMatch(/^\.t[a-f0-9]{8}$/u);
     const probed = options.runCommand.mock.calls[1][0];
@@ -253,8 +286,8 @@ describe('verified runtime tools', () => {
     if (kind === 'HTTP') options.fetchImplementation.mockResolvedValue({ ok: false, status: 403 });
     if (kind === 'version')
       options.runCommand
-        .mockImplementationOnce(async (command, args) => {
-          const target = path.join(args.at(-1), options.plan.root, options.plan.executable);
+        .mockImplementationOnce(async (command, args, processOptions) => {
+          const target = path.resolve(processOptions.cwd, args.at(-1), options.plan.root, options.plan.executable);
           await mkdir(path.dirname(target), { recursive: true });
           await writeFile(target, 'binary');
         })

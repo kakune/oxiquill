@@ -178,7 +178,13 @@ async function runCliCommand(commandOrArgs = [], argsOrOptions = {}, legacyOptio
     }
     switch (command) {
       case 'dev':
-        await generateRuntime({ projectConfig, tolerateHaskellBuildFailure: true, wasmMode: 'dev' });
+        // Like the development watcher, start with every Rust module that builds.
+        await generateRuntime({
+          projectConfig,
+          tolerateHaskellBuildFailure: true,
+          runtimeOptions: { tolerateRustModuleFailures: true },
+          wasmMode: 'dev'
+        });
         await runDevServer({ args: astroArgs, projectConfig, runCommand, selectNode });
         return;
       case 'dev:runtime': {
@@ -332,10 +338,17 @@ async function generateProjectRuntime({
       });
     else log(`Generated ${summary.cellCount} interactive cell(s).`);
     if (summary.haskellBuildResult) warnToleratedHaskellBuildFailure(summary.haskellBuildResult);
+    if (summary.rustBuildResult) warnToleratedRustBuildFailure(summary.rustBuildResult);
     return summary;
   } finally {
     context.highlighter?.dispose?.();
   }
+}
+
+function warnToleratedRustBuildFailure(result) {
+  if (result.ok) return;
+  console.warn('[runtime] some Rust modules failed; their pages keep the last working module');
+  console.warn(formatCliError(result.error));
 }
 
 function warnToleratedHaskellBuildFailure(result) {

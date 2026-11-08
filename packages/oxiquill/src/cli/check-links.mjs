@@ -49,20 +49,22 @@ export function classifyLink(href, source, report) {
   return { target, url };
 }
 
+// `preserve` emits `x/index.html` for index routes and `x.html` for the others.
 function documentUrl(file, report) {
   let route = file;
   let pageRoute = false;
+  let directoryRoute = false;
   if (route === 'index.html') route = '';
-  else if (report.build.format === 'directory' && route.endsWith('/index.html')) {
+  else if (report.build.format !== 'file' && route.endsWith('/index.html')) {
     route = route.slice(0, -11);
     pageRoute = true;
-  } else if (report.build.format === 'file') {
+    directoryRoute = true;
+  } else if (report.build.format !== 'directory') {
     route = route.slice(0, -5);
     pageRoute = true;
   }
   if (route && pageRoute) {
-    if (report.trailingSlash === 'always' || (report.trailingSlash === 'ignore' && report.build.format === 'directory'))
-      route += '/';
+    if (report.trailingSlash === 'always' || (report.trailingSlash === 'ignore' && directoryRoute)) route += '/';
   }
   const base = basePath(report);
   const encodedRoute = route.split('/').map(encodeURIComponent).join('/');
@@ -85,8 +87,12 @@ function outputFile(url, report, files) {
   if (files.has(relative)) return relative;
   if (!relative) return files.has('index.html') ? 'index.html' : undefined;
   const route = relative.replace(/\/$/u, '');
-  const candidate = report.build.format === 'file' ? `${route}.html` : `${route}/index.html`;
-  return files.has(candidate) ? candidate : undefined;
+  const candidates = {
+    file: [`${route}.html`],
+    directory: [`${route}/index.html`],
+    preserve: [`${route}/index.html`, `${route}.html`]
+  }[report.build.format];
+  return candidates.find((candidate) => files.has(candidate));
 }
 
 function configuredRedirect(url, report) {
@@ -153,15 +159,16 @@ function evaluateLink(href, source, report, files, documents) {
     }
     if (!file) return { target, reason: 'missing-page' };
     if (!document) return { target };
-    let fragment;
+    // Like browsers, match the fragment as written before its percent-decoded form.
+    const fragment = url.hash.slice(1);
+    if (!fragment || fragment === 'top' || document.ids.has(fragment)) return { target };
+    let decoded;
     try {
-      fragment = decodeURIComponent(url.hash.slice(1));
+      decoded = decodeURIComponent(fragment);
     } catch {
       return { target, reason: 'missing-fragment' };
     }
-    return fragment && fragment !== 'top' && !document.ids.has(fragment)
-      ? { target, reason: 'missing-fragment' }
-      : { target };
+    return decoded === 'top' || document.ids.has(decoded) ? { target } : { target, reason: 'missing-fragment' };
   }
   return current;
 }
@@ -221,7 +228,7 @@ export async function readBuiltSite(cacheDir) {
     const report = JSON.parse(await readFile(path.join(cacheDir, 'build-report.json'), 'utf8'));
     if (
       !path.isAbsolute(report.outDir) ||
-      !['directory', 'file'].includes(report.build?.format) ||
+      !['directory', 'file', 'preserve'].includes(report.build?.format) ||
       !['always', 'never', 'ignore'].includes(report.trailingSlash) ||
       typeof report.base !== 'string' ||
       !report.redirects ||

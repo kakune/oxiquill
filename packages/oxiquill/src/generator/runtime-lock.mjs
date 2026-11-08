@@ -18,8 +18,14 @@ export function readRuntimeLock(lockPath, fileSystem = defaultFileSystem) {
   }
 }
 
+// Tokens of acquisitions and leases in this process. A record with this
+// process's PID but another token was left by a crashed process whose PID has
+// been reused, typically PID 1 in a container with a persisted cache.
+const liveTokens = new Set();
+
 export function isDeadRuntimeOwner(record, { host, process: processInterface }) {
   if (!record || record.host !== host) return false;
+  if (record.pid === processInterface.pid) return !liveTokens.has(record.token);
   try {
     processInterface.kill(record.pid, 0);
     return false;
@@ -70,6 +76,8 @@ export async function acquireRuntimeLock({
   });
   const candidatePath = `${lockPath}.candidate-${record.token}`;
   let candidateCreated = false;
+  let leased = false;
+  liveTokens.add(record.token);
   let reported = false;
   let remindedAt = started;
   let checkedPaths = false;
@@ -103,6 +111,7 @@ export async function acquireRuntimeLock({
         await beforeWrite();
         try {
           fileSystem.linkSync(candidate(), lockPath);
+          leased = true;
           return createLease({ lockPath, record, fileSystem, processInterface, onSignalExit });
         } catch (error) {
           if (error.code !== 'EEXIST') throw error;
@@ -142,6 +151,7 @@ export async function acquireRuntimeLock({
       await delay(Math.min(100, timeout * 1000 - elapsed), signal);
     }
   } finally {
+    if (!leased) liveTokens.delete(record.token);
     if (candidateCreated) unlinkIfPresent(candidatePath, fileSystem);
   }
 }
@@ -205,6 +215,7 @@ function unlinkIfPresent(filePath, fileSystem) {
 function createLease({ lockPath, record, fileSystem, processInterface, onSignalExit }) {
   const children = new Set();
   let stopping = false;
+  let stopSignal;
   const stopChild = ({ child, detached }, signal) => {
     try {
       if (detached && child.pid) processInterface.kill(-child.pid, signal);
@@ -220,6 +231,7 @@ function createLease({ lockPath, record, fileSystem, processInterface, onSignalE
   const onSignal = (signal) => {
     if (stopping) return;
     stopping = true;
+    stopSignal = signal;
     const finish = () => {
       try {
         onSignalExit?.(signal);
@@ -230,9 +242,14 @@ function createLease({ lockPath, record, fileSystem, processInterface, onSignalE
     };
     if (children.size === 0) return finish();
     children.forEach((child) => stopChild(child, signal));
+    // The force timer acts on the live set: children started after the signal are stopped too.
     const force = globalThis.setTimeout(() => children.forEach((child) => stopChild(child, 'SIGKILL')), 5000);
     force.unref();
-    void Promise.all(Array.from(children, ({ done }) => done)).then(() => {
+    // Pending work can still start processes while earlier ones exit; wait until none remain.
+    const drain = async () => {
+      while (children.size > 0) await Promise.all(Array.from(children, ({ done }) => done));
+    };
+    void drain().then(() => {
       clearTimeout(force);
       finish();
     });
@@ -240,6 +257,7 @@ function createLease({ lockPath, record, fileSystem, processInterface, onSignalE
   const onInterrupt = () => onSignal('SIGINT');
   const onTerminate = () => onSignal('SIGTERM');
   const releaseNow = () => {
+    liveTokens.delete(record.token);
     processInterface.removeListener('exit', onExit);
     processInterface.removeListener('SIGINT', onInterrupt);
     processInterface.removeListener('SIGTERM', onTerminate);
@@ -251,6 +269,8 @@ function createLease({ lockPath, record, fileSystem, processInterface, onSignalE
   const trackChild = (child, detached = false) => {
     const entry = { child, detached, done: new Promise((resolve) => child.once('close', resolve)) };
     children.add(entry);
+    // A process started after the signal is stopped at once.
+    if (stopping) stopChild(entry, stopSignal);
     void entry.done.then(() => {
       // A terminated compiler can leave descendants after its own exit.
       if (stopping && detached) stopChild(entry, 'SIGKILL');
