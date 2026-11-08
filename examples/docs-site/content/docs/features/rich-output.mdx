@@ -1,6 +1,6 @@
 ---
 title: Rich Output
-description: Emit text, JSON, tables, charts, images, and sandboxed HTML from executable cells.
+description: Emit text, JSON, tables, charts, 3D point scenes, images, and sandboxed HTML from executable cells.
 ---
 
 Interactive cells can return multiple typed output artifacts. Plain `print` and `println!` still work, and richer artifacts render with shared UI components.
@@ -13,6 +13,7 @@ Oxiquill renders these output kinds:
 - JSON values with structured formatting.
 - Tables with sortable columns.
 - Charts rendered with ECharts.
+- Interactive 3D point-and-edge scenes rendered with Canvas 2D.
 - Images from SVG, PNG, or JPEG data.
 - Sandboxed HTML in an iframe.
 - Author-declared computation outcomes.
@@ -27,6 +28,7 @@ Every artifact may have optional string `id`, `title`, and `caption` fields. Val
 | `json`    | `value`                                                        | Cycle-aware formatting represents BigInt explicitly; `truncated` indicates bounded serialized data. |
 | `table`   | `columns`, rectangular `rows`                                  | `rowCount` records the original size; `truncated` marks a preview.                                  |
 | `chart`   | Valid `spec` described below                                   | Oversize/invalid charts become a local artifact error.                                              |
+| `scene3d` | `points`                                                       | Optional edges, groups, axes, and camera; see [3D scenes](#interactive-3d-point-scenes).            |
 | `image`   | `mime: image/png \| image/jpeg \| image/svg+xml`, valid data   | `alt` supplies the image alternative.                                                               |
 | `html`    | `html: string`, `sandboxed: true`                              | Rendered with an empty sandbox, no referrer, and the restrictive CSP described below.               |
 | `outcome` | `state`, nonblank `label`                                      | One computational outcome per successful result; optional explanation, status, and diagnostics.     |
@@ -322,6 +324,7 @@ Python cells include display helpers:
 - `display_json(value)` emits JSON.
 - `display_html(html)` emits sandboxed HTML.
 - `display_table(rows_or_dataframe)` emits a table.
+- `display_scene3d(points, ...)` emits an interactive [3D point scene](#interactive-3d-point-scenes).
 - `display_image(data, mime)` emits SVG, PNG, or JPEG image data.
 
 The runtime also understands common rich representations such as pandas DataFrames and Series, matplotlib figures, `_repr_mimebundle_`, `_repr_json_`, `_repr_html_`, `_repr_svg_`, `_repr_png_`, and `_repr_jpeg_`.
@@ -373,6 +376,7 @@ _ = plt.ylabel("score")
 
 Rust cells use explicit `emit_*` macros. Supported macros include:
 
+- `emit_scene3d!` for [3D point scenes](#interactive-3d-point-scenes).
 - `emit_text!`
 - `emit_json!`
 - `emit_html!`

@@ -1,6 +1,6 @@
 ---
 title: リッチ出力
-description: 実行可能セルから text、JSON、table、chart、image、sandboxed HTML を出力します。
+description: 実行可能セルから text、JSON、table、chart、3D点シーン、image、sandboxed HTML を出力します。
 ---
 
 実行可能セルは複数の typed output artifact を返せます。通常の `print` や `println!` も使えますが、より構造化された出力は共通 UI component で表示されます。
@@ -13,6 +13,7 @@ Oxiquill は次の出力を表示します。
 - 構造化表示される JSON。
 - sort 可能な column を持つ table。
 - ECharts で render される chart。
+- Canvas 2D で表示するインタラクティブな3D点・辺シーン。
 - SVG、PNG、JPEG data から作る image。
 - iframe 内の sandboxed HTML。
 - 著者が宣言する計算条件の達成状況。
@@ -27,6 +28,7 @@ Oxiquill は次の出力を表示します。
 | `json`    | `value`                                                        | cycle-aware formatting が BigInt を明示表現し、`truncated` が bounded serialized data を示します。 |
 | `table`   | `columns`、rectangular `rows`                                  | `rowCount` が original size、`truncated` が preview を示します。                                   |
 | `chart`   | 下記の valid `spec`                                            | oversize/invalid chart は local artifact error。                                                   |
+| `scene3d` | `points`                                                       | 辺、グループ、軸、カメラは任意。[3D点シーン](#インタラクティブな3d点シーン)を参照。                |
 | `image`   | `mime: image/png \| image/jpeg \| image/svg+xml`、valid data   | `alt` が image alternative。                                                                       |
 | `html`    | `html: string`, `sandboxed: true`                              | empty sandbox、no-referrer、下記の restrictive CSP で表示。                                        |
 | `outcome` | `state`、空白だけではない `label`                              | 正常な実行の計算結果を一つだけ指定。説明、ステータス、診断値は任意。                               |
@@ -322,6 +324,7 @@ Python セルには display helper が含まれます。
 - `display_json(value)` は JSON を出力します。
 - `display_html(html)` は sandboxed HTML を出力します。
 - `display_table(rows_or_dataframe)` は table を出力します。
+- `display_scene3d(points, ...)` は [3D点シーン](#インタラクティブな3d点シーン)を出力します。
 - `display_image(data, mime)` は SVG、PNG、JPEG image data を出力します。
 
 runtime は pandas DataFrame/Series、matplotlib figure、`_repr_mimebundle_`、`_repr_json_`、`_repr_html_`、`_repr_svg_`、`_repr_png_`、`_repr_jpeg_` などの rich representation も扱います。
@@ -373,6 +376,7 @@ _ = plt.ylabel("score")
 
 Rust セルでは明示的な `emit_*` macro を使います。対応 macro:
 
+- [3D点シーン](#インタラクティブな3d点シーン)を出力する `emit_scene3d!`。
 - `emit_text!`
 - `emit_json!`
 - `emit_html!`
