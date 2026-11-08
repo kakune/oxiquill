@@ -86,9 +86,9 @@ export async function buildRustModules({
   if (mode === 'build' && !wasmOpt?.command) throw new Error('Rust release builds require wasm-opt.');
   // Verified tool downloads overlap with compilation; post-link jobs await them.
   const tools = Promise.all([
-    wasmBindgen.url ? ensureTool(wasmBindgen, { fileSystem, runCommand: execute }) : undefined,
+    wasmBindgen.url ? ensureTool(wasmBindgen, { fileSystem, runCommand: execute, environment }) : undefined,
     mode === 'build' && wasmOpt.url
-      ? ensureTool(wasmOpt, { fileSystem, runCommand: execute, processOptions: { phase: 'optimize' } })
+      ? ensureTool(wasmOpt, { fileSystem, runCommand: execute, environment, processOptions: { phase: 'optimize' } })
       : undefined
   ]);
   tools.catch(() => {});

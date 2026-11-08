@@ -39,7 +39,7 @@ async function fixture(tool = 'wasm-bindgen') {
     return `${tool} ${plan.version}`;
   });
   const wait = vi.fn(async () => {});
-  return { plan, paths, fetchImplementation, runCommand, wait };
+  return { plan, paths, fetchImplementation, runCommand, wait, environment: {} };
 }
 
 describe('verified runtime tools', () => {
@@ -170,6 +170,32 @@ describe('verified runtime tools', () => {
     expect(options.fetchImplementation.mock.calls.at(-1)[1].headers).toEqual({ accept: 'application/octet-stream' });
     expect(options.plan.fallbackUrl).toBe(
       'https://api.github.com/repos/wasm-bindgen/wasm-bindgen/releases/assets/587769529'
+    );
+  });
+
+  it('authenticates only the release API request and follows its asset redirect without the token', async () => {
+    const options = await fixture();
+    const archive = await options.fetchImplementation().then((response) => response.arrayBuffer());
+    const signed = 'https://release-assets.example/signed?token=1';
+    options.fetchImplementation.mockReset();
+    options.fetchImplementation.mockImplementation(async (url) => {
+      if (url === options.plan.url) return { ok: false, status: 504 };
+      if (url === options.plan.fallbackUrl)
+        return { ok: false, status: 302, headers: new Headers({ location: signed }) };
+      return { ok: true, arrayBuffer: async () => archive };
+    });
+    options.environment = { GH_TOKEN: '  ', GITHUB_TOKEN: ' secret ' };
+    expect(await ensureToolDownload(options.plan, options)).toBe(options.plan.command);
+    const [api, asset] = options.fetchImplementation.mock.calls.slice(-2);
+    expect(api[0]).toBe(options.plan.fallbackUrl);
+    expect(api[1]).toMatchObject({
+      redirect: 'manual',
+      headers: { accept: 'application/octet-stream', authorization: 'Bearer secret' }
+    });
+    expect(asset[0]).toBe(signed);
+    expect(asset[1].headers).toBeUndefined();
+    expect(options.fetchImplementation.mock.calls.slice(0, 4).every(([, init]) => !init.headers.authorization)).toBe(
+      true
     );
   });
 

@@ -69,12 +69,30 @@ export function toolDownloadPlan({ tool, version, paths, platform = process.plat
 const transientStatuses = new Set([408, 425, 429, 500, 502, 503, 504]);
 const defaultRetryDelays = Object.freeze([1_000, 3_000, 9_000]);
 
+// Anonymous release API requests share a small rate limit per address, which CI
+// runners exhaust quickly, so a GitHub token from the environment is used when
+// present. It is sent only to the API: the signed asset redirect is followed
+// without it.
+function githubToken(environment) {
+  return [environment?.GH_TOKEN, environment?.GITHUB_TOKEN]
+    .find((token) => typeof token === 'string' && token.trim() !== '')
+    ?.trim();
+}
+
+async function requestArchive(url, headers, fetchImplementation) {
+  const signal = AbortSignal.timeout(120_000);
+  if (!headers.authorization) return fetchImplementation(url, { headers, signal });
+  const response = await fetchImplementation(url, { headers, redirect: 'manual', signal });
+  const location = response.status >= 300 && response.status < 400 ? response.headers?.get('location') : null;
+  return location ? fetchImplementation(new URL(location, url).href, { signal }) : response;
+}
+
 async function fetchWithRetries(url, headers, { fetchImplementation, retryDelays, wait }) {
   for (let attempt = 0; ; attempt += 1) {
     let failure;
     let transient = true;
     try {
-      const response = await fetchImplementation(url, { headers, signal: AbortSignal.timeout(120_000) });
+      const response = await requestArchive(url, headers, fetchImplementation);
       if (response.ok) return { bytes: Buffer.from(await response.arrayBuffer()) };
       failure = new Error(`HTTP ${response.status} downloading ${url}`);
       transient = transientStatuses.has(response.status);
@@ -91,7 +109,12 @@ async function fetchWithRetries(url, headers, { fetchImplementation, retryDelays
 async function downloadArchive(plan, options) {
   const primary = await fetchWithRetries(plan.url, {}, options);
   if (primary.bytes) return primary.bytes;
-  const fallback = await fetchWithRetries(plan.fallbackUrl, { accept: 'application/octet-stream' }, options);
+  const token = githubToken(options.environment);
+  const fallback = await fetchWithRetries(
+    plan.fallbackUrl,
+    { accept: 'application/octet-stream', ...(token ? { authorization: `Bearer ${token}` } : {}) },
+    options
+  );
   if (fallback.bytes) return fallback.bytes;
   throw new Error(`${primary.failure.message}; fallback: ${fallback.failure.message}`, { cause: primary.failure });
 }
@@ -104,7 +127,8 @@ export async function ensureToolDownload(
     runCommand = runProcess,
     processOptions = {},
     retryDelays = defaultRetryDelays,
-    wait = sleep
+    wait = sleep,
+    environment = process.env
   } = {}
 ) {
   const archivePath = path.join(plan.cacheDir, 'archive.tar.gz');
@@ -148,7 +172,7 @@ export async function ensureToolDownload(
       if (error?.code !== 'ENOENT') throw error;
     }
     if (!bytes || hashBytes(bytes) !== plan.sha256) {
-      bytes = await downloadArchive(plan, { fetchImplementation, retryDelays, wait });
+      bytes = await downloadArchive(plan, { fetchImplementation, retryDelays, wait, environment });
       if (hashBytes(bytes) !== plan.sha256) throw new Error(`SHA-256 verification failed (expected ${plan.sha256})`);
       await fileSystem.writeFile(`${temporary}.tar.gz`, bytes);
       await fileSystem.rename(`${temporary}.tar.gz`, archivePath);
