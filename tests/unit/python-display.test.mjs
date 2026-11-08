@@ -19,6 +19,29 @@ afterAll(() => vi.unstubAllGlobals());
 
 beforeEach(() => python.runPython('__oxiquill_prepare_cell()'));
 
+it('emits bounded scene snapshots, optional fields, and local producer errors', () => {
+  python.runPython(`
+points = [{"id": "a", "position": [0, 0, 0]}]
+display_scene3d(points, edges=[], groups=[], axes={"x": {"unit": "nm"}}, camera={"yaw": 30}, title="<b>Scene</b>", caption="literal")
+points[0]["position"][0] = 99
+scene = __oxiquill_take_outputs()[0].to_py()
+assert scene["kind"] == "scene3d" and scene["points"][0]["position"] == [0, 0, 0]
+assert scene["edges"] == [] and scene["groups"] == []
+assert scene["axes"] == {"x": {"unit": "nm"}} and scene["camera"] == {"yaw": 30}
+assert scene["title"] == "<b>Scene</b>" and scene["caption"] == "literal"
+display_scene3d([])
+assert __oxiquill_take_outputs()[0].to_py() == {"kind": "scene3d", "points": []}
+for field, arguments in [
+    ("points", {"points": ({} for _ in range(10001))}),
+    ("edges", {"points": [], "edges": ({} for _ in range(20001))}),
+    ("finite", {"points": [{"id": "a", "position": [float("nan"), 0, 0]}]}),
+    ("bytes", {"points": [], "title": "x" * (16 * 1024 * 1024)})
+]:
+    display_scene3d(**arguments)
+    assert __oxiquill_take_outputs()[0]["kind"] == "__oxiquill_error", field
+`);
+});
+
 it('reexecutes setup in fresh globals, hides setup output, and injects reader inputs last', async () => {
   const postMessage = vi.fn();
   const handle = createPythonWorkerRequestHandler({ ensurePyodide: async () => python, postMessage });

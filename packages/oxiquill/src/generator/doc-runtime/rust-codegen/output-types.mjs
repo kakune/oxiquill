@@ -35,6 +35,10 @@ export function generateRustOutputTypes(rustCells, capabilities = rustOutputCapa
     capabilities.chart
       ? `    #[serde(rename = "chart")]
     Chart(ChartArtifact),`
+      : '',
+    capabilities.scene3d
+      ? `    #[serde(rename = "scene3d")]
+    Scene3d(Value),`
       : ''
   ]
     .filter(Boolean)
@@ -74,7 +78,8 @@ export function generateRustOutputTypes(rustCells, capabilities = rustOutputCapa
     capabilities.html ||
     capabilities.image ||
     capabilities.table ||
-    capabilities.chart;
+    capabilities.chart ||
+    capabilities.scene3d;
   const outputCollector = emitsArtifacts
     ? `struct OutputCollector {
     byte_length: usize,
@@ -286,6 +291,37 @@ fn image_artifact(
     : ''
 }
 ${capabilities.table ? generateRustTableTypes() : ''}
+${
+  capabilities.scene3d
+    ? `fn scene3d_artifact(scene: Value, metadata: Value) -> OutputArtifact {
+    let Value::Object(mut fields) = scene else {
+        return producer_error("Scene3d must serialize as an object");
+    };
+    if fields.contains_key("kind") {
+        return producer_error("Scene3d helper adds kind; omit it from the scene object");
+    }
+    for (key, limit) in [("points", ${outputArtifactLimits.scene3dPoints}), ("edges", ${outputArtifactLimits.scene3dEdges})] {
+        if fields.get(key).and_then(Value::as_array).is_some_and(|items| items.len() > limit) {
+            return producer_error(&format!("Scene3d.{key} exceeds {limit} entries"));
+        }
+    }
+    match metadata {
+        Value::Null => {},
+        Value::Object(values) => {
+            for (key, value) in values {
+                if !matches!(key.as_str(), "id" | "title" | "caption") {
+                    return producer_error(&format!("unsupported scene3d metadata field: {key}"));
+                }
+                fields.insert(key, value);
+            }
+        },
+        _ => return producer_error("Scene3d metadata must serialize as an object"),
+    }
+    OutputArtifact::Scene3d(Value::Object(fields))
+}
+`
+    : ''
+}
 ${
   capabilities.chart
     ? `#[derive(Debug, Serialize)]

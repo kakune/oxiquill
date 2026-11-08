@@ -418,6 +418,17 @@
 }
 
 @media print {
+  .doc-scene3d__viewport,
+  .doc-scene3d__actions,
+  .doc-scene3d__controls,
+  .doc-scene3d__legend {
+    display: none !important;
+  }
+
+  .doc-scene3d .doc-scene3d__print {
+    display: block;
+    width: 100%;
+  }
   .doc-source .shiki {
     max-height: none;
     overflow: visible;
@@ -828,4 +839,62 @@
 .doc-outcome dd {
   margin: 0;
   font-variant-numeric: tabular-nums;
+}
+
+.doc-scene3d {
+  margin-inline: 0;
+  min-width: 0;
+}
+.doc-scene3d__viewport {
+  touch-action: none;
+  overflow: hidden;
+  width: 100%;
+}
+.doc-scene3d__viewport canvas {
+  display: block;
+}
+.doc-scene3d__actions,
+.doc-scene3d__legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  margin-block: 0.5rem;
+}
+.doc-scene3d__legend > span {
+  display: inline-flex;
+  gap: 0.25rem;
+}
+.doc-scene3d button {
+  max-width: 100%;
+  overflow-wrap: anywhere;
+}
+.doc-scene3d__legend button[aria-pressed='false'] {
+  text-decoration: line-through;
+}
+.doc-scene3d__legend button[aria-pressed='false'] .doc-scene3d__symbol {
+  opacity: 0.4;
+}
+.doc-scene3d button:focus-visible,
+.doc-scene3d__viewport:focus-visible,
+.doc-scene3d summary:focus-visible {
+  outline: 2px solid var(--sl-color-text-accent);
+  outline-offset: 3px;
+}
+.doc-scene3d__symbol {
+  display: inline-block;
+  width: 0.65rem;
+  height: 0.65rem;
+  margin-inline-end: 0.4rem;
+}
+.doc-scene3d__symbol--circle {
+  border-radius: 50%;
+}
+.doc-scene3d__symbol--triangle {
+  clip-path: polygon(50% 0, 100% 100%, 0 100%);
+}
+.doc-scene3d__symbol--diamond {
+  transform: rotate(45deg);
+}
+.doc-scene3d__print {
+  display: none;
 }

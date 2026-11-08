@@ -109,3 +109,9 @@ pnpm exec node tests/performance/chart-rendering.mjs --label after --output test
 ```
 
 The selected source tree must resolve the same installed dependencies (as the existing chart gallery baseline does). Set PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH for a system/Nix Chromium. The benchmark requires at least five measured runs and rejects browser errors; raw rendering artifacts go under test-results.
+
+## Scene3d rendering
+
+Run `pnpm exec node tests/performance/scene3d-rendering.mjs` without other builds or test suites running. The report defaults to `test-results/scene3d-rendering.json`; an optional first argument selects another destination. Set `PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH` when using a system/Nix Chromium.
+
+The harness uses the actual Canvas renderer with 4, 1,000, and 10,000 deterministic points and 5, 1,997, and 20,000 undirected edges. Each condition discards one warmup and records five samples. Initial drawing and a 15° orbit include projection, sorting, Canvas calls, and a one-pixel readback to flush drawing. Projection plus picking is measured separately. DOM layout, lazy module loading, and worker execution are excluded. Reports include the source revision, working-tree status, browser, CPU, viewport, canvas dimensions, and device pixel ratio. Correctness tests have no timing thresholds.

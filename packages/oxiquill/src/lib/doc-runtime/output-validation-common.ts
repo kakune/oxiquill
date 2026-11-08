@@ -22,6 +22,7 @@ export type ValidatedOutputArtifact =
   | ValidatedJsonArtifact
   | TableArtifact
   | Extract<OutputArtifact, { kind: 'chart' }>
+  | Extract<OutputArtifact, { kind: 'scene3d' }>
   | ValidatedImageArtifact
   | HtmlArtifact
   | OutcomeArtifact;

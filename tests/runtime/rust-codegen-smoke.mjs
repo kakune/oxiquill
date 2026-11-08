@@ -317,6 +317,7 @@ try {
   await readFile(paths.runtimeVersionPath);
 
   for (const [id, source, kind] of [
+    ['scene3d-only', 'emit_scene3d!(serde_json::json!({"points": [{"id": "a", "position": [0, 0, 0]}]}));', 'scene3d'],
     ['area-only', 'emit_area_chart!(&[[0, 1]]);', 'chart'],
     ['outcome-only', 'emit_outcome!(Outcome::unavailable("Environment unavailable"));', 'outcome'],
     [

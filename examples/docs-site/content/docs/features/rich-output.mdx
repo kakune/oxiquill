@@ -1,6 +1,6 @@
 ---
 title: Rich Output
-description: Emit text, JSON, tables, charts, images, and sandboxed HTML from executable cells.
+description: Emit text, JSON, tables, charts, 3D point scenes, images, and sandboxed HTML from executable cells.
 ---
 
 Interactive cells can return multiple typed output artifacts. Plain `print` and `println!` still work, and richer artifacts render with shared UI components.
@@ -13,6 +13,7 @@ Oxiquill renders these output kinds:
 - JSON values with structured formatting.
 - Tables with sortable columns.
 - Charts rendered with ECharts.
+- Interactive 3D point-and-edge scenes rendered with Canvas 2D.
 - Images from SVG, PNG, or JPEG data.
 - Sandboxed HTML in an iframe.
 - Author-declared computation outcomes.
@@ -27,6 +28,7 @@ Every artifact may have optional string `id`, `title`, and `caption` fields. Val
 | `json`    | `value`                                                        | Cycle-aware formatting represents BigInt explicitly; `truncated` indicates bounded serialized data. |
 | `table`   | `columns`, rectangular `rows`                                  | `rowCount` records the original size; `truncated` marks a preview.                                  |
 | `chart`   | Valid `spec` described below                                   | Oversize/invalid charts become a local artifact error.                                              |
+| `scene3d` | `points`                                                       | Optional edges, groups, axes, and camera; see [3D scenes](#interactive-3d-point-scenes).            |
 | `image`   | `mime: image/png \| image/jpeg \| image/svg+xml`, valid data   | `alt` supplies the image alternative.                                                               |
 | `html`    | `html: string`, `sandboxed: true`                              | Rendered with an empty sandbox, no referrer, and the restrictive CSP described below.               |
 | `outcome` | `state`, nonblank `label`                                      | One computational outcome per successful result; optional explanation, status, and diagnostics.     |
@@ -322,6 +324,7 @@ Python cells include display helpers:
 - `display_json(value)` emits JSON.
 - `display_html(html)` emits sandboxed HTML.
 - `display_table(rows_or_dataframe)` emits a table.
+- `display_scene3d(points, ...)` emits an interactive [3D point scene](#interactive-3d-point-scenes).
 - `display_image(data, mime)` emits SVG, PNG, or JPEG image data.
 
 The runtime also understands common rich representations such as pandas DataFrames and Series, matplotlib figures, `_repr_mimebundle_`, `_repr_json_`, `_repr_html_`, `_repr_svg_`, `_repr_png_`, and `_repr_jpeg_`.
@@ -373,6 +376,7 @@ _ = plt.ylabel("score")
 
 Rust cells use explicit `emit_*` macros. Supported macros include:
 
+- `emit_scene3d!` for [3D point scenes](#interactive-3d-point-scenes).
 - `emit_text!`
 - `emit_json!`
 - `emit_html!`
@@ -669,4 +673,84 @@ let quantity = (tableColumn "time" "Time")
 displayTableWith [quantity] [[JsonNumber 1.234], [JsonNull]]
 displayOutcome ((outcome "satisfied" "Criterion met")
   { outcomeDiagnostics = [OutcomeDiagnostic "residual" 0.00001 Nothing] })
+```
+
+## Interactive 3D point scenes
+
+`scene3d` displays bounded point sets and optional undirected edges through a lazy-loaded, dependency-free Canvas 2D viewer with an orthographic camera. It supports neither meshes, model imports, scripts, nor perspective cameras.
+
+The artifact contains `kind: "scene3d"`, required `points`, and optional `edges`, `groups`, `axes`, `camera`, `id`, `title`, and `caption`:
+
+| Field    | Rules                                                                                                                                          |
+| -------- | ---------------------------------------------------------------------------------------------------------------------------------------------- |
+| `points` | 0–10,000 records: unique `id` (1–64 UTF-8 bytes), three finite `position` coordinates, optional plain-text `label` (256 bytes) and `group` ID. |
+| `edges`  | 0–20,000 `{from, to}` records referencing distinct existing points. Repeated and reversed pairs are duplicates.                                |
+| `groups` | Ordered `{id, label?}` declarations with unique nonempty IDs. Undeclared used groups follow in first-use order with their ID as label.         |
+| `axes`   | Optional `x`, `y`, `z`, each with optional plain-text `label` and `unit` (32 bytes).                                                           |
+| `camera` | Optional finite degree `yaw`, `pitch` within −90…90, and finite positive `zoom`; defaults: 30°, 20°, 1.                                        |
+
+Other text metadata uses the existing 16 KiB per-field limit. Full scene bytes count against the shared 16 MiB run and worker-response limits. Invalid fields, unknown fields, counts, and byte limits produce an artifact-local diagnostic; scenes are never silently truncated. Markup in text is displayed literally.
+
+Drag to orbit, wheel or pinch to zoom, or focus the view and use arrow keys (15°), **+ / −**, and **0** to reset the latest authored camera. **Controls** reveals instructions. Group colors and circle/square/triangle/diamond symbols follow the shared chart palette; legend controls toggle, isolate, or show all groups. There are no animated transitions.
+
+Click or tap within 12 CSS pixels of a point to select it. The selection shows its original coordinates and units. Select two points to measure Euclidean distance. A third selection replaces the oldest; selecting an already selected point removes it. Distance is available only when all three axes declare exactly the same nonblank unit. Otherwise the viewer says “distance unavailable: axes use different or undeclared units”; it never infers units.
+
+**Show data as tables** exposes all points and edges, with sorting, pagination, and raw-value CSV. Point-row selection buttons support the same distance measurement without the canvas, including hidden groups. PNG saves the current view. Printing shows all groups at the authored initial projection. Resizing and theme changes preserve the reader’s view. Reruns in the same cell preserve camera and selection when the artifact identity and point-ID set remain unchanged; replacing either resets the scene. Explicit artifact IDs distinguish multiple or reordered outputs.
+
+The tetrahedron has origin-to-axis distances of `scale` nm and other edges of `sqrt(2) × scale` nm. Changing Scale preserves the camera and selected point IDs:
+
+```rust
+//| id: scene3d-tetrahedron
+//| title: Tetrahedron
+//| run: reactive
+//| crates: []
+//| inputs:
+//|   scale: { type: range, label: Scale, min: 0.5, max: 3, step: 0.5, value: 1 }
+//| tests:
+//|   - { case: default, expect: [{ path: /outputs/0/kind, equals: scene3d }] }
+let points = [
+    ("a", [0.0, 0.0, 0.0], "core"),
+    ("b", [scale, 0.0, 0.0], "shell"),
+    ("c", [0.0, scale, 0.0], "shell"),
+    ("d", [0.0, 0.0, scale], "shell"),
+].into_iter().map(|(id, position, group)| serde_json::json!({
+    "id": id, "position": position, "group": group
+})).collect::<Vec<_>>();
+emit_scene3d!(serde_json::json!({
+    "points": points,
+    "edges": [
+        {"from": "a", "to": "b"}, {"from": "a", "to": "c"},
+        {"from": "a", "to": "d"}, {"from": "b", "to": "c"},
+        {"from": "b", "to": "d"}, {"from": "c", "to": "d"}
+    ],
+    "groups": [{"id": "core", "label": "Core"}, {"id": "shell", "label": "Shell"}],
+    "axes": {"x": {"unit": "nm"}, "y": {"unit": "nm"}, "z": {"unit": "nm"}},
+    "camera": {"yaw": 30, "pitch": 20, "zoom": 1}
+}), metadata = serde_json::json!({"id": "tetrahedron", "title": "Tetrahedron"}));
+```
+
+Rust `emit_scene3d!(scene, metadata = ...)` and Haskell `displayScene3d scene` accept scene fields without `kind`. Python provides `display_scene3d(points, *, edges=None, groups=None, axes=None, camera=None, title=None, caption=None)`. All three add `kind` and share the same validation.
+
+```python
+#| id: python-scene3d
+#| title: Python 3D points
+#| run: button
+display_scene3d([
+    {"id": "a", "position": [0, 0, 0], "label": "Origin"},
+    {"id": "b", "position": [1, 0, 0]},
+], edges=[{"from": "a", "to": "b"}],
+   axes={axis: {"unit": "nm"} for axis in ("x", "y", "z")}, title="Python scene")
+```
+
+```haskell
+--| id: haskell-scene3d
+--| title: Haskell 3D points
+--| run: button
+import Oxiquill.Output
+let point name x = JsonObject [("id", JsonString name),
+      ("position", JsonArray [JsonNumber x, JsonNumber 0, JsonNumber 0])]
+displayScene3d (JsonObject [
+    ("title", JsonString "Haskell scene"),
+    ("points", JsonArray [point "a" 0, point "b" 1]),
+    ("edges", JsonArray [JsonObject [("from", JsonString "a"), ("to", JsonString "b")]])])
 ```

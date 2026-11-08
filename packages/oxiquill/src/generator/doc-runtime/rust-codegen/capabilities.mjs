@@ -16,6 +16,7 @@ const imageTokens = ['emit_image_svg', 'emit_image_png', 'emit_svg', 'emit_png_b
 const tableTokens = ['emit_table', 'emit_table_with_columns', 'emit_records_table'];
 
 const sourceFeatureDescriptors = [
+  ['scene3d', ['emit_scene3d']],
   ['legacyPlot', ['emit_line_plot']],
   ['lineChart', ['emit_line_chart']],
   ['areaChart', ['emit_area_chart']],

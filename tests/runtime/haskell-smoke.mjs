@@ -26,6 +26,14 @@ const result = await testGeneratedHaskellCells({
       validateOutputArtifacts(outputs).filter((artifact) => artifact.status === 'error'),
       []
     );
+    if (options.cell.id.endsWith('__haskell-scene3d')) {
+      assert.equal(outputs[0].kind, 'scene3d');
+      assert.deepEqual(
+        outputs[0].points.map((point) => point.id),
+        ['a', 'b']
+      );
+      assert.deepEqual(outputs[0].edges, [{ from: 'a', to: 'b' }]);
+    }
     if (options.cell.id.endsWith('__satisfied-outcome')) {
       assert.deepEqual(
         outputs.map((output) => output.kind),

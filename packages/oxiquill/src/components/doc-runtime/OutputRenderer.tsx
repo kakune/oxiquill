@@ -13,6 +13,7 @@ import type { ChartSpec, TextArtifact } from '../../lib/doc-runtime/types.js';
 import ArtifactErrorBoundary, { ArtifactError } from './ArtifactErrorBoundary.js';
 import OutcomeOutput from './OutcomeOutput.js';
 import TableOutput from './TableOutput.js';
+import LazyScene3dOutput from './LazyScene3dOutput.js';
 
 type ChartOutputModule = typeof import('./ChartOutput.js');
 type LoadChartOutput = () => Promise<ChartOutputModule>;
@@ -27,13 +28,15 @@ interface OutputRendererProps {
   labels?: RuntimeLabels;
   outputs: readonly ValidatedArtifactResult[];
   resultIdentity?: object;
+  sceneIdentity?: object;
 }
 
 export default function OutputRenderer({
   idPrefix = 'doc-output',
   labels = labelsForLanguage(globalThis.document?.documentElement.lang),
   outputs,
-  resultIdentity
+  resultIdentity,
+  sceneIdentity
 }: OutputRendererProps) {
   const ordered = [...outputs.filter(isOutcome), ...outputs.filter((output) => !isOutcome(output))];
   const keys = artifactKeys(ordered);
@@ -46,6 +49,7 @@ export default function OutputRenderer({
             labels={labels}
             output={output}
             resultIdentity={resultIdentity}
+            sceneIdentity={sceneIdentity}
           />
         </ArtifactErrorBoundary>
       ))}
@@ -61,18 +65,29 @@ function ArtifactOutput({
   idPrefix,
   labels,
   output,
-  resultIdentity
+  resultIdentity,
+  sceneIdentity
 }: {
   idPrefix: string;
   labels: RuntimeLabels;
   output: ValidatedArtifactResult;
   resultIdentity?: object;
+  sceneIdentity?: object;
 }) {
   if (output.status === 'error') {
     return <ArtifactError message={labels.artifactError(output.index + 1, labels.diagnosticDetail(output.message))} />;
   }
 
   switch (output.artifact.kind) {
+    case 'scene3d':
+      return (
+        <LazyScene3dOutput
+          artifact={output.artifact}
+          idPrefix={idPrefix}
+          labels={labels}
+          resultIdentity={sceneIdentity ?? resultIdentity}
+        />
+      );
     case 'outcome':
       return <OutcomeOutput output={output.artifact} labels={labels} />;
     case 'text':

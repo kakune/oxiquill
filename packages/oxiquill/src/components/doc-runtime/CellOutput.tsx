@@ -1,5 +1,5 @@
 import type { UpstreamFailure } from '../../lib/doc-runtime/page-cell-store.js';
-import { useLayoutEffect, useState } from 'preact/hooks';
+import { useLayoutEffect, useMemo, useState } from 'preact/hooks';
 import { idleOutputMessage, labelsForLanguage } from '../../lib/doc-runtime/interactive-cell-model.js';
 import {
   normalizeCellExecutionResult,
@@ -45,6 +45,7 @@ export function CellOutput({
   canRetry?: boolean;
   runMode: CellManifest['run'];
 }) {
+  const sceneIdentity = useMemo(() => ({}), [outputId]);
   const outputResults = result
     ? 'outputResults' in result
       ? result.outputResults
@@ -145,7 +146,13 @@ export function CellOutput({
           ) : null}
           <div class="doc-cell__outputs">
             {error !== undefined ? <p>{labels.previousSuccessfulOutput}</p> : null}
-            <OutputRenderer idPrefix={outputId} labels={labels} outputs={outputResults ?? []} resultIdentity={result} />
+            <OutputRenderer
+              idPrefix={outputId}
+              labels={labels}
+              outputs={outputResults ?? []}
+              resultIdentity={result}
+              sceneIdentity={sceneIdentity}
+            />
             {outputResults?.length ? null : <p class="empty-state">{labels.cellCompletedWithoutOutput}</p>}
           </div>
         </div>
