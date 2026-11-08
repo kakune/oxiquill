@@ -2,9 +2,10 @@
 import ArrowIcon from './ArrowIcon.astro';
 import { togglePresentation } from './toggle-localization.js';
 
-const { dir, lang, toc } = Astro.locals.starlightRoute;
+const { dir, entry, lang, toc } = Astro.locals.starlightRoute;
 const presentation = togglePresentation(lang, dir, 'tableOfContents');
 const hasTableOfContents = Boolean(toc);
+const contentWidth = (entry.data as { contentWidth?: unknown }).contentWidth === 'full' ? 'full' : undefined;
 ---
 
 <script is:inline define:vars={{ hasTableOfContents }}>
@@ -20,7 +21,7 @@ const hasTableOfContents = Boolean(toc);
   })();
 </script>
 
-<div class="two-column-content lg:sl-flex">
+<div class="two-column-content lg:sl-flex" data-content-width={contentWidth}>
   {toc && (
     <>
       <aside id="starlight__right-sidebar" class="right-sidebar-container print:hidden">
@@ -65,6 +66,8 @@ const hasTableOfContents = Boolean(toc);
 <style>
   :global(:root) {
     --oq-base-content-width: var(--sl-content-width);
+    /* Consumers set --oq-toc-width; the default narrows the column on smaller desktops. */
+    --oq-resolved-toc-width: var(--oq-toc-width, clamp(14rem, 18vw, var(--sl-sidebar-width)));
   }
 
   .two-column-content {
@@ -74,9 +77,23 @@ const hasTableOfContents = Boolean(toc);
     );
   }
 
+  .two-column-content[data-content-width='full'] {
+    --oq-base-content-width: 100%;
+  }
+
   @media (min-width: 72rem) {
     :global([data-has-toc][data-table-of-contents-collapsed]) {
-      --oq-released-table-of-contents-width: var(--sl-sidebar-width);
+      --oq-released-table-of-contents-width: var(--oq-resolved-toc-width);
+    }
+
+    /* Starlight sizes the table of contents from a share of the viewport; use the column width instead. */
+    .right-sidebar :global(.right-sidebar-panel) {
+      overflow-wrap: anywhere;
+    }
+
+    .right-sidebar :global(.right-sidebar-panel > .sl-container) {
+      width: calc(var(--oq-resolved-toc-width) - 2 * var(--sl-sidebar-pad-x));
+      max-width: none;
     }
   }
 </style>
@@ -84,6 +101,7 @@ const hasTableOfContents = Boolean(toc);
 <style>
   @layer starlight.core {
     .main-pane {
+      min-inline-size: 0;
       isolation: isolate;
     }
 
@@ -125,8 +143,8 @@ const hasTableOfContents = Boolean(toc);
         order: 2;
         position: relative;
         width: max(
-          var(--sl-sidebar-width),
-          calc(var(--sl-sidebar-width) + (100% - var(--sl-content-width) - var(--sl-sidebar-width)) / 2)
+          var(--oq-resolved-toc-width),
+          calc(var(--oq-resolved-toc-width) + (100% - var(--sl-content-width) - var(--oq-resolved-toc-width)) / 2)
         );
       }
 
@@ -150,8 +168,8 @@ const hasTableOfContents = Boolean(toc);
 
         order: 1;
         width: min(
-          calc(100% - var(--sl-sidebar-width)),
-          calc(var(--sl-content-width) + (100% - var(--sl-content-width) - var(--sl-sidebar-width)) / 2)
+          calc(100% - var(--oq-resolved-toc-width)),
+          calc(var(--sl-content-width) + (100% - var(--sl-content-width) - var(--oq-resolved-toc-width)) / 2)
         );
       }
 
@@ -163,7 +181,23 @@ const hasTableOfContents = Boolean(toc);
         position: fixed;
         z-index: var(--sl-z-index-navbar);
         inset-block-start: calc(var(--sl-nav-height) + 0.75rem);
-        inset-inline-end: calc(var(--sl-sidebar-width) - 1rem);
+        /*
+         * Straddle the border of the table-of-contents column. The fixed containing block spans the
+         * viewport, so subtracting the sidebar inset reproduces the width this column is sized from.
+         */
+        inset-inline-end: calc(
+          max(
+              var(--oq-resolved-toc-width),
+              calc(
+                var(--oq-resolved-toc-width) +
+                  (
+                    100% - var(--sl-content-inline-start, 0rem) - var(--sl-content-width) - var(--oq-resolved-toc-width)
+                  ) /
+                  2
+              )
+            ) -
+            1rem
+        );
         transition:
           background-color 0.15s ease,
           border-color 0.15s ease,

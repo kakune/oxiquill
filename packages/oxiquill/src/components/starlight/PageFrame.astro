@@ -3,8 +3,9 @@ import MobileMenuToggle from '@astrojs/starlight/components/MobileMenuToggle.ast
 import ArrowIcon from './ArrowIcon.astro';
 import { togglePresentation } from './toggle-localization.js';
 
-const { hasSidebar, dir, lang } = Astro.locals.starlightRoute;
+const { entry, hasSidebar, dir, lang } = Astro.locals.starlightRoute;
 const presentation = togglePresentation(lang, dir, 'sidebar');
+const contentWidth = (entry.data as { contentWidth?: unknown }).contentWidth === 'full' ? 'full' : undefined;
 ---
 
 <script is:inline define:vars={{ hasSidebar }}>
@@ -20,7 +21,7 @@ const presentation = togglePresentation(lang, dir, 'sidebar');
   })();
 </script>
 
-<div class="page sl-flex">
+<div class="page sl-flex" data-content-width={contentWidth}>
   <header class="header">
     <slot name="header" />
   </header>
@@ -100,6 +101,11 @@ const presentation = togglePresentation(lang, dir, 'sidebar');
       var(--oq-base-content-width) + var(--oq-released-sidebar-width, 0rem) +
         var(--oq-released-table-of-contents-width, 0rem)
     );
+  }
+
+  /* Pages with `contentWidth: full` drop the reading measure but keep both navigation columns. */
+  .page[data-content-width='full'] {
+    --oq-base-content-width: 100%;
   }
 
   @media (min-width: 50rem) {

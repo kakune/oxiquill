@@ -1,6 +1,9 @@
 import { z } from 'astro/zod';
 
-const referenceSchema = z.object({ references: z.record(z.string(), z.string()).optional() });
+const referenceSchema = z.object({
+  contentWidth: z.enum(['default', 'full']).optional(),
+  references: z.record(z.string(), z.string()).optional()
+});
 
 type Callable = (...args: never[]) => unknown;
 
