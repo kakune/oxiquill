@@ -100,7 +100,7 @@ it('offers keyboard and table measurement without interpreting labels as markup'
   expect(result.container).toHaveTextContent('<b>Origin</b>');
   expect(result.container.querySelectorAll('table')).toHaveLength(2);
   fireEvent.click(screen.getByRole('button', { name: 'Select point c' }));
-  expect(screen.getByRole('status', { name: 'Selected points' })).toHaveTextContent(`Distance: ${Math.SQRT2} nm`);
+  expect(screen.getByRole('status', { name: 'Selected points' })).toHaveTextContent('Distance: 1.41421 nm');
   fireEvent.click(screen.getByRole('button', { name: 'Select point b' }));
   expect(screen.getByRole('status', { name: 'Selected points' })).not.toHaveTextContent('Distance:');
 });
@@ -271,4 +271,31 @@ it('preserves selected scene IDs through actual CellOutput result replacements',
   await waitFor(() =>
     expect(screen.getByRole('status', { name: 'Selected points' })).toHaveTextContent('Distance: 2 nm')
   );
+});
+
+it('redraws when the device pixel ratio changes and stops watching on unmount', async () => {
+  const queries: { query: string; listener?: () => void; removed: boolean }[] = [];
+  vi.stubGlobal('matchMedia', (query: string) => {
+    const entry: (typeof queries)[number] = { query, removed: false };
+    queries.push(entry);
+    return {
+      addEventListener: (_type: string, listener: () => void) => {
+        entry.listener = listener;
+      },
+      removeEventListener: () => {
+        entry.removed = true;
+      }
+    };
+  });
+  vi.stubGlobal('devicePixelRatio', 1);
+  const view = render(<Scene3dOutput artifact={tetrahedron} idPrefix="scene" />);
+  await waitFor(() => expect(camera()).toBeDefined());
+  const draws = draw.mock.calls.length;
+  expect(queries.at(-1)?.query).toBe('(resolution: 1dppx)');
+  vi.stubGlobal('devicePixelRatio', 2);
+  act(() => queries.at(-1)?.listener?.());
+  await waitFor(() => expect(draw.mock.calls.length).toBeGreaterThan(draws));
+  expect(queries.at(-1)?.query).toBe('(resolution: 2dppx)');
+  view.unmount();
+  expect(queries.at(-1)?.removed).toBe(true);
 });

@@ -124,6 +124,13 @@ test('the Japanese stylesheet applies strict line breaking only to Japanese page
   expect(japanese.lineBreak).toBe('strict');
   expect(japanese.lineHeight).toBeCloseTo(1.9, 1);
 
+  // Starlight renders fallback content inside <main lang="en"> under a Japanese route.
+  await page.locator('main').evaluate((main) => main.setAttribute('lang', 'en'));
+  expect(await page.locator('html').getAttribute('lang')).toBe('ja');
+  const fallback = await typography();
+  expect(fallback.lineBreak).toBe('auto');
+  expect(fallback.lineHeight).not.toBeCloseTo(1.9, 1);
+
   await page.goto(`${root}guide/`);
   expect((await typography()).lineBreak).toBe('auto');
 });

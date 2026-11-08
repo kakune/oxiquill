@@ -15,6 +15,9 @@ export default function RuntimeDisclosure({ id, label, disabled, busy, overlay, 
   const [open, setOpen] = useState(false);
   const root = useRef<HTMLDivElement>(null);
   const trigger = useRef<HTMLButtonElement>(null);
+  // Closing from the trigger, an action inside, or Escape returns focus to the
+  // trigger, since the focused action is hidden. An outside click that focused
+  // another control leaves focus there.
   function close(): void {
     setOpen(false);
     trigger.current?.focus();
@@ -24,10 +27,14 @@ export default function RuntimeDisclosure({ id, label, disabled, busy, overlay, 
     if (!open || !element) return;
     const document = element.ownerDocument;
     const outside = (event: MouseEvent) => {
-      if (event.target instanceof Node && !element.contains(event.target)) close();
+      if (!(event.target instanceof Node) || element.contains(event.target)) return;
+      const focused = document.activeElement;
+      if (!focused || focused === document.body || element.contains(focused)) close();
+      else setOpen(false);
     };
+    // Escape belongs to the disclosure only while focus is inside it.
     const escape = (event: KeyboardEvent) => {
-      if (event.key !== 'Escape') return;
+      if (event.key !== 'Escape' || !element.contains(document.activeElement)) return;
       event.preventDefault();
       close();
     };

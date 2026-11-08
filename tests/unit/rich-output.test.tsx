@@ -56,6 +56,11 @@ it.each(['en', 'ja'] as const)('formats table numbers and explicit chart notatio
   expect(chartNumberFormatter([0], locale, false, { fractionDigits: 2 })(-0)).toBe('0.00');
   expect(chartNumberFormatter([1.005], locale, false, { fractionDigits: 2 })(1.005)).toBe('1.00');
   expect(formatTableNumber(1.005, locale, false, { fractionDigits: 2 })).toBe('1.01');
+  // Fixed decimals keep ordinary notation in tables, as on chart axes.
+  expect(formatTableNumber(1234567.891, locale, false, { fractionDigits: 2 })).toBe('1234567.89');
+  expect(formatTableNumber(1234567.891, locale, true, { fractionDigits: 2 })).toBe('1,234,567.89');
+  expect(formatTableNumber(0.00003, locale, false, { fractionDigits: 2 })).toBe('0.00');
+  expect(chartNumberFormatter([0.00003], locale, false, { fractionDigits: 2 })(0.00003)).toBe('0.00');
   expect(chartNumberFormatter([Number.MAX_VALUE], locale)(Number.MAX_VALUE)).toBe('1.79769×10³⁰⁸');
 });
 

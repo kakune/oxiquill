@@ -13,7 +13,9 @@ export function resolveDocRedirects(docRedirects, { base, redirects } = {}) {
   if (docRedirects === undefined) return { redirects, targets: [] };
   if (!isRecord(docRedirects)) throw new TypeError('docRedirects must be an object of source paths to destinations.');
 
-  const prefix = String(base ?? '').replace(/\/+$/u, '');
+  // Astro adds a leading slash to `base`; without it the destination would be relative.
+  const trimmed = String(base ?? '').replace(/^\/+|\/+$/gu, '');
+  const prefix = trimmed ? `/${trimmed}` : '';
   const merged = { ...(redirects ?? {}) };
   const targets = [];
   for (const [source, value] of Object.entries(docRedirects)) {

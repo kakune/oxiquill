@@ -29,6 +29,10 @@ export function chartLinkConflict(member: ChartLinkIdentity, peers: readonly Cha
   return undefined;
 }
 
+function sameRange(a: ChartRange | undefined, b: ChartRange | undefined): boolean {
+  return a === b || (a !== undefined && b !== undefined && a[0] === b[0] && a[1] === b[1]);
+}
+
 export function intersectChartRange(range: ChartRange, domain: ChartRange | undefined): ChartRange | undefined {
   if (!domain) return undefined;
   const start = Math.max(range[0], domain[0]);
@@ -42,6 +46,15 @@ export function createChartLinkCoordinator() {
   const ranges = new Map<string, ChartRange>();
   const applying = new Set<object>();
   const cursorSources = new Map<string, object>();
+  // Charts rejected for a conflict retry once their group's membership changes.
+  const watchers = new Map<string, Set<() => void>>();
+
+  function membershipChanged(group: string) {
+    const callbacks = watchers.get(group);
+    if (!callbacks) return;
+    watchers.delete(group);
+    queueMicrotask(() => callbacks.forEach((callback) => callback()));
+  }
 
   function deliver(identity: object, apply: () => void) {
     applying.add(identity);
@@ -70,6 +83,7 @@ export function createChartLinkCoordinator() {
     members.delete(identity);
     if (member && !Array.from(members.values()).some((peer) => peer.link.group === member.link.group))
       ranges.delete(member.link.group);
+    if (member) membershipChanged(member.link.group);
   }
 
   return {
@@ -82,9 +96,22 @@ export function createChartLinkCoordinator() {
       if (joining) unregister(identity);
       members.set(identity, member);
       const range = ranges.get(member.link.group);
-      if (joining && range && member.link.zoom !== false) deliver(identity, () => receive(member, range));
+      // A rerun with new data takes the group's current range and disjoint status.
+      if (range && member.link.zoom !== false && (joining || !sameRange(previous?.domain, member.domain)))
+        deliver(identity, () => receive(member, range));
+      if (joining || previous?.xType !== member.xType || previous?.unit !== member.unit)
+        membershipChanged(member.link.group);
     },
     unregister,
+    /** Calls `retry` once, after the next membership change of `group`. */
+    watch(group: string, retry: () => void) {
+      let callbacks = watchers.get(group);
+      if (!callbacks) watchers.set(group, (callbacks = new Set()));
+      callbacks.add(retry);
+      return () => {
+        watchers.get(group)?.delete(retry);
+      };
+    },
     viewport(identity: object, range?: ChartRange) {
       const source = members.get(identity);
       if (!source || source.link.zoom === false || applying.has(identity)) return;
@@ -111,6 +138,7 @@ export function createChartLinkCoordinator() {
     clear() {
       members.clear();
       ranges.clear();
+      watchers.clear();
       applying.clear();
       cursorSources.clear();
     },

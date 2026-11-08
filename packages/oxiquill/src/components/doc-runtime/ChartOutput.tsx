@@ -1,6 +1,7 @@
 import { chartItems, chartLineItems } from '../../lib/doc-runtime/chart-layers.js';
 import { updatedColorSelection, selectedColorRange } from '../../lib/doc-runtime/chart-color-scale.js';
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'preact/hooks';
+import { acquirePageChartLinks, chartLinkIdentity } from '../../lib/doc-runtime/chart-link.js';
 import { boundedErrorMessage } from '../../lib/doc-runtime/output-limits.mjs';
 import type { RuntimeLabels } from '../../lib/doc-runtime/runtime-localization.js';
 import type { ChartArtifact, ChartSpec } from '../../lib/doc-runtime/types.js';
@@ -100,7 +101,7 @@ export default function ChartOutput({
   );
   const [exportError, setExportError] = useState<string>();
   const [disjoint, setDisjoint] = useState(false);
-  const [linkFailure, setLinkFailure] = useState<{ artifact: ChartArtifact; message: string }>();
+  const [linkFailure, setLinkFailure] = useState<{ artifact: ChartArtifact; message: string; group?: string }>();
   const savedView = useRef<{
     signature: string;
     rangeSignature: string;
@@ -201,7 +202,11 @@ export default function ChartOutput({
         try {
           current.interactions?.update(next.spec);
         } catch (error) {
-          setLinkFailure({ artifact: next, message: boundedErrorMessage(error) });
+          setLinkFailure({
+            artifact: next,
+            message: boundedErrorMessage(error),
+            group: chartLinkIdentity(next.spec)?.link.group
+          });
           setIsReady(false);
           return;
         }
@@ -392,6 +397,18 @@ export default function ChartOutput({
     if (linkFailure && linkFailure.artifact !== artifact) setLinkFailure(undefined);
     applyLatest();
   }, [artifact, reducedMotion, labels, theme, identity]);
+  // A link conflict clears once the conflicting peer changes or leaves the group.
+  useEffect(() => {
+    const group = linkFailure?.group;
+    const page = element.current?.ownerDocument ?? globalThis.document;
+    if (group === undefined || !page) return;
+    const links = acquirePageChartLinks(page);
+    const stop = links.coordinator.watch(group, () => setLinkFailure(undefined));
+    return () => {
+      stop();
+      links.release();
+    };
+  }, [linkFailure]);
   const titleId = idPrefix + '-title';
   const captionId = displayed.caption ? idPrefix + '-caption' : undefined;
   const descriptionId = idPrefix + '-description';

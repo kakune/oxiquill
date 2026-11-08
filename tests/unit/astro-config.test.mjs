@@ -487,6 +487,15 @@ flowchart LR
     });
     expect(defineOxiquillConfig({ docRedirects: { '/old/': '/new/' } }).redirects).toEqual({ '/old/': '/new/' });
     expect(defineOxiquillConfig({})).not.toHaveProperty('redirects');
+    // Astro adds the leading slash to base, so destinations never become relative.
+    for (const base of ['docs', 'docs/', '/docs', '//docs//'])
+      expect(defineOxiquillConfig({ base, docRedirects: { '/old/': '/new/' } }).redirects).toEqual({
+        '/old/': '/docs/new/'
+      });
+    for (const base of ['/', '', '//'])
+      expect(defineOxiquillConfig({ base, docRedirects: { '/old/': '/new/' } }).redirects).toEqual({
+        '/old/': '/new/'
+      });
   });
 
   it.each([

@@ -31,6 +31,8 @@ assert scene["axes"] == {"x": {"unit": "nm"}} and scene["camera"] == {"yaw": 30}
 assert scene["title"] == "<b>Scene</b>" and scene["caption"] == "literal"
 display_scene3d([])
 assert __oxiquill_take_outputs()[0].to_py() == {"kind": "scene3d", "points": []}
+display_scene3d([], id="overview")
+assert __oxiquill_take_outputs()[0].to_py() == {"kind": "scene3d", "points": [], "id": "overview"}
 for field, arguments in [
     ("points", {"points": ({} for _ in range(10001))}),
     ("edges", {"points": [], "edges": ({} for _ in range(20001))}),
@@ -226,6 +228,9 @@ assert table["columns"][1]["nullText"] == "Missing"
 assert table["rows"] == [[1.234, None]]
 display_table([[1]], columns=["Count"])
 assert __oxiquill_take_outputs()[0]["columns"][0] == {"key": "0", "label": "Count", "type": "unknown"}
+display_table([[1, 2]], columns={"Tme": {"type": "number"}, "0": {"type": "number"}})
+error = __oxiquill_take_outputs()[0]
+assert error["kind"] == "__oxiquill_error" and "matches no column: Tme." in error["message"], error
 display_outcome("partial", "Iteration limit reached", status="MaxIterations", diagnostics=[{"name": "residual", "value": 0.0013}])
 result = __oxiquill_take_outputs()[0]
 assert result.kind == "outcome" and result.state == "partial"
