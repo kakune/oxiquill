@@ -1,0 +1,10 @@
+---
+title: First page
+---
+
+```rust
+//| id: point
+//| crates: [typed-helper]
+let point = typed_helper::point(5);
+println!("{}", serde_json::to_string(&point).map_err(|error| error.to_string())?);
+```

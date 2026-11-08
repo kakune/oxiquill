@@ -6,14 +6,15 @@ import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import {
-  buildRustWasm,
+  buildRustModules,
   createDocRuntimeContext,
   syncDocRuntime
 } from '../../packages/oxiquill/dist/generator/doc-runtime-service.mjs';
 import { runCli } from '../../packages/oxiquill/dist/cli/commands.mjs';
 import { createOxiquillPaths } from '../../packages/oxiquill/dist/config/paths.mjs';
 import { listFiles } from '../../packages/oxiquill/dist/generator/doc-runtime/file-system.mjs';
-import { wasmPackEnvironment } from '../../packages/oxiquill/dist/generator/doc-runtime/compiler-cache.mjs';
+import { cargoEnvironment } from '../../packages/oxiquill/dist/generator/doc-runtime/compiler-cache.mjs';
+import { rustGroupId } from '../../packages/oxiquill/dist/generator/doc-runtime/rust-grouping.mjs';
 import { validateOutputArtifacts } from '../../packages/oxiquill/dist/lib/doc-runtime/output-artifact-validation.js';
 
 const workspaceRoot = await mkdtemp(path.join(tmpdir(), 'oxiquill-rust-codegen-'));
@@ -26,9 +27,10 @@ try {
     cwd: workspaceRoot,
     loadProjectConfig: async () => ({ astroConfigArgs: [], cwd: workspaceRoot, paths })
   });
-  const generatedSource = await readFile(path.join(paths.rustCellsDir, 'src/lib.rs'), 'utf8');
+  const moduleDir = path.join(paths.rustCellsDir, 'modules', rustGroupId('page', 'index.mdx'));
+  const generatedSource = await readFile(path.join(moduleDir, 'src/lib.rs'), 'utf8');
   assert.ok(!generatedSource.includes('wasm_bindgen_test'));
-  assert.ok(!(await readFile(path.join(paths.rustCellsDir, 'Cargo.toml'), 'utf8')).includes('wasm-bindgen-test'));
+  assert.ok(!(await readFile(path.join(moduleDir, 'Cargo.toml'), 'utf8')).includes('wasm-bindgen-test'));
   const configModule = new URL('../../packages/oxiquill/dist/astro/index.js', import.meta.url).href;
   await writeFile(
     path.join(workspaceRoot, 'astro.config.mjs'),
@@ -256,10 +258,10 @@ try {
   assert.deepEqual(run('early-return', { early: true }), {
     outputs: [{ kind: 'text', stream: 'stdout', content: 'early return', truncated: false }]
   });
-  const targetDir = path.resolve(workspaceRoot, wasmPackEnvironment({ paths }).CARGO_TARGET_DIR);
+  const targetDir = path.resolve(workspaceRoot, cargoEnvironment({ paths }).CARGO_TARGET_DIR);
   const dependencyFiles = (await listFiles(targetDir)).filter(
     (file) =>
-      /[/\\]deps[/\\]/u.test(file) && /\.(?:rlib|rmeta)$/u.test(file) && !path.basename(file).includes('doc_rust_cells')
+      /[/\\]deps[/\\]/u.test(file) && /\.(?:rlib|rmeta)$/u.test(file) && !path.basename(file).includes('doc_rust_')
   );
   assert.ok(dependencyFiles.length > 0, 'warm build must produce cached registry artifacts');
   const dependencyTimes = await Promise.all(dependencyFiles.map(async (file) => [file, (await stat(file)).mtimeMs]));
@@ -276,7 +278,7 @@ try {
     buildRust: async (options) => {
       entered.resolve();
       await resume.promise;
-      await buildRustWasm(options);
+      return buildRustModules(options);
     }
   });
   const rejected = assert.rejects(attempt, /Interactive cell sources changed after runtime generation started\./u);

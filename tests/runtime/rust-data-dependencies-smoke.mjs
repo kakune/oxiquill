@@ -14,6 +14,7 @@ import { createOxiquillPaths } from '../../packages/oxiquill/dist/config/paths.m
 import { collectAuthoringCells } from '../../packages/oxiquill/dist/generator/doc-runtime/cell-collection.mjs';
 import { createCellTestPlan } from '../../packages/oxiquill/dist/generator/doc-runtime/cell-test-plan.mjs';
 import { testGeneratedRustCells } from '../../packages/oxiquill/dist/generator/doc-runtime/rust-runtime-test.mjs';
+import { rustModuleForCell } from '../../packages/oxiquill/dist/lib/doc-runtime/rust-registry.mjs';
 
 const root = await mkdtemp(path.join(tmpdir(), 'oxiquill-data-dependencies-'));
 const paths = createOxiquillPaths({ workspaceRoot: root });
@@ -109,11 +110,11 @@ try {
   await mkdir(paths.docsDir, { recursive: true });
   await writeFile(path.join(root, 'package.json'), '{"private":true,"type":"module"}');
   await writeFile(path.join(paths.docsDir, 'data.mdx'), ['---\ntitle: Data dependencies\n---', ...blocks].join('\n'));
-  for (const grouping of ['site', 'page']) {
+  for (const grouping of ['page', 'directory', 'site', () => 'data']) {
     const context = await createDocRuntimeContext({ paths, rustOptions: { grouping } });
     await syncDocRuntime({ ...context, mode: 'dev', languages: ['rust'] });
     const manifest = JSON.parse(await readFile(paths.cellsJsonPath, 'utf8'));
-    const descriptor = manifest.rust.modules[0];
+    const descriptor = rustModuleForCell(manifest.rust, 'data__stdout-overflow');
     const runtime = await import(pathToFileURL(path.join(paths.publicDir, descriptor.glue.url)).href);
     runtime.initSync({
       module: await WebAssembly.compile(await readFile(path.join(paths.publicDir, descriptor.wasm.url)))
@@ -142,7 +143,7 @@ try {
     const selected = createCellTestPlan(cells, { page: ['data.mdx'], cell: ['final'], case: ['adjusted'] }, paths);
     assert.equal((await testGeneratedRustCells({ tests: selected.tests, paths, report: () => {} })).failed, 0);
   }
-  console.log('Rust data dependency smoke tests passed (site and page grouping).');
+  console.log('Rust data dependency smoke tests passed (page, directory, site, and function grouping).');
 } finally {
   await rm(root, { recursive: true, force: true });
 }

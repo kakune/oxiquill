@@ -463,9 +463,14 @@ try {
   );
   assert.ok(!bundledLock.includes('name = "either"'), 'helper dependency must be absent from the bundled lock');
   const generatedRustRoot = path.join(projectRoot, 'state cache/rust-cells');
-  const generatedCargo = await readFile(path.join(generatedRustRoot, 'Cargo.toml'), 'utf8');
+  const [moduleDirectory] = await readdir(path.join(generatedRustRoot, 'modules'));
+  const generatedCargo = await readFile(path.join(generatedRustRoot, 'modules', moduleDirectory, 'Cargo.toml'), 'utf8');
   assert.ok(generatedCargo.includes('rust-version = "1.85"'));
   const generatedLock = await readFile(path.join(generatedRustRoot, 'Cargo.lock'), 'utf8');
+  assert.ok(
+    generatedLock.includes('name = "either"\nversion = "1.15.0"'),
+    'helper registry dependency must be resolved'
+  );
   for (const [name, version] of Object.entries(runtimeInputs.rust.dependencies)) {
     assert.ok(
       generatedLock.includes(`name = "${name}"\nversion = "${version}"`),

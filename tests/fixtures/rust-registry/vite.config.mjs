@@ -4,6 +4,7 @@ import path from 'node:path';
 import { defineConfig } from 'vite';
 import { createOxiquillPaths } from '../../../packages/oxiquill/src/config/paths.mjs';
 import { createRustModuleAssets } from '../../../packages/oxiquill/src/generator/doc-runtime/rust-module-assets.mjs';
+import { rustGroupId } from '../../../packages/oxiquill/src/generator/doc-runtime/rust-grouping.mjs';
 import { collectAuthoringCells } from '../../../packages/oxiquill/src/generator/doc-runtime/cell-collection.mjs';
 import {
   resolveRustRegistryUrls,
@@ -16,8 +17,10 @@ const paths = createOxiquillPaths({ workspaceRoot: path.join(repository, 'exampl
 // Browser CI downloads only the built site, so derive this fixture from its compiled
 // assets and the checked-in cell sources without requiring Cargo or generated caches.
 const directory = path.join(paths.outDir, path.relative(paths.publicDir, paths.rustWasmPublicDir));
-const wasmName = readdirSync(directory).find((name) => /^site-[a-f0-9]+\.wasm$/u.test(name));
-const glueName = readdirSync(directory).find((name) => /^site-[a-f0-9]+\.js$/u.test(name));
+// Both fixture cells live on this page, so its module serves them both.
+const moduleId = rustGroupId('page', 'features/interactive-cells.mdx');
+const wasmName = readdirSync(directory).find((name) => name.startsWith(`${moduleId}-`) && name.endsWith('.wasm'));
+const glueName = readdirSync(directory).find((name) => name.startsWith(`${moduleId}-`) && name.endsWith('.js'));
 if (!wasmName || !glueName) throw new Error('Build the docs site before running the Rust registry browser fixture.');
 const wasm = readFileSync(path.join(directory, wasmName));
 const glue = readFileSync(path.join(directory, glueName), 'utf8').replaceAll(wasmName, 'doc_rust_cells_bg.wasm');
