@@ -13,7 +13,6 @@ export async function preflightRequiredToolchains({
   haskellCellCount,
   explain = false,
   paths,
-  grouping = 'site',
   mode,
   platform = process.platform,
   runCommand = runCommandWithCapturedOutput,
@@ -36,8 +35,7 @@ export async function preflightRequiredToolchains({
           runCommand,
           runtimeInputs: runtimeInputs.rust,
           explain,
-          paths,
-          grouping
+          paths
         })
       : undefined,
     haskellCellCount > 0
@@ -52,16 +50,16 @@ export async function preflightRequiredToolchains({
       : undefined
   ]);
 
-  const wasmBindgen =
-    rust && grouping === 'page'
-      ? await resolveWasmBindgen({
-          version: parse(runtimeInputs.rustLock).package.find((entry) => entry.name === 'wasm-bindgen').version,
-          paths,
-          runCommand,
-          environment,
-          platform
-        })
-      : undefined;
+  // Every Rust module is bound with the CLI matching the pinned wasm-bindgen crate.
+  const wasmBindgen = rust
+    ? await resolveWasmBindgen({
+        version: parse(runtimeInputs.rustLock).package.find((entry) => entry.name === 'wasm-bindgen').version,
+        paths,
+        runCommand,
+        environment,
+        platform
+      })
+    : undefined;
   return Object.freeze({
     ...(rust ? { rust: wasmBindgen ? { ...rust, wasmBindgen } : rust } : {}),
     ...(haskell ? { haskell } : {})
@@ -75,17 +73,13 @@ export async function preflightRustToolchain({
   fileSystem = defaultFileSystem,
   explain = false,
   paths,
-  grouping = 'site',
   runCommand,
   runtimeInputs
 }) {
   const runVersion = (command, args) => runCommand(command, args, { env: environment, cwd });
   const commands = [
     ['rustc', runtimeInputs.minimumVersion, undefined],
-    ['cargo', runtimeInputs.minimumVersion, undefined],
-    ...(grouping === 'page'
-      ? []
-      : [['wasm-pack', runtimeInputs.wasmPackMinimumVersion, runtimeInputs.wasmPackMaximumVersionExclusive]])
+    ['cargo', runtimeInputs.minimumVersion, undefined]
   ];
   const versions = Object.fromEntries(
     await Promise.all(
@@ -205,7 +199,7 @@ function preflightError([command, args], expected, actual, guidance) {
 }
 
 function rustSetupGuidance(runtimeInputs) {
-  return `Install Rust and Cargo >=${runtimeInputs.minimumVersion} (tested ${runtimeInputs.testedVersion}), run "rustup target add ${runtimeInputs.target}", and install wasm-pack >=${runtimeInputs.wasmPackMinimumVersion} <${runtimeInputs.wasmPackMaximumVersionExclusive}. Rust beta/nightly channels are accepted but untested.`;
+  return `Install Rust and Cargo >=${runtimeInputs.minimumVersion} (tested ${runtimeInputs.testedVersion}) and run "rustup target add ${runtimeInputs.target}". The pinned wasm-bindgen CLI and Binaryen wasm-opt are used from PATH or downloaded and verified automatically. Rust beta/nightly channels are accepted but untested.`;
 }
 
 function errorMessage(error) {

@@ -8,7 +8,7 @@ export function parseToolVersion(output, tool) {
   const match = output.trim().match(/^(\S+)[ \t]+(\S+)(?:[ \t]+\([^\r\n]*\))?$/u);
   if (!match || match[1] !== tool) return undefined;
   const version = match[2];
-  const stableVersion = tool === 'wasm-pack' ? version : version?.replace(/-(?:beta\.\d+|nightly)$/u, '');
+  const stableVersion = version?.replace(/-(?:beta\.\d+|nightly)$/u, '');
   return parseVersion(stableVersion);
 }
 

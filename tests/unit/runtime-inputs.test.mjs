@@ -26,9 +26,7 @@ const runtimeData = {
     edition: '2024',
     minimumVersion: '1.85.0',
     testedVersion: '1.99.0',
-    target: 'wasm32-unknown-unknown',
-    wasmPackMinimumVersion: '0.15.0',
-    wasmPackMaximumVersionExclusive: '0.16.0'
+    target: 'wasm32-unknown-unknown'
   },
   haskell: {
     compiler: 'wasm32-wasi-ghc',
@@ -111,7 +109,7 @@ describe('toolchain preflight', () => {
         'cargo --version': 'cargo 1.95.0 (fixture)',
         'rustc --print target-libdir --target wasm32-unknown-unknown': '/toolchain/lib',
         'rustc --version': 'rustc 1.95.0 (fixture)',
-        'wasm-pack --version': 'wasm-pack 0.15.0'
+        'wasm-bindgen --version': 'wasm-bindgen 0.2.122'
       }[invocation];
     });
     const fileSystem = {
@@ -138,8 +136,8 @@ describe('toolchain preflight', () => {
         cargo: 'cargo 1.95.0 (fixture)',
         rustc: 'rustc 1.95.0 (fixture)',
         target: 'wasm32-unknown-unknown',
-        'wasm-pack': 'wasm-pack 0.15.0',
-        wasmOpt: { identity: 'managed-by-wasm-pack' }
+        wasmBindgen: { command: 'wasm-bindgen', identity: { version: '0.2.122' } },
+        wasmOpt: { identity: 'unavailable' }
       }
     });
     expect(runCommand).not.toHaveBeenCalledWith('wasm32-wasi-ghc', expect.anything());
@@ -188,9 +186,7 @@ function rustPreflight(versions = {}, overrides = {}) {
     environment: {},
     fileSystem: { readdir: async () => [{ name: 'libcore-fixture.rlib' }] },
     runCommand: async (command, args) =>
-      args[0] === '--print'
-        ? '/toolchain/lib'
-        : `${command} ${versions[command] ?? (command === 'wasm-pack' ? '0.15.0' : '1.99.0')}`,
+      args[0] === '--print' ? '/toolchain/lib' : `${command} ${versions[command] ?? '1.99.0'}`,
     runtimeInputs: runtimeData.rust,
     ...overrides
   });
@@ -214,14 +210,10 @@ describe('consumer toolchain versions', () => {
     await expect(result).rejects.not.toThrow('--toolchain');
   });
 
-  it.each(['0.15.0', '0.15.1', '0.15.99'])('accepts wasm-pack %s', async (version) => {
-    await expect(rustPreflight({ 'wasm-pack': version })).resolves.toMatchObject({
-      'wasm-pack': `wasm-pack ${version}`
-    });
-  });
-
-  it.each(['0.14.9', '0.16.0', '0.16.0-beta.1', '0.15.1-nightly'])('rejects wasm-pack %s', async (version) => {
-    await expect(rustPreflight({ 'wasm-pack': version })).rejects.toThrow('wasm-pack >=0.15.0 <0.16.0');
+  it('requires only Cargo, rustc, and the Wasm target from PATH', async () => {
+    const result = await rustPreflight();
+    expect(Object.keys(result).sort()).toEqual(['cargo', 'rustc', 'target', 'wasmOpt']);
+    await expect(rustPreflight({ rustc: '1.84.0' })).rejects.toThrow('downloaded and verified automatically');
   });
 
   it.each([
@@ -277,16 +269,13 @@ describe('consumer toolchain versions', () => {
     expect(parseVersion('1.99999999999999999999.0')).toBeUndefined();
   });
 
-  it.each(['minimumVersion', 'testedVersion', 'wasmPackMinimumVersion', 'wasmPackMaximumVersionExclusive'])(
-    'rejects invalid runtime policy %s',
-    (field) => {
-      expect(() =>
-        normalizeRuntimeInputs({
-          packageJson: { repository: 'https://example.com/oxiquill', version: '0.2.0' },
-          runtimeData: { ...runtimeData, rust: { ...runtimeData.rust, [field]: 'invalid' } },
-          rustLock: lock
-        })
-      ).toThrow(`major.minor.patch version for ${field}`);
-    }
-  );
+  it.each(['minimumVersion', 'testedVersion'])('rejects invalid runtime policy %s', (field) => {
+    expect(() =>
+      normalizeRuntimeInputs({
+        packageJson: { repository: 'https://example.com/oxiquill', version: '0.2.0' },
+        runtimeData: { ...runtimeData, rust: { ...runtimeData.rust, [field]: 'invalid' } },
+        rustLock: lock
+      })
+    ).toThrow(`major.minor.patch version for ${field}`);
+  });
 });

@@ -10,9 +10,7 @@
     "edition": "2024",
     "minimumVersion": "1.85.0",
     "target": "wasm32-unknown-unknown",
-    "testedVersion": "1.99.0",
-    "wasmPackMaximumVersionExclusive": "0.16.0",
-    "wasmPackMinimumVersion": "0.15.0"
+    "testedVersion": "1.99.0"
   },
   "haskell": {
     "compiler": "wasm32-wasi-ghc",
