@@ -1,0 +1,4 @@
+[package]
+name = "helper-tests"
+version = "1.4.0"
+edition = "2024"

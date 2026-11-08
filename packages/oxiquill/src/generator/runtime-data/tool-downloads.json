@@ -1,24 +1,62 @@
 {
   "wasm-bindgen": {
     "version": "0.2.129",
+    "repository": "wasm-bindgen/wasm-bindgen",
     "hosts": {
-      "aarch64-apple-darwin": "81d4a23d56b3c3eb8187658329116d50e0b228a93b343825fb71f70179051cd1",
-      "aarch64-unknown-linux-gnu": "1797c349a0f45d30946e8986b184135e12839ab576c9a04203e85febfc5dcb35",
-      "aarch64-unknown-linux-musl": "2ed4351c35dd9440308bbb02767d47ea278efe851a52465300f3c94f5b6c2a87",
-      "riscv64gc-unknown-linux-gnu": "413833a52d93c207418bc4d52d72cf1e785efbffb382a127f8fb8bc0ea0ad8cd",
-      "x86_64-apple-darwin": "7e028879a68ec53dae14048b55cc5215f6df75b17a9c1426fac8fa086d3202fd",
-      "x86_64-pc-windows-msvc": "79e348c169d0c10c0b287647f1e753d0985353ca96800bc29be8f4261baf13e6",
-      "x86_64-unknown-linux-musl": "82d12bb940e2d4e72e0d5605387fc1b8ca179044e012b620f0ce4e7440e8320e"
+      "aarch64-apple-darwin": {
+        "sha256": "81d4a23d56b3c3eb8187658329116d50e0b228a93b343825fb71f70179051cd1",
+        "asset": 587769526
+      },
+      "aarch64-unknown-linux-gnu": {
+        "sha256": "1797c349a0f45d30946e8986b184135e12839ab576c9a04203e85febfc5dcb35",
+        "asset": 587769532
+      },
+      "aarch64-unknown-linux-musl": {
+        "sha256": "2ed4351c35dd9440308bbb02767d47ea278efe851a52465300f3c94f5b6c2a87",
+        "asset": 587769523
+      },
+      "riscv64gc-unknown-linux-gnu": {
+        "sha256": "413833a52d93c207418bc4d52d72cf1e785efbffb382a127f8fb8bc0ea0ad8cd",
+        "asset": 587769519
+      },
+      "x86_64-apple-darwin": {
+        "sha256": "7e028879a68ec53dae14048b55cc5215f6df75b17a9c1426fac8fa086d3202fd",
+        "asset": 587769520
+      },
+      "x86_64-pc-windows-msvc": {
+        "sha256": "79e348c169d0c10c0b287647f1e753d0985353ca96800bc29be8f4261baf13e6",
+        "asset": 587769522
+      },
+      "x86_64-unknown-linux-musl": {
+        "sha256": "82d12bb940e2d4e72e0d5605387fc1b8ca179044e012b620f0ce4e7440e8320e",
+        "asset": 587769529
+      }
     }
   },
   "wasm-opt": {
     "version": "117",
+    "repository": "WebAssembly/binaryen",
     "hosts": {
-      "aarch64-linux": "ad560204426015a815faa45693c83bef7d58677d38a39422c272a30ba4b6da2a",
-      "arm64-macos": "f2d962ff294b38ea3cfbbae8f6c728089d9375a57bac9a1880eb86779d6d3a84",
-      "x86_64-linux": "3dc677006555b355ea2da5e82602065a161d5e83eaefd3f759afa00b96e83212",
-      "x86_64-macos": "c0be7b448888f2c851a853ca19299b09d42cac8c3090c716d14cc8ec3c0ac849",
-      "x86_64-windows": "b09f260176483bd30194303ccb15ac81c2247e4e566894f9d931e4313cb36d58"
+      "aarch64-linux": {
+        "sha256": "ad560204426015a815faa45693c83bef7d58677d38a39422c272a30ba4b6da2a",
+        "asset": 153927815
+      },
+      "arm64-macos": {
+        "sha256": "f2d962ff294b38ea3cfbbae8f6c728089d9375a57bac9a1880eb86779d6d3a84",
+        "asset": 153907622
+      },
+      "x86_64-linux": {
+        "sha256": "3dc677006555b355ea2da5e82602065a161d5e83eaefd3f759afa00b96e83212",
+        "asset": 153906727
+      },
+      "x86_64-macos": {
+        "sha256": "c0be7b448888f2c851a853ca19299b09d42cac8c3090c716d14cc8ec3c0ac849",
+        "asset": 153907621
+      },
+      "x86_64-windows": {
+        "sha256": "b09f260176483bd30194303ccb15ac81c2247e4e566894f9d931e4313cb36d58",
+        "asset": 153906484
+      }
     }
   }
 }

@@ -5,7 +5,7 @@ on:
     branches: [main]
     paths:
       - '.github/workflows/rust-canary.yml'
-      - '.github/scripts/resolve-wasm-pack.mjs'
+      - '.github/scripts/install-binaryen.sh'
       - '.github/scripts/install-wasm-bindgen.sh'
       - 'packages/oxiquill/**'
       - 'examples/docs-site/**'
@@ -61,29 +61,13 @@ jobs:
           rustup toolchain install stable --profile minimal --target wasm32-unknown-unknown
           rustc --version
           cargo --version
-      - name: Resolve latest compatible wasm-pack release
-        id: wasm-pack
-        env:
-          GH_TOKEN: ${{ github.token }}
-        shell: bash
-        run: gh api --paginate --slurp repos/wasm-bindgen/wasm-pack/releases | node .github/scripts/resolve-wasm-pack.mjs
-      - name: Install wasm-pack
-        env:
-          GH_TOKEN: ${{ github.token }}
-          WASM_PACK_VERSION: ${{ steps.wasm-pack.outputs.version }}
-          WASM_PACK_TAG: ${{ steps.wasm-pack.outputs.tag }}
-          WASM_PACK_ASSET: ${{ steps.wasm-pack.outputs.asset }}
-          WASM_PACK_DIGEST: ${{ steps.wasm-pack.outputs.digest }}
-        shell: bash
-        run: |
-          gh release download "$WASM_PACK_TAG" --repo wasm-bindgen/wasm-pack --pattern "$WASM_PACK_ASSET" --dir "$RUNNER_TEMP"
-          echo "${WASM_PACK_DIGEST#sha256:}  $RUNNER_TEMP/$WASM_PACK_ASSET" | sha256sum --check --strict
-          mkdir -p "$RUNNER_TEMP/wasm-pack"
-          tar -xzf "$RUNNER_TEMP/$WASM_PACK_ASSET" --strip-components=1 -C "$RUNNER_TEMP/wasm-pack"
-          test "$("$RUNNER_TEMP/wasm-pack/wasm-pack" --version)" = "wasm-pack $WASM_PACK_VERSION"
-          echo "$RUNNER_TEMP/wasm-pack" >> "$GITHUB_PATH"
       - name: Report selected toolchains
-        run: rustc --version && cargo --version && wasm-pack --version
+        run: rustc --version && cargo --version
+      - name: Install pinned Binaryen
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: bash .github/scripts/install-binaryen.sh
       - name: Install matching prebuilt wasm-bindgen CLI
         env:
           GH_TOKEN: ${{ github.token }}
@@ -100,8 +84,14 @@ jobs:
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
       - name: Test every generated Rust cell
+        env:
+          GH_TOKEN: ${{ github.token }}
         run: pnpm test:wasm
       - name: Test packed npm consumer
+        env:
+          GH_TOKEN: ${{ github.token }}
         run: pnpm test:consumer:npm
       - name: Test packed pnpm consumer
+        env:
+          GH_TOKEN: ${{ github.token }}
         run: pnpm test:consumer:pnpm

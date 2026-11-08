@@ -12,8 +12,9 @@ export function createProcessRunner({
 } = {}) {
   return (command, args, options = {}) =>
     new Promise((resolve, reject) => {
-      const { events, format = 'human', captureOutput, trackChild } = options;
-      const inherited = format === 'human' && !events && !captureOutput;
+      const { events, format = 'human', captureOutput, trackChild, onStdoutLine } = options;
+      // A line consumer owns stdout: it is neither echoed, captured, nor reported.
+      const inherited = format === 'human' && !events && !captureOutput && !onStdoutLine;
       const detached = Boolean(trackChild) && process.platform !== 'win32';
       const context = {
         phase: options.phase ?? 'compile',
@@ -61,15 +62,26 @@ export function createProcessRunner({
       const streams = ['stdout', 'stderr'].map((stream) => {
         const decoder = new StringDecoder('utf8');
         let pending = '';
-        const line = (value) =>
-          events?.report({ type: 'output', source: options.source ?? path.basename(command), stream, line: value });
+        const consumed = stream === 'stdout' && typeof onStdoutLine === 'function';
+        const line = consumed
+          ? (value) => {
+              try {
+                onStdoutLine(value);
+              } catch (error) {
+                child.kill?.();
+                finish(error);
+              }
+            }
+          : (value) =>
+              events?.report({ type: 'output', source: options.source ?? path.basename(command), stream, line: value });
         child[stream]?.on('data', (chunk) => {
           if (settled) return;
           lastOutput = now();
           if (stream === 'stderr' && options.captureFailureOutput) capturedStderr.push(Buffer.from(chunk));
-          if (stream === 'stdout' && (captureOutput || options.captureFailureOutput)) captured.push(Buffer.from(chunk));
+          if (stream === 'stdout' && !consumed && (captureOutput || options.captureFailureOutput))
+            captured.push(Buffer.from(chunk));
           if (stream === 'stderr') diagnostic = `${diagnostic}${chunk}`.slice(-16_384);
-          if (format === 'json') {
+          if (format === 'json' || consumed) {
             pending += decoder.write(Buffer.from(chunk));
             const lines = pending.split(/\r?\n/u);
             pending = lines.pop();
@@ -79,7 +91,7 @@ export function createProcessRunner({
           }
         });
         return () => {
-          if (settled || format !== 'json') return;
+          if (settled || (format !== 'json' && !consumed)) return;
           pending += decoder.end();
           if (pending) line(pending);
         };

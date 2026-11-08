@@ -57,7 +57,8 @@ try {
     );
     await writeFile(path.join(directory, 'src/lib.rs'), source);
   }
-  for (const grouping of ['site', 'page']) {
+  // A function grouping exercises custom keys alongside the built-in modes.
+  for (const grouping of ['page', 'directory', 'site', ({ path: pagePath }) => pagePath.split('/')[0]]) {
     await writeFile(page, authored);
     const checks = [];
     const context = await createDocRuntimeContext({ paths, rustOptions: { grouping } });
@@ -141,7 +142,8 @@ try {
         }
         return true;
       });
-      assert.equal(checks.length, previousChecks + 1);
+      // Diagnostics come from the build itself; no separate cargo check runs.
+      assert.equal(checks.length, previousChecks);
       // Unused-source rendering can have changed, but failed compilation retains
       // the last successful runtime registry and executable entries.
       const retained = JSON.parse(await readFile(paths.cellsJsonPath));
@@ -175,7 +177,7 @@ try {
     await writeFile(page, authored);
     await sync();
   }
-  console.log('Rust definitions and authored diagnostics smoke passed (site and page).');
+  console.log('Rust definitions and authored diagnostics smoke passed (page, directory, site, and function grouping).');
 } finally {
   await rm(root, { recursive: true, force: true });
 }

@@ -5,19 +5,19 @@ description: Know the supported platforms, browser matrix, execution model, and 
 
 ## Compatibility Matrix
 
-| Capability                                                                    | Linux     | macOS     | Windows                | Chromium  | Firefox   | WebKit    |
-| ----------------------------------------------------------------------------- | --------- | --------- | ---------------------- | --------- | --------- | --------- |
-| Core package and CLI with Node.js 24+                                         | Supported | Supported | Supported              | —         | —         | —         |
-| Consumer installation with npm or pnpm                                        | Supported | Supported | Supported              | —         | —         | —         |
-| Rust/Wasm generation with Rust/Cargo 1.85.0+ and `wasm-pack >=0.15.0 <0.16.0` | Supported | Supported | Supported              | —         | —         | —         |
-| Python/Pyodide asset generation                                               | Supported | Supported | Supported              | —         | —         | —         |
-| Haskell/WASI generation with `wasm32-wasi-ghc` 9.14                           | Supported | Supported | Not supported          | —         | —         | —         |
-| Built static site and Rust/Python/Haskell execution                           | —         | —         | —                      | Supported | Supported | Supported |
-| Viewing already generated Haskell Wasm                                        | —         | —         | Supported host browser | Supported | Supported | Supported |
+| Capability                                          | Linux     | macOS     | Windows                | Chromium  | Firefox   | WebKit    |
+| --------------------------------------------------- | --------- | --------- | ---------------------- | --------- | --------- | --------- |
+| Core package and CLI with Node.js 24+               | Supported | Supported | Supported              | —         | —         | —         |
+| Consumer installation with npm or pnpm              | Supported | Supported | Supported              | —         | —         | —         |
+| Rust/Wasm generation with Rust/Cargo 1.85.0+        | Supported | Supported | Supported              | —         | —         | —         |
+| Python/Pyodide asset generation                     | Supported | Supported | Supported              | —         | —         | —         |
+| Haskell/WASI generation with `wasm32-wasi-ghc` 9.14 | Supported | Supported | Not supported          | —         | —         | —         |
+| Built static site and Rust/Python/Haskell execution | —         | —         | —                      | Supported | Supported | Supported |
+| Viewing already generated Haskell Wasm              | —         | —         | Supported host browser | Supported | Supported | Supported |
 
 Node.js 24 or newer is the package boundary. The repository uses pnpm 12.10.1; consumers may use npm or pnpm. Native Windows cannot author/generate Haskell cells, but it can serve and view Haskell Wasm produced on Linux or macOS.
 
-Rust/Cargo 1.85.0 or newer and `wasm-pack >=0.15.0 <0.16.0` are supported. Install the `wasm32-unknown-unknown` target. Required CI tests Rust 1.85.0 with wasm-pack 0.15.0; repository development uses Rust 1.99.0 and wasm-pack 0.15.0. Rust beta/nightly channels are accepted when their numeric version meets the minimum, but are untested. Helper crates can impose a higher Rust minimum of their own.
+Rust/Cargo 1.85.0 or newer is supported. Install the `wasm32-unknown-unknown` target; the `wasm-bindgen` CLI matching the runtime pin and Binaryen 117 `wasm-opt` are used from `PATH` or downloaded and verified automatically. Required CI tests Rust 1.85.0; repository development uses Rust 1.99.0. Rust beta/nightly channels are accepted when their numeric version meets the minimum, but are untested. Helper crates can impose a higher Rust minimum of their own.
 
 ## Execution Model
 

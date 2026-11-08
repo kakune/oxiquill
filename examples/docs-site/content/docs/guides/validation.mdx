@@ -84,7 +84,7 @@ The consumer commands pack `oxiquill`, install the tarball in a temporary standa
 
 Pull requests require compatibility jobs on Linux, macOS, and Windows, Haskell runtime jobs on Linux and macOS, the packed Chromium job on Linux, and full browser jobs for Chromium, Firefox, and WebKit. Every supported matrix cell is merge-blocking.
 
-The required Rust minimum job runs every generated Rust cell and the npm/pnpm packed consumers with Rust 1.85.0 and wasm-pack 0.15.0, and feeds the required `ci-ok` check. A separate, non-required canary runs the same checks with latest stable Rust and latest wasm-pack 0.15.x on relevant PRs, Mondays at 03:00 UTC, and manual dispatch. The packed helper fixture also exercises a registry dependency absent from the bundled lock.
+The required Rust minimum job runs every generated Rust cell and the npm/pnpm packed consumers with Rust 1.85.0, and feeds the required `ci-ok` check. A separate, non-required canary runs the same checks with the latest stable Rust on relevant PRs, Mondays at 03:00 UTC, and manual dispatch. The packed helper fixture also exercises a registry dependency absent from the bundled lock, and `tests/runtime/rust-helper-lock-smoke.mjs` builds a helper workspace whose lock carries dev-only packages and alternative versions of runtime-pinned crates.
 
 ## Rust Helper Checks
 

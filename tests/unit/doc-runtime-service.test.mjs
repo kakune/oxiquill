@@ -1,13 +1,11 @@
 import path from 'node:path';
 import { describe, expect, it, vi } from 'vitest';
-import {
-  postprocessRustWasm,
-  removeUnusedWasmPackState,
-  stripUnusedWasmPackState
-} from '../../packages/oxiquill/src/generator/postprocess-rust-wasm.mjs';
+import { removeUnusedGlueState } from '../../packages/oxiquill/src/generator/postprocess-rust-wasm.mjs';
+import { finalizeRustModuleOutput } from '../../packages/oxiquill/src/generator/doc-runtime/rust-module-assets.mjs';
+import { createFakeLockResolver, createFakeRustBuilder } from './support/rust-builder.mjs';
+import { rustGroupId } from '../../packages/oxiquill/src/generator/doc-runtime/rust-grouping.mjs';
 import {
   buildHaskellWasm,
-  buildRustWasm,
   collectCells,
   copyFileIfChanged,
   copyPyodideAssets,
@@ -201,6 +199,20 @@ function createMemoryFileSystem(initialFiles = {}) {
 const highlighter = {
   codeToHtml: (source, options) => Promise.resolve(`<pre data-lang="${options.lang}">${source}</pre>`)
 };
+const registry = 'registry+https://github.com/rust-lang/crates.io-index';
+const fixtureLock = [
+  'version = 4',
+  ...[
+    ['console_error_panic_hook', '0.1.7', ['wasm-bindgen']],
+    ['doc-rust-cells', '0.2.0'],
+    ['serde', '1.0.228'],
+    ['serde_json', '1.0.150', ['serde']],
+    ['wasm-bindgen', '0.2.122']
+  ].map(
+    ([name, version, dependencies = []]) =>
+      `\n[[package]]\nname = "${name}"\nversion = "${version}"${name === 'doc-rust-cells' ? '' : `\nsource = "${registry}"`}${dependencies.length ? `\ndependencies = ${JSON.stringify(dependencies)}` : ''}`
+  )
+].join('\n');
 const runtimeInputs = Object.freeze({
   haskell: Object.freeze({ compiler: 'wasm32-wasi-ghc', supportedVersionPrefix: '9.14.' }),
   package: Object.freeze({ repository: 'https://example.com/oxiquill', version: '0.2.0' }),
@@ -214,12 +226,10 @@ const runtimeInputs = Object.freeze({
     edition: '2024',
     minimumVersion: '1.85.0',
     testedVersion: '1.99.0',
-    target: 'wasm32-unknown-unknown',
-    wasmPackMinimumVersion: '0.15.0',
-    wasmPackMaximumVersionExclusive: '0.16.0'
+    target: 'wasm32-unknown-unknown'
   }),
-  rustLock: 'fixture lock',
-  rustLockSha256: hashText('fixture lock')
+  rustLock: fixtureLock,
+  rustLockSha256: hashText(fixtureLock)
 });
 const runtimeSyncOptions = Object.freeze({
   generatorIdentity: async () => 'fixture-generator',
@@ -239,23 +249,12 @@ function createRustRuntimeHarness(helperFiles) {
     '/repo/crates/doc-rust/Cargo.toml': '[package]\nname = "doc-rust"\nversion = "0.1.0"\n',
     ...helperFiles
   });
-  const buildRust = vi.fn(async ({ paths: runtimePaths }) => {
-    await Promise.all([
-      fileSystem.writeFile(path.join(runtimePaths.rustWasmPublicDir, 'doc_rust_cells.js'), 'generated js'),
-      fileSystem.writeFile(path.join(runtimePaths.rustWasmPublicDir, 'doc_rust_cells_bg.wasm'), 'generated wasm')
-    ]);
-  });
-  const syncRustSupport = async ({ fileSystem: runtimeFileSystem, paths: runtimePaths }) => {
-    await Promise.all(
-      ['Cargo.lock', 'LICENSE-MIT', 'LICENSE-APACHE'].map((fileName) =>
-        runtimeFileSystem.writeFile(path.join(runtimePaths.rustCellsDir, fileName), fileName)
-      )
-    );
-  };
+  const buildRust = createFakeRustBuilder({ fileSystem, wasm: () => Buffer.from('generated wasm') });
   const options = {
     ...runtimeSyncOptions,
     buildHaskell: vi.fn(),
     buildRust,
+    resolveRustLock: createFakeLockResolver(fileSystem),
     fileSystem,
     helperCrates: usesHelpers ? new Map([['doc-rust', { relativePath: '../../crates/doc-rust' }]]) : new Map(),
     highlighter,
@@ -263,10 +262,15 @@ function createRustRuntimeHarness(helperFiles) {
     paths,
     syncLicenses: async () => false,
     syncPyodide: vi.fn(),
-    syncRustSupport
+    syncRustSupport: async () => []
   };
 
   return { buildRust, fileSystem, paths, sync: (overrides = {}) => syncDocRuntime({ ...options, ...overrides }) };
+}
+
+function rustGroupRecord(fileSystem, paths = createDocRuntimePaths('/repo')) {
+  const state = JSON.parse(fileSystem.files.get(memoryPath(paths.runtimeOwnershipPath)).toString());
+  return Object.values(state.languages.rust.groups)[0];
 }
 
 function pyodidePackage(name, fileName, content, depends = []) {
@@ -290,7 +294,7 @@ describe('doc runtime service', () => {
       helper.mockRestore();
     }
   });
-  it('postprocesses wasm-pack JavaScript without unused cached state', async () => {
+  it('removes unused glue state and content-addresses bindgen output in memory', async () => {
     const generatedSource = [
       'let wasmModule, wasmInstance, wasm;',
       'function __wbg_finalize_init(instance, module) {',
@@ -299,40 +303,45 @@ describe('doc runtime service', () => {
       '    wasmModule = module;',
       '    cachedDataViewMemory0 = null;',
       '    return wasm;',
-      '}'
+      '}',
+      'const url = "doc_rust_cells_bg.wasm";'
     ].join('\n');
 
-    expect(removeUnusedWasmPackState(generatedSource)).toContain('let wasm;\nfunction __wbg_finalize_init(instance) {');
-    expect(removeUnusedWasmPackState(generatedSource)).not.toContain('wasmModule');
-    expect(removeUnusedWasmPackState(generatedSource)).not.toContain('wasmInstance');
+    expect(removeUnusedGlueState(generatedSource)).toContain('let wasm;\nfunction __wbg_finalize_init(instance) {');
+    expect(removeUnusedGlueState(generatedSource)).not.toContain('wasmModule');
+    expect(removeUnusedGlueState('unchanged')).toBe('unchanged');
 
-    const writes = [];
-    const removals = [];
-    const files = new Map([['/repo/pkg/doc_rust_cells.js', generatedSource]]);
-    const fileSystem = {
-      readFile: async (filePath) => files.get(memoryPath(filePath)),
-      rm: async (filePath, options) => removals.push([memoryPath(filePath), options]),
-      writeFile: async (filePath, content) => {
-        const normalizedPath = memoryPath(filePath);
-        files.set(normalizedPath, content);
-        writes.push([normalizedPath, content]);
-      }
-    };
-
-    await postprocessRustWasm({ fileSystem, rustWasmDir: '/repo/pkg' });
-
-    expect(removals).toEqual(
-      ['.gitignore', 'doc_rust_cells.d.ts', 'doc_rust_cells_bg.wasm.d.ts', 'package.json'].map((fileName) => [
-        memoryPath(repoPath('pkg', fileName)),
-        { force: true }
-      ])
+    const fileSystem = createMemoryFileSystem({
+      '/repo/stage/raw/doc_rust_cells.js': generatedSource,
+      '/repo/stage/raw/doc_rust_cells_bg.wasm': 'wasm bytes'
+    });
+    const cells = [{ id: 'page__cell', language: 'rust' }];
+    const result = await finalizeRustModuleOutput({
+      id: 'page-0123456789abcdef',
+      cells,
+      directory: '/repo/stage/raw',
+      outputDirectory: '/repo/stage',
+      publicPath: 'oxiquill/rust-wasm',
+      fileSystem
+    });
+    expect(Object.keys(result.files)).toHaveLength(2);
+    const [glueName, wasmName] = [result.module.glue.url, result.module.wasm.url].map((url) =>
+      path.posix.basename(url)
     );
-    expect(writes).toHaveLength(1);
-    expect(files.get('/repo/pkg/doc_rust_cells.js')).not.toContain('wasmInstance');
-
-    writes.length = 0;
-    await stripUnusedWasmPackState('/repo/pkg/doc_rust_cells.js', { fileSystem });
-    expect(writes).toEqual([]);
+    expect(result.files[wasmName]).toEqual({ size: 10, sha256: hashBytes(Buffer.from('wasm bytes')) });
+    const glue = fileSystem.files.get(`/repo/stage/${glueName}`).toString();
+    expect(glue).not.toContain('wasmInstance');
+    expect(glue).toContain(wasmName);
+    await expect(
+      finalizeRustModuleOutput({
+        id: 'page-0123456789abcdef',
+        cells,
+        directory: '/repo/missing',
+        outputDirectory: '/repo/stage',
+        publicPath: 'x',
+        fileSystem
+      })
+    ).rejects.toThrow('has missing build assets');
   });
 
   it('creates project paths and context with discovered helper crates', async () => {
@@ -945,7 +954,8 @@ describe('doc runtime service', () => {
         '/repo/.oxiquill/generated/cells.json',
         '/repo/.oxiquill/generated/runtime-ownership.json',
         '/repo/.oxiquill/rust-cells/Cargo.toml',
-        '/repo/.oxiquill/rust-cells/src/lib.rs',
+        '/repo/.oxiquill/rust-cells/Cargo.lock',
+        `/repo/.oxiquill/rust-cells/modules/${rustGroupId('page', 'page.mdx')}/src/lib.rs`,
         '/repo/.oxiquill/haskell-cells/Main.hs'
       ])
     );
@@ -1028,17 +1038,13 @@ describe('doc runtime service', () => {
       rust: {
         rustc: `rustc ${version} (hash date)`,
         cargo: `cargo ${version} (hash date)`,
-        'wasm-pack': 'wasm-pack 0.15.1',
         target: 'wasm32-unknown-unknown'
       }
     });
     await sync({ preflightToolchains: async () => toolchain('1.85.0') });
-    const first = JSON.parse(await fileSystem.readFile(path.join(paths.generatedDir, 'runtime-ownership.json'), 'utf8'))
-      .languages.rust.buildFingerprint;
+    const first = rustGroupRecord(fileSystem, paths).buildFingerprint;
     await sync({ preflightToolchains: async () => toolchain('1.100.0') });
-    const second = JSON.parse(
-      await fileSystem.readFile(path.join(paths.generatedDir, 'runtime-ownership.json'), 'utf8')
-    ).languages.rust.buildFingerprint;
+    const second = rustGroupRecord(fileSystem, paths).buildFingerprint;
     expect(second).not.toBe(first);
     expect(second).toContain('rustc 1.100.0 (hash date)');
     await sync({ preflightToolchains: async () => toolchain('1.100.0') });
@@ -1048,11 +1054,11 @@ describe('doc runtime service', () => {
   it('rebuilds when PATH optimizers appear, disappear, or change and reuses release output for dev', async () => {
     const { buildRust, sync } = createRustRuntimeHarness();
     for (const wasmOpt of [
-      { identity: 'managed-by-wasm-pack' },
+      { identity: 'unavailable' },
       { command: '/tools/wasm-opt', identity: { version: '117', sha256: 'first' } },
       { command: '/tools/wasm-opt', identity: { version: '117', sha256: 'second' } },
       { command: '/tools/wasm-opt', identity: { version: '118', sha256: 'second' } },
-      { identity: 'managed-by-wasm-pack' }
+      { identity: 'unavailable' }
     ]) {
       const before = buildRust.mock.calls.length;
       const preflightToolchains = async () => ({ rust: { wasmOpt } });
@@ -1060,21 +1066,24 @@ describe('doc runtime service', () => {
       expect(buildRust).toHaveBeenCalledTimes(before + 1);
       await sync({ preflightToolchains, mode: 'dev' });
       expect(buildRust).toHaveBeenCalledTimes(before + 1);
-      expect(buildRust.mock.calls.at(-1)[0].wasmOpt).toEqual(wasmOpt);
+      expect(buildRust.mock.calls.at(-1)[0].toolchain.wasmOpt).toEqual(wasmOpt);
     }
   });
 
   it('invalidates Rust builds for generator, environment, Cargo config, and each reported tool version', async () => {
     const { buildRust, fileSystem, sync } = createRustRuntimeHarness();
     await sync();
-    await sync({ environment: { UNRELATED: 'ignored' } });
+    await sync({ environment: { UNRELATED: 'ignored', BINARYEN_CORES: '2', CARGO_BUILD_JOBS: '3' } });
     expect(buildRust).toHaveBeenCalledOnce();
     for (const overrides of [
       { generatorIdentity: async () => 'updated generator' },
       { environment: { RUSTFLAGS: '-C opt-level=1' } },
-      { environment: { BINARYEN_CORES: '2' } },
-      ...['rustc', 'cargo', 'wasm-pack', 'wasmOpt'].map((name) => ({
+      { environment: { BINARYEN_PASS_DEBUG: '1' } },
+      ...['rustc', 'cargo'].map((name) => ({
         preflightToolchains: async () => ({ rust: { [name]: 'changed' } })
+      })),
+      ...['wasmBindgen', 'wasmOpt'].map((name) => ({
+        preflightToolchains: async () => ({ rust: { [name]: { identity: 'changed' } } })
       }))
     ]) {
       const count = buildRust.mock.calls.length;
@@ -1102,7 +1111,7 @@ describe('doc runtime service', () => {
     }
     const ownershipPath = '/repo/.oxiquill/generated/runtime-ownership.json';
     const ownership = JSON.parse(fileSystem.files.get(ownershipPath).toString());
-    delete ownership.languages.rust.publicFileIntegrity;
+    for (const group of Object.values(ownership.languages.rust.groups)) delete group.publicFiles;
     await fileSystem.writeFile(ownershipPath, JSON.stringify(ownership));
     await sync();
     expect(buildRust).toHaveBeenCalledTimes(4);
@@ -1117,9 +1126,9 @@ describe('doc runtime service', () => {
     expect(buildRust).toHaveBeenCalledOnce();
     await fileSystem.writeFile('/repo/content/docs/index.mdx', '```rust\n//| id: rust\nprintln!("changed");\n```');
     await sync({ mode: 'dev' });
-    const state = JSON.parse(fileSystem.files.get('/repo/.oxiquill/generated/runtime-ownership.json').toString());
-    expect(state.languages.rust.mode).toBe('dev');
-    expect(JSON.parse(state.languages.rust.buildFingerprint).mode).toBe('dev');
+    const record = rustGroupRecord(fileSystem);
+    expect(record.buildMode).toBe('dev');
+    expect(JSON.parse(record.buildFingerprint).mode).toBe('dev');
     await sync();
     expect(buildRust).toHaveBeenCalledTimes(3);
   });
@@ -1156,13 +1165,14 @@ describe('doc runtime service', () => {
     await sync();
     const ownershipPath = '/repo/.oxiquill/generated/runtime-ownership.json';
     const ownership = JSON.parse(fileSystem.files.get(ownershipPath).toString());
-    ownership.languages.rust.sourceFingerprint = 'obsolete-output-contract';
-    ownership.languages.rust.buildFingerprint = 'obsolete-output-contract';
+    const id = rustGroupId('page', 'index.mdx');
+    const libPath = `/repo/.oxiquill/rust-cells/modules/${id}/src/lib.rs`;
+    ownership.languages.rust.groups[id].buildFingerprint = 'obsolete-output-contract';
     await fileSystem.writeFile(ownershipPath, JSON.stringify(ownership));
-    await fileSystem.writeFile('/repo/.oxiquill/rust-cells/src/lib.rs', 'struct CellOutput { stdout: String }');
+    await fileSystem.writeFile(libPath, 'struct CellOutput { stdout: String }');
     await expect(sync()).resolves.toMatchObject({ plan: { languages: { rust: { public: 'build' } } } });
     expect(buildRust).toHaveBeenCalledTimes(2);
-    const source = fileSystem.files.get('/repo/.oxiquill/rust-cells/src/lib.rs').toString();
+    const source = fileSystem.files.get(libPath).toString();
     expect(source).toContain('outputs: Vec<OutputArtifact>');
     expect(source).not.toContain('stdout: String');
     await expect(sync()).resolves.toMatchObject({ plan: { languages: { rust: { public: 'keep' } } } });
@@ -1298,81 +1308,37 @@ describe('doc runtime service', () => {
   });
 
   it('builds Rust once for unchanged inputs and preserves old output and readiness on failure', async () => {
-    const paths = createDocRuntimePaths('/repo');
-    const fileSystem = createMemoryFileSystem({
-      '/repo/content/docs/index.mdx': '```rust\n//| id: rust\n//| crates: []\nprintln!("one");\n```'
-    });
-    const syncRustSupport = async ({ fileSystem: runtimeFileSystem, paths: runtimePaths }) => {
-      await Promise.all(
-        ['Cargo.lock', 'LICENSE-MIT', 'LICENSE-APACHE'].map((fileName) =>
-          runtimeFileSystem.writeFile(path.join(runtimePaths.rustCellsDir, fileName), fileName)
-        )
-      );
-    };
-    const buildRust = vi.fn(async ({ paths: runtimePaths }) => {
-      await Promise.all([
-        fileSystem.writeFile(path.join(runtimePaths.rustWasmPublicDir, 'doc_rust_cells.js'), 'old js'),
-        fileSystem.writeFile(path.join(runtimePaths.rustWasmPublicDir, 'doc_rust_cells_bg.wasm'), 'old wasm')
-      ]);
-    });
-    const options = {
-      ...runtimeSyncOptions,
-      buildHaskell: vi.fn(),
-      buildRust,
-      fileSystem,
-      helperCrates: new Map(),
-      highlighter,
-      mode: 'build',
-      paths,
-      syncLicenses: async () => false,
-      syncPyodide: vi.fn(),
-      syncRustSupport
-    };
-
-    await syncDocRuntime(options);
-    await syncDocRuntime(options);
+    const { buildRust, fileSystem, sync } = createRustRuntimeHarness();
+    await sync();
+    await sync();
     expect(buildRust).toHaveBeenCalledOnce();
+    const published = () =>
+      [...fileSystem.files.keys()].filter((file) => file.startsWith('/repo/public/oxiquill/rust-wasm/page-')).sort();
+    const before = published();
+    const manifest = fileSystem.files.get('/repo/.oxiquill/generated/cells.json').toString();
 
     await fileSystem.writeFile(
       '/repo/content/docs/index.mdx',
       '```rust\n//| id: rust\n//| crates: []\nprintln!("two");\n```'
     );
-    const runtimeFileSystem = {
-      ...fileSystem,
-      readdir: async (...args) => (await fileSystem.readdir(...args)).map((entry) => entry.name)
-    };
-    buildRust.mockImplementationOnce(async (buildOptions) =>
-      buildRustWasm({
-        ...buildOptions,
-        fileSystem: runtimeFileSystem,
-        wasmOpt: { command: '/tools/wasm-opt', identity: { version: '117', sha256: 'binary' } },
-        runCommand: async (command) => {
-          if (command === 'wasm-pack') {
-            await fileSystem.writeFile(
-              path.join(buildOptions.paths.rustWasmPublicDir, 'doc_rust_cells_bg.wasm'),
-              'new unoptimized wasm'
-            );
-          } else {
-            throw new Error('wasm-opt failed');
-          }
-        }
-      })
-    );
+    buildRust.mockImplementationOnce(async ({ groups }) => ({
+      results: groups.map((group) => ({
+        group,
+        ok: false,
+        kind: 'tool',
+        messages: [],
+        error: Object.assign(new Error('Rust Wasm optimization failed with /tools/wasm-opt: wasm-opt failed'), {
+          exitCode: 1
+        })
+      })),
+      dependencyMessages: []
+    }));
 
-    await expect(syncDocRuntime(options)).rejects.toThrow('/tools/wasm-opt: wasm-opt failed');
-    expect([...fileSystem.files.keys()].filter((file) => file.includes('/build-cache/wasm-opt/'))).toEqual([]);
-    expect(
-      Array.from(fileSystem.files.entries()).some(
-        ([file, bytes]) => file.includes('/rust-wasm/site-') && bytes.toString().startsWith('old js')
-      )
-    ).toBe(true);
-    expect(
-      Array.from(fileSystem.files.entries()).some(
-        ([file, bytes]) => file.includes('/rust-wasm/site-') && bytes.toString() === 'old wasm'
-      )
-    ).toBe(true);
+    await expect(sync()).rejects.toThrow('/tools/wasm-opt: wasm-opt failed');
+    expect(published()).toEqual(before);
+    expect(fileSystem.files.get('/repo/.oxiquill/generated/cells.json').toString()).toBe(manifest);
     expect(fileSystem.existsSync('/repo/.oxiquill/generated/runtime-version.ts')).toBe(true);
-    await syncDocRuntime(options);
+    await sync();
     expect(buildRust).toHaveBeenCalledTimes(3);
     expect(fileSystem.existsSync('/repo/.oxiquill/generated/runtime-version.ts')).toBe(true);
   });
@@ -1465,56 +1431,6 @@ describe('doc runtime service', () => {
     expect(shouldBuildHaskellWasm({ current: { ...previous, haskellCellCount: 0 }, force: true })).toBe(false);
 
     const commands = [];
-    await buildRustWasm({
-      wasmOpt: { identity: 'managed-by-wasm-pack' },
-      environment: {},
-      mode: 'build',
-      postprocess: async (options) => {
-        commands.push(['postprocess', [], options]);
-      },
-      root: '/repo',
-      runCommand: async (command, args, options) => {
-        commands.push([command, args, options]);
-      }
-    });
-
-    expect(commands).toEqual([
-      [
-        'wasm-pack',
-        [
-          'build',
-          repoPath('.oxiquill/rust-cells'),
-          '--target',
-          'web',
-          '--release',
-          '--out-dir',
-          repoPath('public/oxiquill/rust-wasm'),
-          '--out-name',
-          'doc_rust_cells',
-          '--locked'
-        ],
-        expect.objectContaining({
-          cwd: repoRoot,
-          env: { CARGO_TARGET_DIR: repoPath('.oxiquill/build-cache/rust-target') }
-        })
-      ],
-      ['postprocess', [], { rustWasmDir: repoPath('public/oxiquill/rust-wasm') }]
-    ]);
-
-    commands.length = 0;
-    await buildRustWasm({
-      wasmOpt: { identity: 'managed-by-wasm-pack' },
-      environment: {},
-      mode: 'dev',
-      postprocess: async () => undefined,
-      root: '/repo',
-      runCommand: async (command, args, options) => {
-        commands.push([command, args, options]);
-      }
-    });
-    expect(commands[0][1]).toContain('--dev');
-
-    commands.length = 0;
     const fileSystem = createMemoryFileSystem();
     await buildHaskellWasm({
       compilerVersion: '9.14.1',
@@ -1690,9 +1606,10 @@ describe('production generation checkpoints', () => {
     const resume = Promise.withResolvers();
     const compile = buildRust.getMockImplementation();
     buildRust.mockImplementationOnce(async (options) => {
-      await compile(options);
+      const result = await compile(options);
       entered.resolve();
       await resume.promise;
+      return result;
     });
     const attempt = sync({ forceRustBuild: true });
     const rejected = expect(attempt).rejects.toThrow(
@@ -1726,9 +1643,10 @@ describe('production generation checkpoints', () => {
     const resume = Promise.withResolvers();
     const compile = buildRust.getMockImplementation();
     buildRust.mockImplementationOnce(async (options) => {
-      await compile(options);
+      const result = await compile(options);
       entered.resolve();
       await resume.promise;
+      return result;
     });
     const attempt = sync({ forceRustBuild: true });
     await entered.promise;
@@ -1759,9 +1677,10 @@ describe('production generation checkpoints', () => {
     const resume = Promise.withResolvers();
     const compile = buildRust.getMockImplementation();
     buildRust.mockImplementationOnce(async (options) => {
-      await compile(options);
+      const result = await compile(options);
       entered.resolve();
       await resume.promise;
+      return result;
     });
     const attempt = sync();
     const rejected = expect(attempt).rejects.toThrow('cell "rust": source');
@@ -1863,10 +1782,7 @@ describe('Rust registry publication', () => {
     };
     await sync({
       forceRustBuild: true,
-      buildRust: async ({ paths: staged }) => {
-        await fileSystem.writeFile(path.join(staged.rustWasmPublicDir, 'doc_rust_cells.js'), 'replacement glue');
-        await fileSystem.writeFile(path.join(staged.rustWasmPublicDir, 'doc_rust_cells_bg.wasm'), 'replacement wasm');
-      }
+      buildRust: createFakeRustBuilder({ fileSystem, wasm: () => Buffer.from('replacement wasm') })
     });
     expect(published).toBe(true);
     oldFiles.forEach((file) => expect(fileSystem.existsSync(file)).toBe(false));
@@ -1887,10 +1803,7 @@ describe('Rust registry publication', () => {
     await expect(
       sync({
         forceRustBuild: true,
-        buildRust: async ({ paths: staged }) => {
-          await fileSystem.writeFile(path.join(staged.rustWasmPublicDir, 'doc_rust_cells.js'), 'committed glue');
-          await fileSystem.writeFile(path.join(staged.rustWasmPublicDir, 'doc_rust_cells_bg.wasm'), 'committed wasm');
-        }
+        buildRust: createFakeRustBuilder({ fileSystem, wasm: () => Buffer.from('committed wasm') })
       })
     ).rejects.toThrow('backup cleanup failed');
     const manifest = JSON.parse(await fileSystem.readFile(paths.cellsJsonPath, 'utf8'));
@@ -1911,10 +1824,7 @@ describe('Rust registry publication', () => {
     await expect(
       sync({
         forceRustBuild: true,
-        buildRust: async ({ paths: staged }) => {
-          await fileSystem.writeFile(path.join(staged.rustWasmPublicDir, 'doc_rust_cells.js'), 'different glue');
-          await fileSystem.writeFile(path.join(staged.rustWasmPublicDir, 'doc_rust_cells_bg.wasm'), 'different wasm');
-        }
+        buildRust: createFakeRustBuilder({ fileSystem, wasm: () => Buffer.from('different wasm') })
       })
     ).rejects.toThrow('registry publication failed');
     expect(fileSystem.files).toEqual(before);

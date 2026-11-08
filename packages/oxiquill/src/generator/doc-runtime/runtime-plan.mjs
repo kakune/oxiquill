@@ -3,18 +3,10 @@ import { hashText, stableFingerprint } from './hashing.mjs';
 
 export const runtimeLanguages = Object.freeze(['rust', 'python', 'haskell']);
 
-export function createRuntimePlan({ desired, forceRustBuild = false, mode, outputComplete, outputPresent, state }) {
+// Rust actions come from the module-group plan (`rust`); this function only
+// decides removal when no Rust cells remain.
+export function createRuntimePlan({ desired, mode, outputComplete, outputPresent, rust, state }) {
   const previous = state?.languages ?? {};
-  const rustSourceCurrent =
-    desired.rust.cellCount > 0 &&
-    previous.rust?.sourceFingerprint === desired.rust.sourceFingerprint &&
-    outputComplete.rustSource;
-  const rustBuildCurrent =
-    rustSourceCurrent &&
-    previous.rust?.buildFingerprint === artifactBuildFingerprint(desired.rust.buildFingerprint, previous.rust?.mode) &&
-    previous.rust?.status === 'ready' &&
-    modeSatisfies(previous.rust?.mode, mode) &&
-    outputComplete.rustPublic;
   const haskellSourceCurrent =
     desired.haskell.cellCount > 0 &&
     previous.haskell?.sourceFingerprint === desired.haskell.sourceFingerprint &&
@@ -32,28 +24,16 @@ export function createRuntimePlan({ desired, forceRustBuild = false, mode, outpu
     outputComplete.pythonPublic;
 
   const languages = {
-    rust: {
-      source:
-        desired.rust.cellCount === 0
-          ? outputPresent.rustSource || previous.rust
-            ? 'remove'
-            : 'keep'
-          : rustSourceCurrent && !forceRustBuild
-            ? 'keep'
-            : 'write',
-      public:
-        desired.rust.cellCount === 0
-          ? outputPresent.rustPublic || previous.rust?.publicFiles?.length > 0
-            ? 'remove'
-            : 'keep'
-          : mode == null
-            ? rustSourceCurrent
-              ? 'keep'
-              : 'remove'
-            : rustBuildCurrent && !forceRustBuild
-              ? 'keep'
-              : 'build'
-    },
+    rust:
+      desired.rust.cellCount > 0
+        ? { source: rust?.source ?? 'write', public: rust?.public ?? (mode == null ? 'remove' : 'build') }
+        : {
+            source: outputPresent.rustSource || previous.rust ? 'remove' : 'keep',
+            public:
+              outputPresent.rustPublic || previous.rust?.publicFiles?.length > 0 || state?.rust?.modules?.length > 0
+                ? 'remove'
+                : 'keep'
+          },
     python: {
       public:
         desired.python.cellCount === 0

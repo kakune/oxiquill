@@ -62,14 +62,6 @@ jobs:
           rustup default "$RUST_TOOLCHAIN"
           test "$(rustc --version | cut -d ' ' -f 2)" = "$RUST_TOOLCHAIN"
           test "$(cargo --version | cut -d ' ' -f 2)" = "$RUST_TOOLCHAIN"
-      - name: Install wasm-pack
-        uses: taiki-e/install-action@ab6895351a88b908e96a4697860d4ffea5e57dbe # v2.87.27
-        with:
-          fallback: none
-          tool: wasm-pack@0.15.0
-      - name: Assert pinned wasm-pack
-        shell: bash
-        run: test "$(wasm-pack --version)" = "wasm-pack 0.15.0"
       - name: Cache ghc-wasm
         uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
@@ -84,6 +76,7 @@ jobs:
         run: pnpm exec playwright install --with-deps chromium
       - name: Test newest allowed packed consumer with browser hydration
         env:
+          GH_TOKEN: ${{ github.token }}
           OXIQUILL_CONSUMER_ARTIFACTS: compatibility-artifacts
         run: node tests/package/consumer-smoke.mjs --package-manager ${{ matrix.package-manager }} --profile highest --browser
       - name: Upload compatibility evidence

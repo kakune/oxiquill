@@ -11,10 +11,12 @@ export const WASM_OPT_ARGS = Object.freeze(['-O']);
 const identities = new Map();
 const entryPattern = /^[a-f0-9]{64}\.[a-f0-9]{64}\.wasm$/u;
 
+// BINARYEN_CORES only selects optimizer parallelism; Binaryen output is identical
+// for every thread count, so it never invalidates cached or published modules.
 export function binaryenEnvironment(environment) {
   return Object.fromEntries(
     Object.entries(environment)
-      .filter(([name, value]) => name.startsWith('BINARYEN_') && value !== undefined)
+      .filter(([name, value]) => name.startsWith('BINARYEN_') && name !== 'BINARYEN_CORES' && value !== undefined)
       .sort(([left], [right]) => left.localeCompare(right))
   );
 }
@@ -78,7 +80,7 @@ export async function resolveWasmOpt({
     }
     return provision
       ? toolDownloadPlan({ tool: 'wasm-opt', version: '117', paths, platform })
-      : Object.freeze({ identity: 'managed-by-wasm-pack' });
+      : Object.freeze({ identity: 'unavailable' });
   };
   if (!memoize) return lookup();
   const key = stableFingerprint([
@@ -92,12 +94,14 @@ export async function resolveWasmOpt({
   return identities.get(key);
 }
 
-export function cacheEntriesToRemove(entries, now) {
+export const WASM_OPT_CACHE_MINIMUM_ENTRIES = 16;
+
+export function cacheEntriesToRemove(entries, now, keep = WASM_OPT_CACHE_MINIMUM_ENTRIES) {
   const completed = entries
     .filter(({ name }) => entryPattern.test(name))
     .sort((left, right) => right.mtimeMs - left.mtimeMs || left.name.localeCompare(right.name));
   return [
-    ...completed.slice(16),
+    ...completed.slice(Math.max(WASM_OPT_CACHE_MINIMUM_ENTRIES, keep)),
     ...entries.filter(({ name, mtimeMs }) => name.startsWith('.tmp-') && now - mtimeMs > 60 * 60 * 1000)
   ];
 }
@@ -112,7 +116,8 @@ export async function optimizeRustWasmFiles({
   runCommand,
   events = createRuntimeEvents(),
   context = {},
-  fileSystem = defaultFileSystem
+  fileSystem = defaultFileSystem,
+  prune = true
 }) {
   let cacheEnabled = true;
   const cacheIO = async (action) => {
@@ -198,7 +203,7 @@ export async function optimizeRustWasmFiles({
             }
           }
         }
-        await pruneWasmOptCache({ cacheDir, fileSystem });
+        if (prune) await pruneWasmOptCache({ cacheDir, fileSystem });
       });
     } finally {
       await fileSystem.rm(temporaryPath, { force: true }).catch(() => {});
@@ -206,7 +211,12 @@ export async function optimizeRustWasmFiles({
   }
 }
 
-export async function pruneWasmOptCache({ cacheDir, fileSystem = defaultFileSystem, now = Date.now() }) {
+export async function pruneWasmOptCache({
+  cacheDir,
+  fileSystem = defaultFileSystem,
+  now = Date.now(),
+  keep = WASM_OPT_CACHE_MINIMUM_ENTRIES
+}) {
   const entries = (
     await Promise.all(
       (await fileSystem.readdir(cacheDir)).map(async (name) => {
@@ -221,6 +231,8 @@ export async function pruneWasmOptCache({ cacheDir, fileSystem = defaultFileSyst
     )
   ).filter(Boolean);
   await Promise.all(
-    cacheEntriesToRemove(entries, now).map(({ name }) => fileSystem.rm(path.join(cacheDir, name), { force: true }))
+    cacheEntriesToRemove(entries, now, keep).map(({ name }) =>
+      fileSystem.rm(path.join(cacheDir, name), { force: true })
+    )
   );
 }

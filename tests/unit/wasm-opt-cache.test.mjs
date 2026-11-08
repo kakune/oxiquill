@@ -6,7 +6,6 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import { createOxiquillPaths } from '../../packages/oxiquill/src/config/paths.mjs';
 import { defaultFileSystem } from '../../packages/oxiquill/src/generator/doc-runtime/file-system.mjs';
 import { hashBytes } from '../../packages/oxiquill/src/generator/doc-runtime/hashing.mjs';
-import { buildRustWasm } from '../../packages/oxiquill/src/generator/doc-runtime/wasm-build.mjs';
 import { readRustBuildInputs } from '../../packages/oxiquill/src/generator/doc-runtime/build-inputs.mjs';
 import {
   binaryenEnvironment,
@@ -47,13 +46,11 @@ describe('optimizer identity and keys', () => {
       { identity: { ...optimizer.identity, version: '118\n' } },
       { identity: { ...optimizer.identity, sha256: 'edited executable' } },
       { args: ['-O2'] },
-      { environment: { BINARYEN_CORES: '2' } },
+      { environment: { BINARYEN_PASS_DEBUG: '1' } },
       { schema: 2 }
     ])
       expect(wasmOptCacheKey({ ...options, ...change })).not.toBe(original);
-    expect(wasmOptCacheKey({ ...options, environment: { OTHER: 'ignored', BINARYEN_CORES: undefined } })).toBe(
-      original
-    );
+    expect(wasmOptCacheKey({ ...options, environment: { OTHER: 'ignored', BINARYEN_CORES: '16' } })).toBe(original);
     expect(binaryenEnvironment({ BINARYEN_Z: 'z', BINARYEN_A: 'a' })).toEqual({ BINARYEN_A: 'a', BINARYEN_Z: 'z' });
     expect(wasmOptCacheKey({ ...options, environment: { BINARYEN_A: 'a', BINARYEN_Z: 'z' } })).toBe(
       wasmOptCacheKey({ ...options, environment: { BINARYEN_Z: 'z', BINARYEN_A: 'a' } })
@@ -79,8 +76,8 @@ describe('optimizer identity and keys', () => {
     const cached = await resolveWasmOpt({ ...options, memoize: true });
     expect(await resolveWasmOpt({ ...options, memoize: true })).toBe(cached);
     await rm(command);
-    expect(await resolveWasmOpt(options)).toEqual({ identity: 'managed-by-wasm-pack' });
-    expect(await resolveWasmOpt({ ...options, environment: {} })).toEqual({ identity: 'managed-by-wasm-pack' });
+    expect(await resolveWasmOpt(options)).toEqual({ identity: 'unavailable' });
+    expect(await resolveWasmOpt({ ...options, environment: {} })).toEqual({ identity: 'unavailable' });
   });
 
   it('uses Windows PATH casing, PATHEXT order and the requested working directory', async () => {
@@ -108,7 +105,7 @@ describe('optimizer identity and keys', () => {
   it('skips directories and nonexecutables and propagates identity errors', async () => {
     const options = { environment: { PATH: '/bin' }, runCommand: async () => '117' };
     expect(await resolveWasmOpt({ ...options, fileSystem: { stat: async () => ({ isFile: () => false }) } })).toEqual({
-      identity: 'managed-by-wasm-pack'
+      identity: 'unavailable'
     });
     expect(
       await resolveWasmOpt({
@@ -119,7 +116,7 @@ describe('optimizer identity and keys', () => {
           }
         }
       })
-    ).toEqual({ identity: 'managed-by-wasm-pack' });
+    ).toEqual({ identity: 'unavailable' });
     await expect(
       resolveWasmOpt({
         ...options,
@@ -132,12 +129,12 @@ describe('optimizer identity and keys', () => {
     ).rejects.toThrow('EIO');
   });
 
-  it('invalidates whole-runtime reuse for Binaryen environment changes', async () => {
+  it('invalidates whole-runtime reuse for Binaryen environment changes except thread counts', async () => {
     const { root } = await fixture();
     const paths = createOxiquillPaths({ workspaceRoot: root });
-    expect(await readRustBuildInputs({ paths, environment: { BINARYEN_CORES: '2' } })).not.toBe(
-      await readRustBuildInputs({ paths, environment: {} })
-    );
+    const original = await readRustBuildInputs({ paths, environment: {} });
+    expect(await readRustBuildInputs({ paths, environment: { BINARYEN_PASS_DEBUG: '1' } })).not.toBe(original);
+    expect(await readRustBuildInputs({ paths, environment: { BINARYEN_CORES: '2' } })).toBe(original);
   });
 });
 
@@ -276,71 +273,15 @@ describe('verified optimizer cache', () => {
     expect(await readdir(cacheDir)).not.toContain('.tmp-old');
     expect(cacheEntriesToRemove([{ name: '.tmp-active', mtimeMs: now }], now)).toEqual([]);
   });
-});
 
-describe('wasm-pack integration', () => {
-  it.each(['dev', 'build'])('preserves the original %s invocation without a PATH optimizer', async (mode) => {
-    const { root } = await fixture();
-    const paths = createOxiquillPaths({ workspaceRoot: root });
-    const runCommand = vi.fn();
-    await buildRustWasm({
-      mode,
-      paths,
-      environment: {},
-      runCommand,
-      postprocess: vi.fn(),
-      wasmOpt: { identity: 'managed-by-wasm-pack' }
-    });
-    expect(runCommand).toHaveBeenCalledExactlyOnceWith(
-      'wasm-pack',
-      [
-        'build',
-        paths.rustCellsDir,
-        '--target',
-        'web',
-        mode === 'build' ? '--release' : '--dev',
-        '--out-dir',
-        paths.rustWasmPublicDir,
-        '--out-name',
-        'doc_rust_cells',
-        '--locked'
-      ],
-      expect.objectContaining({ cwd: paths.workspaceRoot, env: { CARGO_TARGET_DIR: paths.rustTargetDir } })
-    );
-  });
-
-  it('optimizes every Wasm before postprocessing and skips optimization in dev', async () => {
-    const options = await fixture();
-    const paths = {
-      ...createOxiquillPaths({ workspaceRoot: options.root }),
-      rustWasmPublicDir: options.directory,
-      wasmOptCacheDir: options.cacheDir
-    };
-    await writeFile(path.join(options.directory, 'second.wasm'), 'different input');
-    await writeFile(path.join(options.directory, 'glue.js'), 'untouched');
-    const postprocess = vi.fn(async () => expect(await readFile(options.file)).toEqual(output));
-    const runCommand = vi.fn(async (command, args) => {
-      if (command === 'wasm-pack') {
-        expect(args.indexOf('--no-opt')).toBeLessThan(args.indexOf('--locked'));
-        expect(args).toContain('--no-opt');
-        return;
-      }
-      expect(args.at(-1)).toBe('-O');
-      await writeFile(args[2], output);
-    });
-    await buildRustWasm({ paths, mode: 'build', wasmOpt: optimizer, runCommand, postprocess, environment: {} });
-    expect(runCommand).toHaveBeenCalledTimes(3);
-    expect(postprocess).toHaveBeenCalledOnce();
-    const devRunner = vi.fn();
-    await buildRustWasm({
-      paths,
-      mode: 'dev',
-      wasmOpt: optimizer,
-      runCommand: devRunner,
-      postprocess: vi.fn(),
-      environment: {}
-    });
-    expect(devRunner).toHaveBeenCalledOnce();
-    expect(devRunner.mock.calls[0][1]).not.toContain('--no-opt');
+  it('retains at least as many entries as a book needs', () => {
+    const now = Date.now();
+    const completed = Array.from({ length: 40 }, (_, index) => ({
+      name: `${hashBytes(String(index))}.${hashBytes(output)}.wasm`,
+      mtimeMs: index
+    }));
+    expect(cacheEntriesToRemove(completed, now)).toHaveLength(24);
+    expect(cacheEntriesToRemove(completed, now, 30)).toHaveLength(10);
+    expect(cacheEntriesToRemove(completed, now, 4)).toHaveLength(24);
   });
 });

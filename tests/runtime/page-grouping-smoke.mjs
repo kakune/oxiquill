@@ -6,13 +6,21 @@ import { preparePageGroupingFixture } from './page-grouping-fixture.mjs';
 import { createCellTestPlan } from '../../packages/oxiquill/dist/generator/doc-runtime/cell-test-plan.mjs';
 import { createOxiquillPaths } from '../../packages/oxiquill/dist/config/paths.mjs';
 import { testGeneratedRustCells } from '../../packages/oxiquill/dist/generator/doc-runtime/rust-runtime-test.mjs';
+import {
+  createDocRuntimeContext,
+  syncDocRuntime
+} from '../../packages/oxiquill/dist/generator/doc-runtime-service.mjs';
+import { benchmarkTable, runLargeBookBenchmark } from './large-book-benchmark.mjs';
 
 const cwd = await preparePageGroupingFixture();
 const sourcePath = path.join(cwd, 'content/docs/first.mdx');
 const original = await readFile(sourcePath, 'utf8');
 const helperPath = path.join(cwd, 'crates/page-math-base/src/lib.rs');
 const originalHelper = await readFile(helperPath, 'utf8');
+const secondPath = path.join(cwd, 'content/docs/second.mdx');
+const originalSecond = await readFile(secondPath, 'utf8');
 const previousGrouping = process.env.OXIQUILL_FIXTURE_GROUPING;
+const previousJobs = process.env.CARGO_BUILD_JOBS;
 const invoke = async (args) => {
   const events = [];
   const started = performance.now();
@@ -29,30 +37,6 @@ const invoke = async (args) => {
 };
 const state = async () =>
   JSON.parse(await readFile(path.join(cwd, '.oxiquill/generated/runtime-ownership.json'), 'utf8'));
-const sizes = async (registry) => {
-  const modules = await Promise.all(
-    registry.modules.map(async (module) => ({
-      id: module.id,
-      cells: module.cells,
-      bytes: (
-        await Promise.all(
-          [module.glue, module.wasm].map(async (asset) => (await readFile(path.join(cwd, 'public', asset.url))).length)
-        )
-      ).reduce((a, b) => a + b, 0)
-    }))
-  );
-  return {
-    totalBytes: modules.reduce((total, module) => total + module.bytes, 0),
-    pageBytes: Object.fromEntries(
-      ['first', 'second', 'third'].map((page) => [
-        page,
-        modules
-          .filter((module) => module.cells.some((id) => id.startsWith(`${page}__`)))
-          .reduce((total, module) => total + module.bytes, 0)
-      ])
-    )
-  };
-};
 
 try {
   process.env.OXIQUILL_FIXTURE_GROUPING = 'page';
@@ -98,61 +82,92 @@ try {
   const manifest = JSON.parse(previousManifest.toString('utf8'));
   const smokePlan = createCellTestPlan(manifest.cells, {}, paths);
   assert.equal((await testGeneratedRustCells({ tests: smokePlan.tests, paths, report: () => {} })).failed, 0);
+
+  // The development watcher publishes every other module and keeps the failing
+  // page on its last working module.
+  await writeFile(secondPath, originalSecond.replace('second ready', 'second updated'));
+  const context = await createDocRuntimeContext({ paths, rustOptions: { grouping: 'page' } });
+  const tolerated = await syncDocRuntime({ ...context, mode: 'dev', tolerateRustModuleFailures: true });
+  assert.equal(tolerated.rustBuildResult.ok, false);
+  assert.match(tolerated.rustBuildResult.error.message, /first\.mdx/u);
+  const partial = JSON.parse(await readFile(paths.cellsJsonPath, 'utf8'));
+  assert.deepEqual(
+    partial.rust.modules.find((module) => module.id === firstModule.id),
+    manifest.rust.modules.find((module) => module.id === firstModule.id)
+  );
+  assert.match(partial.cells.find((entry) => entry.id === 'second__text').source, /second updated/u);
+  const partialPlan = createCellTestPlan(partial.cells, {}, paths);
+  assert.equal((await testGeneratedRustCells({ tests: partialPlan.tests, paths, report: () => {} })).failed, 0);
+  await writeFile(secondPath, originalSecond);
   await writeFile(sourcePath, original);
   await invoke(['docgen', '--wasm', 'dev', '--format', 'json']);
   if (!process.argv.includes('--benchmark')) {
-    const registry = (await state()).rust;
+    // Development builds use rustc incremental compilation, whose output is not
+    // guaranteed to be byte-identical to a clean build (Rust 1.85 differs after an
+    // edit is reverted), so they are compared by build inputs. Release output is
+    // compared byte for byte below.
+    const buildInputs = (current) => ({
+      modules: current.rust.modules.map(({ id, cells }) => ({ id, cells })),
+      groups: Object.fromEntries(
+        Object.entries(current.languages.rust.groups).map(([id, group]) => [
+          id,
+          { sourceFingerprint: group.sourceFingerprint, buildFingerprint: group.buildFingerprint }
+        ])
+      )
+    });
+    const incremental = buildInputs(await state());
     await runCli(['clean'], { cwd });
     await invoke(['docgen', '--wasm', 'dev', '--format', 'json']);
-    assert.deepEqual((await state()).rust, registry);
+    assert.deepEqual(buildInputs(await state()), incremental);
+
+    for (const [grouping, modules] of [
+      ['directory', 1],
+      ['site', 1],
+      ['custom', 3]
+    ]) {
+      process.env.OXIQUILL_FIXTURE_GROUPING = grouping;
+      await invoke(['docgen', '--wasm', 'dev', '--format', 'json']);
+      const grouped = await state();
+      assert.equal(grouped.rust.modules.length, modules, grouping);
+      assert.ok(grouped.rust.modules.every((module) => module.id.startsWith(`${grouping}-`)));
+      const lines = [];
+      await runCli(['test-wasm', '--format', 'json'], { cwd, log: (line) => lines.push(JSON.parse(line)) });
+      assert.equal(lines.at(-1).failed, 0, grouping);
+    }
+
+    // Release output is byte-identical across clean builds and post-link pool sizes.
+    process.env.OXIQUILL_FIXTURE_GROUPING = 'page';
+    const releases = [];
+    for (const jobs of [undefined, '1']) {
+      if (jobs === undefined) delete process.env.CARGO_BUILD_JOBS;
+      else process.env.CARGO_BUILD_JOBS = jobs;
+      await runCli(['clean'], { cwd });
+      await invoke(['docgen', '--wasm', 'build', '--format', 'json']);
+      releases.push((await state()).rust);
+    }
+    assert.deepEqual(releases[1], releases[0]);
+    // Rebuilding an edited and then restored page reproduces the clean release.
+    await writeFile(secondPath, originalSecond.replace('second ready', 'second updated'));
+    await invoke(['docgen', '--wasm', 'build', '--format', 'json']);
+    await writeFile(secondPath, originalSecond);
+    await invoke(['docgen', '--wasm', 'build', '--format', 'json']);
+    assert.deepEqual((await state()).rust, releases[0]);
   }
 
   if (process.argv.includes('--benchmark')) {
-    const measurements = [];
-    for (const grouping of ['site', 'page']) {
-      process.env.OXIQUILL_FIXTURE_GROUPING = grouping;
-      await runCli(['clean'], { cwd });
-      const clean = await invoke(['build', '--format', 'json']);
-      const built = await state();
-      const bytes = await sizes(built.rust);
-      await writeFile(sourcePath, original.replace('.sum();', '.sum::<i32>() + 1;'));
-      const incremental = await invoke(['build', '--format', 'json']);
-      if (grouping === 'page') {
-        const next = await state();
-        for (const module of built.rust.modules.filter(
-          (entry) => !entry.cells.some((id) => id.startsWith('first__'))
-        )) {
-          assert.deepEqual(
-            next.rust.modules.find((entry) => entry.id === module.id),
-            module
-          );
-          assert.deepEqual(next.languages.rust.groups[module.id], built.languages.rust.groups[module.id]);
-        }
-      }
-      measurements.push({ grouping, clean, incremental, ...bytes });
-      await writeFile(sourcePath, original);
-      await runCli(['clean'], { cwd });
-      await invoke(['build', '--format', 'json']);
-      assert.deepEqual((await state()).rust, built.rust, `${grouping} output changed across clean builds`);
-    }
-    console.log(
-      JSON.stringify(
-        {
-          cacheConditions:
-            'Clean generated/compiler/optimizer caches per mode; verified downloads and Cargo registry caches retained. Full CLI build includes Astro check/build.',
-          measurements
-        },
-        null,
-        2
-      )
-    );
+    const result = await runLargeBookBenchmark();
+    console.log(JSON.stringify(result, null, 2));
+    console.log(benchmarkTable(result));
   } else
     console.log(
-      'Page-grouped Rust compilation, transitive invalidation, rollback, clean determinism, and six cell executions passed.'
+      'Rust module groups, transitive invalidation, partial development publication, rollback, every grouping mode, and release determinism across pool sizes and incremental rebuilds passed.'
     );
 } finally {
   await writeFile(sourcePath, original);
   await writeFile(helperPath, originalHelper);
+  await writeFile(secondPath, originalSecond);
+  if (previousJobs === undefined) delete process.env.CARGO_BUILD_JOBS;
+  else process.env.CARGO_BUILD_JOBS = previousJobs;
   if (previousGrouping === undefined) delete process.env.OXIQUILL_FIXTURE_GROUPING;
   else process.env.OXIQUILL_FIXTURE_GROUPING = previousGrouping;
 }

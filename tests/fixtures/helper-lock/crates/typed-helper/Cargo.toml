@@ -1,0 +1,11 @@
+[package]
+name = "typed-helper"
+version = "1.4.0"
+edition = "2024"
+
+[dependencies]
+serde = { version = "1.0.220", features = ["derive"] }
+
+[dev-dependencies]
+num = "0.4"
+helper-tests = { path = "../helper-tests" }

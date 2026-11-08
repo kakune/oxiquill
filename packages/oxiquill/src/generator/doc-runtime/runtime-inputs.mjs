@@ -91,12 +91,7 @@ function normalizeRustInputs(value) {
     edition: requiredText(value.edition, 'Rust runtime inputs are missing edition.'),
     minimumVersion: requiredVersion(value.minimumVersion, 'minimumVersion'),
     testedVersion: requiredVersion(value.testedVersion, 'testedVersion'),
-    target: requiredText(value.target, 'Rust runtime inputs are missing target.'),
-    wasmPackMinimumVersion: requiredVersion(value.wasmPackMinimumVersion, 'wasmPackMinimumVersion'),
-    wasmPackMaximumVersionExclusive: requiredVersion(
-      value.wasmPackMaximumVersionExclusive,
-      'wasmPackMaximumVersionExclusive'
-    )
+    target: requiredText(value.target, 'Rust runtime inputs are missing target.')
   });
 }
 

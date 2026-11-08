@@ -108,7 +108,7 @@ pnpm exec oxiquill test-wasm --page guides/validation.mdx --cell tested-square -
 
 Repeated values within an option are alternatives; page, cell, and case filters intersect. Every selector must match, and an empty selection is a usage error. Explicitly selecting a non-Rust cell reports that case tests are not yet supported for its language. Filtered runs skip the legacy Haskell smoke step.
 
-Without selectors, all Rust defaults and declared tests run. Every cell/case executes once: declared expectations replace its smoke check. The harness reuses the existing generated Wasm build, compiles its module once, and initializes a fresh instance for each execution. It does not invoke `wasm-pack test` or compile a separate test build.
+Without selectors, all Rust defaults and declared tests run. Every cell/case executes once: declared expectations replace its smoke check. The harness reuses the existing generated Wasm build, compiles its module once, and initializes a fresh instance for each execution. It does not compile a separate test build.
 
 JSON output emits `test` events with `page`, `line` (fence line), `cell`, `case`, `status` (`pass` or `fail`), `durationMs`, and `failures`. Each failure includes `reason`, `fieldPath`, `location` (`line`, `column`), bounded `actual` and `expected` strings, and `path`/`artifact` when applicable. Failure reasons distinguish execution errors, timeouts, harness errors, missing paths/artifacts, and failed comparisons. Fatal errors emit a `diagnostic` event with `message`. The final `summary` event has `total`, `passed`, `failed`, `exitStatus`, and an optional `haskell` object with `status` and `cellCount`. Haskell counts are separate from Rust test totals.
 
@@ -150,7 +150,7 @@ JSON output is NDJSON on stdout. Every line is one event, child output is wrappe
 | `type`       | Fields                                                                                                                                                   |
 | ------------ | -------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `phase`      | `phase`, `state`, `elapsedMs`; optional `language`, `module`, `cache` (`hit` or `miss`), and `reason`. States: `start`, `success`, `failure`, `skipped`. |
-| `plan`       | `language`, `action`, `reasons`; applicable `module`, `page`, and `target` (`source` or `public`).                                                       |
+| `plan`       | `language`, `action`, `reasons`; applicable `module`, `key`, `pages`, and `target` (`source` or `public`).                                               |
 | `heartbeat`  | `phase`, `elapsedMs`; applicable `language` and `module`.                                                                                                |
 | `output`     | `source` (tool), `stream` (`stdout` or `stderr`), `line`.                                                                                                |
 | `diagnostic` | `message`.                                                                                                                                               |
@@ -158,7 +158,7 @@ JSON output is NDJSON on stdout. Every line is one event, child output is wrappe
 
 The phases are `discovery`, `validation`, `generation`, `compile`, `optimize`, `publish`, `astro-check`, and `astro-build`. Optimization events come from Oxiquill's own optimizer operation and include verified optimizer-cache reuse. Summary durations aggregate operations within each phase.
 
-Plan reasons use `code`: `source-changed` (with `changes: [{ page, cell }]`), `helper-inputs-changed`, `toolchain-changed`, `build-options-changed` (with changed `variables` names only), `generator-changed`, `package-changed`, `mode-upgrade`, `output-missing`, `integrity-mismatch`, `previous-build-failed`, or `forced`. `cache-hit` describes verified reuse; `absent` describes an already absent language. Fingerprints and build-option values are never printed. No telemetry or benchmark history is stored.
+Plan reasons use `code`: `source-changed` (with `changes: [{ page, cell }]`), `helper-inputs-changed`, `toolchain-changed`, `build-options-changed` (with changed `variables` names only), `generator-changed`, `package-changed`, `dependencies-changed`, `mode-upgrade`, `output-missing`, `integrity-mismatch`, `previous-build-failed`, `failure-unchanged`, or `forced`. `cache-hit` describes verified reuse; `absent` describes an already absent language. Fingerprints and build-option values are never printed. No telemetry or benchmark history is stored.
 
 ## Built-site Link Checks
 

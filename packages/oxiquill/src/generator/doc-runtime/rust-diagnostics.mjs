@@ -1,5 +1,4 @@
 import path from 'node:path';
-import { stripVTControlCharacters } from 'node:util';
 import { hashText } from './hashing.mjs';
 
 export function compilerMessages(output) {
@@ -15,19 +14,6 @@ export function compilerMessages(output) {
         return [];
       }
     });
-}
-
-export function isRustCompilerFailure(error) {
-  const output = stripVTControlCharacters(`${error.stdout ?? ''}\n${error.stderr ?? error.message}`);
-  if (compilerMessages(output).length) return true;
-  if (/(?:^|\n)\[INFO\]:[^\n]*(?:Installing wasm-bindgen|Optimizing wasm)/u.test(output)) return false;
-  // wasm-pack prints rustc's human diagnostics. Require both a diagnostic header
-  // and Cargo's compile summary; tool and resolver errors have neither pairing.
-  return (
-    /(?:^|\n)error(?:\[E\d+\])?:/u.test(output) &&
-    /could not compile [`']/u.test(output) &&
-    !/failed to run custom build command/u.test(output)
-  );
 }
 
 function fileMap(fileName, files, cwd) {
@@ -176,43 +162,15 @@ function displayWidth(value) {
   );
 }
 
-// The original error remains the failure, regardless of the check pass outcome.
-export async function diagnoseRustFailure({
-  error,
-  files = [],
-  paths,
-  mode,
-  env,
-  runCommand,
-  packages = [],
-  fileSystem
-}) {
-  if (!isRustCompilerFailure(error)) return error;
-  let output;
-  try {
-    output = await runCommand(
-      'cargo',
-      [
-        'check',
-        '--manifest-path',
-        path.join(paths.rustCellsDir, 'Cargo.toml'),
-        '--locked',
-        '--target',
-        'wasm32-unknown-unknown',
-        '--message-format=json',
-        ...(mode === 'build' ? ['--release'] : []),
-        ...packages.flatMap((name) => ['--package', name])
-      ],
-      { cwd: paths.workspaceRoot, env, captureOutput: true, source: 'cargo', phase: 'diagnostic' }
-    );
-  } catch (cause) {
-    output = cause.stdout ?? '';
-  }
+// Maps compiler messages captured from the build through each module's source
+// map. A map is used only when its lib.rs and every authored page line still
+// match, so an unavailable or stale source is never mapped speculatively.
+export async function mapRustCompilerMessages({ messages, files = [], paths, fileSystem }) {
   const verified = [];
   const pages = new Map();
   for (const file of files) {
     try {
-      if (hashText(await fileSystem.readFile(file.file, 'utf8')) !== hashText(file.text)) continue;
+      if (hashText(String(await fileSystem.readFile(file.file, 'utf8'))) !== hashText(file.text)) continue;
       for (const region of file.regions.filter((region) => region.kind === 'authored')) {
         if (!pages.has(region.pagePath)) {
           const source = String(await fileSystem.readFile(path.resolve(paths.workspaceRoot, region.pagePath), 'utf8'));
@@ -232,10 +190,12 @@ export async function diagnoseRustFailure({
       /* An unavailable source must never be mapped speculatively. */
     }
   }
-  const diagnostics = compilerMessages(output).map((message) =>
-    mapRustDiagnostic(message, verified, paths.rustCellsDir)
-  );
-  error.rustDiagnostics = diagnostics;
-  error.message = `${diagnostics.length ? diagnostics.map(formatRustDiagnostic).join('\n\n') : ''}${!diagnostics.length || (files.length > 0 && !verified.length) ? '\ncould not map this error to an authored cell' : ''}\n\nOriginal build error:\n${error.message}`;
-  return error;
+  return {
+    diagnostics: messages.map((message) => mapRustDiagnostic(message, verified, paths.rustCellsDir)),
+    unmapped: files.length > 0 && verified.length < files.length
+  };
+}
+
+export function formatRustFailure({ diagnostics, unmapped, original }) {
+  return `${diagnostics.length ? diagnostics.map(formatRustDiagnostic).join('\n\n') : ''}${!diagnostics.length || unmapped ? '\ncould not map this error to an authored cell' : ''}\n\nOriginal build error:\n${original}`;
 }

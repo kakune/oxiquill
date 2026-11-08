@@ -6,7 +6,7 @@
       "version": "3.20.3",
       "license": "MIT",
       "licenseFiles": ["rust/bumpalo-3.20.3-LICENSE-MIT.txt"],
-      "files": ["rust-wasm/doc_rust_cells_bg.wasm"],
+      "files": ["rust-wasm/*.wasm"],
       "source": "generated Rust/Wasm runtime"
     },
     {
@@ -14,7 +14,7 @@
       "version": "1.0.5",
       "license": "MIT",
       "licenseFiles": ["rust/cfg-if-1.0.5-LICENSE-MIT.txt"],
-      "files": ["rust-wasm/doc_rust_cells_bg.wasm"],
+      "files": ["rust-wasm/*.wasm"],
       "source": "generated Rust/Wasm runtime"
     },
     {
@@ -22,7 +22,7 @@
       "version": "0.1.7",
       "license": "MIT",
       "licenseFiles": ["rust/console_error_panic_hook-0.1.7-LICENSE-MIT.txt"],
-      "files": ["rust-wasm/doc_rust_cells_bg.wasm"],
+      "files": ["rust-wasm/*.wasm"],
       "source": "generated Rust/Wasm runtime"
     },
     {
@@ -38,7 +38,7 @@
       "version": "1.0.18",
       "license": "MIT",
       "licenseFiles": ["rust/itoa-1.0.18-LICENSE-MIT.txt"],
-      "files": ["rust-wasm/doc_rust_cells_bg.wasm"],
+      "files": ["rust-wasm/*.wasm"],
       "source": "generated Rust/Wasm runtime"
     },
     {
@@ -46,7 +46,7 @@
       "version": "2.8.3",
       "license": "MIT",
       "licenseFiles": ["rust/memchr-2.8.3-LICENSE-MIT.txt"],
-      "files": ["rust-wasm/doc_rust_cells_bg.wasm"],
+      "files": ["rust-wasm/*.wasm"],
       "source": "generated Rust/Wasm runtime"
     },
     {
@@ -54,7 +54,7 @@
       "version": "1.21.4",
       "license": "MIT",
       "licenseFiles": ["rust/itoa-1.0.18-LICENSE-MIT.txt"],
-      "files": ["rust-wasm/doc_rust_cells_bg.wasm"],
+      "files": ["rust-wasm/*.wasm"],
       "source": "generated Rust/Wasm runtime"
     },
     {
@@ -62,7 +62,7 @@
       "version": "1.0.107",
       "license": "MIT",
       "licenseFiles": ["rust/itoa-1.0.18-LICENSE-MIT.txt"],
-      "files": ["rust-wasm/doc_rust_cells_bg.wasm"],
+      "files": ["rust-wasm/*.wasm"],
       "source": "generated Rust/Wasm runtime"
     },
     {
@@ -86,7 +86,7 @@
       "version": "1.0.47",
       "license": "MIT",
       "licenseFiles": ["rust/itoa-1.0.18-LICENSE-MIT.txt"],
-      "files": ["rust-wasm/doc_rust_cells_bg.wasm"],
+      "files": ["rust-wasm/*.wasm"],
       "source": "generated Rust/Wasm runtime"
     },
     {
@@ -94,7 +94,7 @@
       "version": "1.0.23",
       "license": "MIT",
       "licenseFiles": ["rust/itoa-1.0.18-LICENSE-MIT.txt"],
-      "files": ["rust-wasm/doc_rust_cells_bg.wasm"],
+      "files": ["rust-wasm/*.wasm"],
       "source": "generated Rust/Wasm runtime build"
     },
     {
@@ -102,7 +102,7 @@
       "version": "1.0.229",
       "license": "MIT",
       "licenseFiles": ["rust/itoa-1.0.18-LICENSE-MIT.txt"],
-      "files": ["rust-wasm/doc_rust_cells_bg.wasm"],
+      "files": ["rust-wasm/*.wasm"],
       "source": "generated Rust/Wasm runtime"
     },
     {
@@ -110,7 +110,7 @@
       "version": "1.0.229",
       "license": "MIT",
       "licenseFiles": ["rust/itoa-1.0.18-LICENSE-MIT.txt"],
-      "files": ["rust-wasm/doc_rust_cells_bg.wasm"],
+      "files": ["rust-wasm/*.wasm"],
       "source": "generated Rust/Wasm runtime"
     },
     {
@@ -118,7 +118,7 @@
       "version": "1.0.229",
       "license": "MIT",
       "licenseFiles": ["rust/itoa-1.0.18-LICENSE-MIT.txt"],
-      "files": ["rust-wasm/doc_rust_cells_bg.wasm"],
+      "files": ["rust-wasm/*.wasm"],
       "source": "generated Rust/Wasm runtime"
     },
     {
@@ -126,7 +126,7 @@
       "version": "1.0.151",
       "license": "MIT",
       "licenseFiles": ["rust/itoa-1.0.18-LICENSE-MIT.txt"],
-      "files": ["rust-wasm/doc_rust_cells_bg.wasm"],
+      "files": ["rust-wasm/*.wasm"],
       "source": "generated Rust/Wasm runtime"
     },
     {
@@ -134,7 +134,7 @@
       "version": "3.0.7",
       "license": "MIT",
       "licenseFiles": ["rust/itoa-1.0.18-LICENSE-MIT.txt"],
-      "files": ["rust-wasm/doc_rust_cells_bg.wasm"],
+      "files": ["rust-wasm/*.wasm"],
       "source": "generated Rust/Wasm runtime"
     },
     {
@@ -142,7 +142,7 @@
       "version": "1.0.26",
       "license": "MIT AND Unicode-3.0",
       "licenseFiles": ["rust/itoa-1.0.18-LICENSE-MIT.txt", "rust/unicode-ident-1.0.26-LICENSE-UNICODE.txt"],
-      "files": ["rust-wasm/doc_rust_cells_bg.wasm"],
+      "files": ["rust-wasm/*.wasm"],
       "source": "generated Rust/Wasm runtime"
     },
     {
@@ -150,7 +150,7 @@
       "version": "0.2.129",
       "license": "MIT",
       "licenseFiles": ["rust/cfg-if-1.0.5-LICENSE-MIT.txt"],
-      "files": ["rust-wasm/doc_rust_cells_bg.wasm"],
+      "files": ["rust-wasm/*.wasm"],
       "source": "generated Rust/Wasm runtime"
     },
     {
@@ -158,7 +158,7 @@
       "version": "0.2.129",
       "license": "MIT",
       "licenseFiles": ["rust/cfg-if-1.0.5-LICENSE-MIT.txt"],
-      "files": ["rust-wasm/doc_rust_cells_bg.wasm"],
+      "files": ["rust-wasm/*.wasm"],
       "source": "generated Rust/Wasm runtime"
     },
     {
@@ -166,7 +166,7 @@
       "version": "0.2.129",
       "license": "MIT",
       "licenseFiles": ["rust/cfg-if-1.0.5-LICENSE-MIT.txt"],
-      "files": ["rust-wasm/doc_rust_cells_bg.wasm"],
+      "files": ["rust-wasm/*.wasm"],
       "source": "generated Rust/Wasm runtime"
     },
     {
@@ -174,7 +174,7 @@
       "version": "0.2.129",
       "license": "MIT",
       "licenseFiles": ["rust/cfg-if-1.0.5-LICENSE-MIT.txt"],
-      "files": ["rust-wasm/doc_rust_cells_bg.wasm"],
+      "files": ["rust-wasm/*.wasm"],
       "source": "generated Rust/Wasm runtime"
     },
     {
@@ -182,7 +182,7 @@
       "version": "1.0.23",
       "license": "MIT",
       "licenseFiles": ["rust/itoa-1.0.18-LICENSE-MIT.txt"],
-      "files": ["rust-wasm/doc_rust_cells_bg.wasm"],
+      "files": ["rust-wasm/*.wasm"],
       "source": "generated Rust/Wasm runtime"
     },
     {

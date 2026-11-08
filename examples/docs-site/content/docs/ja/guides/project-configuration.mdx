@@ -45,7 +45,7 @@ export const collections = createOxiquillCollections({ defineCollection, docsLoa
 | `vite`                            | 追加の Vite setting。必須 alias、dedupe、worker plugin、filesystem access は保持されます。                                                                          |
 | `paths`                           | 下記の source/cache/generated/public path。                                                                                                                         |
 | `python`                          | Pyodide download の `preload`、`offline` と optional `packageMirror`。                                                                                              |
-| `rust`                            | Rust のコンパイル単位。`site`（既定値）または `page`。                                                                                                              |
+| `rust`                            | Rust モジュールのグループ化。`page`（既定値）、`directory`、`site`、またはキーを返す関数。                                                                          |
 | `missingTranslations`             | `fallback`（既定値）は Starlight のフォールバックページを維持し、`omit` は翻訳したページだけを生成・リンクします。[多言語サイト](#多言語サイト)を参照してください。 |
 | `docRedirects`                    | 転送先を `base` からの相対パスの文書ページで指定するリダイレクト。[文書のリダイレクト](#文書のリダイレクト)を参照してください。                                     |
 | その他の Astro field              | Astro に渡されます。Oxiquill の output は常に static です。                                                                                                         |
@@ -198,9 +198,9 @@ Astro の `root`、`publicDir`、`outDir`、`cacheDir` と Oxiquill の path set
 
 ## 生成される Rust アセット
 
-実行可能な `.oxiquill/generated/cells.json` には、バージョン 1 の `rust` レジストリが含まれます。各 Rust セルは必ず 1 つのモジュールに属し、現在の生成処理は `site` という単一モジュールを出力します。
+実行可能な `.oxiquill/generated/cells.json` には、バージョン 1 の `rust` レジストリが含まれます。各 Rust セルは必ず 1 つのモジュールに属し、各モジュールは `page-3f2a9c41d07b5e68` のような `<mode>-<hash>` という名前の [Rust モジュールのグループ](#rust-モジュールのグループ化) に対応します。
 
-各モジュールには、ビルドのフィンガープリント、JavaScript グルーと Wasm の URL、Wasm の SHA-384 整合性情報、バイト数、セル ID が記録されます。`public/oxiquill/rust-wasm/` のファイル名は `site-<hash>.js` や `site-<hash>.wasm` の形式です。内容に基づく URL は不変です。レジストリは `publicDir` からの相対パスを保存し、Astro はカスタムのランタイムディレクトリも含めて、設定された `base` に合わせてブラウザー用 URL を解決します。
+各モジュールには、ビルドのフィンガープリント、JavaScript グルーと Wasm の URL、Wasm の SHA-384 整合性情報、バイト数、セル ID が記録されます。`public/oxiquill/rust-wasm/` のファイル名は `page-3f2a9c41d07b5e68-<hash>.js` や `page-3f2a9c41d07b5e68-<hash>.wasm` の形式です。内容に基づく URL は不変です。レジストリは `publicDir` からの相対パスを保存し、Astro はカスタムのランタイムディレクトリも含めて、設定された `base` に合わせてブラウザー用 URL を解決します。
 
 Rust ワーカーは、そのモジュールのセルが初めて実行されたときにアセットを読み込み、取得時に Wasm の整合性を検証します。テキストのみ、または Python のみのページは Rust モジュールのアセットを取得しません。開発中の更新ではフィンガープリントが変わったモジュールだけを無効化します。キャンセルとタイムアウトは引き続き Rust ワーカー全体をリセットします。古い登録済みアセットは、新しいレジストリの公開後に削除されます。
 
@@ -245,17 +245,17 @@ Oxiquill は比較・削除前に既存 path と symlink ancestor を canonicali
 
 runtime fingerprint には machine-local path ではなく semantic build input が入ります。Python fingerprint は Pyodide version、lockfile SHA-256、検証済み core-file hash、選択 package metadata、requested package set を含みます。Haskell build fingerprint は cell、generated source、supported compiler-version prefix、compiler が報告した正確な version（または unavailable state）を含みます。Haskell compiler command、executable path、diagnostic text は除外されるため、同等 toolchain の移動だけでは rebuild せず、reported version や supported-version policy の変更では rebuild します。
 
-Rust と Haskell の build fingerprint は、installed generator の content hash と package identity も含みます。workspace package version が変わらなくても、codegen、build flag、postprocessing、staging、runtime data の変更を検出します。Rust はさらに `RUSTFLAGS`、`CARGO_ENCODED_RUSTFLAGS`、すべての `CARGO_PROFILE_*`、`CARGO_BUILD_*`、`CARGO_TARGET_*` 環境変数と、workspace root の `.cargo/config`、`.cargo/config.toml` を hash 化します。無関係な環境変数は除外します。artifact mode も記録し、production output は dev request に再利用できますが、dev output は production 用に rebuild します。
+Rust と Haskell の build fingerprint は、installed generator の content hash と package identity も含みます。workspace package version が変わらなくても、codegen、build flag、postprocessing、staging、runtime data の変更を検出します。Rust はさらに `RUSTFLAGS`、`CARGO_ENCODED_RUSTFLAGS`、すべての `CARGO_PROFILE_*`、`CARGO_BUILD_*`、`CARGO_TARGET_*`、`BINARYEN_*` 環境変数と、workspace root の `.cargo/config`、`.cargo/config.toml` を hash 化します。並列数だけを決める `CARGO_BUILD_JOBS` と `BINARYEN_CORES`、および無関係な環境変数は除外します。各モジュールは、解決済みの依存関係と workspace のビルドに参加する helper の manifest も fingerprint に含めます。artifact mode も記録し、production output は dev request に再利用できますが、dev output は production 用に rebuild します。
 
-published Rust、Haskell、Python file を再利用する前に、記録した byte size と SHA-256 digest を検証します。file の欠落、編集、切り詰めは regeneration の対象です。integrity record のない古い runtime state も自動的に再生成します。
+published Rust、Haskell、Python file を再利用する前に、記録した byte size と SHA-256 digest を検証します。開発時は、内容に基づく名前の Rust モジュール file と生成したモジュールの source を存在と size で確認するため、変更のない sync はモジュールの bytes を読みません。production build は常に SHA-256 を検証します。file の欠落、編集、切り詰めは regeneration の対象です。integrity record のない古い runtime state も自動的に再生成します。
 
 ## Compiler Cache
 
 compiler cache は設定した `cacheDir` 内の `build-cache/rust-target`（Cargo）と `build-cache/haskell/<mode>-<ghc-version>`（Haskell）に置きます。runtime staging や compile failure 後も保持します。Haskell は安定した cached source path と未変更 source の timestamp を使い、GHC の module object 再利用を可能にします。mode と正確な compiler version ごとに cache を分離し、Cargo の dependency recompilation 判定は Cargo に任せます。
 
-Release Rust build は、実行可能な `wasm-opt` が `PATH` にある場合、`wasm-opt -O` の結果を `build-cache/wasm-opt` にも cache します。key は input の bytes と size、optimizer の version と executable hash、最適化引数、schema version、ソートした `BINARYEN_*` 環境変数です。optimizer の追加・削除・変更は Rust build の再利用を無効にします。dev build は最適化を行わず、`PATH` に optimizer がない場合は従来どおり wasm-pack が Binaryen を管理し、結果は cache しません。cache hit 時は content integrity を検証し、bytes を build stage にコピーします。破損した entry は自動再生成します。直近に使用した 16 件の結果を保持し、通常は build failure 後も残ります。`oxiquill clean` または `pnpm build:clean` で削除でき、verified download は保持します。
+Release Rust build は `wasm-opt -O` の結果を `build-cache/wasm-opt` に cache します。optimizer は `PATH` 上の `wasm-opt`、または検証済みの Binaryen 117 です。key は input の bytes と size、optimizer の version と executable hash、最適化引数、schema version、`BINARYEN_CORES` を除くソートした `BINARYEN_*` 環境変数です。optimizer の変更は Rust build の再利用を無効にします。dev build は最適化を行いません。cache hit 時は content integrity を検証し、bytes を build stage にコピーします。破損した entry は自動再生成します。直近に使用した少なくとも 16 件、大きなサイトでは Rust モジュール数の 2 倍の結果を保持し、通常は build failure 後も残ります。`oxiquill clean` または `pnpm build:clean` で削除でき、verified download は保持します。
 
-Cargo target directory は `wasm-pack build` と `wasm-pack test` の両方に渡します。明示した `CARGO_TARGET_DIR` が優先され、user-owned の外部 target directory は clean で削除しません。compiler cache は published output、verified download cache と別に管理します。`oxiquill clean` は Oxiquill-owned compiler cache を削除し、verified download は保持します。
+Cargo target directory はすべての Cargo 実行に渡します。明示した `CARGO_TARGET_DIR` が優先され、user-owned の外部 target directory は clean で削除しません。compiler cache は published output、verified download cache と別に管理します。`oxiquill clean` は Oxiquill-owned compiler cache を削除し、verified download は保持します。
 
 ancestor の `.cargo` file、`$CARGO_HOME/config*`、config が参照する file など workspace root 外の設定は fingerprint に含みません。これらを変更した後は、repository では `pnpm build:clean`、consumer project では `oxiquill clean` の後に `oxiquill build` を実行してください。
 
@@ -271,20 +271,44 @@ subpath 配下へ公開するときは Astro の `base` を設定します。Oxi
 
 `python.additionalPackages` はパッケージ名から `{ version, license, licenseFiles }` への mapping です。固定 Pyodide lock の配布物を許可リストへ追加します。`python.experimentalSetup` は既定で `false` で、有効にすると同じページの Python setup を毎回再実行できます。詳細は [Python runtime asset](/ja/guides/python-runtime/) を参照してください。
 
-## Rust コンパイルのグループ化
+## Rust モジュールのグループ化
 
-`defineOxiquillConfig()` または `oxiquillIntegration()` に `rust: { grouping: 'page' }` を指定すると、ページごとの Rust セルを別々のモジュールにコンパイルします。指定可能な値は `'site'`（既定値、サイト全体で 1 モジュール）と `'page'` です。Rust セルのないページにはモジュールを生成しません。
+`rust.grouping` は、どのページが同じ Rust モジュールを共有するかを決めます。どの方式でも処理は同じで、`paths.rustCellsDir` 以下の 1 つの Cargo workspace に、グループごとのメンバー crate と、内容に基づく名前の Wasm モジュールを 1 つずつ生成します。Rust セルのないページにはモジュールを生成しません。1 つのページが複数のモジュールにまたがることはないため、ページ内の `definitions`、`uses`、`exports`、`dependsOn` は常に 1 つの crate に収まります。
+
+| 値                     | グループのキー          | 適した場面                                                                                                                     |
+| ---------------------- | ----------------------- | ------------------------------------------------------------------------------------------------------------------------------ |
+| `'page'`（既定値）     | ページのパス            | ほとんどのサイトと大きな book。編集時は 1 ページ分だけを再ビルドし、読者は使うページのモジュールだけを取得します。             |
+| `'directory'`          | ページの親ディレクトリ  | 章を順に読み進め、章内のページが helper を共有する場合。少数の大きなモジュールでモジュールごとの負担を抑えます。               |
+| `'site'`               | サイト全体で 1 つのキー | まとめて読まれる小さなページが多い場合。モジュールは 1 回の取得でキャッシュされますが、Rust の編集ごとに全体を再ビルドします。 |
+| `({ path }) => string` | 返された文字列          | book の部ごとに 1 モジュールにするなど、その他の分け方。                                                                       |
+
+パスは `paths.docsDir` からの POSIX 相対パスで、ロケールの接頭辞も含みます。そのため `guides/a.mdx` と `ja/guides/a.mdx` が同じ `directory` グループになることはありません。キーは Unicode NFC に正規化されるため、分解形のファイル名を保存するファイルシステムでも同じモジュールになります。関数は副作用のない純粋関数にしてください。凍結された `{ path }` を受け取り、生成ごとに Rust セルのある各ページで 1 回呼ばれ、256 文字以下の空でない正しい文字列を同期的に返す必要があります。それ以外の結果はページ名を示して生成を失敗させます。関数はプロジェクト設定に書くため、CLI、Astro、開発ランタイムで同じように使われ、設定ファイルを保存すると開発ランタイムがグループを作り直します。
 
 ```js
 export default defineOxiquillConfig({
   framework: { starlight },
-  title: 'My Docs',
-  rust: { grouping: 'page' }
+  title: 'My Book',
+  // `part-1/...` や `ja/part-1/...` など、最上位の部ごとに 1 モジュール。
+  rust: {
+    grouping: ({ path }) =>
+      path
+        .split('/')
+        .slice(0, path.startsWith('ja/') ? 2 : 1)
+        .join('/')
+  }
 });
 ```
 
-ページモードでは、ソース、helper の推移的な依存入力、ツールチェーン、ビルド設定が変わったモジュールだけを再ビルドします。読者は実行するセルが必要とするモジュールだけを取得します。共通依存は生成 Cargo workspace 内で一度コンパイルされますが、それぞれの Wasm に含まれるため、合計サイズは増える場合があります。小規模なサイトでは既定の単一モジュールが適しています。ページモードはサイトの拡大に伴う再ビルドとページ単位の転送量を抑えます。`oxiquill build --explain` で計画を確認できます。
+モジュール ID は方式名とキーの 16 文字のダイジェストを組み合わせたものです（`page-…`、`directory-…`、`site-…`、`custom-…`）。大文字小文字を区別しないファイルシステムでも小文字のまま扱え、Windows でも Cargo の出力パスを短く保ちます。`rust.grouping` を変更したときも、ID、ページ、ソースが変わらないモジュールは再利用します。
 
-ページモードは Cargo を直接使い、生成 Cargo.lock と完全一致する wasm-bindgen CLI を必要とします。PATH 上の一致するバイナリを使い、なければ公式ホスト向け配布物の固定 SHA-256 を検証して `paths.downloadCacheDir` に保存します。PATH 上のバージョンが違う場合も検証済みのキャッシュまたはダウンロードを選択します。リリース最適化も PATH 上の wasm-opt、または検証済み Binaryen 117 を使い、既存の `-O` を維持します。展開には `tar` が必要です。検証失敗や未対応ホストでは期待するバージョンとキャッシュパスを表示します。一致するツールを PATH にインストールしても構いません。
+ビルドでは、ソース、helper の依存入力、解決済みの依存関係、ツールチェーン、ビルド設定のいずれかが変わったモジュールだけをコンパイルします。古くなったモジュールは 1 回の Cargo 実行でまとめてコンパイルし、依存は `build-cache/rust-target` で共有します。各モジュールのコンパイルが終わり次第、wasm-bindgen と（本番ビルドでは）wasm-opt を上限付きの並列数で実行します。並列数は正の `CARGO_BUILD_JOBS`、指定がなければ利用可能な CPU 数です。`BINARYEN_CORES` を指定しない場合、wasm-opt は同時に最適化するモジュールで CPU を分け合います。出力は実行順に依存せず、クリーンビルドの結果は並列数にかかわらずバイト単位で同一です。`oxiquill build --explain` で計画を確認できます。
 
-ページ crate のソースは `paths.rustCellsDir` 以下の安定したパスを使い、コンパイラと最適化キャッシュを共有します。必要な全グループが成功してから registry を公開し、失敗時は以前の完全な registry を維持します。移動・削除されたページの古い所有出力は公開後に削除します。`oxiquill clean` は生成物とコンパイラキャッシュを削除しますが、検証済みダウンロードは保持します。
+読者は実行するセルが必要とするモジュールだけを取得します。共通の依存は一度だけコンパイルされますが、それを使う各モジュールにリンクされるため、合計の転送量と保存容量はモジュール数とともに増えます。
+
+本番ビルドは、いずれかのモジュールが失敗すると何も公開せずに失敗します。`oxiquill dev` のランタイムはビルドできたモジュールをすべて公開します。失敗したモジュールは最後に動作したビルドを維持し、そのページは以前の Rust セルを使いながらコンパイルエラーを表示します。入力が変わるまで再コンパイルはしません。`oxiquill docgen --wasm dev` などの単発コマンドは、代わりに何も公開せず失敗します。
+
+Rust の生成には Cargo と `wasm32-unknown-unknown` ターゲットが必要です。Oxiquill は固定されたランタイム crate と一致する `wasm-bindgen` CLI を `PATH` から使い、なければ公式のホスト向け配布物をダウンロードして固定 SHA-256 を検証し、`paths.downloadCacheDir` に保存します。バージョンの異なる `PATH` 上のバイナリは使いません。本番の最適化も同様に、`PATH` 上の `wasm-opt` または検証済みの Binaryen 117 を `-O` で使います。展開には `tar` が必要です。検証の失敗や未対応のホストでは、期待するバージョンとキャッシュのパスを表示します。一致するツールを `PATH` にインストールしても構いません。
+
+生成される workspace の lock は、ランタイムの完全固定バージョンと、helper workspace が lock している通常依存およびビルド依存のバージョンを出発点にします。helper の dev-dependencies は無視します。Cargo は workspace の依存関係が変わったときに一度だけこれを解決し、ローカルにキャッシュされていないパッケージがある場合だけネットワークを使います。以降のビルドはすべて `--locked` で実行します。解決に失敗した場合は[トラブルシューティング](/ja/guides/troubleshooting/)を参照してください。
+
+生成されるモジュール crate のソースは `paths.rustCellsDir/modules` 以下の安定したパスに置かれます。ページの削除やグループ変更で不要になったモジュールのソースとアセットは公開後に削除し、以前の単一 crate やページ単位のレイアウトの出力も、`oxiquill clean` なしで次回の生成時に置き換えます。`oxiquill clean` は生成物とコンパイラキャッシュを削除しますが、検証済みのダウンロードは保持します。

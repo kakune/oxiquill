@@ -152,14 +152,6 @@ jobs:
           rustup default "$RUST_TOOLCHAIN"
           test "$(rustc --version | cut -d ' ' -f 2)" = "$RUST_TOOLCHAIN"
           test "$(cargo --version | cut -d ' ' -f 2)" = "$RUST_TOOLCHAIN"
-      - name: Install wasm-pack
-        uses: taiki-e/install-action@ab6895351a88b908e96a4697860d4ffea5e57dbe # v2.87.27
-        with:
-          fallback: none
-          tool: wasm-pack@0.15.0
-      - name: Assert pinned wasm-pack
-        shell: bash
-        run: test "$(wasm-pack --version)" = "wasm-pack 0.15.0"
       - name: Cache ghc-wasm
         uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
@@ -171,6 +163,8 @@ jobs:
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
       - name: Build browser site
+        env:
+          GH_TOKEN: ${{ github.token }}
         run: |
           pnpm build
           node tests/e2e/page-grouping-server.mjs --build-only
@@ -247,6 +241,7 @@ jobs:
         run: pnpm exec playwright install --with-deps "$PLAYWRIGHT_PROJECT"
       - name: Run browser suite
         env:
+          GH_TOKEN: ${{ github.token }}
           PLAYWRIGHT_PROJECT: ${{ matrix.project }}
         run: pnpm test:e2e --project="$PLAYWRIGHT_PROJECT"
       - name: Prepare baseline chart sources
@@ -310,17 +305,17 @@ jobs:
           rustup default "$RUST_TOOLCHAIN"
           test "$(rustc --version | cut -d ' ' -f 2)" = "$RUST_TOOLCHAIN"
           test "$(cargo --version | cut -d ' ' -f 2)" = "$RUST_TOOLCHAIN"
-      - name: Install wasm-pack
-        uses: taiki-e/install-action@ab6895351a88b908e96a4697860d4ffea5e57dbe # v2.87.27
-        with:
-          fallback: none
-          tool: wasm-pack@0.15.0
-      - name: Assert pinned wasm-pack
-        shell: bash
-        run: test "$(wasm-pack --version)" = "wasm-pack 0.15.0"
       - name: Install pinned Binaryen
+        env:
+          GH_TOKEN: ${{ github.token }}
         shell: bash
         run: bash .github/scripts/install-binaryen.sh
+      # Smoke workspaces are temporary; a PATH CLI avoids one verified download per workspace.
+      - name: Install matching prebuilt wasm-bindgen CLI
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: bash .github/scripts/install-wasm-bindgen.sh
       - name: Cache ghc-wasm
         uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
@@ -332,6 +327,8 @@ jobs:
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
       - name: Test generated runtimes
+        env:
+          GH_TOKEN: ${{ github.token }}
         run: pnpm test:wasm && pnpm test:haskell
 
   rust-minimum:
@@ -364,14 +361,11 @@ jobs:
           rustup default "$RUST_TOOLCHAIN"
           test "$(rustc --version | cut -d ' ' -f 2)" = "$RUST_TOOLCHAIN"
           test "$(cargo --version | cut -d ' ' -f 2)" = "$RUST_TOOLCHAIN"
-      - name: Install wasm-pack
-        uses: taiki-e/install-action@ab6895351a88b908e96a4697860d4ffea5e57dbe # v2.87.27
-        with:
-          fallback: none
-          tool: wasm-pack@0.15.0
-      - name: Assert pinned wasm-pack
+      - name: Install pinned Binaryen
+        env:
+          GH_TOKEN: ${{ github.token }}
         shell: bash
-        run: test "$(wasm-pack --version)" = "wasm-pack 0.15.0"
+        run: bash .github/scripts/install-binaryen.sh
       - name: Install matching prebuilt wasm-bindgen CLI
         env:
           GH_TOKEN: ${{ github.token }}
@@ -388,10 +382,16 @@ jobs:
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
       - name: Test every generated Rust cell
+        env:
+          GH_TOKEN: ${{ github.token }}
         run: pnpm test:wasm
       - name: Test packed npm consumer
+        env:
+          GH_TOKEN: ${{ github.token }}
         run: pnpm test:consumer:npm
       - name: Test packed pnpm consumer
+        env:
+          GH_TOKEN: ${{ github.token }}
         run: pnpm test:consumer:pnpm
 
   consumer-linux:
@@ -423,14 +423,6 @@ jobs:
           rustup default "$RUST_TOOLCHAIN"
           test "$(rustc --version | cut -d ' ' -f 2)" = "$RUST_TOOLCHAIN"
           test "$(cargo --version | cut -d ' ' -f 2)" = "$RUST_TOOLCHAIN"
-      - name: Install wasm-pack
-        uses: taiki-e/install-action@ab6895351a88b908e96a4697860d4ffea5e57dbe # v2.87.27
-        with:
-          fallback: none
-          tool: wasm-pack@0.15.0
-      - name: Assert pinned wasm-pack
-        shell: bash
-        run: test "$(wasm-pack --version)" = "wasm-pack 0.15.0"
       - name: Cache ghc-wasm
         uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
@@ -444,10 +436,16 @@ jobs:
       - name: Install Chromium
         run: pnpm exec playwright install --with-deps chromium
       - name: Test npm consumer
+        env:
+          GH_TOKEN: ${{ github.token }}
         run: pnpm test:consumer:npm
       - name: Test pnpm consumer with browser hydration
+        env:
+          GH_TOKEN: ${{ github.token }}
         run: pnpm test:packed-browser
       - name: Run development HMR smoke
+        env:
+          GH_TOKEN: ${{ github.token }}
         run: pnpm test:dev-hmr
 
   compatibility-lowest:
@@ -486,14 +484,6 @@ jobs:
           rustup default "$RUST_TOOLCHAIN"
           test "$(rustc --version | cut -d ' ' -f 2)" = "$RUST_TOOLCHAIN"
           test "$(cargo --version | cut -d ' ' -f 2)" = "$RUST_TOOLCHAIN"
-      - name: Install wasm-pack
-        uses: taiki-e/install-action@ab6895351a88b908e96a4697860d4ffea5e57dbe # v2.87.27
-        with:
-          fallback: none
-          tool: wasm-pack@0.15.0
-      - name: Assert pinned wasm-pack
-        shell: bash
-        run: test "$(wasm-pack --version)" = "wasm-pack 0.15.0"
       - name: Cache ghc-wasm
         uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
@@ -515,6 +505,7 @@ jobs:
           node-version: ${{ matrix.node }}
       - name: Test lowest allowed packed consumer with browser hydration
         env:
+          GH_TOKEN: ${{ github.token }}
           OXIQUILL_CONSUMER_ARTIFACTS: compatibility-artifacts
         run: node tests/package/consumer-smoke.mjs --package-manager ${{ matrix.package-manager }} --profile lowest --browser --tarball "$RUNNER_TEMP"/oxiquill-*.tgz
       - name: Upload compatibility evidence
@@ -554,14 +545,6 @@ jobs:
           rustup default "$RUST_TOOLCHAIN"
           test "$(rustc --version | cut -d ' ' -f 2)" = "$RUST_TOOLCHAIN"
           test "$(cargo --version | cut -d ' ' -f 2)" = "$RUST_TOOLCHAIN"
-      - name: Install wasm-pack
-        uses: taiki-e/install-action@ab6895351a88b908e96a4697860d4ffea5e57dbe # v2.87.27
-        with:
-          fallback: none
-          tool: wasm-pack@0.15.0
-      - name: Assert pinned wasm-pack
-        shell: bash
-        run: test "$(wasm-pack --version)" = "wasm-pack 0.15.0"
       - name: Cache ghc-wasm
         uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
@@ -575,6 +558,8 @@ jobs:
       - name: Test unit behavior
         run: pnpm test:unit
       - name: Test pnpm consumer
+        env:
+          GH_TOKEN: ${{ github.token }}
         run: pnpm test:consumer:pnpm
 
   consumer-windows:
@@ -606,19 +591,13 @@ jobs:
           rustup default "$RUST_TOOLCHAIN"
           test "$(rustc --version | cut -d ' ' -f 2)" = "$RUST_TOOLCHAIN"
           test "$(cargo --version | cut -d ' ' -f 2)" = "$RUST_TOOLCHAIN"
-      - name: Install wasm-pack
-        uses: taiki-e/install-action@ab6895351a88b908e96a4697860d4ffea5e57dbe # v2.87.27
-        with:
-          fallback: none
-          tool: wasm-pack@0.15.0
-      - name: Assert pinned wasm-pack
-        shell: bash
-        run: test "$(wasm-pack --version)" = "wasm-pack 0.15.0"
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
       - name: Test unit behavior
         run: pnpm test:unit
       - name: Test npm consumer
+        env:
+          GH_TOKEN: ${{ github.token }}
         run: pnpm test:consumer:npm
 
   ci-ok:

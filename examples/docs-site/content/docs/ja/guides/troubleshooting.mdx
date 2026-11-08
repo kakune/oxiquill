@@ -32,18 +32,18 @@ dev では未生成の cell に対し runtime watcher が再生成する旨を�
 
 ## Rust と Wasm
 
-| 症状                            | 対応                                                                                                               |
-| ------------------------------- | ------------------------------------------------------------------------------------------------------------------ |
-| Rust toolchain/target がない    | Rust/Cargo 1.85.0 以上を install し、`rustup target add wasm32-unknown-unknown` を実行します。                     |
-| `wasm-pack` がない              | `wasm-pack >=0.15.0 <0.16.0` を install し、`pnpm wasm:dev` または失敗した strict command を再実行します。         |
-| Unknown helper crate            | `crates: [...]` を configured `cratesDir` 直下の `package.name` と一致させます。不要なら `crates: []` を使います。 |
-| Rust cell が stale、Wasm がない | `pnpm wasm:dev` で再生成し、`.oxiquill`/`public/oxiquill` を直接編集しません。                                     |
+| 症状                            | 対応                                                                                                                         |
+| ------------------------------- | ---------------------------------------------------------------------------------------------------------------------------- |
+| Rust toolchain/target がない    | Rust/Cargo 1.85.0 以上を install し、`rustup target add wasm32-unknown-unknown` を実行します。                               |
+| Rust tool の download に失敗    | network を復旧するか、runtime pin と一致する `wasm-bindgen` と Binaryen 117 の `wasm-opt` を `PATH` に配置して再実行します。 |
+| Unknown helper crate            | `crates: [...]` を configured `cratesDir` 直下の `package.name` と一致させます。不要なら `crates: []` を使います。           |
+| Rust cell が stale、Wasm がない | `pnpm wasm:dev` で再生成し、`.oxiquill`/`public/oxiquill` を直接編集しません。                                               |
 
-Rust/Cargo は 1.85.0 以上、`wasm-pack` は `>=0.15.0 <0.16.0` に対応します。`wasm32-unknown-unknown` target が必要です。Rust 1.85.0 と wasm-pack 0.15.0 を必須 CI で検証し、repository の開発には Rust 1.99.0 と wasm-pack 0.15.0 を使用します。Rust beta/nightly channel も数値 version が最低要件以上なら受け入れますが、未検証です。helper crate 自身がより新しい Rust を要求する場合は、その要件も満たす必要があります。
+Rust/Cargo は 1.85.0 以上に対応します。`wasm32-unknown-unknown` target が必要です。Rust 1.85.0 を必須 CI で検証し、repository の開発には Rust 1.99.0 を使用します。Rust beta/nightly channel も数値 version が最低要件以上なら受け入れますが、未検証です。helper crate 自身がより新しい Rust を要求する場合は、その要件も満たす必要があります。
 
-wasm-pack は通常、exact pin された wasm-bindgen と一致する prebuilt CLI を取得します。download に失敗して source build に fallback すると、現在の wasm-bindgen-cli 0.2.129 は Rust 1.86 以上を要求します。Rust 1.85 では同じ version の公式 prebuilt `wasm-bindgen` と `wasm-bindgen-test-runner` を `PATH` に配置して再実行してください。生成 crate 自体の最低要件は Rust 1.85 のままです。
+Oxiquill は、固定された runtime crate と完全に一致する `wasm-bindgen` CLI で各モジュールを bind します。`PATH` 上に一致する binary があればそれを使い、なければ host 向けの公式 prebuilt release を download して SHA-256 を検証します。一時的な download の失敗は再試行し、その後は同じ release asset を GitHub release API から取得します。この request は、`GH_TOKEN` または `GITHUB_TOKEN` が設定されていればそれを使うため、共有 CI runner の匿名 rate limit を避けられます。token は `api.github.com` にだけ送ります。`wasm-bindgen` と Binaryen `wasm-opt` の download はどちらもこの方針に従います。CLI を source から build することはないため、Rust 1.85 で足ります。公式 prebuilt release のない host では、一致する `wasm-bindgen` を `PATH` に配置してください。`wasm-pack` は使いません。
 
-generated runtime の直接依存は exact pin、bundled lockfile、`--locked` を使用します。ただし wasm-pack 0.15.x は locked compile の前に unlocked `cargo metadata` を実行し、bundled lock にない helper の registry dependency を解決する場合があります。helper 自身の workspace lockfile も generated crate の依存解決には適用されません。追加依存の再現性は bundled lock では保証しません。helper の依存は exact pin にし、最低対応 compiler で検証してください。解決に失敗した場合は helper の version constraint と表示された Cargo error を確認し、Oxiquill の exact runtime pin と互換性のある version を選んで `pnpm wasm:dev` を再実行してください。生成 `Cargo.lock` は直接編集しません。
+generated runtime の依存は exact pin を維持し、すべての Cargo build は `--locked` で実行します。生成 workspace の依存関係が変わるたびに、Oxiquill は runtime pin と、各 helper workspace 自身の `Cargo.lock` にある通常依存と build 依存の version から `rust-cells/Cargo.lock` の初期値を作り（dev-dependencies は無視します）、Cargo に一度だけ解決させます。どの helper lock にも記録されていない registry 依存は、その時点で利用できる互換性のある最新 version に解決されます。再現性が必要なら helper workspace の `Cargo.lock` を commit するか、exact pin にしてください。helper が Oxiquill の exact runtime pin と矛盾する version を要求すると、Cargo の error で解決に失敗します。`serde = "=1.0.228"` ではなく `serde = "1"` のように helper の制約を広げて pin された version を受け入れられるようにし、`pnpm wasm:dev` を再実行してください。生成 `Cargo.lock` は直接編集しません。
 
 ## Haskell
 
@@ -95,9 +95,9 @@ Release Rust の再 build で optimizer-result cache が有効になるのは、
 
 `pnpm exec oxiquill build --explain` で、lock を待たず出力を変更せずに、再ビルドする言語・モジュールと理由を確認できます。`--format json` の NDJSON スキーマは [CLI リファレンス](/ja/reference/cli/#ビルドの報告と-explain) を参照してください。
 
-`source-changed` はページとセル、`helper-inputs-changed` は推移的な helper 入力の変更を示します。`mode-upgrade` は開発成果物からリリースへの更新です。`output-missing` と `integrity-mismatch` は不足・破損出力を再生成します。`previous-build-failed` は以前の完全な registry を維持して失敗した処理を再試行します。`build-options-changed` は値を表示せず変数名だけを示します。`generator-changed`、`package-changed`、`toolchain-changed` は実装・パッケージ・ツール変更、`forced` は明示的再ビルドです。`cache-hit` は検証済み再利用、`absent` は対象言語の出力が不要であることを示します。
+`source-changed` はページとセル、`helper-inputs-changed` は推移的な helper 入力の変更を示します。`mode-upgrade` は開発成果物からリリースへの更新です。`output-missing` と `integrity-mismatch` は不足・破損出力を再生成します。`previous-build-failed` は以前の完全な registry を維持して失敗した処理を再試行します。`build-options-changed` は値を表示せず変数名だけを示します。`dependencies-changed` はモジュールの解決済み依存 version、または workspace の build に参加する helper manifest の変更です。`failure-unchanged` は、入力が変わるまで失敗した開発用モジュールの最後に動作した build を維持します。`generator-changed`、`package-changed`、`toolchain-changed` は実装・パッケージ・ツール変更、`forced` は明示的再ビルドです。`cache-hit` は検証済み再利用、`absent` は対象言語の出力が不要であることを示します。
 
-Heartbeat は対象プロセスに 30 秒間出力がないという意味で、完了予測ではありません。最後のフェーズ集計でコンパイル、最適化、キャッシュ再利用を確認してください。`rust.grouping: 'page'` の失敗にはモジュール digest とページパスが含まれます。対象のページや helper を修正して再実行してください。失敗したグループが以前の完全な registry を置き換えることはありません。
+Heartbeat は対象プロセスに 30 秒間出力がないという意味で、完了予測ではありません。最後のフェーズ集計でコンパイル、最適化、キャッシュ再利用を確認してください。どのグループ化でも、Rust の失敗にはモジュール ID とページが含まれます。対象のページや helper を修正して再実行してください。本番ビルドはいずれかのモジュールが失敗すると何も公開しません。開発ランタイムは他のモジュールをすべて公開し、失敗したモジュールは最後に動作したビルドを維持します。1 回の実行で失敗したページをすべて報告します。
 
 wasm-bindgen のバージョン・checksum エラーでは、診断の期待バージョンとキャッシュパスを確認します。一致する公式 CLI を PATH にインストールするか、示された破損キャッシュだけを削除して再取得してください。リリースでは wasm-opt を引き続き実行します。自動セットアップが失敗する場合は Binaryen を PATH にインストールしてください。検証の無効化や生成物の直接編集は不要です。
 

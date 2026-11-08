@@ -24,7 +24,8 @@ export async function collectAuthoringContent({
   helperCrates,
   paths,
   events = createRuntimeEvents(),
-  pythonOptions = {}
+  pythonOptions = {},
+  parsePage = parseCellsFromMarkdown
 }) {
   const parsedPages = await events.phase('discovery', {}, async () => {
     const files = await listFiles(paths.docsDir, { fileSystem });
@@ -32,7 +33,7 @@ export async function collectAuthoringContent({
       files
         .filter((file) => file.endsWith('.mdx') || file.endsWith('.md'))
         .map(async (file) => {
-          const parsed = parseCellsFromMarkdown(
+          const parsed = parsePage(
             await fileSystem.readFile(file, 'utf8'),
             normalizePath(path.relative(pathFromUrl(paths.workspaceRoot), file)),
             pythonOptions

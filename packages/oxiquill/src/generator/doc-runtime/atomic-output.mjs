@@ -2,6 +2,24 @@ import { randomUUID } from 'node:crypto';
 import path from 'node:path';
 import { defaultFileSystem } from './file-system.mjs';
 
+const transientCodes = new Set(['EPERM', 'EBUSY', 'EACCES']);
+
+// Windows briefly refuses renames and removals while another process (an
+// editor, indexer, antivirus, or the dev server) holds a file open.
+export async function retryFileOperation(
+  action,
+  { platform = process.platform, attempts = 6, delay = (ms) => new Promise((resolve) => setTimeout(resolve, ms)) } = {}
+) {
+  for (let attempt = 1; ; attempt += 1) {
+    try {
+      return await action();
+    } catch (error) {
+      if (platform !== 'win32' || attempt >= attempts || !transientCodes.has(error?.code)) throw error;
+      await delay(25 * 2 ** (attempt - 1));
+    }
+  }
+}
+
 export async function createDirectoryStage(targetPath, { fileSystem = defaultFileSystem } = {}) {
   const stagePath = path.join(path.dirname(targetPath), `.${path.basename(targetPath)}.oxiquill-${randomUUID()}`);
   await fileSystem.rm(stagePath, { force: true, recursive: true });
@@ -42,13 +60,13 @@ export async function publishDirectoryStages(stages, { fileSystem = defaultFileS
   try {
     for (const change of [...changes].reverse()) {
       if (fileSystem.existsSync(change.targetPath)) {
-        await fileSystem.rename(change.targetPath, change.backupPath);
+        await retryFileOperation(() => fileSystem.rename(change.targetPath, change.backupPath));
         change.backedUp = true;
       }
     }
     for (const change of changes) {
       if (change.stagePath) {
-        await fileSystem.rename(change.stagePath, change.targetPath);
+        await retryFileOperation(() => fileSystem.rename(change.stagePath, change.targetPath));
         change.installed = true;
       }
     }

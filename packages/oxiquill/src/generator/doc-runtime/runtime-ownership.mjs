@@ -1,7 +1,7 @@
 import path from 'node:path';
 import { assertPathWithin, canonicalPath, normalizePath } from '../../config/paths.mjs';
 import { defaultFileSystem } from './file-system.mjs';
-import { validateRustRegistry } from '../../lib/doc-runtime/rust-registry.mjs';
+import { validateRustRegistryShape } from '../../lib/doc-runtime/rust-registry.mjs';
 
 export const RUNTIME_OWNERSHIP_SCHEMA_VERSION = 1;
 
@@ -56,7 +56,9 @@ export function validateRuntimeOwnership(manifest, paths) {
     throw new Error('Runtime ownership manifest must use schemaVersion 1 and contain valid runtime state.');
   }
 
-  if (manifest.rust) validateRustRegistry(manifest.rust, manifest.snapshot?.cells ?? []);
+  // A development registry may retain a failing group's last working module, so
+  // coverage is checked against the published cells, not the authoring snapshot.
+  if (manifest.rust) validateRustRegistryShape(manifest.rust);
   const expected = new Map(
     createRuntimeOwnedOutputs(paths, manifest.rust).map((entry) => [ownershipKey(entry), entry])
   );

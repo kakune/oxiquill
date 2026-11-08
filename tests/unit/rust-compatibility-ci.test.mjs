@@ -1,9 +1,8 @@
 // @vitest-environment node
-import { readFileSync } from 'node:fs';
+import { existsSync, readdirSync, readFileSync } from 'node:fs';
 import { createRequire } from 'node:module';
 import { resolve } from 'node:path';
 import { describe, expect, it } from 'vitest';
-import { latestCompatibleWasmPack, resolveWasmPackDownload } from '../../.github/scripts/resolve-wasm-pack.mjs';
 
 const { parse } = createRequire(resolve('packages/oxiquill/package.json'))('yaml');
 const ci = parse(readFileSync('.github/workflows/ci.yml', 'utf8'));
@@ -11,9 +10,10 @@ const canary = parse(readFileSync('.github/workflows/rust-canary.yml', 'utf8'));
 
 describe('Rust compatibility CI', () => {
   it('provides pinned Binaryen for the real optimizer-cache smoke test', () => {
-    expect(ci.jobs.runtime.steps.some((step) => step.run === 'bash .github/scripts/install-binaryen.sh')).toBe(true);
+    const step = ci.jobs.runtime.steps.find((entry) => entry.run === 'bash .github/scripts/install-binaryen.sh');
+    expect(step?.env).toEqual({ GH_TOKEN: '${{ github.token }}' });
     const installer = readFileSync('.github/scripts/install-binaryen.sh', 'utf8');
-    expect(installer).toContain('version_117');
+    expect(installer).toContain('gh release download version_117');
     expect(installer).toContain('sha256sum --check --strict');
     expect(installer).toContain('wasm-opt version 117 (version_117)');
   });
@@ -24,7 +24,6 @@ describe('Rust compatibility CI', () => {
     expect(minimum.if).toBeUndefined();
     expect(ci.jobs['ci-ok'].needs).toContain('rust-minimum');
     expect(ci.env.RUST_TOOLCHAIN).toBe('1.99.0');
-    expect(minimum.steps.some((step) => step.with?.tool === 'wasm-pack@0.15.0')).toBe(true);
   });
 
   it('runs the same runtime and packed consumer checks in both jobs', () => {
@@ -33,6 +32,10 @@ describe('Rust compatibility CI', () => {
         expect(job.steps.some((step) => step.run === command)).toBe(true);
       expect(job.steps.some((step) => step.run?.includes('install-ghc-wasm.sh'))).toBe(true);
       expect(job.steps.some((step) => step.run === 'bash .github/scripts/install-wasm-bindgen.sh')).toBe(true);
+      const binaryen = job.steps.find((step) => step.run === 'bash .github/scripts/install-binaryen.sh');
+      expect(binaryen?.env).toEqual({ GH_TOKEN: '${{ github.token }}' });
+      for (const command of ['pnpm test:wasm', 'pnpm test:consumer:npm', 'pnpm test:consumer:pnpm'])
+        expect(job.steps.find((step) => step.run === command).env).toEqual({ GH_TOKEN: '${{ github.token }}' });
     }
     expect(canary.env.RUSTUP_TOOLCHAIN).toBe('stable');
     expect(canary.on.schedule).toEqual([{ cron: '0 3 * * 1' }]);
@@ -41,34 +44,17 @@ describe('Rust compatibility CI', () => {
     expect(ci.jobs['ci-ok'].needs).not.toContain('latest-stable');
   });
 
-  it('resolves the highest stable compatible upstream release numerically', () => {
-    const releases = ['v0.15.1', 'v0.15.10', 'v0.16.0', 'v0.14.9', 'v0.15.100-beta.1', 'invalid', '0.15.2'].map(
-      (tag_name) => ({ tag_name })
-    );
-    expect(
-      latestCompatibleWasmPack([
-        ...releases,
-        { tag_name: 'v0.15.99', draft: true },
-        { tag_name: 'v0.15.98', prerelease: true }
-      ])
-    ).toBe('0.15.10');
-    expect(() => latestCompatibleWasmPack([{ tag_name: 'v0.14.0' }])).toThrow('No stable wasm-pack release');
+  it('no longer installs wasm-pack in any workflow', () => {
+    for (const workflow of readdirSync('.github/workflows'))
+      expect(readFileSync(`.github/workflows/${workflow}`, 'utf8')).not.toMatch(/wasm-pack|WASM_PACK/u);
+    expect(existsSync('.github/scripts/resolve-wasm-pack.mjs')).toBe(false);
   });
+});
 
-  it('requires an upstream SHA-256 digest for the selected Linux binary', () => {
-    const asset = 'wasm-pack-v0.15.1-x86_64-unknown-linux-musl.tar.gz';
-    const release = { tag_name: 'v0.15.1', assets: [{ name: asset, digest: `sha256:${'a'.repeat(64)}` }] };
-    expect(resolveWasmPackDownload([release])).toEqual({
-      version: '0.15.1',
-      tag: 'v0.15.1',
-      asset,
-      digest: `sha256:${'a'.repeat(64)}`
-    });
-    expect(() => resolveWasmPackDownload([{ tag_name: 'v0.15.1' }])).toThrow('missing a SHA-256 digest');
-    expect(() => resolveWasmPackDownload([{ ...release, assets: [{ name: asset, digest: 'md5:invalid' }] }])).toThrow(
-      'missing a SHA-256 digest'
-    );
-    const install = canary.jobs['latest-stable'].steps.find((step) => step.name === 'Install wasm-pack');
-    expect(install.run).toContain('sha256sum --check --strict');
+describe('CI release downloads', () => {
+  it('retries every failed ghc-wasm download, including transfers that fail mid-stream', () => {
+    const installer = readFileSync('.github/scripts/install-ghc-wasm.sh', 'utf8');
+    expect(installer).toContain("printf '%s\\n' 'retry-all-errors'");
+    expect(installer).toMatch(/CURL_HOME="\$curl_home" FLAVOUR=.*\.\/setup\.sh/u);
   });
 });
