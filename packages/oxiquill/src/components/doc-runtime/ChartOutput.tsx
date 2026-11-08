@@ -1,6 +1,6 @@
 import { chartItems, chartLineItems } from '../../lib/doc-runtime/chart-layers.js';
 import { updatedColorSelection, selectedColorRange } from '../../lib/doc-runtime/chart-color-scale.js';
-import { useEffect, useMemo, useRef, useState } from 'preact/hooks';
+import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'preact/hooks';
 import { boundedErrorMessage } from '../../lib/doc-runtime/output-limits.mjs';
 import type { RuntimeLabels } from '../../lib/doc-runtime/runtime-localization.js';
 import type { ChartArtifact, ChartSpec } from '../../lib/doc-runtime/types.js';
@@ -20,6 +20,13 @@ import { chartRangeSignature } from '../../lib/doc-runtime/chart-axes.js';
 import { chartHeight } from '../../lib/doc-runtime/chart-layout.js';
 import { chartToTable } from '../../lib/doc-runtime/chart-table.js';
 import TableOutput from './TableOutput.js';
+import RuntimeDisclosure from './RuntimeDisclosure.js';
+import {
+  reconcileChartSelection,
+  isolateChartSelection,
+  visibleChartSeries,
+  chartSelectionIds
+} from '../../lib/doc-runtime/chart-selection.js';
 import {
   applyChartViewState,
   chartViewState,
@@ -40,10 +47,23 @@ interface ChartOutputProps {
   idPrefix: string;
   labels: RuntimeLabels;
   artifactIndex?: number;
+  resultIdentity?: object;
 }
 import { loadECharts, type EChartsInstance } from '../../lib/doc-runtime/echarts-runtime.js';
 
-export default function ChartOutput({ artifact, idPrefix, labels, artifactIndex = 0 }: ChartOutputProps) {
+export default function ChartOutput({
+  artifact,
+  idPrefix,
+  labels,
+  artifactIndex = 0,
+  resultIdentity
+}: ChartOutputProps) {
+  const mountedIdentity = useRef({});
+  const identity = resultIdentity ?? mountedIdentity.current;
+  const selection = useRef({ identity, selected: {} as Record<string, boolean> });
+  const [compact, setCompact] = useState(false);
+  const figure = useRef<HTMLElement>(null);
+  const focusBeforeLayout = useRef<Element | null>(null);
   const element = useRef<HTMLDivElement>(null);
   const chart = useRef<{
     instance: EChartsInstance;
@@ -64,8 +84,8 @@ export default function ChartOutput({ artifact, idPrefix, labels, artifactIndex 
   const reducedMotion = useReducedMotion();
   const [displayed, setDisplayed] = useState(artifact);
   const [theme, setTheme] = useState<ChartTheme>(() => currentChartTheme());
-  const latest = useRef({ artifact, reducedMotion, labels, theme });
-  latest.current = { artifact, reducedMotion, labels, theme };
+  const latest = useRef({ artifact, reducedMotion, labels, theme, identity });
+  latest.current = { artifact, reducedMotion, labels, theme, identity };
   const [renderError, setRenderError] = useState<{ message: string; initialization: boolean }>();
   const [renderAttempt, setRenderAttempt] = useState(0);
   const [exporting, setExporting] = useState(false);
@@ -75,24 +95,43 @@ export default function ChartOutput({ artifact, idPrefix, labels, artifactIndex 
   const [selected, setSelected] = useState<Record<string, boolean>>({});
   const [legendPage, setLegendPage] = useState(0);
   const table = useMemo(
-    () => (tableOpen ? chartToTable(displayed.spec, labels) : undefined),
-    [tableOpen, displayed.spec, labels]
+    () => (tableOpen ? chartToTable(displayed.spec, labels, selected) : undefined),
+    [tableOpen, displayed.spec, labels, selected]
   );
   const [exportError, setExportError] = useState<string>();
   const [disjoint, setDisjoint] = useState(false);
   const [linkFailure, setLinkFailure] = useState<{ artifact: ChartArtifact; message: string }>();
-  const savedView = useRef<{ signature: string; rangeSignature: string; spec: ChartSpec; state: ChartViewState }>();
+  const savedView = useRef<{
+    signature: string;
+    rangeSignature: string;
+    spec: ChartSpec;
+    state: ChartViewState;
+    identity: object;
+  }>();
+  const dataSummary = useMemo(() => chartDataSummary(displayed.spec, labels), [displayed.spec, labels]);
+
+  function rememberFocus(): void {
+    const active = figure.current?.ownerDocument.activeElement;
+    focusBeforeLayout.current = active && figure.current?.contains(active) ? active : null;
+  }
 
   function applyLatest(force = false): void {
     const current = chart.current;
     if (!current) return;
-    const { artifact: next, reducedMotion: motion, labels: nextLabels, theme: nextTheme } = latest.current;
+    const {
+      artifact: next,
+      reducedMotion: motion,
+      labels: nextLabels,
+      theme: nextTheme,
+      identity: nextIdentity
+    } = latest.current;
     const width = element.current?.clientWidth || 720;
     const height = chartHeight(next.spec);
     try {
       if (
         force ||
         current.spec !== next.spec ||
+        selection.current.identity !== nextIdentity ||
         current.reducedMotion !== motion ||
         current.theme !== nextTheme ||
         current.replace ||
@@ -130,6 +169,19 @@ export default function ChartOutput({ artifact, idPrefix, labels, artifactIndex 
           if (range) state.visualMap = [{ range }];
           applyChartViewState(options, state);
         }
+        const restoredSelection =
+          !current.spec && savedView.current?.identity === nextIdentity
+            ? savedView.current.state.legend?.[0]?.selected
+            : undefined;
+        const nextSelection = reconcileChartSelection(
+          next.spec,
+          selection.current.identity === nextIdentity
+            ? (restoredSelection ??
+                (options.legend as { selected?: Record<string, boolean> }).selected ??
+                selection.current.selected)
+            : undefined
+        );
+        options.legend = { ...(options.legend as Record<string, unknown>), selected: nextSelection };
         savedView.current = undefined;
         // Omit interactive state when merging a compatible chart.
         if (!notMerge && current.spec && chartRangeSignature(current.spec) === chartRangeSignature(next.spec))
@@ -142,8 +194,8 @@ export default function ChartOutput({ artifact, idPrefix, labels, artifactIndex 
           options,
           notMerge ? { notMerge: true } : { notMerge: false, lazyUpdate: true, replaceMerge: ['series'] }
         );
-        // Merges keep ECharts' legend selection; replacements start from the applied option.
-        if (notMerge) setSelected({ ...(options.legend as { selected?: Record<string, boolean> }).selected });
+        selection.current = { identity: nextIdentity, selected: nextSelection };
+        setSelected(nextSelection);
         current.signature = signature;
         current.spec = next.spec;
         try {
@@ -166,6 +218,7 @@ export default function ChartOutput({ artifact, idPrefix, labels, artifactIndex 
         current.counts = { x: xAxis.data?.length ?? 0, y: yAxis.data?.length ?? 0 };
         current.updateViewport?.();
       }
+      rememberFocus();
       setDisplayed(next);
       setIsReady(true);
       setRenderError(undefined);
@@ -195,6 +248,14 @@ export default function ChartOutput({ artifact, idPrefix, labels, artifactIndex 
     const chartElement = element.current;
     if (!chartElement || linkFailure) return;
     setIsReady(false);
+    const updateCompact = () => {
+      const next = getComputedStyle(chartElement).getPropertyValue('--doc-chart-compact').trim() === '1';
+      setCompact((previous) => {
+        if (previous !== next) rememberFocus();
+        return next;
+      });
+    };
+    updateCompact();
     let cancelled = false;
     let instance: EChartsInstance | undefined;
     let resizeObserver: ResizeObserver | undefined;
@@ -214,6 +275,7 @@ export default function ChartOutput({ artifact, idPrefix, labels, artifactIndex 
           if (frame !== undefined) return;
           frame = requestAnimationFrame(() => {
             frame = undefined;
+            updateCompact();
             const current = chart.current;
             const spec = current?.spec;
             if (!current || !spec) return;
@@ -283,7 +345,11 @@ export default function ChartOutput({ artifact, idPrefix, labels, artifactIndex 
           // Legend actions report the complete selection; getOption() would clone every data point.
           instance.on(event, (params: unknown) => {
             const selected = (params as { selected?: Record<string, boolean> } | undefined)?.selected;
-            if (selected) setSelected({ ...selected });
+            if (selected && chart.current?.spec) {
+              const next = reconcileChartSelection(chart.current.spec, selected);
+              selection.current = { ...selection.current, selected: next };
+              setSelected(next);
+            }
             updateViewport();
           });
         }
@@ -292,6 +358,7 @@ export default function ChartOutput({ artifact, idPrefix, labels, artifactIndex 
           updateViewport();
         });
         resizeObserver.observe(chartElement);
+        if (figure.current) resizeObserver.observe(figure.current);
         applyLatest(true);
       })
       .catch((error: unknown) => {
@@ -310,7 +377,8 @@ export default function ChartOutput({ artifact, idPrefix, labels, artifactIndex 
           signature: chart.current.signature,
           rangeSignature: chartRangeSignature(chart.current.spec),
           spec: chart.current.spec,
-          state: chartViewState(instance)
+          state: chartViewState(instance),
+          identity: selection.current.identity
         };
       instance?.dispose();
       chart.current = undefined;
@@ -323,7 +391,7 @@ export default function ChartOutput({ artifact, idPrefix, labels, artifactIndex 
   useEffect(() => {
     if (linkFailure && linkFailure.artifact !== artifact) setLinkFailure(undefined);
     applyLatest();
-  }, [artifact, reducedMotion, labels, theme]);
+  }, [artifact, reducedMotion, labels, theme, identity]);
   const titleId = idPrefix + '-title';
   const captionId = displayed.caption ? idPrefix + '-caption' : undefined;
   const descriptionId = idPrefix + '-description';
@@ -339,6 +407,80 @@ export default function ChartOutput({ artifact, idPrefix, labels, artifactIndex 
   const legendPageCount = Math.max(1, Math.ceil(legendSeries.length / 25));
   const safeLegendPage = Math.min(legendPage, legendPageCount - 1);
   const legendStart = safeLegendPage * 25;
+  const totalSeries = chartSelectionIds(displayed.spec).length;
+  const shownSeries = visibleChartSeries(displayed.spec, selected);
+  const compactLegend = compact && legendSeries.length > 6;
+  useLayoutEffect(() => {
+    const active = focusBeforeLayout.current;
+    focusBeforeLayout.current = null;
+    if (active && !active.isConnected) tableButton.current?.focus();
+  }, [compact, displayed]);
+  function selectSeries(only?: string): void {
+    const current = chart.current;
+    if (!current?.spec || !isReady) return;
+    const next = isolateChartSelection(current.spec, only);
+    for (const visible of [true, false]) {
+      const batch = Object.entries(next)
+        .filter(([, selected]) => selected === visible)
+        .map(([name]) => ({ name }));
+      if (batch.length)
+        current.instance.dispatchAction({ type: visible ? 'legendSelect' : 'legendUnSelect', batch }, { silent: true });
+    }
+    selection.current = { ...selection.current, selected: next };
+    setSelected(next);
+    current.updateViewport?.();
+  }
+  const legend = (
+    <div class="doc-chart-output__legend" role="group" aria-label={labels.chartSeries}>
+      <button type="button" disabled={!isReady} onClick={() => selectSeries()}>
+        {labels.chartShowAll}
+      </button>
+      {legendSeries.slice(legendStart, legendStart + 25).map((series, offset) => {
+        const index = legendStart + offset;
+        const id = chartSeriesId(displayed.spec, index);
+        const appearance = chartSeriesPresentation(displayed.spec, index, theme);
+        const name = series.name?.trim() ? series.name : labels.chartSeriesName(index + 1);
+        return (
+          <div class="doc-chart-output__legend-entry" key={id}>
+            <button
+              type="button"
+              aria-pressed={selected[id] !== false}
+              disabled={!isReady}
+              onClick={() => chart.current?.instance.dispatchAction({ type: 'legendToggleSelect', name: id })}
+            >
+              <LegendSwatch
+                {...appearance}
+                kind={displayed.spec.kind === 'xy' ? displayed.spec.layers[index].kind : displayed.spec.kind}
+              />
+              {name}
+            </button>
+            <button
+              type="button"
+              disabled={!isReady}
+              aria-label={labels.chartOnlySeries(name)}
+              onClick={() => selectSeries(id)}
+            >
+              {labels.chartOnly}
+            </button>
+          </div>
+        );
+      })}
+      {legendPageCount > 1 ? (
+        <>
+          <button type="button" disabled={safeLegendPage === 0} onClick={() => setLegendPage(safeLegendPage - 1)}>
+            {labels.previousPage}
+          </button>
+          <button
+            type="button"
+            disabled={safeLegendPage + 1 >= legendPageCount}
+            onClick={() => setLegendPage(safeLegendPage + 1)}
+          >
+            {labels.nextPage}
+          </button>
+        </>
+      ) : null}
+    </div>
+  );
   async function saveImage(format: 'png' | 'svg'): Promise<void> {
     const current = chart.current;
     if (!current?.spec || exporting) return;
@@ -372,6 +514,7 @@ export default function ChartOutput({ artifact, idPrefix, labels, artifactIndex 
     );
   return (
     <figure
+      ref={figure}
       class="doc-chart-output"
       aria-labelledby={titleId}
       aria-describedby={[captionId, descriptionId].filter(Boolean).join(' ')}
@@ -387,6 +530,7 @@ export default function ChartOutput({ artifact, idPrefix, labels, artifactIndex 
         <button
           ref={tableButton}
           type="button"
+          aria-label={compact ? (tableOpen ? labels.hideChartData : labels.showChartData) : undefined}
           aria-expanded={tableOpen}
           aria-controls={`${idPrefix}-data`}
           onClick={() => {
@@ -394,61 +538,59 @@ export default function ChartOutput({ artifact, idPrefix, labels, artifactIndex 
             tableButton.current?.focus();
           }}
         >
-          {tableOpen ? labels.hideChartData : labels.showChartData}
+          {compact ? labels.chartCompactData : tableOpen ? labels.hideChartData : labels.showChartData}
         </button>
         {chartZoomable(displayed.spec) ? (
           <button type="button" disabled={!isReady} onClick={() => chart.current?.interactions?.reset()}>
-            {labels.resetZoom}
+            {compact ? labels.chartResetView : labels.resetZoom}
           </button>
         ) : null}
-        <button type="button" disabled={exporting || !isReady} onClick={() => saveImage('png')}>
-          {labels.savePng}
-        </button>
-        <button type="button" disabled={exporting || !isReady} onClick={() => saveImage('svg')}>
-          {labels.saveSvg}
-        </button>
+        {compact ? (
+          <RuntimeDisclosure
+            id={`${idPrefix}-exports`}
+            label={labels.chartExport}
+            disabled={!isReady}
+            busy={exporting}
+            overlay
+          >
+            {(close) => (
+              <ul>
+                {(['png', 'svg'] as const).map((format) => (
+                  <li key={format}>
+                    <button
+                      type="button"
+                      disabled={exporting || !isReady}
+                      onClick={() => {
+                        close();
+                        void saveImage(format);
+                      }}
+                    >
+                      {format === 'png' ? labels.savePng : labels.saveSvg}
+                    </button>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </RuntimeDisclosure>
+        ) : (
+          <>
+            <button type="button" disabled={exporting || !isReady} onClick={() => saveImage('png')}>
+              {labels.savePng}
+            </button>
+            <button type="button" disabled={exporting || !isReady} onClick={() => saveImage('svg')}>
+              {labels.saveSvg}
+            </button>
+          </>
+        )}
       </div>
       {showLegend(displayed.spec) ? (
-        <div class="doc-chart-output__legend" role="group" aria-label={labels.chartSeries}>
-          {legendSeries.slice(legendStart, legendStart + 25).map((series, offset) => {
-            const index = legendStart + offset;
-            const id = chartSeriesId(displayed.spec, index);
-            const appearance = chartSeriesPresentation(displayed.spec, index, theme);
-            return (
-              <button
-                key={id}
-                type="button"
-                aria-pressed={selected[id] !== false}
-                disabled={!isReady}
-                onClick={() => chart.current?.instance.dispatchAction({ type: 'legendToggleSelect', name: id })}
-              >
-                <LegendSwatch
-                  {...appearance}
-                  kind={displayed.spec.kind === 'xy' ? displayed.spec.layers[index].kind : displayed.spec.kind}
-                />
-                {series.name?.trim() ? series.name : labels.chartSeriesName(index + 1)}
-              </button>
-            );
-          })}
-          {legendPageCount > 1 ? (
-            <>
-              <button
-                type="button"
-                disabled={safeLegendPage === 0}
-                onClick={() => setLegendPage((page) => Math.max(0, Math.min(page, legendPageCount - 1) - 1))}
-              >
-                {labels.previousPage}
-              </button>
-              <button
-                type="button"
-                disabled={safeLegendPage + 1 >= legendPageCount}
-                onClick={() => setLegendPage(safeLegendPage + 1)}
-              >
-                {labels.nextPage}
-              </button>
-            </>
-          ) : null}
-        </div>
+        compactLegend ? (
+          <RuntimeDisclosure id={`${idPrefix}-series`} label={labels.chartSelectedSeries(shownSeries, totalSeries)}>
+            {() => legend}
+          </RuntimeDisclosure>
+        ) : (
+          legend
+        )
       ) : null}
       {exportError ? (
         <p class="error-state" role="alert">
@@ -456,6 +598,7 @@ export default function ChartOutput({ artifact, idPrefix, labels, artifactIndex 
         </p>
       ) : null}
       <div
+        key="viewport"
         class="doc-chart-output__viewport"
         role={chartZoomable(displayed.spec) ? 'group' : undefined}
         tabIndex={chartZoomable(displayed.spec) ? 0 : undefined}
@@ -475,6 +618,11 @@ export default function ChartOutput({ artifact, idPrefix, labels, artifactIndex 
           data-chart-motion={reducedMotion ? 'reduced' : 'full'}
           data-testid="doc-plot"
         />
+        {totalSeries > 0 && shownSeries === 0 ? (
+          <p class="doc-chart-output__empty" role="status">
+            {labels.noChartData}
+          </p>
+        ) : null}
       </div>
       {chartZoomable(displayed.spec) ? (
         <p id={`${idPrefix}-keyboard`} class="doc-visually-hidden">
@@ -486,11 +634,16 @@ export default function ChartOutput({ artifact, idPrefix, labels, artifactIndex 
       </p>
       <p id={descriptionId} class="doc-chart-output__summary">
         <span class="doc-visually-hidden">{labels.chartCaption}: </span>
-        {chartDataSummary(displayed.spec, labels)}
+        {dataSummary} {labels.chartSeriesVisibility(shownSeries, totalSeries)}
       </p>
       {table ? (
         <div id={`${idPrefix}-data`}>
-          <TableOutput table={table} idPrefix={`${idPrefix}-table`} labels={labels} resultIdentity={displayed} />
+          <TableOutput
+            table={table}
+            idPrefix={`${idPrefix}-table`}
+            labels={labels}
+            resultIdentity={selection.current.identity}
+          />
         </div>
       ) : null}
       {renderError ? (

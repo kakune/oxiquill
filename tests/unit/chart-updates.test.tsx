@@ -587,6 +587,193 @@ it('keeps mixed layer IDs and selection through reorder and renderer changes', a
     })
   );
   await waitFor(() => expect(chart.setOption.mock.lastCall?.[1].notMerge).toBe(true));
-  expect(chart.setOption.mock.lastCall?.[0].legend.selected).toEqual({ 'xy:id:samples': false });
+  expect(chart.setOption.mock.lastCall?.[0].legend.selected).toEqual({
+    'xy:id:band': true,
+    'xy:id:reference': true,
+    'xy:id:samples': false
+  });
   expect(chart.setOption.mock.lastCall?.[0].dataZoom[0].start).toBe(20);
+});
+
+it('reconciles stable IDs within a result, including removal and reintroduction, and resets on a new result', async () => {
+  const identity = {};
+  const series = (ids: string[]): ChartSpec => ({
+    kind: 'line',
+    series: ids.map((id) => ({ id, name: id, points: [[0, 1]] }))
+  });
+  const outputFor = (spec: ChartSpec, resultIdentity = identity) => (
+    <ChartOutput
+      artifact={{ kind: 'chart', spec }}
+      resultIdentity={resultIdentity}
+      labels={labels}
+      idPrefix="selection"
+    />
+  );
+  const view = render(outputFor(series(['a', 'b'])));
+  await waitFor(() => expect(chart.setOption).toHaveBeenCalled());
+  const changed = chart.on.mock.calls.find(([event]) => event === 'legendselectchanged')?.[1] as (
+    params: unknown
+  ) => void;
+  act(() => changed({ selected: { 'line:id:a': false, 'line:id:b': false } }));
+  view.rerender(outputFor(series(['b', 'a', 'c'])));
+  await waitFor(() =>
+    expect(chart.setOption.mock.lastCall?.[0].legend.selected).toEqual({
+      'line:id:b': false,
+      'line:id:a': false,
+      'line:id:c': true
+    })
+  );
+  view.rerender(outputFor(series(['b', 'c'])));
+  await waitFor(() =>
+    expect(chart.setOption.mock.lastCall?.[0].legend.selected).toEqual({ 'line:id:b': false, 'line:id:c': true })
+  );
+  const final = series(['a', 'b', 'c']);
+  view.rerender(outputFor(final));
+  await waitFor(() =>
+    expect(chart.setOption.mock.lastCall?.[0].legend.selected).toEqual({
+      'line:id:a': true,
+      'line:id:b': false,
+      'line:id:c': true
+    })
+  );
+  view.rerender(outputFor(final, {}));
+  await waitFor(() =>
+    expect(chart.setOption.mock.lastCall?.[0].legend.selected).toEqual({
+      'line:id:a': true,
+      'line:id:b': true,
+      'line:id:c': true
+    })
+  );
+  expect(chart.getOption).not.toHaveBeenCalled();
+});
+
+it('isolates across all legend pages, keeps hidden data, and restores all from an empty selection', async () => {
+  const spec: ChartSpec = {
+    kind: 'line',
+    series: Array.from({ length: 26 }, (_, i) => ({ id: `s${i}`, name: `S${i}`, points: [[0, i]] }))
+  };
+  render(output(spec));
+  await waitFor(() => expect(screen.getByRole('button', { name: labels.chartShowAll })).toBeEnabled());
+  fireEvent.click(screen.getByRole('button', { name: labels.nextPage }));
+  fireEvent.click(screen.getByRole('button', { name: labels.chartOnlySeries('S25') }));
+  expect(screen.getByRole('button', { name: 'S25', exact: true })).toHaveAttribute('aria-pressed', 'true');
+  expect(chart.dispatchAction).toHaveBeenCalledWith(
+    { type: 'legendUnSelect', batch: Array.from({ length: 25 }, (_, i) => ({ name: `line:id:s${i}` })) },
+    { silent: true }
+  );
+  fireEvent.click(screen.getByRole('button', { name: labels.previousPage }));
+  expect(screen.getByRole('button', { name: 'S0', exact: true })).toHaveAttribute('aria-pressed', 'false');
+  fireEvent.click(screen.getByRole('button', { name: labels.showChartData }));
+  expect(screen.getByRole('table')).toHaveTextContent('S0');
+  expect(screen.getByRole('table')).toHaveTextContent(labels.chartVisible);
+  const changed = chart.on.mock.calls.find(([event]) => event === 'legendselectchanged')?.[1] as (
+    params: unknown
+  ) => void;
+  act(() => changed({ selected: Object.fromEntries(spec.series.map((s) => [`line:id:${s.id}`, false])) }));
+  expect(screen.getByText(labels.noChartData)).toBeVisible();
+  expect(screen.getByText(/Showing 0 of 26 series/)).toBeVisible();
+  fireEvent.click(screen.getByRole('button', { name: labels.chartShowAll }));
+  expect(screen.queryByText(labels.noChartData)).toBeNull();
+  expect(screen.getByRole('button', { name: 'S0', exact: true })).toHaveAttribute('aria-pressed', 'true');
+  expect(screen.getByText(/Showing 26 of 26 series/)).toBeVisible();
+  expect(chart.getOption).not.toHaveBeenCalled();
+});
+
+it('switches compact markup from the CSS container signal and preserves selection and focus on resize', async () => {
+  const spec: ChartSpec = {
+    kind: 'line',
+    series: Array.from({ length: 7 }, (_, i) => ({ name: `S${i}`, points: [[0, i]] }))
+  };
+  render(output(spec));
+  await waitFor(() => expect(screen.getByRole('button', { name: labels.saveSvg })).toBeEnabled());
+  const plot = screen.getByTestId('doc-plot');
+  act(() => {
+    plot.style.setProperty('--doc-chart-compact', '1');
+    resizeCallback([], {} as ResizeObserver);
+  });
+  const trigger = await screen.findByRole('button', { name: labels.chartSelectedSeries(7, 7) });
+  expect(screen.getByTestId('doc-plot')).toBe(plot);
+  expect(screen.queryByRole('button', { name: 'S0', exact: true })).toBeNull();
+  fireEvent.click(trigger);
+  fireEvent.click(screen.getByRole('button', { name: labels.chartOnlySeries('S2') }));
+  expect(trigger).toHaveTextContent(labels.chartSelectedSeries(1, 7));
+  screen.getByRole('button', { name: 'S2', exact: true }).focus();
+  act(() => {
+    plot.style.setProperty('--doc-chart-compact', '0');
+    resizeCallback([], {} as ResizeObserver);
+  });
+  await waitFor(() => expect(screen.getByRole('button', { name: labels.showChartData })).toHaveFocus());
+  expect(screen.getByRole('button', { name: 'S0', exact: true })).toHaveAttribute('aria-pressed', 'false');
+  expect(screen.queryByRole('button', { name: labels.chartExport })).toBeNull();
+  expect(screen.getByTestId('doc-plot')).toBe(plot);
+  expect(echartsInit).toHaveBeenCalledOnce();
+});
+
+it('keeps an export failure announced after the compact disclosure closes', async () => {
+  const exports = await import('../../packages/oxiquill/src/lib/doc-runtime/chart-export');
+  vi.spyOn(exports, 'exportChartImage').mockRejectedValue(new Error('Forced export failure'));
+  render(output(line));
+  await waitFor(() => expect(chart.setOption).toHaveBeenCalled());
+  act(() => {
+    screen.getByTestId('doc-plot').style.setProperty('--doc-chart-compact', '1');
+    resizeCallback([], {} as ResizeObserver);
+  });
+  const trigger = await screen.findByRole('button', { name: labels.chartExport });
+  fireEvent.click(trigger);
+  fireEvent.click(screen.getByRole('button', { name: labels.saveSvg }));
+  await waitFor(() => expect(screen.getByRole('alert')).toHaveTextContent('Forced export failure'));
+  expect(trigger).toHaveAttribute('aria-expanded', 'false');
+  expect(trigger).toHaveFocus();
+  fireEvent.click(trigger);
+  fireEvent.keyDown(document, { key: 'Escape' });
+  expect(screen.getByRole('alert')).toHaveTextContent('Forced export failure');
+});
+
+it('keeps six series expanded and preserves focus when an update removes the compact legend', async () => {
+  const spec = (count: number): ChartSpec => ({
+    kind: 'line',
+    series: Array.from({ length: count }, (_, i) => ({ id: `s${i}`, name: `S${i}`, points: [[0, i]] }))
+  });
+  const view = render(output(spec(7)));
+  await waitFor(() => expect(chart.setOption).toHaveBeenCalled());
+  act(() => {
+    screen.getByTestId('doc-plot').style.setProperty('--doc-chart-compact', '1');
+    resizeCallback([], {} as ResizeObserver);
+  });
+  const trigger = await screen.findByRole('button', { name: labels.chartSelectedSeries(7, 7) });
+  fireEvent.click(trigger);
+  screen.getByRole('button', { name: 'S0', exact: true }).focus();
+  view.rerender(output(spec(6)));
+  await waitFor(() => expect(screen.getByRole('button', { name: labels.showChartData })).toHaveFocus());
+  expect(screen.queryByRole('button', { name: labels.chartSelectedSeries(6, 6) })).toBeNull();
+  expect(screen.getByRole('button', { name: 'S0', exact: true })).toBeVisible();
+});
+
+it('retains displayed selection after a failed replacement and resets only when the new result succeeds', async () => {
+  const spec: ChartSpec = {
+    kind: 'line',
+    series: [
+      { id: 'a', name: 'A', points: [[0, 1]] },
+      { id: 'b', name: 'B', points: [[0, 2]] }
+    ]
+  };
+  const view = render(
+    <ChartOutput artifact={{ kind: 'chart', spec }} idPrefix="retry" labels={labels} resultIdentity={{}} />
+  );
+  await waitFor(() => expect(chart.setOption).toHaveBeenCalled());
+  const changed = chart.on.mock.calls.find(([event]) => event === 'legendselectchanged')?.[1] as (
+    params: unknown
+  ) => void;
+  act(() => changed({ selected: { 'line:id:a': false } }));
+  chart.setOption.mockImplementationOnce(() => {
+    throw new Error('failed replacement');
+  });
+  view.rerender(
+    <ChartOutput artifact={{ kind: 'chart', spec }} idPrefix="retry" labels={labels} resultIdentity={{}} />
+  );
+  await waitFor(() => expect(screen.getByRole('alert')).toHaveTextContent('failed replacement'));
+  expect(screen.getByRole('button', { name: 'A', exact: true })).toHaveAttribute('aria-pressed', 'false');
+  fireEvent.click(screen.getByRole('button', { name: labels.chartRetry }));
+  await waitFor(() => expect(screen.queryByRole('alert')).toBeNull());
+  expect(screen.getByRole('button', { name: 'A', exact: true })).toHaveAttribute('aria-pressed', 'true');
 });
