@@ -105,9 +105,20 @@ export function numberFormatter(
         })
       : chartFormatter;
     const scaled = si ? scaleForSi(normalized, exponent) : normalized;
+    // Charts retain their established rounding, including authored fixed decimals.
+    // Tables round the decimal representation directly. Preserve finite extremes
+    // if rounding to significant digits would overflow the double.
+    const preserveTick = !si && ticks && format.significantDigits === undefined && fixed === undefined;
+    const rounded =
+      table || preserveTick
+        ? scaled
+        : (scientific && !si) || fixed === undefined
+          ? Number(scaled.toPrecision(precision))
+          : Number(scaled.toFixed(fixed));
+    const displayed = Number.isFinite(rounded) ? rounded : scaled;
     // Intl rounds the shortest decimal representation directly, avoiding toFixed's
     // extra binary digits and toPrecision's overflow near Number.MAX_VALUE.
-    const text = formatter.format(scaled || 0).replace(/^-0([.,]0+)?(E[+-]?\d+)?$/u, '0$1$2');
+    const text = formatter.format(displayed || 0).replace(/^-0([.,]0+)?(E[+-]?\d+)?$/u, '0$1$2');
     if (!table && scientific && !si && normalized !== 0) {
       const [coefficient, power] = text.split('E');
       return append(`${coefficient}×10${String(Number(power)).replace(/./gu, (digit) => superscripts[digit])}`);
