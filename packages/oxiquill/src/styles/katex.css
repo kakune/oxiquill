@@ -1,1 +1,19 @@
 @import 'katex/dist/katex.min.css';
+
+/* Long display equations scroll inside themselves instead of widening the page. */
+.katex-display {
+  max-inline-size: 100%;
+  overflow-x: auto;
+  overflow-y: hidden;
+}
+
+.katex-display:focus-visible {
+  outline: 2px solid var(--sl-color-text-accent);
+  outline-offset: 2px;
+}
+
+@media print {
+  .katex-display {
+    overflow: visible;
+  }
+}
