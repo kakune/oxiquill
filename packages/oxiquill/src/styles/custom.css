@@ -305,6 +305,7 @@
 }
 
 .doc-chart-output {
+  container: doc-chart / inline-size;
   display: grid;
   grid-template-columns: minmax(0, 1fr);
   gap: 0.45rem;
@@ -335,6 +336,13 @@
   gap: 0.35rem;
 }
 
+.doc-chart-output__legend-entry {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.35rem;
+  max-width: 100%;
+}
+
 .doc-chart-output__legend button {
   display: inline-flex;
   align-items: center;
@@ -350,6 +358,56 @@
 
 .doc-chart-output__legend button[aria-pressed='false'] {
   text-decoration: line-through;
+}
+
+.doc-disclosure {
+  min-width: 0;
+}
+
+.doc-disclosure--overlay {
+  position: relative;
+}
+
+.doc-disclosure__content[hidden] {
+  display: none;
+}
+
+.doc-disclosure--overlay .doc-disclosure__content {
+  position: absolute;
+  inset-block-start: calc(100% + 0.25rem);
+  inset-inline-end: 0;
+  z-index: 10;
+  width: max-content;
+  max-width: 100cqi;
+  padding: 0.4rem;
+  border: 1px solid var(--rn-panel-border);
+  border-radius: 6px;
+  background: var(--sl-color-bg);
+  box-shadow: 0 3px 12px #0003;
+}
+
+.doc-disclosure__content ul {
+  display: grid;
+  gap: 0.35rem;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.doc-chart-output > .doc-disclosure .doc-disclosure__content {
+  margin-block-start: 0.35rem;
+}
+
+.doc-chart-output__viewport {
+  position: relative;
+}
+
+.doc-chart-output__empty {
+  position: absolute;
+  inset: 40% 10% auto;
+  text-align: center;
+  pointer-events: none;
+  background: var(--sl-color-bg);
 }
 
 .doc-chart-output button:focus-visible,
@@ -375,6 +433,14 @@
   .doc-chart-output {
     break-inside: avoid;
     print-color-adjust: exact;
+  }
+
+  .doc-chart-output > .doc-disclosure > button {
+    display: none;
+  }
+
+  .doc-chart-output > .doc-disclosure > .doc-disclosure__content[hidden] {
+    display: block;
   }
 
   .doc-chart-output__legend button:not([aria-pressed]) {
@@ -538,6 +604,7 @@
   justify-content: flex-start;
 }
 
+.doc-chart-output .doc-disclosure > button,
 .doc-chart-output__actions button,
 .doc-chart-output__legend button,
 .doc-table-output__controls button,
@@ -550,6 +617,7 @@
   font: inherit;
 }
 
+.doc-chart-output .doc-disclosure > button,
 .doc-chart-output__actions button,
 .doc-chart-output__legend button,
 .doc-table-output__controls button {
@@ -557,11 +625,44 @@
   cursor: pointer;
 }
 
+.doc-chart-output .doc-disclosure > button:disabled,
+.doc-chart-output .doc-disclosure > button[aria-disabled='true'],
 .doc-chart-output__actions button:disabled,
 .doc-chart-output__legend button:disabled,
 .doc-table-output__controls button:disabled {
   cursor: not-allowed;
   opacity: 0.62;
+}
+
+@container doc-chart (width < 36rem) {
+  .doc-plot {
+    --doc-chart-compact: 1;
+  }
+
+  .doc-chart-output__actions {
+    flex-wrap: nowrap;
+    gap: 0.35rem;
+  }
+
+  .doc-chart-output__actions > * {
+    flex: 1 1 0;
+    min-width: 44px;
+  }
+
+  .doc-chart-output__actions .doc-disclosure > button,
+  .doc-chart-output__actions button,
+  .doc-chart-output__legend button,
+  .doc-chart-output > .doc-disclosure > button {
+    min-width: 44px;
+    min-height: 44px;
+    padding: 0.3rem 0.45rem;
+    overflow-wrap: anywhere;
+    font-size: 0.875rem;
+  }
+
+  .doc-chart-output__actions .doc-disclosure > button {
+    width: 100%;
+  }
 }
 
 .mermaid-diagram {

@@ -54,7 +54,7 @@ for (const axis of ['value', 'time', 'log']) {
     expect(await range(page, 'peer')).toEqual([x(25), x(125)]);
     await expect(page.locator('#disjoint [role=status]')).toBeEmpty();
     await zoom(page, x(30), x(60));
-    await page.locator('#peer').getByRole('button', { name: 'Reset zoom' }).click();
+    await page.locator('#peer').getByRole('button', { name: 'Reset view' }).click();
     await expect.poll(() => range(page, 'source')).toEqual([x(0), x(100)]);
   });
 }

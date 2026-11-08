@@ -3,9 +3,14 @@ import type { RuntimeLabels } from './runtime-localization.js';
 import { outputArtifactLimits } from './output-limits.mjs';
 import { chartAxisType } from './chart-axes.js';
 import { histogramHeight } from './chart-histogram.js';
+import { chartSeriesId } from './chart-options.js';
+import type { ChartSelection } from './chart-selection.js';
 
-export function chartToTable(spec: ChartSpec, labels: RuntimeLabels): TableArtifact {
+export function chartToTable(spec: ChartSpec, labels: RuntimeLabels, selected?: ChartSelection): TableArtifact {
   const rows: unknown[][] = [];
+  const pushRow = (row: unknown[], seriesIndex = 0) => {
+    rows.push(selected ? [...row, selected[chartSeriesId(spec, seriesIndex)] !== false] : row);
+  };
   const limit = outputArtifactLimits.rowsPerTable;
   let rowCount = 0;
   let columns: TableColumn[];
@@ -27,14 +32,17 @@ export function chartToTable(spec: ChartSpec, labels: RuntimeLabels): TableArtif
     spec.layers.forEach((layer, index) => {
       rowCount += layer.points.length;
       for (const point of layer.points.slice(0, limit - rows.length))
-        rows.push([
-          layer.id,
-          layer.kind,
-          layer.name ?? labels.chartSeriesName(index + 1),
-          spec.xType === 'time' ? timeCoordinate(point[0]) : point[0],
-          point[1],
-          ...(point.length === 4 ? [point[2], point[3]] : [null, null])
-        ]);
+        pushRow(
+          [
+            layer.id,
+            layer.kind,
+            layer.name ?? labels.chartSeriesName(index + 1),
+            spec.xType === 'time' ? timeCoordinate(point[0]) : point[0],
+            point[1],
+            ...(point.length === 4 ? [point[2], point[3]] : [null, null])
+          ],
+          index
+        );
     });
   } else if (spec.kind === 'field') {
     columns = [
@@ -47,7 +55,7 @@ export function chartToTable(spec: ChartSpec, labels: RuntimeLabels): TableArtif
     rowCount = spec.values.reduce((sum, row) => sum + row.length, 0);
     for (let y = 0; y < spec.values.length && rows.length < limit; y++)
       for (let x = 0; x < spec.values[y].length && rows.length < limit; x++)
-        rows.push([spec.xEdges[x], spec.xEdges[x + 1], spec.yEdges[y], spec.yEdges[y + 1], spec.values[y][x]]);
+        pushRow([spec.xEdges[x], spec.xEdges[x + 1], spec.yEdges[y], spec.yEdges[y + 1], spec.values[y][x]]);
   } else if (spec.kind === 'bubble') {
     columns = [
       column('series', labels.chartSeries, 'string'),
@@ -67,13 +75,16 @@ export function chartToTable(spec: ChartSpec, labels: RuntimeLabels): TableArtif
     spec.series.forEach((series, index) => {
       rowCount += series.points.length;
       for (const [x, y, size, color] of series.points.slice(0, limit - rows.length))
-        rows.push([
-          series.name ?? labels.chartSeriesName(index + 1),
-          spec.xType === 'time' ? timeCoordinate(x) : x,
-          spec.yType === 'time' ? timeCoordinate(y) : y,
-          size,
-          color ?? null
-        ]);
+        pushRow(
+          [
+            series.name ?? labels.chartSeriesName(index + 1),
+            spec.xType === 'time' ? timeCoordinate(x) : x,
+            spec.yType === 'time' ? timeCoordinate(y) : y,
+            size,
+            color ?? null
+          ],
+          index
+        );
     });
   } else if (spec.kind === 'boxplot') {
     columns = [
@@ -86,11 +97,14 @@ export function chartToTable(spec: ChartSpec, labels: RuntimeLabels): TableArtif
       series.values
         .slice(0, limit - rows.length)
         .forEach((value, category) =>
-          rows.push([
-            series.name ?? labels.chartSeriesName(index + 1),
-            spec.categories[category],
-            ...(value ?? [null, null, null, null, null])
-          ])
+          pushRow(
+            [
+              series.name ?? labels.chartSeriesName(index + 1),
+              spec.categories[category],
+              ...(value ?? [null, null, null, null, null])
+            ],
+            index
+          )
         );
     });
   } else if (spec.kind === 'errorbar' || spec.kind === 'band') {
@@ -108,11 +122,14 @@ export function chartToTable(spec: ChartSpec, labels: RuntimeLabels): TableArtif
     spec.series.forEach((series, index) => {
       rowCount += series.points.length;
       for (const point of series.points.slice(0, limit - rows.length))
-        rows.push([
-          series.name ?? labels.chartSeriesName(index + 1),
-          spec.xType === 'time' ? timeCoordinate(point[0]) : point[0],
-          ...point.slice(1)
-        ]);
+        pushRow(
+          [
+            series.name ?? labels.chartSeriesName(index + 1),
+            spec.xType === 'time' ? timeCoordinate(point[0]) : point[0],
+            ...point.slice(1)
+          ],
+          index
+        );
     });
   } else if (spec.kind === 'histogram') {
     columns = [
@@ -123,7 +140,7 @@ export function chartToTable(spec: ChartSpec, labels: RuntimeLabels): TableArtif
     if (spec.mode === 'density') columns.push(column('height', labels.chartHistogramDensity));
     rowCount = spec.bins.length;
     for (const bin of spec.bins.slice(0, limit))
-      rows.push(spec.mode === 'density' ? [...bin, histogramHeight(bin, spec.mode)] : [...bin]);
+      pushRow(spec.mode === 'density' ? [...bin, histogramHeight(bin, spec.mode)] : [...bin]);
   } else if (spec.kind === 'heatmap') {
     columns = [
       column('x', spec.xLabel ?? 'X', 'string'),
@@ -132,7 +149,7 @@ export function chartToTable(spec: ChartSpec, labels: RuntimeLabels): TableArtif
     ];
     rowCount = spec.data.length;
     for (const [x, y, value] of spec.data.slice(0, limit)) {
-      rows.push([
+      pushRow([
         typeof x === 'number' ? (spec.xCategories?.[x] ?? String(x)) : x,
         typeof y === 'number' ? (spec.yCategories?.[y] ?? String(y)) : y,
         value
@@ -159,20 +176,22 @@ export function chartToTable(spec: ChartSpec, labels: RuntimeLabels): TableArtif
       if ('values' in series && spec.kind === 'bar') {
         rowCount += series.values.length;
         for (let i = 0; i < series.values.length && rows.length < limit; i++)
-          rows.push(
+          pushRow(
             spec.orientation === 'horizontal'
               ? [name, series.values[i], spec.categories[i]]
-              : [name, spec.categories[i], series.values[i]]
+              : [name, spec.categories[i], series.values[i]],
+            index
           );
       } else if ('points' in series) {
         rowCount += series.points.length;
         for (let i = 0; i < series.points.length && rows.length < limit; i++) {
           const [pointX, pointY] = series.points[i];
-          rows.push([name, x(pointX), y(pointY)]);
+          pushRow([name, x(pointX), y(pointY)], index);
         }
       }
     });
   }
+  if (selected) columns.push(column('visible', labels.chartVisible, 'boolean'));
   return { kind: 'table', title: labels.chartData, columns, rows, rowCount, truncated: rowCount > rows.length };
 }
 

@@ -40,6 +40,15 @@ export type RuntimeLabels = {
   showChartData: string;
   hideChartData: string;
   resetZoom: string;
+  chartCompactData: string;
+  chartResetView: string;
+  chartExport: string;
+  chartOnly: string;
+  chartOnlySeries: (name: string) => string;
+  chartShowAll: string;
+  chartSelectedSeries: (selected: number, total: number) => string;
+  chartSeriesVisibility: (selected: number, total: number) => string;
+  chartVisible: string;
   chartKeyboardInstructions: string;
   chartNoDataInRange: string;
   savePng: string;
@@ -196,6 +205,15 @@ const runtimeLabels = {
     showChartData: 'Show data as a table',
     hideChartData: 'Hide data table',
     resetZoom: 'Reset zoom',
+    chartCompactData: 'Data',
+    chartResetView: 'Reset view',
+    chartExport: 'Export',
+    chartOnly: 'Only this series',
+    chartOnlySeries: (name) => `Only this series: ${name}`,
+    chartShowAll: 'Show all series',
+    chartSelectedSeries: (selected, total) => `Series (${selected}/${total})`,
+    chartSeriesVisibility: (selected, total) => `Showing ${selected} of ${total} series.`,
+    chartVisible: 'Visible',
     chartKeyboardInstructions: 'Use + or = to zoom in, - to zoom out, Left and Right arrows to pan, and 0 to reset.',
     chartNoDataInRange: 'This chart has no data in the selected range.',
     savePng: 'Save PNG',
@@ -314,6 +332,15 @@ const runtimeLabels = {
     showChartData: 'データを表で表示',
     hideChartData: 'データの表を隠す',
     resetZoom: 'ズームを戻す',
+    chartCompactData: 'データ',
+    chartResetView: '表示を戻す',
+    chartExport: '保存',
+    chartOnly: 'この系列のみ',
+    chartOnlySeries: (name) => `この系列のみ表示: ${name}`,
+    chartShowAll: 'すべての系列を表示',
+    chartSelectedSeries: (selected, total) => `系列 (${selected}/${total})`,
+    chartSeriesVisibility: (selected, total) => `${total} 系列中 ${selected} 系列を表示。`,
+    chartVisible: '表示中',
     chartKeyboardInstructions: '+ または = で拡大、- で縮小、左右の矢印キーで移動、0 で元の範囲に戻します。',
     chartNoDataInRange: 'このグラフには選択した範囲のデータがありません。',
     savePng: 'PNGを保存',

@@ -209,7 +209,7 @@ emit_line_chart!(&points, "Time", "Voltage", &serde_json::json!({
 
 ### 系列の ID とスタイル
 
-`series[]` を持つすべての種類の系列には、空でない一意の `id` を付けられます。実行ごとに同じ ID を使うと、並べ替えや改名後も系列の識別と凡例の選択を保持します。name は表示名であり、同名の系列も個別に選択できます。ID がなければ系列の位置で対応付けます。系列の追加・削除ではズームをリセットしません。既定の配色は記述順に従うため、系列の色を固定するには明示的に指定してください。
+`series[]` を持つすべての種類の系列には、空でない一意の `id` を付けられます。同じ結果内では、安定した ID により並べ替えや改名後も系列の識別と凡例の選択を保持します。新しいセル実行が成功すると、すべての系列を表示する初期状態に戻ります。name は表示名であり、同名の系列も個別に選択できます。ID がなければ系列の位置で対応付けます。系列の追加・削除ではズームをリセットしません。既定の配色は記述順に従うため、系列の色を固定するには明示的に指定してください。
 
 `series.style.color` は `#RGB/#RRGGBB` または `{ light, dark }` で指定し、少なくとも一方のテーマを含めます。未指定のテーマは chart palette を使います。line・area はさらに `lineType`（solid/dashed/dotted）、`step`（false/start/middle/end）、`smooth`（boolean）、`symbol`、`showSymbol` を使えます。scatter・bubble は色と記号、bar・errorbar・band・boxplot は色に対応します。記号は circle/emptyCircle/rect/triangle/diamond/none です。
 
@@ -248,6 +248,22 @@ producer は各 language worker 内で `postMessage` より前に limit を適�
 `truncated: true` を使えるのは text、JSON、table だけです。chart、image、HTML は黙って truncate しません。invalid/cyclic/over-deep JSON、ragged table、non-finite chart value、invalid base64/MIME pair、unsafe structural record が cell component を crash させることはありません。実行結果は `outputs` に統一され、ストリームのテキストと JSON 値を結果直下に重複して保持しません。
 
 ## グラフ画像
+
+幅が36rem未満のグラフでは、操作を「データ」「表示を戻す」（利用可能な場合）「保存 ▾」の1行にまとめます。「保存」から従来と同じPNG・SVGを選べます。判定にはページ全体ではなくグラフのコンテナー幅を使います。Escapeキーまたは外側のクリックで開閉パネルを閉じると、開いたボタンにフォーカスが戻ります。
+
+各凡例には「この系列のみ」があり、「すべての系列を表示」で全ページの系列を復元できます。すべてを非表示にすることも可能です。幅の狭いグラフで凡例が7件以上ある場合は「系列（表示数/総数）」にまとめます。開くと同じ操作と25件ずつのページ送りを使えます。テーマ変更、ズームとリセット、画像保存では系列選択を保持します。要約には表示中の系列数を示し、表とCSVには既存の行数上限の範囲で非表示の系列も「表示中」列とともに保持します。
+
+```rust
+//| id: compact-series
+//| title: Twelve series
+//| run: autorun
+//| crates: []
+let series: Vec<_> = (0..12).map(|i| serde_json::json!({
+    "id": format!("series-{i}"), "name": format!("Series {}", i + 1),
+    "points": [[0, i], [1, i + 2], [2, i + 1]]
+})).collect();
+emit_chart!(serde_json::json!({ "kind": "line", "title": "Twelve series", "series": series }));
+```
 
 「データを表で表示」で、非表示の系列を含む元の値、ヒストグラムの両端と度数、heatmapの座標、区間の上下限、箱ひげ図の統計量、バブルのサイズと色、fieldのセル境界を確認できます。時刻軸の整数のepochミリ秒は、グラフと同じUTCのISO-8601時刻で表示します。開いた時だけ変換し、最大10,000行を保持して総数と省略を表示します。表の並べ替え、ページ送り、CSV保存はキーボードで操作できます。系列ボタンは `aria-pressed` で選択状態を伝え、色・線種・記号を併用します。「ズームを戻す」は系列選択を保持して著者指定の全範囲に戻します。既存のグラフ要約も維持します。
 
