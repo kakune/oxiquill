@@ -352,6 +352,7 @@ function InteractiveCellPanel({
         isRunning={runtime.isRunning}
         isPreparing={runtime.phase === 'preparing'}
         isComplete={runtime.isComplete}
+        isStale={runtime.isStale}
         retry={runtime.run}
         canRetry={runtime.inputsValid}
         labels={labels}

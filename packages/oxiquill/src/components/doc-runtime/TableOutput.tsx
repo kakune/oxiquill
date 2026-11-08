@@ -2,7 +2,7 @@ import { useLayoutEffect, useMemo, useRef, useState } from 'preact/hooks';
 import { boundedErrorMessage } from '../../lib/doc-runtime/output-limits.mjs';
 import { labelsForLanguage, type RuntimeLabels } from '../../lib/doc-runtime/runtime-localization.js';
 import type { TableArtifact, TableColumn } from '../../lib/doc-runtime/types.js';
-import { formatTableNumber, tableColumnGrouping } from '../../lib/doc-runtime/table-format.js';
+import { formatTableNumber, tableColumnGrouping, tableColumnLabel } from '../../lib/doc-runtime/table-format.js';
 import { artifactDownloadName, downloadBlob } from '../../lib/doc-runtime/download.js';
 
 interface TableOutputProps {
@@ -143,7 +143,7 @@ export default function TableOutput({
               {table.columns.map((column, columnIndex) => (
                 <th key={column.key} scope="col" aria-sort={ariaSort(reconciledSort, columnIndex)}>
                   <button type="button" onClick={() => updateSort(columnIndex)}>
-                    {column.label}
+                    {tableColumnLabel(column)}
                   </button>
                 </th>
               ))}
@@ -158,7 +158,7 @@ export default function TableOutput({
                     data-type={column.type ?? 'unknown'}
                     title={typeof row[columnIndex] === 'number' ? String(row[columnIndex]) : undefined}
                   >
-                    {formatTableCell(row[columnIndex], labels, grouping[columnIndex])}
+                    {formatTableCell(row[columnIndex], labels, grouping[columnIndex], column)}
                   </td>
                 ))}
               </tr>
@@ -277,7 +277,7 @@ export function tableToCsv(
     return {
       ok: true,
       csv: [
-        columns.map((column) => csvCell(column.label, labels)).join(','),
+        columns.map((column) => csvCell(tableColumnLabel(column), labels)).join(','),
         ...rows.map((row, rowIndex) => {
           if (row.length !== columns.length) {
             throw new Error(labels.tableRowWidthError(rowIndex + 1, row.length, columns.length));
@@ -294,12 +294,13 @@ export function tableToCsv(
 export function formatTableCell(
   value: unknown,
   labels: RuntimeLabels = labelsForLanguage('en'),
-  useGrouping = false
+  useGrouping = false,
+  column?: TableColumn
 ): string {
-  if (value === null) return 'null';
+  if (value === null) return column?.nullText ?? 'null';
   if (value === undefined) return labels.tableMissingValue;
   if (typeof value === 'number') {
-    return formatTableNumber(value, labels.locale, useGrouping);
+    return formatTableNumber(value, labels.locale, useGrouping, column?.format);
   }
   if (typeof value === 'boolean') return value ? 'true' : 'false';
   if (typeof value === 'string') return value;

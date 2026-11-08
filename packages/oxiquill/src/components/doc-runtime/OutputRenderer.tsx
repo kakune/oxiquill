@@ -11,6 +11,7 @@ import type { ComponentChildren } from 'preact';
 import { useEffect, useState } from 'preact/hooks';
 import type { ChartSpec, TextArtifact } from '../../lib/doc-runtime/types.js';
 import ArtifactErrorBoundary, { ArtifactError } from './ArtifactErrorBoundary.js';
+import OutcomeOutput from './OutcomeOutput.js';
 import TableOutput from './TableOutput.js';
 
 type ChartOutputModule = typeof import('./ChartOutput.js');
@@ -34,10 +35,11 @@ export default function OutputRenderer({
   outputs,
   resultIdentity
 }: OutputRendererProps) {
-  const keys = artifactKeys(outputs);
+  const ordered = [...outputs.filter(isOutcome), ...outputs.filter((output) => !isOutcome(output))];
+  const keys = artifactKeys(ordered);
   return (
     <>
-      {outputs.map((output, index) => (
+      {ordered.map((output, index) => (
         <ArtifactErrorBoundary key={keys[index]} index={output.index} labels={labels} resetKey={output}>
           <ArtifactOutput
             idPrefix={`${idPrefix}-artifact-${output.index}`}
@@ -49,6 +51,10 @@ export default function OutputRenderer({
       ))}
     </>
   );
+}
+
+function isOutcome(output: ValidatedArtifactResult): boolean {
+  return output.status === 'valid' && output.artifact.kind === 'outcome';
 }
 
 function ArtifactOutput({
@@ -67,6 +73,8 @@ function ArtifactOutput({
   }
 
   switch (output.artifact.kind) {
+    case 'outcome':
+      return <OutcomeOutput output={output.artifact} labels={labels} />;
     case 'text':
       return <TextOutput labels={labels} output={output.artifact} />;
     case 'json':

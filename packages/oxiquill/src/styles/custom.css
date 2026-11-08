@@ -685,3 +685,45 @@
 .ox-reference-anchor {
   display: block;
 }
+
+.doc-cell__retained-output {
+  min-width: 0;
+}
+.doc-cell__stale {
+  padding: 0.5rem 0.75rem;
+  border-inline-start: 3px solid var(--sl-color-gray-3);
+  background: var(--sl-color-bg-inline-code);
+}
+.doc-cell__retained-output[data-stale='true'] .doc-cell__outputs {
+  border-inline-start: 2px dashed var(--sl-color-gray-3);
+  padding-inline-start: 0.75rem;
+}
+.doc-outcome {
+  padding: 0.75rem;
+  border: 1px solid var(--sl-color-gray-3);
+  border-inline-start: 4px solid var(--sl-color-text-accent);
+  border-radius: 0.25rem;
+  background: var(--sl-color-bg-inline-code);
+}
+.doc-outcome[data-outcome='satisfied'] {
+  border-inline-start-color: var(--sl-color-green);
+}
+.doc-outcome[data-outcome='partial'] {
+  border-inline-start-color: var(--sl-color-orange);
+}
+.doc-outcome[data-outcome='failed'] {
+  border-inline-start-color: var(--sl-color-red);
+}
+.doc-outcome dl {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem 1.5rem;
+}
+.doc-outcome dl div {
+  display: flex;
+  gap: 0.5rem;
+}
+.doc-outcome dd {
+  margin: 0;
+  font-variant-numeric: tabular-nums;
+}

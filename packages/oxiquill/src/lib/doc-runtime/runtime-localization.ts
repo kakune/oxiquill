@@ -68,6 +68,11 @@ export type RuntimeLabels = {
   executionErrorLabel: string;
   failedOutput: string;
   previousSuccessfulOutput: string;
+  previousInputsOutput: string;
+  outcomeLabel: string;
+  outcomeStatus: string;
+  outcomeState: (state: import('./types.js').OutcomeState) => string;
+  outcomeAnnouncement: (state: import('./types.js').OutcomeState, label: string) => string;
   hideCode: string;
   htmlOutput: string;
   idleButton: string;
@@ -231,6 +236,13 @@ const runtimeLabels = {
     executionErrorLabel: 'Cell execution failed:',
     failedOutput: 'Output from the failed execution',
     previousSuccessfulOutput: 'Previous successful output',
+    previousInputsOutput: 'Result of previous inputs.',
+    outcomeLabel: 'Outcome',
+    outcomeStatus: 'Status',
+    outcomeState: (state) =>
+      ({ satisfied: 'Satisfied', partial: 'Partial', failed: 'Failed', unavailable: 'Unavailable' })[state],
+    outcomeAnnouncement: (state, label) =>
+      `Outcome: ${{ satisfied: 'satisfied', partial: 'partial', failed: 'failed', unavailable: 'unavailable' }[state]}, ${label}`,
     hideCode: 'Hide code',
     htmlOutput: 'HTML output',
     idleButton: 'Run the cell to show its output.',
@@ -342,6 +354,13 @@ const runtimeLabels = {
     executionErrorLabel: 'セルの実行に失敗しました:',
     failedOutput: '失敗した実行の出力',
     previousSuccessfulOutput: '前回成功した実行の出力',
+    previousInputsOutput: '変更前の入力による結果です。',
+    outcomeLabel: '計算結果',
+    outcomeStatus: 'ステータス',
+    outcomeState: (state) =>
+      ({ satisfied: '条件達成', partial: '部分的', failed: '不成立', unavailable: '利用不可' })[state],
+    outcomeAnnouncement: (state, label) =>
+      `計算結果: ${{ satisfied: '条件達成', partial: '部分的', failed: '不成立', unavailable: '利用不可' }[state]}、${label}`,
     hideCode: 'コードを隠す',
     htmlOutput: 'HTML 出力',
     idleButton: 'セルを実行すると出力が表示されます。',

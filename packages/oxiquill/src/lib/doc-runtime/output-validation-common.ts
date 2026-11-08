@@ -1,5 +1,6 @@
 import type {
   HtmlArtifact,
+  OutcomeArtifact,
   ImageArtifact,
   JsonArtifact,
   OutputArtifact,
@@ -22,7 +23,8 @@ export type ValidatedOutputArtifact =
   | TableArtifact
   | Extract<OutputArtifact, { kind: 'chart' }>
   | ValidatedImageArtifact
-  | HtmlArtifact;
+  | HtmlArtifact
+  | OutcomeArtifact;
 
 export type ValidatedArtifactResult =
   | {
@@ -215,4 +217,15 @@ function withoutProperty<Value extends object, Key extends keyof Value>(value: V
   const output = { ...value };
   Reflect.deleteProperty(output, key);
   return output;
+}
+
+export function rejectUnknownFields(
+  record: Record<string, unknown>,
+  allowed: readonly string[],
+  context: string
+): void {
+  for (const field of Reflect.ownKeys(record)) {
+    if (typeof field !== 'string' || !allowed.includes(field))
+      throw new ArtifactValidationError(`${context} has unknown field ${quoted(String(field))}.`);
+  }
 }

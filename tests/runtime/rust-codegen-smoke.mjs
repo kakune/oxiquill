@@ -102,6 +102,25 @@ try {
     bytes: [...Buffer.from('first\nsecond')],
     raw_bytes: [...Buffer.from('first\n  second')]
   });
+  const formatted = run('formatted-outcomes', { invalid: false }).outputs;
+  assert.deepEqual(
+    validateOutputArtifacts(formatted).map((output) => output.status),
+    ['valid', 'valid', 'valid']
+  );
+  assert.deepEqual(formatted[0].columns[0], {
+    key: '0',
+    label: 'Value',
+    type: 'number',
+    format: { notation: 'scientific', fractionDigits: 2, unit: 's' },
+    nullText: 'Missing'
+  });
+  assert.equal(
+    JSON.stringify(formatted[1]),
+    '{"kind":"table","columns":[{"key":"0","label":"Value","type":"unknown"}],"rows":[[1.234]],"rowCount":1,"truncated":false}'
+  );
+  assert.equal(formatted[2].state, 'partial');
+  assert.deepEqual(formatted[2].diagnostics, [{ name: 'residual', value: 0.0013, unit: 's' }]);
+  assert.equal(validateOutputArtifacts(run('formatted-outcomes', { invalid: true }).outputs)[2].status, 'error');
   const contract = JSON.parse(await readFile(new URL('../fixtures/output-contract.json', import.meta.url), 'utf8'));
   for (const fixture of contract.filter((fixture) => fixture.artifact.kind === 'chart')) {
     const { spec, ...metadata } = structuredClone(fixture.artifact);
@@ -296,6 +315,7 @@ try {
 
   for (const [id, source, kind] of [
     ['area-only', 'emit_area_chart!(&[[0, 1]]);', 'chart'],
+    ['outcome-only', 'emit_outcome!(Outcome::unavailable("Environment unavailable"));', 'outcome'],
     [
       'generic-only',
       'emit_chart!(serde_json::json!({ "kind": "xy", "layers": [{ "id": "reference", "kind": "line", "points": [[0, 1]] }, { "id": "samples", "kind": "scatter", "points": [[0, 1.1]] }, { "id": "band", "kind": "band", "points": [[0, 1, 0.5, 1.5]] }] }));',

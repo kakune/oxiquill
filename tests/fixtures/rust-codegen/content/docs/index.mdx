@@ -241,3 +241,16 @@ emit_json!(&serde_json::json!({
     "error_bounded": error.len() <= 16384,
 }));
 ```
+
+```rust
+//| id: formatted-outcomes
+//| inputs:
+//|   invalid: { type: checkbox, label: Invalid, value: false }
+let columns = serde_json::json!([
+    { "key": "0", "label": "Value", "type": "number", "format": { "notation": "scientific", "fractionDigits": 2, "unit": "s" }, "nullText": "Missing" }
+]);
+emit_table_with_columns!(columns, [[1.234]]);
+emit_table_with_columns!(["Value"], [[1.234]]);
+let value = if invalid { f64::NAN } else { 0.0013 };
+emit_outcome!(Outcome::partial("Iteration limit reached").status("MaxIterations").diagnostic("residual", value, Some("s")));
+```

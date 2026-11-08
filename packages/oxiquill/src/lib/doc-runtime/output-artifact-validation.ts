@@ -16,8 +16,11 @@ import {
   requireMetadataBudget,
   boundedDiagnostic,
   validateBaseArtifact,
-  artifactMetadata
+  artifactMetadata,
+  rejectUnknownFields
 } from './output-validation-common.js';
+import { validateNumberFormat } from './output-validation-number-format.js';
+import { validateOutcomeArtifact } from './output-validation-outcome.js';
 import { validateChartArtifact } from './output-validation-chart.js';
 import { validateJsonArtifact, safeJsonFormat } from './output-validation-json.js';
 import { validateImageArtifact } from './output-validation-image.js';
@@ -47,11 +50,17 @@ const tableColumnTypes = new Set<TableColumnType>([
 export function validateOutputArtifacts(outputs: readonly unknown[]): readonly ValidatedArtifactResult[] {
   const results: ValidatedArtifactResult[] = [];
   let validatedBytes = 0;
+  let hasOutcome = false;
   let diagnosticBytes = 0;
   const artifactCount = Math.min(outputs.length, outputArtifactLimits.artifactsPerRun);
 
   for (let index = 0; index < artifactCount; index += 1) {
     try {
+      const candidate = plainRecord(outputs[index], 'Artifact');
+      if (requiredOwnValue(candidate, 'kind', 'Artifact') === 'outcome') {
+        if (hasOutcome) throw new ArtifactValidationError('A result may contain at most one outcome artifact.');
+        hasOutcome = true;
+      }
       const validated = validateOutputArtifact(
         outputs[index],
         outputArtifactLimits.validatedBytesPerRun - validatedBytes
@@ -89,6 +98,8 @@ function validateOutputArtifact(value: unknown, remainingBytes: number): Validat
   const kind = requiredString(record, 'kind', 'Artifact');
 
   switch (kind) {
+    case 'outcome':
+      return validateOutcomeArtifact(record, remainingBytes);
     case 'text':
       return validateTextArtifact(record, remainingBytes);
     case 'json':
@@ -151,7 +162,15 @@ function validateTableArtifact(record: Record<string, unknown>, remainingBytes: 
 
   let byteLength =
     base.byteLength +
-    columns.reduce((total, column) => total + utf8ByteLength(column.key) + utf8ByteLength(column.label), 0);
+    columns.reduce(
+      (total, column) =>
+        total +
+        utf8ByteLength(column.key) +
+        utf8ByteLength(column.label) +
+        utf8ByteLength(column.nullText ?? '') +
+        (column.format ? utf8ByteLength(JSON.stringify(column.format)) : 0),
+      0
+    );
   if (byteLength > remainingBytes) {
     throw new ArtifactValidationError('Table artifact metadata exceeds the remaining 16 MiB run limit.');
   }
@@ -224,10 +243,18 @@ function validateHtmlArtifact(record: Record<string, unknown>, remainingBytes: n
 
 function validateTableColumn(value: unknown, index: number): TableColumn {
   const record = plainRecord(value, `Table artifact column ${index + 1}`);
+  const context = `Table artifact column ${index + 1}`;
+  rejectUnknownFields(record, ['key', 'label', 'type', 'format', 'nullText'], context);
+  const format = Object.hasOwn(record, 'format')
+    ? validateNumberFormat(requiredOwnValue(record, 'format', context), `${context} format`)
+    : undefined;
+  const nullText = optionalString(record, 'nullText', context);
   const type = optionalString(record, 'type', `Table artifact column ${index + 1}`);
   if (type != null && !tableColumnTypes.has(type as TableColumnType)) {
     throw new ArtifactValidationError(`Table artifact column ${index + 1} type ${quoted(type)} is not supported.`);
   }
+  if (format !== undefined && type !== 'number' && type !== 'integer')
+    throw new ArtifactValidationError(`${context} format is supported only on number and integer columns.`);
   const key = requiredString(record, 'key', `Table artifact column ${index + 1}`);
   const label = requiredString(record, 'label', `Table artifact column ${index + 1}`);
   requireMetadataBudget(key, `Table artifact column ${index + 1} key`);
@@ -235,6 +262,8 @@ function validateTableColumn(value: unknown, index: number): TableColumn {
   return {
     key,
     label,
+    ...(format === undefined ? {} : { format }),
+    ...(nullText === undefined ? {} : { nullText }),
     ...(type == null ? {} : { type: type as TableColumnType })
   };
 }

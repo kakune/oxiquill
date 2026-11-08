@@ -1,3 +1,5 @@
+import type { NumberFormat, TableColumn } from './types.js';
+import { numberFormatter } from './number-format.js';
 import type { RuntimeLocale } from './runtime-localization.js';
 
 export function tableColumnGrouping(rows: readonly unknown[][], columnCount: number): boolean[] {
@@ -6,15 +8,15 @@ export function tableColumnGrouping(rows: readonly unknown[][], columnCount: num
   );
 }
 
-export function formatTableNumber(value: number, locale: RuntimeLocale, useGrouping = false): string {
-  if (!Number.isFinite(value)) return String(value);
-  if (value === 0) return '0';
-  // Beyond 2^53 - 1, printing every digit would invent digits the double does not hold.
-  const integer = Number.isSafeInteger(value);
-  const scientific = !integer && (Math.abs(value) >= 1e6 || Math.abs(value) < 1e-4);
-  return new Intl.NumberFormat(locale === 'ja' ? 'ja-JP' : 'en-US', {
-    useGrouping,
-    notation: scientific ? 'scientific' : 'standard',
-    ...(integer ? { maximumFractionDigits: 0 } : { maximumSignificantDigits: 6 })
-  }).format(value);
+export function formatTableNumber(
+  value: number,
+  locale: RuntimeLocale,
+  useGrouping = false,
+  format: NumberFormat = {}
+): string {
+  return numberFormatter([value], locale, { context: 'table', useGrouping, format })(value);
+}
+
+export function tableColumnLabel(column: TableColumn): string {
+  return column.format?.unit ? `${column.label} (${column.format.unit})` : column.label;
 }

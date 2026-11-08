@@ -24,7 +24,8 @@ const sourceFeatureDescriptors = [
   ['histogramChart', ['emit_histogram']],
   ['heatmapChart', ['emit_heatmap']],
   ['html', ['emit_html']],
-  ['json', ['emit_json']]
+  ['json', ['emit_json']],
+  ['outcome', ['emit_outcome']]
 ];
 
 export function rustOutputCapabilities(

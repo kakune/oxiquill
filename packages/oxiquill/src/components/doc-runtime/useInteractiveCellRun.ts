@@ -29,9 +29,17 @@ type ExecutionState = {
   status: 'idle' | 'running' | 'success' | 'error';
   result?: NormalizedCellExecutionResult;
   resultFromDraft?: boolean;
+  resultSnapshot?: string;
+  stale?: boolean;
   error?: string;
   partialResult?: NormalizedCellExecutionResult;
 };
+
+type CompletedRun = { result: NormalizedCellExecutionResult; snapshot: string; fromDraft: boolean };
+
+function runSnapshot(values: InputValues, source: string, version: string): string {
+  return JSON.stringify([Object.entries(values).sort(([left], [right]) => left.localeCompare(right)), source, version]);
+}
 
 const autorunRequests = createRunOnceCache<string, NormalizedCellExecutionResult>();
 const reactiveDebounceMs = 150;
@@ -47,13 +55,10 @@ export function useInteractiveCellRun(cell: CellManifest, runtimeVersion: string
     if (draft && draft.original !== cell.source) setDraft(undefined);
   }, [cell.source]);
   const invalidInputsRef = useRef(new Set<string>());
-  // The scheduler reports only the latest request, so this describes any result it delivers.
-  const latestRequestIsDraftRef = useRef(false);
   const valuesRef = useRef(values);
   const inputDefinitions = JSON.stringify(cell.inputs);
   const previousInputDefinitions = useRef(inputDefinitions);
-  const schedulerRef =
-    useRef<ReturnType<typeof createLatestRequestScheduler<CellRunRequest, NormalizedCellExecutionResult>>>();
+  const schedulerRef = useRef<ReturnType<typeof createLatestRequestScheduler<CellRunRequest, CompletedRun>>>();
 
   schedulerRef.current ??= createLatestRequestScheduler({
     execute: (
@@ -89,10 +94,15 @@ export function useInteractiveCellRun(cell: CellManifest, runtimeVersion: string
               undefined,
               requestedModule
             );
-      return autorunKey ? autorunRequests.getOrCreate(autorunKey, execute) : execute();
+      const response = autorunKey ? autorunRequests.getOrCreate(autorunKey, execute) : execute();
+      return response.then((result) => ({
+        result,
+        snapshot: runSnapshot(requestedValues, source ?? requestedCell.source, requestedVersion),
+        fromDraft: source !== undefined
+      }));
     },
     onCancelled: () => {
-      setExecution((previous) => ({ ...previous, status: 'idle' }));
+      setExecution((previous) => ({ ...previous, stale: Boolean(previous.result), status: 'idle' }));
     },
     onError: (caught) => {
       setExecution((previous) => ({
@@ -102,8 +112,8 @@ export function useInteractiveCellRun(cell: CellManifest, runtimeVersion: string
         status: 'error'
       }));
     },
-    onResult: (result) => {
-      setExecution({ result, resultFromDraft: latestRequestIsDraftRef.current, status: 'success' });
+    onResult: ({ result, snapshot, fromDraft }) => {
+      setExecution({ result, resultSnapshot: snapshot, resultFromDraft: fromDraft, stale: false, status: 'success' });
     },
     onScheduled: () => {
       setExecution((previous) => ({
@@ -111,6 +121,7 @@ export function useInteractiveCellRun(cell: CellManifest, runtimeVersion: string
         error: undefined,
         partialResult: undefined,
         phase: cell.language === 'python' ? 'preparing' : 'executing',
+        stale: Boolean(previous.result),
         status: 'running'
       }));
     }
@@ -127,7 +138,7 @@ export function useInteractiveCellRun(cell: CellManifest, runtimeVersion: string
       previousInputDefinitions.current = inputDefinitions;
       replaceInputs(reconcileInputValues(cell.inputs, valuesRef.current), false);
     }
-    setExecution((previous) => ({ ...previous, status: 'idle' }));
+    setExecution((previous) => ({ ...previous, stale: Boolean(previous.result), status: 'idle' }));
     if (isEditing) return;
     if (cell.run === 'reactive' && invalidInputsRef.current.size === 0) {
       schedule(valuesRef.current);
@@ -153,9 +164,8 @@ export function useInteractiveCellRun(cell: CellManifest, runtimeVersion: string
 
   function schedule(nextValues: InputValues, delayMs = 0, autorunKey?: string): void {
     const source = isEditing ? draft?.source : undefined;
-    latestRequestIsDraftRef.current = source !== undefined;
     schedulerRef.current?.schedule(
-      { autorunKey, cell, runtimeVersion, rustModule, values: nextValues, source },
+      { autorunKey, cell, runtimeVersion, rustModule, values: { ...nextValues }, source },
       delayMs
     );
   }
@@ -170,8 +180,8 @@ export function useInteractiveCellRun(cell: CellManifest, runtimeVersion: string
     valuesRef.current = nextValues;
     setValues(nextValues);
 
-    if (isEditing) stopExecution();
-    else if (cell.run === 'reactive' && invalidInputsRef.current.size === 0) {
+    stopExecution();
+    if (!isEditing && cell.run === 'reactive' && invalidInputsRef.current.size === 0) {
       schedule(nextValues, reactiveDebounceMs);
     }
   }
@@ -192,13 +202,25 @@ export function useInteractiveCellRun(cell: CellManifest, runtimeVersion: string
     setValues(nextValues);
     setInputsValid(true);
     setInputRevision((revision) => revision + 1);
-    setExecution((previous) => ({ ...previous, error: undefined, partialResult: undefined, status: 'idle' }));
+    setExecution((previous) => ({
+      ...previous,
+      stale: Boolean(previous.result),
+      error: undefined,
+      partialResult: undefined,
+      status: 'idle'
+    }));
     if (shouldSchedule && cell.run === 'reactive' && !isEditing) schedule(nextValues, reactiveDebounceMs);
   }
 
   function stopExecution(): void {
     schedulerRef.current?.cancel();
-    setExecution((previous) => ({ ...previous, error: undefined, partialResult: undefined, status: 'idle' }));
+    setExecution((previous) => ({
+      ...previous,
+      stale: Boolean(previous.result),
+      error: undefined,
+      partialResult: undefined,
+      status: 'idle'
+    }));
   }
 
   function editSource(source: string): void {
@@ -227,11 +249,18 @@ export function useInteractiveCellRun(cell: CellManifest, runtimeVersion: string
     setInputsValid(nextInvalidInputs.size === 0);
     if (!valid) {
       schedulerRef.current?.cancel();
-      setExecution((previous) => ({ ...previous, status: 'idle' }));
+      setExecution((previous) => ({ ...previous, stale: Boolean(previous.result), status: 'idle' }));
     }
   }
 
   return {
+    isStale: Boolean(
+      execution.result &&
+      (execution.stale ||
+        !inputsValid ||
+        execution.resultSnapshot !==
+          runSnapshot(values, isEditing ? (draft?.source ?? cell.source) : cell.source, runtimeVersion))
+    ),
     phase: execution.phase,
     error: execution.error,
     partialResult: execution.partialResult,
