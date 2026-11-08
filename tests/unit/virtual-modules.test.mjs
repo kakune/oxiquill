@@ -128,6 +128,46 @@ describe('oxiquill virtual modules', () => {
     }
   });
 
+  it('describes only the graph cells of a page, without highlighted source', () => {
+    const root = mkdtempSync(path.join(os.tmpdir(), 'oxiquill-page-descriptor-'));
+    try {
+      const paths = createDocRuntimePaths(root);
+      const cells = [
+        { id: 'producer', language: 'rust', pagePath: 'a.mdx', exports: ['value'], sourceHtml: '<pre>p</pre>' },
+        {
+          id: 'consumer',
+          language: 'rust',
+          pagePath: 'a.mdx',
+          dependsOn: { data: { cell: 'producer' } },
+          sourceHtml: '<pre>c</pre>'
+        },
+        { id: 'independent', language: 'rust', pagePath: 'a.mdx', sourceHtml: '<pre>i</pre>' },
+        { id: 'elsewhere', language: 'rust', pagePath: 'b.mdx', exports: ['value'], sourceHtml: '<pre>e</pre>' }
+      ];
+      const modules = cells.map(
+        (cell, index) =>
+          createRustModuleAssets({
+            id: `module-${index}`,
+            cells: [cell],
+            glue: 'glue',
+            wasm: Buffer.from('wasm'),
+            publicPath: 'rust'
+          }).module
+      );
+      mkdirSync(path.dirname(paths.cellsJsonPath), { recursive: true });
+      writeFileSync(paths.cellsJsonPath, JSON.stringify({ cells, rust: { version: 1, modules } }));
+      const plugin = oxiquillVirtualModulesPlugin(paths);
+      plugin.configResolved({ base: '/' });
+      const source = plugin.load.call({ addWatchFile: vi.fn() }, '\0virtual:oxiquill/cell?cellId=producer&page=1');
+      const page = JSON.parse(source.replace(/^export const page = /u, '').replace(/;\n$/u, ''));
+      expect(page.cells.map((cell) => cell.id)).toEqual(['producer', 'consumer']);
+      expect(page.cells.every((cell) => cell.sourceHtml === '')).toBe(true);
+      expect(page.rust.modules.map((module) => module.id)).toEqual(['module-0', 'module-1']);
+    } finally {
+      rmSync(root, { force: true, recursive: true });
+    }
+  });
+
   it('serves registered public glue byte-for-byte before Vite import transforms, including under base', () => {
     const root = mkdtempSync(path.join(os.tmpdir(), 'oxiquill-registry-glue-'));
     try {

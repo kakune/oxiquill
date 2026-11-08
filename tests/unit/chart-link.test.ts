@@ -344,3 +344,46 @@ describe('pure viewport calculations', () => {
     expect(chartNavigationAxis({ kind: 'line', series: [] })).toBe('x');
   });
 });
+
+describe('link membership updates', () => {
+  it('applies the group range to a member whose rerun changed its domain', () => {
+    const coordinator = createChartLinkCoordinator();
+    const a = {};
+    const b = {};
+    const disjoint = member({ domain: [200, 300] });
+    coordinator.register(a, member());
+    coordinator.register(b, disjoint);
+    coordinator.viewport(a, [10, 20]);
+    expect(disjoint.status).toHaveBeenLastCalledWith(true);
+    const rerun = member({ domain: [0, 50] });
+    coordinator.register(b, rerun);
+    expect(rerun.status).toHaveBeenLastCalledWith(false);
+    expect(rerun.viewport).toHaveBeenCalledWith([10, 20]);
+    // An update with the same domain keeps the reader's own view.
+    const same = member({ domain: [0, 50] });
+    coordinator.register(b, same);
+    expect(same.viewport).not.toHaveBeenCalled();
+  });
+
+  it('retries a rejected chart once its group membership changes', async () => {
+    const coordinator = createChartLinkCoordinator();
+    const first = {};
+    coordinator.register(first, member({ xType: 'time' }));
+    expect(() => coordinator.register({}, member())).toThrow('same xType');
+    const retry = vi.fn();
+    coordinator.watch('g', retry);
+    coordinator.register(first, member({ xType: 'time' }));
+    await Promise.resolve();
+    expect(retry).not.toHaveBeenCalled();
+    coordinator.unregister(first);
+    await Promise.resolve();
+    expect(retry).toHaveBeenCalledOnce();
+    expect(() => coordinator.register({}, member())).not.toThrow();
+    const stopped = vi.fn();
+    const stop = coordinator.watch('g', stopped);
+    stop();
+    coordinator.register({}, member());
+    await Promise.resolve();
+    expect(stopped).not.toHaveBeenCalled();
+  });
+});

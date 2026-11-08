@@ -46,6 +46,7 @@ export async function resolveWasmOpt({
   fileSystem = defaultFileSystem,
   runCommand,
   provision = false,
+  required = true,
   paths,
   memoize = false
 }) {
@@ -55,7 +56,13 @@ export async function resolveWasmOpt({
       Object.entries(environment).find(([key]) =>
         platform === 'win32' ? key.toUpperCase() === name : key === name
       )?.[1];
-    const extensions = platform === 'win32' ? (envValue('PATHEXT') ?? '.COM;.EXE;.BAT;.CMD').split(';') : [''];
+    // Batch shims (for example an npm-installed wasm-opt.cmd) cannot be spawned without a shell.
+    const extensions =
+      platform === 'win32'
+        ? (envValue('PATHEXT') ?? '.COM;.EXE')
+            .split(';')
+            .filter((extension) => ['.COM', '.EXE'].includes(extension.toUpperCase()))
+        : [''];
     const candidates = (
       envValue('PATH') === undefined ? [] : envValue('PATH').split(platform === 'win32' ? ';' : ':')
     ).flatMap((directory) =>
@@ -78,19 +85,33 @@ export async function resolveWasmOpt({
         identity: Object.freeze({ version: String(version), sha256: hashBytes(executable) })
       });
     }
-    return provision
-      ? toolDownloadPlan({ tool: 'wasm-opt', version: '117', paths, platform })
-      : Object.freeze({ identity: 'unavailable' });
+    if (!provision) return Object.freeze({ identity: 'unavailable' });
+    try {
+      return toolDownloadPlan({ tool: 'wasm-opt', version: '117', paths, platform });
+    } catch (error) {
+      if (required) throw error;
+      return Object.freeze({ identity: 'unavailable' });
+    }
   };
   if (!memoize) return lookup();
   const key = stableFingerprint([
     platform,
     cwd,
+    provision,
+    required,
+    paths?.downloadCacheDir ?? null,
     Object.entries(environment)
       .filter(([name]) => ['PATH', 'PATHEXT'].includes(name.toUpperCase()))
       .sort()
   ]);
-  if (!identities.has(key)) identities.set(key, lookup());
+  if (!identities.has(key))
+    identities.set(
+      key,
+      lookup().catch((error) => {
+        identities.delete(key);
+        throw error;
+      })
+    );
   return identities.get(key);
 }
 

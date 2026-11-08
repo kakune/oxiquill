@@ -90,7 +90,10 @@ export function validateScene3dArtifact(record: Record<string, unknown>, remaini
       finiteNumber(raw[2], `${context}.position[2]`)
     ];
     const label = text(point, 'label', context, 256);
-    const group = optionalString(point, 'group', context);
+    // Point groups follow the group id contract: an empty id would be a second "ungrouped" set.
+    const group = Object.hasOwn(point, 'group')
+      ? text(point, 'group', context, outputArtifactLimits.bytesPerMetadataField, true)
+      : undefined;
     const pointValue = {
       id,
       position,

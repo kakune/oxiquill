@@ -243,6 +243,24 @@ emit_json!(&serde_json::json!({
 ```
 
 ```rust
+//| id: table-metadata
+//| tests:
+//|   - case: default
+//|     expect:
+//|       - { artifact: scores, path: /rows/1/1, equals: 5 }
+//|       - { artifact: scores, path: /caption, equals: Two rows }
+//|       - { artifact: records, path: /title, equals: Records }
+//|       - { artifact: plain-rows, path: /rows/0/0, equals: alpha }
+let rows = serde_json::json!([["alpha", 3], ["beta", 5]]);
+emit_table!(&rows);
+emit_table_with_columns!(["Label", "Score"], &rows, metadata = serde_json::json!({ "id": "scores", "caption": "Two rows" }));
+emit_records_table!(&serde_json::json!([{ "label": "alpha" }]), metadata = serde_json::json!({ "id": "records", "title": "Records" }));
+emit_table!(&rows, metadata = serde_json::json!({ "id": "plain-rows", "title": null }));
+emit_table!(&rows, metadata = serde_json::json!({ "unexpected": true }));
+emit_table!(&rows, metadata = "not an object");
+```
+
+```rust
 //| id: formatted-outcomes
 //| inputs:
 //|   invalid: { type: checkbox, label: Invalid, value: false }

@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, useState } from 'preact/hooks';
 import type { Scene3dArtifact } from '../../lib/doc-runtime/types.js';
 import { labelsForLanguage, type RuntimeLabels } from '../../lib/doc-runtime/runtime-localization.js';
 import { scene3dLabels } from '../../lib/doc-runtime/scene3d-localization.js';
+import { numberFormatter } from '../../lib/doc-runtime/number-format.js';
 import {
   authoredCamera,
   pickPoint,
@@ -56,6 +57,8 @@ export default function Scene3dOutput({
   const viewport = useRef<HTMLDivElement>(null);
   const [size, setSize] = useState({ width: 640, height: 360 });
   const [theme, setTheme] = useState(() => document.documentElement.dataset.theme);
+  // The canvas backing store follows the device pixel ratio, for example after moving to another monitor.
+  const [pixelRatio, setPixelRatio] = useState(() => globalThis.devicePixelRatio || 1);
   const [available, setAvailable] = useState(true);
   const [error, setError] = useState('');
   const [exporting, setExporting] = useState(false);
@@ -111,7 +114,17 @@ export default function Scene3dOutput({
       updateCamera((camera) => zoomCamera(camera, Math.exp(Math.max(-2, Math.min(2, -delta * 0.002)))));
     };
     root.addEventListener('wheel', wheel, { passive: false });
+    let pixelQuery: MediaQueryList | undefined;
+    const watchPixelRatio = () => {
+      pixelQuery?.removeEventListener('change', watchPixelRatio);
+      const ratio = globalThis.devicePixelRatio || 1;
+      setPixelRatio(ratio);
+      pixelQuery = globalThis.matchMedia?.(`(resolution: ${ratio}dppx)`);
+      pixelQuery?.addEventListener('change', watchPixelRatio);
+    };
+    watchPixelRatio();
     return () => {
+      pixelQuery?.removeEventListener('change', watchPixelRatio);
       observer.disconnect();
       cancelAnimationFrame(resizeFrame);
       themeObserver.disconnect();
@@ -142,7 +155,7 @@ export default function Scene3dOutput({
       }
     });
     return () => cancelAnimationFrame(frame);
-  }, [artifact, view.camera, view.hidden, view.selected, theme, size]);
+  }, [artifact, view.camera, view.hidden, view.selected, theme, size, pixelRatio]);
 
   useEffect(() => {
     const frame = requestAnimationFrame(() => {
@@ -358,7 +371,7 @@ export default function Scene3dOutput({
               {sceneAxes
                 .map(
                   (axis, index) =>
-                    `${artifact.axes?.[axis]?.label ?? axis} = ${point.position[index]}${artifact.axes?.[axis]?.unit ? ` ${artifact.axes[axis]?.unit}` : ''}`
+                    `${artifact.axes?.[axis]?.label ?? axis} = ${formatSceneNumber(point.position[index], labels.locale)}${artifact.axes?.[axis]?.unit ? ` ${artifact.axes[axis]?.unit}` : ''}`
                 )
                 .join(', ')}
             </p>
@@ -368,7 +381,9 @@ export default function Scene3dOutput({
           <p>{text.units}</p>
         ) : distance.kind === 'distance' ? (
           <p>
-            {Number.isFinite(distance.value) ? `${text.distance}: ${distance.value} ${distance.unit}` : text.overflow}
+            {Number.isFinite(distance.value)
+              ? `${text.distance}: ${formatSceneNumber(distance.value, labels.locale)} ${distance.unit}`
+              : text.overflow}
           </p>
         ) : null}
       </div>
@@ -411,4 +426,9 @@ export default function Scene3dOutput({
       </details>
     </figure>
   );
+}
+
+// Readouts use the chart tooltip precision; tables and CSV keep the original values.
+function formatSceneNumber(value: number, locale: RuntimeLabels['locale']): string {
+  return numberFormatter([value], locale, { context: 'chart' })(value);
 }

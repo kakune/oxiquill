@@ -819,9 +819,9 @@ describe('InteractiveCell', () => {
     fireEvent.click(runButton);
 
     expect(screen.getByText('Running cell...')).toBeVisible();
-    expect(within(screen.getByRole('region', { name: 'Output for Cell one' })).getByRole('status')).toHaveTextContent(
-      'Cell execution started.'
-    );
+    expect(
+      within(screen.getByRole('region', { name: 'Output for Cell one' })).getAllByRole('status')[0]
+    ).toHaveTextContent('Cell execution started.');
     expect(screen.getByRole('button', { name: 'Running' })).toHaveAttribute('aria-disabled', 'true');
     expect(screen.getByRole('button', { name: 'Running' })).toHaveAttribute('aria-busy', 'true');
     expect(screen.getByRole('button', { name: 'Running' })).toHaveFocus();
@@ -845,9 +845,9 @@ describe('InteractiveCell', () => {
     });
 
     await waitFor(() =>
-      expect(within(screen.getByRole('region', { name: 'Output for Cell one' })).getByRole('status')).toHaveTextContent(
-        'Cell completed.'
-      )
+      expect(
+        within(screen.getByRole('region', { name: 'Output for Cell one' })).getAllByRole('status')[0]
+      ).toHaveTextContent('Cell completed.')
     );
     expect(screen.getByRole('button', { name: 'Run' })).toHaveFocus();
     expect(screen.getByTestId('run-output')).toHaveTextContent('done');
@@ -904,6 +904,11 @@ describe('InteractiveCell', () => {
       expect(screen.getByTestId('run-output')).toBe(previous);
       expect(screen.getByText('Updating…')).toHaveAttribute('aria-hidden', 'true');
       expect(screen.getByRole('region', { name: 'Output for Cell one' })).toHaveAttribute('aria-busy', 'true');
+      // Run status overlays the outputs instead of being inserted before them.
+      const status = screen.getByText('Updating…').closest('.doc-cell__status');
+      expect(status).toContainElement(screen.getByRole('note'));
+      expect(screen.getByRole('note')).toHaveTextContent('Result of previous inputs.');
+      expect(previous.closest('.doc-cell__retained-output')?.querySelector('[role="note"]')).toBeNull();
       if (outcome === 'invalid') {
         fireEvent.input(screen.getByRole('spinbutton', { name: 'count' }), { target: { value: '' } });
       } else {
@@ -920,9 +925,9 @@ describe('InteractiveCell', () => {
       expect(screen.getByTestId('run-output')).toBe(previous);
       expect(screen.getByTestId('run-output')).toHaveTextContent('retained');
       expect(screen.queryByText('Updating…')).not.toBeInTheDocument();
-      expect(within(screen.getByRole('region', { name: 'Output for Cell one' })).getByRole('status')).toHaveTextContent(
-        /^$/u
-      );
+      expect(
+        within(screen.getByRole('region', { name: 'Output for Cell one' })).getAllByRole('status')[0]
+      ).toHaveTextContent(/^$/u);
       if (outcome === 'error') {
         expect(screen.getByRole('alert')).toHaveTextContent('rerun failed');
         mocks.runInteractiveCell.mockResolvedValueOnce({
@@ -1216,7 +1221,7 @@ describe('InteractiveCell', () => {
     render(<InteractiveCell cellId="cell-one" />);
     fireEvent.click(screen.getByRole('button', { name: 'Run' }));
     await waitFor(() => expect(screen.getByRole('button', { name: 'Preparing Python…' })).toBeVisible());
-    expect(screen.getByRole('status')).toHaveTextContent('Preparing Python…');
+    expect(screen.getAllByRole('status')[0]).toHaveTextContent('Preparing Python…');
     act(() => reportPhase?.('executing'));
     expect(screen.getByRole('button', { name: 'Running' })).toBeVisible();
     expect(screen.getByRole('region', { name: labelsForLanguage('en').cellOutput(makeCell().title) })).toHaveAttribute(

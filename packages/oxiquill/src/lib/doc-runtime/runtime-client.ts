@@ -96,14 +96,37 @@ export function resetInteractiveRuntime(language?: CellLanguage): void {
   defaultGraphRuntimeClient.resetWorker('rust');
 }
 
+/** Superseded Rust modules a worker may keep instantiated before it is retired. */
+export const supersededRustModuleLimit = 4;
+
 export function createInteractiveCellRunner(dependencies: RuntimeClientDependencies) {
   let nextRequestId = 1;
   const workers = new Map<CellLanguage, Worker>();
   const pending = new Map<number, PendingRequest>();
   let rustRegistry: RustRuntimeRegistry | undefined;
+  // Modules the current Rust worker has instantiated. A worker cannot unload a
+  // Wasm instance, so it keeps superseded modules alive. Registry updates replace
+  // modules selectively in the same worker; once enough superseded modules have
+  // accumulated, the idle worker is retired so a long editing session stays bounded.
+  let rustWorkerModules = new Set<string>();
+  let retireRustWorker = false;
+  const rustModuleKey = (module: Pick<RustRuntimeModule, 'id' | 'fingerprint'>) =>
+    JSON.stringify([module.id, module.fingerprint]);
+
+  function retireIdleRustWorker(): void {
+    const worker = workers.get('rust');
+    if (!retireRustWorker || !worker || [...pending.values()].some((request) => request.worker === worker)) return;
+    workers.delete('rust');
+    worker.terminate();
+    rustWorkerModules = new Set();
+    retireRustWorker = false;
+  }
 
   function updateRustRegistry(registry: RustRuntimeRegistry): void {
     rustRegistry = registry;
+    const current = new Set(registry.modules.map(rustModuleKey));
+    const superseded = [...rustWorkerModules].filter((key) => !current.has(key)).length;
+    if (superseded >= supersededRustModuleLimit) retireRustWorker = true;
     for (const [id, request] of pending) {
       if (
         !request.rustModule ||
@@ -121,6 +144,7 @@ export function createInteractiveCellRunner(dependencies: RuntimeClientDependenc
       request.removeAbortListener();
       request.reject(new Error(`Rust module ${request.rustModule.id} has an obsolete fingerprint.`));
     }
+    retireIdleRustWorker();
     const worker = workers.get('rust');
     if (worker) {
       try {
@@ -290,6 +314,7 @@ export function createInteractiveCellRunner(dependencies: RuntimeClientDependenc
   }
 
   function getWorker(language: CellLanguage): Worker {
+    if (language === 'rust') retireIdleRustWorker();
     const current = workers.get(language);
     if (current) return current;
 
@@ -340,6 +365,7 @@ export function createInteractiveCellRunner(dependencies: RuntimeClientDependenc
           return;
         }
 
+        if (language === 'rust' && request.rustModule) rustWorkerModules.add(rustModuleKey(request.rustModule));
         try {
           if (request.type === 'prepare') request.resolve();
           else if ('result' in event.data)
@@ -388,6 +414,10 @@ export function createInteractiveCellRunner(dependencies: RuntimeClientDependenc
 
       ownsWorker = true;
       workers.delete(language);
+      if (language === 'rust') {
+        rustWorkerModules = new Set();
+        retireRustWorker = false;
+      }
       if (language === 'python') {
         preparation = undefined;
         setPreparationState('idle');

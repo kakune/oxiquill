@@ -1,8 +1,7 @@
 import { outputArtifactLimits } from '../../../lib/doc-runtime/output-limits.mjs';
-import { scanRustMacroInvocations } from './macro-invocations.mjs';
+import { authoredMacroInvocations } from './macro-invocations.mjs';
 
-export const needsExports = (cell) =>
-  Boolean(cell.exports?.length || scanRustMacroInvocations(cell.source, cell).has('export'));
+export const needsExports = (cell) => Boolean(cell.exports?.length || authoredMacroInvocations(cell).has('export'));
 
 // Wrap values recursively, rather than inspecting serde_json::Value after it has
 // already replaced NaN and infinities with null. Serialize only once per value.

@@ -2,6 +2,7 @@ import { parsePageFrontmatter } from '../../lib/doc-runtime/references.mjs';
 import { hashText } from './hashing.mjs';
 import { normalizeCell } from '../../lib/doc-runtime/normalized-cell.mjs';
 import { resolveRustDefinitions } from '../../lib/doc-runtime/rust-definitions.mjs';
+import { resolveDataDependencies } from '../../lib/doc-runtime/cell-data-dependencies.mjs';
 import { unified } from 'unified';
 import remarkMath from 'remark-math';
 import remarkMdx from 'remark-mdx';
@@ -67,8 +68,9 @@ export async function extractCellsFromMarkdown(source, pagePath, context) {
   ];
   throwInteractiveCellDiagnostics(diagnostics);
   assertUniqueCellIds(parsed.cells);
+  // Same resolution steps as runtime collection (see cell-collection.mjs).
   return Promise.all(
-    resolveRustDefinitions(resolvePythonSetups(parsed.cells)).map((cell) =>
+    resolveDataDependencies(resolveRustDefinitions(resolvePythonSetups(parsed.cells))).map((cell) =>
       createCellManifest(cell, context.highlighter)
     )
   );

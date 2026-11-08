@@ -103,7 +103,11 @@ export function numberFormatter(
       ? format.notation === 'scientific' ||
         (format.notation === 'si'
           ? !si
-          : format.notation !== 'standard' && !exactInteger && (Math.abs(value) >= 1e6 || Math.abs(value) < 1e-4))
+          : // Authored fixed decimals keep ordinary notation, as on chart axes.
+            format.notation !== 'standard' &&
+            fixed === undefined &&
+            !exactInteger &&
+            (Math.abs(value) >= 1e6 || Math.abs(value) < 1e-4))
       : chartScientific;
     const formatter = table
       ? new Intl.NumberFormat(localeTag, {

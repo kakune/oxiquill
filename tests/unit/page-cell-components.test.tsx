@@ -105,7 +105,7 @@ describe('page cell controls', () => {
     expect(producer.querySelector('.doc-cell__outputs')).not.toHaveTextContent('777');
     expect(producer.querySelector('.doc-cell__outputs')).not.toHaveTextContent('value');
   });
-  it('keeps independent cell inputs and results in the same page store', async () => {
+  it('runs independent cells outside the page store', async () => {
     const independent = { ...base, id: 'independent', title: 'Independent', exports: undefined, cache: undefined };
     const expanded = { ...page, cells: [...page.cells, independent] };
     applyGeneratedSnapshot({ ...expanded, version: 'expanded' });
@@ -124,7 +124,7 @@ describe('page cell controls', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Run', exact: true }));
     await screen.findByText('Independent 9');
     const { getPageCellStore } = await import('../../packages/oxiquill/src/lib/doc-runtime/page-cell-store');
-    expect(getPageCellStore(independent).get('independent')).toMatchObject({ values: { seed: 9 }, status: 'success' });
+    expect(getPageCellStore(independent).has('independent')).toBe(false);
   });
   it('indicates reuse and forces a fresh result with Recompute', async () => {
     mount(true);
@@ -137,7 +137,8 @@ describe('page cell controls', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Recompute' }));
     await waitFor(() => expect(producerCalls()).toHaveLength(2));
     await waitFor(() => expect(screen.queryByText('Reused result for these inputs')).not.toBeInTheDocument());
-    expect(screen.getByText('Upstream changed')).toBeInTheDocument();
+    // Identical exports leave the consumer current.
+    expect(screen.queryByText('Upstream changed')).not.toBeInTheDocument();
   });
   it('links consumers to the failed producer diagnostic', async () => {
     mocks.run.mockRejectedValue(new Error('Generate failed: missing export value'));

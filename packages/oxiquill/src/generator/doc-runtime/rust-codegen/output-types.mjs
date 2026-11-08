@@ -401,10 +401,35 @@ function generateRustTableTypes() {
   return `#[derive(Debug, Serialize)]
 #[serde(rename_all = "camelCase")]
 struct TableArtifact {
+    #[serde(skip_serializing_if = "Option::is_none")]
+    id: Option<Value>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    title: Option<Value>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    caption: Option<Value>,
     columns: Vec<TableColumn>,
     rows: Vec<Vec<Value>>,
     row_count: usize,
     truncated: bool,
+}
+
+fn table_artifact_with_metadata(mut artifact: TableArtifact, metadata: Value) -> OutputArtifact {
+    let metadata = match metadata {
+        Value::Null => serde_json::Map::new(),
+        Value::Object(metadata) => metadata,
+        _ => return producer_error("table metadata must serialize as an object"),
+    };
+    if let Some(key) = metadata
+        .keys()
+        .find(|key| !matches!(key.as_str(), "id" | "title" | "caption"))
+    {
+        return producer_error(&format!("unsupported table metadata field: {key}"));
+    }
+    let field = |key: &str| metadata.get(key).filter(|value| !value.is_null()).cloned();
+    artifact.id = field("id");
+    artifact.title = field("title");
+    artifact.caption = field("caption");
+    OutputArtifact::Table(artifact)
 }
 
 #[derive(Debug, Serialize)]
@@ -428,6 +453,9 @@ fn table_artifact_from_value(value: Value) -> Result<TableArtifact, String> {
     let columns = infer_table_columns(&preview);
     let table_rows = table_rows_for_columns(preview, &columns);
     Ok(TableArtifact {
+        id: None,
+        title: None,
+        caption: None,
         columns,
         rows: table_rows,
         row_count,
@@ -446,6 +474,9 @@ fn table_artifact_with_columns(columns: Value, rows: Value) -> Result<TableArtif
     let preview: Vec<Value> = rows.into_iter().take(${outputArtifactLimits.rowsPerTable}).collect();
     let table_rows = table_rows_for_columns(preview, &columns);
     Ok(TableArtifact {
+        id: None,
+        title: None,
+        caption: None,
         columns,
         rows: table_rows,
         row_count,

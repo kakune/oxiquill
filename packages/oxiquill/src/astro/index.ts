@@ -436,6 +436,10 @@ function createOxiquillIntegration(
       'astro:build:start': async () => {
         if (!paths) return;
 
+        // A failed build never reaches astro:build:done; a later programmatic build in
+        // the same process releases that lease first.
+        buildLease?.release();
+        buildLease = undefined;
         const inherited = process.env.OXIQUILL_RUNTIME_OWNER === 'cli' && hasInheritedRuntimeLock({ paths });
         if (!inherited) buildLease = await acquireRuntimeLock({ paths, command: 'astro build' });
         try {

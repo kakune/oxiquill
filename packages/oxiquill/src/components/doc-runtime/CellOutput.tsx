@@ -64,6 +64,11 @@ export function CellOutput({
       : '';
 
   const outcome = outputResults?.find((output) => output.status === 'valid' && output.artifact.kind === 'outcome');
+  // Announce an outcome when its content changes, not when an identical result is republished.
+  const outcomeKey =
+    outcome?.status === 'valid' && outcome.artifact.kind === 'outcome'
+      ? JSON.stringify([outcome.artifact.state, outcome.artifact.label])
+      : '';
   const [outcomeAnnouncement, setOutcomeAnnouncement] = useState('');
   useLayoutEffect(() => {
     setOutcomeAnnouncement('');
@@ -82,7 +87,8 @@ export function CellOutput({
       0
     );
     return () => clearTimeout(timer);
-  }, [result, isComplete, isRunning, isStale, error, labels]);
+  }, [outcomeKey, isComplete, isRunning, isStale, error, labels]);
+  const showReused = reused && isComplete && !isStale && !isRunning;
 
   return (
     <div
@@ -95,17 +101,32 @@ export function CellOutput({
       <p class="doc-visually-hidden" aria-atomic="true" aria-live="polite" role="status">
         {liveMessage}
       </p>
-      {reused && isComplete && !isStale && !isRunning ? <p role="status">{labels.reusedResult}</p> : null}
-      {upstreamChanged ? (
-        <p class="doc-cell__stale" role="note">
-          {labels.upstreamChanged}
+      {/* Live regions stay mounted so that changes to their text are announced. */}
+      <p class="doc-visually-hidden" aria-atomic="true" aria-live="polite" role="status">
+        {outcomeAnnouncement}
+      </p>
+      {/* Run status overlays the top of the outputs, so editing inputs and rerunning never moves
+          charts, tables, or other retained output. */}
+      <div class="doc-cell__status">
+        {result && isRunning ? (
+          <span class="doc-cell__updating" aria-hidden="true">
+            {labels.cellUpdating}
+          </span>
+        ) : null}
+        {result && isStale ? (
+          <p class="doc-cell__stale" role="note">
+            {labels.previousInputsOutput}
+          </p>
+        ) : null}
+        {upstreamChanged ? (
+          <p class="doc-cell__stale" role="note">
+            {labels.upstreamChanged}
+          </p>
+        ) : null}
+        <p class={showReused ? 'doc-cell__reused' : 'doc-visually-hidden'} role="status">
+          {showReused ? labels.reusedResult : ''}
         </p>
-      ) : null}
-      {outcome ? (
-        <p class="doc-visually-hidden" aria-atomic="true" aria-live="polite" role="status">
-          {outcomeAnnouncement}
-        </p>
-      ) : null}
+      </div>
       {error !== undefined ? (
         <div class="doc-cell__error">
           <p class="error-state" role="alert">
@@ -141,11 +162,6 @@ export function CellOutput({
       ) : null}
       {result ? (
         <div class="doc-cell__retained-output" data-stale={isStale ? 'true' : undefined} key="outputs">
-          {isStale ? (
-            <p class="doc-cell__stale" role="note">
-              {labels.previousInputsOutput}
-            </p>
-          ) : null}
           <div class="doc-cell__outputs" data-layout={outputLayout === 'columns' ? 'columns' : undefined}>
             {error !== undefined ? <p>{labels.previousSuccessfulOutput}</p> : null}
             <OutputRenderer
@@ -163,11 +179,6 @@ export function CellOutput({
       ) : (
         <p class="empty-state">{idleOutputMessage(runMode, labels)}</p>
       )}
-      {result && isRunning ? (
-        <span class="doc-cell__updating" aria-hidden="true">
-          {labels.cellUpdating}
-        </span>
-      ) : null}
     </div>
   );
 }

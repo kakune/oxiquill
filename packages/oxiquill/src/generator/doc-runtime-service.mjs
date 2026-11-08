@@ -368,6 +368,7 @@ export async function syncDocRuntime({
       desired[language].pages = pageSourceFingerprints(desired[language].sources);
     const { outputComplete, outputPresent, outputMissing } = await runtimeOutputState({
       fileSystem,
+      mode,
       paths,
       state,
       manifest: previousManifest
@@ -714,7 +715,11 @@ export async function syncDocRuntime({
         (result?.results ?? []).filter((entry) => entry.ok).map((entry) => [entry.group.id, entry.value])
       );
       const failed = new Set(failures.map((failure) => failure.group.id));
-      const previousModules = new Map((state?.rust?.modules ?? []).map((module) => [module.id, module]));
+      // A failing group keeps its last working module only while that module's files exist.
+      const intact = new Set(rustModules.groups.filter((group) => group.previousComplete).map((group) => group.id));
+      const previousModules = new Map(
+        (state?.rust?.modules ?? []).filter((module) => intact.has(module.id)).map((module) => [module.id, module])
+      );
       const groups = rustModules.groups.map((group) => {
         if (built.has(group.id)) return { ...group, status: 'built', module: built.get(group.id).module };
         if (failed.has(group.id)) return { ...group, status: 'failed' };
@@ -797,7 +802,7 @@ function createDesiredRuntime({
   });
 }
 
-async function runtimeOutputState({ fileSystem, paths, state, manifest }) {
+async function runtimeOutputState({ fileSystem, mode, paths, state, manifest }) {
   if (manifest?.rust) validateRustRegistry(manifest.rust, manifest.cells);
   const registryCurrent = !state?.rust || stableFingerprint(state.rust) === stableFingerprint(manifest?.rust);
   const outputPresent = {
@@ -833,13 +838,17 @@ async function runtimeOutputState({ fileSystem, paths, state, manifest }) {
         fileSystem.existsSync(paths.cellsJsonPath) &&
         fileSystem.existsSync(paths.runtimeOwnershipPath) &&
         (state.ready === false || fileSystem.existsSync(paths.runtimeVersionPath)),
-      pythonPublic: await recordedOutputIsComplete(state?.languages?.python, paths.pyodidePublicDir, fileSystem),
+      pythonPublic: await recordedOutputIsComplete(state?.languages?.python, paths.pyodidePublicDir, fileSystem, {
+        mode
+      }),
       haskellSource:
         outputPresent.haskellSource &&
         ['Main.hs', 'Oxiquill/Output.hs'].every((file) =>
           fileSystem.existsSync(pathInUrl(paths.haskellCellsDir, file))
         ),
-      haskellPublic: await recordedOutputIsComplete(state?.languages?.haskell, paths.haskellWasmPublicDir, fileSystem)
+      haskellPublic: await recordedOutputIsComplete(state?.languages?.haskell, paths.haskellWasmPublicDir, fileSystem, {
+        mode
+      })
     }
   };
 }
@@ -1001,6 +1010,7 @@ async function writeGeneratedRuntime({ fileSystem, generated, nextState, paths, 
 function staleLanguageStages(paths, plan) {
   const targets = [
     [plan.languages.rust.source, paths.rustCellsDir],
+    [plan.languages.rust.public, paths.rustWasmPublicDir],
     [plan.languages.python.public, paths.pyodidePublicDir],
     [plan.languages.haskell.source, paths.haskellCellsDir],
     [plan.languages.haskell.public, paths.haskellWasmPublicDir]

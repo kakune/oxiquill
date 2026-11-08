@@ -1,7 +1,7 @@
 import { generateRustExportSupport } from './exports.mjs';
 import { generateRustReaders } from '../rust-readers.mjs';
 import { rustFunctionName } from '../rust-identifiers.mjs';
-import { scanRustMacroInvocations } from './macro-invocations.mjs';
+import { authoredMacroInvocations } from './macro-invocations.mjs';
 import { rustOutputCapabilities } from './capabilities.mjs';
 import { generatedBanner } from './banners.mjs';
 import { generateRustFunctionMapped } from './functions.mjs';
@@ -40,7 +40,7 @@ ${matchArms}
     serialize_cell_output(output).map_err(to_js_error)
 }`;
 
-  const macroSets = rustCells.map((cell) => scanRustMacroInvocations(cell.source, cell));
+  const macroSets = rustCells.map(authoredMacroInvocations);
   const functions = rustCells.flatMap((cell, index) => [
     generateRustFunctionMapped(cell, macroSets[index]),
     generatedFragment('\n\n')

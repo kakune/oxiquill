@@ -21,7 +21,7 @@ export function chartToTable(spec: ChartSpec, labels: RuntimeLabels, selected?: 
   });
   if (spec.kind === 'xy') {
     columns = [
-      column('id', 'ID', 'string'),
+      column('id', labels.chartLayerId, 'string'),
       column('kind', labels.chartKind, 'string'),
       column('series', labels.chartSeries, 'string'),
       column('x', spec.xLabel ?? 'X', spec.xType === 'time' ? 'datetime' : 'number'),

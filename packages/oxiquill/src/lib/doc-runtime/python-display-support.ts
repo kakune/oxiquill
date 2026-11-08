@@ -527,6 +527,10 @@ def __oxiquill_table_columns(artifact, descriptors):
             return __oxiquill_error_artifact("Table column labels must match the table width.")
         columns = [{**column, "label": label} for column, label in zip(existing, descriptors)]
     elif isinstance(descriptors, dict):
+        names = {column["key"] for column in existing} | {column["label"] for column in existing}
+        unmatched = [str(name) for name in descriptors if name not in names]
+        if unmatched:
+            return __oxiquill_error_artifact("Table column descriptor matches no column: " + ", ".join(unmatched) + ".")
         columns = []
         for column in existing:
             descriptor = descriptors.get(column["key"], descriptors.get(column["label"], {}))
@@ -618,7 +622,7 @@ def display_table(value, *, columns=None, title=None, caption=None):
 `;
 
 const pythonDisplayChartSupport = String.raw`
-def display_scene3d(points, *, edges=None, groups=None, axes=None, camera=None, title=None, caption=None):
+def display_scene3d(points, *, edges=None, groups=None, axes=None, camera=None, id=None, title=None, caption=None):
     try:
         artifact = {"kind": "scene3d", "points": list(islice(iter(points), ${outputArtifactLimits.scene3dPoints + 1}))}
         if len(artifact["points"]) > ${outputArtifactLimits.scene3dPoints}:
@@ -627,7 +631,7 @@ def display_scene3d(points, *, edges=None, groups=None, axes=None, camera=None, 
             artifact["edges"] = list(islice(iter(edges), ${outputArtifactLimits.scene3dEdges + 1}))
             if len(artifact["edges"]) > ${outputArtifactLimits.scene3dEdges}:
                 raise ValueError("Scene3d.edges exceeds ${outputArtifactLimits.scene3dEdges} entries.")
-        for key, value in (("groups", groups), ("axes", axes), ("camera", camera), ("title", title), ("caption", caption)):
+        for key, value in (("id", id), ("groups", groups), ("axes", axes), ("camera", camera), ("title", title), ("caption", caption)):
             if value is not None:
                 artifact[key] = value
         encoder = json.JSONEncoder(ensure_ascii=False, allow_nan=False, separators=(",", ":"))

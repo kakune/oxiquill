@@ -8,10 +8,12 @@ import { createOxiquillPaths } from '../../packages/oxiquill/src/config/paths.mj
 import { defaultFileSystem } from '../../packages/oxiquill/src/generator/doc-runtime/file-system.mjs';
 import { hashBytes } from '../../packages/oxiquill/src/generator/doc-runtime/hashing.mjs';
 import { createHelperClosureReader } from '../../packages/oxiquill/src/generator/doc-runtime/rust-helper-closure.mjs';
+import { predictRustLockClosures } from '../../packages/oxiquill/src/generator/doc-runtime/rust-module-plan.mjs';
 import {
   compareSemver,
   groupLockClosure,
   lockClosure,
+  lockClosureDigest,
   parseLockReference,
   resolveWorkspaceLock,
   runtimeLockClosure,
@@ -130,6 +132,54 @@ describe('Cargo.lock references and versions', () => {
 });
 
 describe('helper dependency closure', () => {
+  it('predicts the resolved closure of a module that uses a helper crate', async () => {
+    const root = await mkdtemp(path.join(tmpdir(), 'oxiquill-lock-'));
+    roots.push(root);
+    const put = async (file, text) => {
+      await mkdir(path.dirname(path.join(root, file)), { recursive: true });
+      await writeFile(path.join(root, file), text);
+    };
+    await put('crates/Cargo.toml', '[workspace]\nmembers = ["helper", "inner"]\nresolver = "3"\n');
+    await put(
+      'crates/helper/Cargo.toml',
+      '[package]\nname = "helper"\nversion = "1.0.0"\n[dependencies]\nitoa = "1"\ninner = { path = "../inner" }\n'
+    );
+    await put('crates/inner/Cargo.toml', '[package]\nname = "inner"\n');
+    const packages = [
+      { name: 'helper', version: '1.0.0', dependencies: ['inner', 'itoa'] },
+      { name: 'inner', version: '0.0.0' },
+      entry('itoa', '1.0.18')
+    ];
+    await put(
+      'crates/Cargo.lock',
+      `version = 4\n${packages
+        .map(
+          (pkg) =>
+            `\n[[package]]\nname = "${pkg.name}"\nversion = "${pkg.version}"${pkg.source ? `\nsource = "${pkg.source}"\nchecksum = "${pkg.checksum}"` : ''}${pkg.dependencies ? `\ndependencies = ${JSON.stringify(pkg.dependencies)}` : ''}\n`
+        )
+        .join('')}`
+    );
+    const closure = await createHelperClosureReader({
+      paths: createOxiquillPaths({ workspaceRoot: root }),
+      helperCrates: new Map([['helper', { name: 'helper', relativePath: '../../crates/helper' }]]),
+      fileSystem: defaultFileSystem,
+      digest: async (file) => hashBytes(await defaultFileSystem.readFile(file))
+    }).closure(['helper']);
+    expect(closure.localPackages).toEqual([
+      { name: 'helper', version: '1.0.0' },
+      { name: 'inner', version: '0.0.0' }
+    ]);
+    const plan = {
+      workspace: { runtime: [], helperPackages: closure.packages },
+      groups: [{ id: 'g', helpers: closure }]
+    };
+    const resolved = {
+      version: 4,
+      package: [{ name: 'doc-rust-g', version: '0.4.1', dependencies: ['helper'] }, ...packages]
+    };
+    expect(predictRustLockClosures(plan).g).toBe(lockClosureDigest(groupLockClosure(resolved, 'doc-rust-g')));
+  });
+
   it('follows normal and build dependencies but never dev-dependencies', async () => {
     const workspace = await helperWorkspace();
     const closure = await workspace.reader().closure(['helper']);

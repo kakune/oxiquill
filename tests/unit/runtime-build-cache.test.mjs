@@ -192,16 +192,22 @@ describe('runtime output integrity', () => {
     await write(file, Buffer.from([0, 1, 255]));
     const publicFileIntegrity = await recordOutputIntegrity(directory);
     const state = { publicFiles: Object.keys(publicFileIntegrity), publicFileIntegrity };
+    const build = { mode: 'build' };
     expect(publicFileIntegrity['nested/runtime.wasm'].size).toBe(3);
-    expect(await recordedOutputIsComplete(state, directory)).toBe(true);
+    expect(await recordedOutputIsComplete(state, directory, undefined, build)).toBe(true);
     await write(file, Buffer.from([0, 2, 255]));
-    expect(await recordedOutputIsComplete(state, directory)).toBe(false);
+    expect(await recordedOutputIsComplete(state, directory, undefined, build)).toBe(false);
+    // Development reuses kept outputs by existence and size, as Rust modules do.
+    expect(await recordedOutputIsComplete(state, directory, undefined, { mode: 'dev' })).toBe(true);
     await write(file, Buffer.from([0]));
-    expect(await recordedOutputIsComplete(state, directory)).toBe(false);
+    for (const options of [build, { mode: 'dev' }])
+      expect(await recordedOutputIsComplete(state, directory, undefined, options)).toBe(false);
     await rm(file);
-    expect(await recordedOutputIsComplete(state, directory)).toBe(false);
+    for (const options of [build, { mode: 'dev' }])
+      expect(await recordedOutputIsComplete(state, directory, undefined, options)).toBe(false);
     await mkdir(file);
-    expect(await recordedOutputIsComplete(state, directory)).toBe(false);
+    for (const options of [build, { mode: 'dev' }])
+      expect(await recordedOutputIsComplete(state, directory, undefined, options)).toBe(false);
   });
 
   it.each([

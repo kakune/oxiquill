@@ -172,7 +172,8 @@ describe('page-local graph execution', () => {
     }
   );
   it('treats rejected producer exports as failures', async () => {
-    const run = execute().mockResolvedValue(normalizeCellExecutionResult({ outputs: [] }));
+    // The runtime client validates exports against the producer declaration.
+    const run = execute().mockImplementation(async (node) => normalizeCellExecutionResult({ outputs: [] }, node));
     const { store } = setup([a, b, c], run);
     store.run('c');
     await complete(store, 'c');
@@ -335,7 +336,9 @@ describe('page producer caching', () => {
       store.reconcile({ cells: [changed, ...cells.slice(1)], rust: modules });
       store.run('c');
       await complete(store, 'c');
-      expect(run.mock.calls.map(([node]) => node.id)).toEqual(['a', 'b', 'c']);
+      // The changed producer recomputes; identical exports keep b's entry valid.
+      expect(run.mock.calls.map(([node]) => node.id)).toEqual(['a', 'c']);
+      expect(store.get('b').reused).toBe(true);
     }
     store.reconcile({
       cells,
@@ -388,5 +391,89 @@ describe('page producer caching', () => {
     expect(() => store.get('b')).toThrow('Unknown cell');
     store.dispose();
     store.run('a');
+  });
+});
+
+describe('page graph scheduling', () => {
+  const producer = cell('p', { exports: ['value'], inputs: [numeric('seed')], run: 'reactive' });
+  const consumer = (id: string, run: CellManifest['run'] = 'reactive') =>
+    cell(id, { dependsOn: { data: { cell: 'p' } }, inputs: [numeric('bias', 0)], run });
+  const content = (store: ReturnType<typeof createPageCellStore>, id: string) =>
+    (store.get(id).result?.outputs[0] as { content?: string } | undefined)?.content;
+
+  it('keeps scheduling after HMR removes a consumer that a producer request still names', async () => {
+    const { store } = setup([producer, consumer('x')]);
+    store.start('p');
+    store.start('x');
+    await complete(store, 'x');
+    store.setValues('p', { seed: 2 });
+    store.reconcile({ cells: [producer], rust: registry() });
+    await vi.waitFor(() => expect(content(store, 'p')).toBe('3'));
+    expect(() => store.setValues('p', { seed: 3 })).not.toThrow();
+    await vi.waitFor(() => expect(content(store, 'p')).toBe('4'));
+    expect(store.get('p').status).toBe('success');
+  });
+  it('restarts sibling consumers when one consumer becomes invalid during propagation', async () => {
+    const { store } = setup([producer, consumer('c1'), consumer('c2')]);
+    for (const id of ['p', 'c1', 'c2']) store.start(id);
+    await complete(store, 'c1');
+    await complete(store, 'c2');
+    store.setValues('p', { seed: 5 });
+    store.setValidity('c1', 'bias', false);
+    await vi.waitFor(() => expect(content(store, 'c2')).toBe('7'));
+    expect(store.get('c1')).toMatchObject({ status: 'idle', stale: true, upstreamChanged: true, error: undefined });
+  });
+  it('refreshes autorun consumers when their producer changes', async () => {
+    const { store } = setup([producer, consumer('auto', 'autorun')]);
+    store.start('p');
+    store.start('auto');
+    await complete(store, 'auto');
+    store.setValues('p', { seed: 4 });
+    await vi.waitFor(() => expect(content(store, 'auto')).toBe('6'));
+    expect(store.get('auto')).toMatchObject({ stale: false, upstreamChanged: false });
+  });
+  it('computes a shared producer once for consumers that start together', async () => {
+    const { store, run } = setup([{ ...producer, run: 'button' }, consumer('c1'), consumer('c2'), consumer('c3')]);
+    for (const id of ['c1', 'c2', 'c3']) store.start(id);
+    for (const id of ['c1', 'c2', 'c3']) await complete(store, id);
+    expect(run.mock.calls.filter(([node]) => node.id === 'p')).toHaveLength(1);
+  });
+  it('keeps prerequisites current while a downstream input recomputes', async () => {
+    const { store } = setup([producer, consumer('c')]);
+    store.start('p');
+    store.start('c');
+    await complete(store, 'c');
+    const states: string[] = [];
+    store.subscribe(() => states.push(`${store.get('p').status}:${store.get('p').stale}`));
+    store.setValues('c', { bias: 3 });
+    await vi.waitFor(() => expect(content(store, 'c')).toBe('6'));
+    expect(new Set(states)).toEqual(new Set(['success:false']));
+  });
+  it('does not report upstream changes to cells that have no result yet', async () => {
+    const { store } = setup([producer, consumer('b', 'button')]);
+    store.start('p');
+    await complete(store, 'p');
+    store.setValues('p', { seed: 3 });
+    await vi.waitFor(() => expect(content(store, 'p')).toBe('4'));
+    expect(store.get('b')).toMatchObject({ stale: false, status: 'idle' });
+    expect(store.get('b').upstreamChanged).toBeFalsy();
+  });
+  it('lets an in-flight computation finish when only the cache setting changes', async () => {
+    let finish: (() => void) | undefined;
+    const run = execute().mockImplementation(async (node, inputs, _v, _signal, _p, _o, _m, deps) => {
+      if (node.id === 'p' && !finish)
+        await new Promise<void>((resolve) => {
+          finish = resolve;
+        });
+      return calculate(node, inputs, deps);
+    });
+    const cached = { ...producer, run: 'button' as const, cache: 'inputs' as const };
+    const { store } = setup([cached, consumer('c', 'button')], run);
+    store.run('c');
+    await vi.waitFor(() => expect(finish).toBeDefined());
+    store.reconcile({ cells: [{ ...cached, cache: undefined }, consumer('c', 'button')], rust: registry() });
+    finish?.();
+    await complete(store, 'c');
+    expect(store.get('c')).toMatchObject({ status: 'success', upstreamFailure: undefined });
   });
 });

@@ -424,6 +424,10 @@ describe('oxiquill CLI', () => {
       expect.objectContaining({ cwd: actualRepoRoot, successfulSignals: ['SIGTERM'] })
     );
     expect(cliMocks.syncDocRuntime).toHaveBeenCalledOnce();
+    // The development server starts with every Rust module that builds.
+    expect(cliMocks.syncDocRuntime).toHaveBeenCalledWith(
+      expect.objectContaining({ mode: 'dev', tolerateRustModuleFailures: true })
+    );
     expect(cliMocks.watchDocRuntime).toHaveBeenCalledWith({ projectConfig: actualProjectConfig, skipInitial: true });
   });
 
@@ -685,6 +689,7 @@ describe('oxiquill CLI', () => {
     expect(cliMocks.syncDocRuntime).toHaveBeenLastCalledWith(
       expect.objectContaining({ mode: 'dev', tolerateHaskellBuildFailure: false })
     );
+    expect(cliMocks.syncDocRuntime.mock.lastCall?.[0].tolerateRustModuleFailures).toBeUndefined();
     expect(log).toHaveBeenCalledWith('Generated 1 interactive cell(s).');
   });
 

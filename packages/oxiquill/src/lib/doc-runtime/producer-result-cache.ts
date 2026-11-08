@@ -1,5 +1,6 @@
 import { ExecutionCancellationError } from './execution-cancellation.js';
 import { outputArtifactLimits, utf8ByteLength } from './output-limits.mjs';
+import { sha256 } from './sha256.js';
 import type { NormalizedCellExecutionResult } from './output-artifacts.js';
 
 export function canonicalSerialize(value: unknown): string {
@@ -12,8 +13,10 @@ export function canonicalSerialize(value: unknown): string {
 
 export async function resultHash(value: unknown): Promise<string> {
   const bytes = new TextEncoder().encode(canonicalSerialize(value));
-  const digest = await globalThis.crypto.subtle.digest('SHA-256', bytes);
-  return Array.from(new Uint8Array(digest), (byte) => byte.toString(16).padStart(2, '0')).join('');
+  // `crypto.subtle` exists only in secure contexts; the fallback yields the same digest.
+  const subtle = globalThis.crypto?.subtle;
+  const digest = subtle ? new Uint8Array(await subtle.digest('SHA-256', bytes)) : sha256(bytes);
+  return Array.from(digest, (byte) => byte.toString(16).padStart(2, '0')).join('');
 }
 
 export function cacheableResult(result: NormalizedCellExecutionResult): boolean {
@@ -25,9 +28,19 @@ export function cacheableResult(result: NormalizedCellExecutionResult): boolean 
   );
 }
 
-export type ProducerResult = { result: NormalizedCellExecutionResult; fingerprint: string; reused: boolean };
+/**
+ * `fingerprint` identifies the exports that descendants read; results without
+ * exports have none. Output-only differences do not change it.
+ */
+export type ProducerResult = { result: NormalizedCellExecutionResult; fingerprint?: string; reused: boolean };
 type Entry = ProducerResult & { bytes: number; producer: string; used: number };
 type Flight = { controller: AbortController; subscribers: number; promise: Promise<ProducerResult> };
+export type AcquireOptions = {
+  /** Starts a new computation instead of reusing a stored entry or an in-flight computation. */
+  force?: boolean;
+  /** Keeps a cacheable result for later requests (`cache: inputs`); otherwise only in-flight work is shared. */
+  store?: boolean;
+};
 
 export function createProducerResultCache({
   maxBytes = outputArtifactLimits.cachedResultBytesPerPage,
@@ -59,11 +72,11 @@ export function createProducerResultCache({
     key: string,
     execute: (signal: AbortSignal) => Promise<NormalizedCellExecutionResult>,
     signal: AbortSignal,
-    force = false
+    { force = false, store = true }: AcquireOptions = {}
   ): Promise<ProducerResult> {
     if (disposed || signal.aborted) return Promise.reject(new ExecutionCancellationError());
     const identity = canonicalSerialize([producer, key]);
-    const entry = entries.get(identity);
+    const entry = store ? entries.get(identity) : undefined;
     if (entry && !force) {
       entry.used = ++clock;
       return Promise.resolve({ result: entry.result, fingerprint: entry.fingerprint, reused: true });
@@ -77,12 +90,13 @@ export function createProducerResultCache({
           if (controller.signal.aborted) throw new ExecutionCancellationError();
           const result = await execute(controller.signal);
           if (controller.signal.aborted) throw new ExecutionCancellationError();
-          const fingerprint = await hash([key, result]);
+          const fingerprint = result.exports === undefined ? undefined : await hash(result.exports);
           if (controller.signal.aborted) throw new ExecutionCancellationError();
           const completed = { result, fingerprint, reused: false };
-          if (!disposed && flights.get(identity) === attempt && cacheableResult(result)) {
+          // A detached flight (see clearProducer) still answers its subscribers but is never stored.
+          if (store && !disposed && flights.get(identity) === attempt && cacheableResult(result)) {
             remove(identity);
-            const size = utf8ByteLength(canonicalSerialize(result));
+            const size = utf8ByteLength(JSON.stringify(result));
             entries.set(identity, { ...completed, producer, bytes: size, used: ++clock });
             bytes += size;
             evict(producer);
@@ -116,13 +130,14 @@ export function createProducerResultCache({
       if (signal.aborted) abort();
     });
   }
+  /**
+   * Forgets a producer's stored results and detaches its in-flight computations:
+   * current subscribers still receive them, later requests start afresh, and
+   * detached results are never stored.
+   */
   function clearProducer(producer: string): void {
     for (const [key, entry] of entries) if (entry.producer === producer) remove(key);
-    for (const [key, flight] of flights)
-      if ((JSON.parse(key) as string[])[0] === producer) {
-        flights.delete(key);
-        flight.controller.abort();
-      }
+    for (const key of [...flights.keys()]) if ((JSON.parse(key) as string[])[0] === producer) flights.delete(key);
   }
   function dispose(): void {
     disposed = true;

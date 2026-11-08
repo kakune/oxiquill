@@ -72,6 +72,7 @@ describe('bounded scene3d contract', () => {
     [{ camera: { script: 'alert(1)' } }, 'script'],
     [{ groups: [{ id: 'g' }, { id: 'g' }] }, 'id'],
     [{ groups: [{ id: '' }] }, 'id'],
+    [{ points: [{ id: 'a', position: [0, 0, 0], group: '' }] }, 'group'],
     [{ groups: [{ id: 'g', html: '<b>unsafe</b>' }] }, 'html'],
     [{ points: [{ id: 'a', position: [0, 0, 0], url: 'model.glb' }] }, 'url'],
     [{ edges: [{ from: 'a', to: 'b', script: 'code' }] }, 'script'],

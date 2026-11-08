@@ -161,6 +161,9 @@ export async function planRustModules({
     ).values()
   ];
   const manifest = generateRustWorkspaceManifest(planned);
+  const helperManifests = featureFingerprint(planned);
+  // Helper manifests (without dev-dependencies) decide which packages the lock
+  // must contain, including registry and path dependencies a helper lock omits.
   const lockInputFingerprint = hashText(
     stableFingerprint({
       manifest,
@@ -170,6 +173,7 @@ export async function planRustModules({
       ]),
       runtime,
       helpers: helperPackages,
+      helperManifests,
       buildInputs,
       cargo: toolchain?.cargo ?? null
     })
@@ -209,7 +213,7 @@ export async function planRustModules({
       lockInputFingerprint
     },
     published: Boolean(state?.rust?.modules?.length),
-    featureFingerprint: featureFingerprint(planned),
+    featureFingerprint: helperManifests,
     legacy: Boolean(state?.languages?.rust) && !published,
     context: { mode, force, failures, generatorIdentity, runtimeInputs, buildInputs, buildOptions, toolchain }
   };
@@ -236,6 +240,9 @@ export function predictRustLockClosures(plan) {
           preferred.get(`${entry.name}\0${entry.source}\0${semverCompatibility(entry.version)}`)?.entry ?? entry;
         closure.set(lockPackageKey(target), [target.name, target.version, target.source ?? '', target.checksum ?? '']);
       }
+      // Helper crates themselves are path packages of the resolved closure.
+      for (const local of group.helpers.localPackages ?? [])
+        closure.set(lockPackageKey(local), [local.name, local.version, '', '']);
       return [
         group.id,
         lockClosureDigest([...closure.values()].sort((a, b) => compareText(a.join('\0'), b.join('\0'))))
@@ -328,6 +335,8 @@ export async function finalizeRustModulePlan(plan, { closures, digests, paths })
         ...group,
         lockClosure,
         buildFingerprint,
+        // Whether the published files of the previous build are still in place.
+        previousComplete: complete,
         public: publicAction,
         reasons: {
           source: actionReasons({

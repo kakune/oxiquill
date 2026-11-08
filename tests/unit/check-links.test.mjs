@@ -92,6 +92,23 @@ describe('rendered local links', () => {
     );
     expect(result.failures.map(({ reason }) => reason)).toEqual(['missing-fragment', 'missing-fragment']);
   });
+  it('matches fragments as written before decoding them, as browsers do', () => {
+    const result = check('<a href="#100%"></a><a href="#a%20b"></a><div id="100%"></div><div id="a%20b"></div>');
+    expect(result.failures).toEqual([]);
+  });
+  it('resolves index and file pages of the preserve build format', () => {
+    const result = checkBuiltLinks(
+      report({ build: { format: 'preserve' } }),
+      entries({
+        'index.html': '<a href="guides/"></a><a href="guides/start#run"></a><a href="guides/missing"></a>',
+        'guides/index.html': '<a href="start"></a>',
+        'guides/start.html': '<h2 id="run"></h2><a href="./"></a>'
+      })
+    );
+    expect(result.failures).toMatchObject([
+      { target: 'https://example.test/manual/guides/missing', reason: 'missing-page' }
+    ]);
+  });
   it('checks non-HTML assets for existence without checking their fragments', () => {
     expect(
       check('<a href="file.pdf#page=2"></a><a href="missing.png"></a>', { 'file.pdf': '' }).failures
@@ -308,6 +325,18 @@ describe('build inputs and CLI', () => {
     expect(built.report.site).toBeNull();
     expect(checkBuiltLinks(built.report, built.entries).failures).toEqual([]);
   });
+  it('reads build reports of every Astro build format', async () => {
+    const { paths } = await fixture();
+    for (const format of ['directory', 'file', 'preserve']) {
+      await writeBuildReport({
+        cacheDir: paths.cacheDir,
+        dir: pathToFileURL(`${paths.outDir}/`),
+        config: report({ build: { format } })
+      });
+      expect((await readBuiltSite(paths.cacheDir)).report.build.format).toBe(format);
+    }
+  });
+
   it('distinguishes missing builds from missing pages and fragments', async () => {
     const { paths } = await fixture('<a href="missing/"></a><a href="#missing"></a>');
     const built = await readBuiltSite(paths.cacheDir);

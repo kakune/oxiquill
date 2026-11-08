@@ -104,6 +104,18 @@ try {
     bytes: [...Buffer.from('first\nsecond')],
     raw_bytes: [...Buffer.from('first\n  second')]
   });
+  // Every table macro accepts artifact metadata, so tests can select tables by id.
+  const tables = run('table-metadata').outputs;
+  assert.deepEqual(
+    validateOutputArtifacts(tables).map((output) => output.status),
+    ['valid', 'valid', 'valid', 'valid', 'error', 'error']
+  );
+  assert.equal(Object.hasOwn(tables[0], 'id'), false);
+  assert.deepEqual([tables[1].id, tables[1].caption, tables[1].rows[1]], ['scores', 'Two rows', ['beta', 5]]);
+  assert.deepEqual([tables[2].id, tables[2].title], ['records', 'Records']);
+  assert.deepEqual([tables[3].id, Object.hasOwn(tables[3], 'title')], ['plain-rows', false]);
+  assert.match(tables[4].message, /unsupported table metadata field: unexpected/u);
+  assert.match(tables[5].message, /table metadata must serialize as an object/u);
   const formatted = run('formatted-outcomes', { invalid: false }).outputs;
   assert.deepEqual(
     validateOutputArtifacts(formatted).map((output) => output.status),

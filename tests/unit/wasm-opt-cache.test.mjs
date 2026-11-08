@@ -102,6 +102,38 @@ describe('optimizer identity and keys', () => {
     expect(calls).toEqual(['C:\\project\\tools\\wasm-opt.COM', 'C:\\project\\tools\\wasm-opt.EXE']);
   });
 
+  it('never probes batch shims that cannot be spawned without a shell', async () => {
+    const calls = [];
+    const fileSystem = {
+      stat: async (command) => {
+        calls.push(command);
+        throw failure('ENOENT');
+      },
+      access: vi.fn(),
+      readFile: async () => input
+    };
+    await resolveWasmOpt({
+      platform: 'win32',
+      cwd: 'C:\\project',
+      environment: { PATH: 'tools', PATHEXT: '.CMD;.EXE;.BAT;.COM' },
+      fileSystem,
+      runCommand: async () => '117'
+    });
+    expect(calls).toEqual(['C:\\project\\tools\\wasm-opt.EXE', 'C:\\project\\tools\\wasm-opt.COM']);
+  });
+
+  it('requires a verified release only when release builds need wasm-opt', async () => {
+    const options = {
+      platform: 'freebsd',
+      environment: {},
+      runCommand: async () => '117',
+      paths: { downloadCacheDir: '/cache' },
+      provision: true
+    };
+    await expect(resolveWasmOpt(options)).rejects.toThrow('No verified wasm-opt 117 release');
+    expect(await resolveWasmOpt({ ...options, required: false })).toEqual({ identity: 'unavailable' });
+  });
+
   it('skips directories and nonexecutables and propagates identity errors', async () => {
     const options = { environment: { PATH: '/bin' }, runCommand: async () => '117' };
     expect(await resolveWasmOpt({ ...options, fileSystem: { stat: async () => ({ isFile: () => false }) } })).toEqual({

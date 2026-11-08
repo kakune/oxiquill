@@ -7,7 +7,10 @@ import {
   scopedCellId
 } from '../../packages/oxiquill/src/lib/doc-runtime/authoring-ids.mjs';
 import { normalizeCell } from '../../packages/oxiquill/src/lib/doc-runtime/normalized-cell.mjs';
-import { scanRustMacroInvocations } from '../../packages/oxiquill/src/generator/doc-runtime/rust-codegen/macro-invocations.mjs';
+import {
+  authoredMacroInvocations,
+  scanRustMacroInvocations
+} from '../../packages/oxiquill/src/generator/doc-runtime/rust-codegen/macro-invocations.mjs';
 import {
   rustOutputCapabilities,
   rustSourceCapabilities
@@ -165,12 +168,21 @@ describe('Rust macro invocation scanning', () => {
     ['br##"unfinished"#', 'raw string literal'],
     [String.raw`'\x27`, 'character literal'],
     ["b'x", 'byte character literal']
-  ])('reports unterminated %s with cell and source location', (source, kind) => {
-    const cell = { id: 'broken', pagePath: 'content/docs/broken.mdx', inputs: [], source: `\n${source}` };
-    expect(() => generateRustLib([cell])).toThrow(
+  ])('leaves unterminated %s to the compiler, failing only its module', (source, kind) => {
+    const cell = {
+      id: 'broken',
+      pagePath: 'content/docs/broken.mdx',
+      inputs: [],
+      source: `emit_json!(1);\n${source} emit_html!(after);`
+    };
+    expect(() => scanRustMacroInvocations(cell.source, cell)).toThrow(
       `Rust cell "broken" in content/docs/broken.mdx has an unterminated ${kind} at line 2, column`
     );
-    expect(() => generateRustFunction(cell)).toThrow('Rust cell "broken"');
+    // Like rustc, generation sees only the invocations before the unterminated token.
+    expect([...authoredMacroInvocations(cell)]).toEqual(['emit_json']);
+    // The authored source stays verbatim, so rustc reports the error at the cell.
+    expect(generateRustLib([cell])).toContain(cell.source);
+    expect(generateRustFunction(cell)).toContain(cell.source);
     expect(() => rustSourceCapabilities(source)).toThrow(`Rust source has an unterminated ${kind}`);
   });
 
@@ -210,7 +222,7 @@ describe('Rust cell author scope', () => {
     expect(generated.indexOf('let __outputs = std::cell::RefCell')).toBeLessThan(block);
     expect(generated.indexOf('macro_rules! println')).toBeLessThan(block);
     expect(generated.indexOf('macro_rules! emit_text')).toBeLessThan(block);
-    expect(generated.slice(block)).toContain('        let label = read_string(inputs, "label")?;');
+    expect(generated.slice(block)).toContain('        let label = read_string(__inputs, "label")?;');
     expect(generated.slice(block)).toContain(`\n${source}\n`);
     expect(generated).toContain('42\n    };\n\n    Ok(finish_cell_output(');
     expect(generated.slice(generated.indexOf('    Ok(finish_cell_output('))).toContain('__stdout.into_inner()');
@@ -909,10 +921,10 @@ describe('doc runtime core', () => {
     expect(rustReaderName({ type: 'text' })).toBe('read_string');
 
     expect(generateRustInputBinding({ name: 'value-name', type: 'number' })).toBe(
-      'let value_name = read_f64(inputs, "value-name")?;'
+      'let value_name = read_f64(__inputs, "value-name")?;'
     );
     expect(generateRustInputBinding({ name: 'type', type: 'text' })).toBe(
-      'let cell_type = read_string(inputs, "type")?;'
+      'let cell_type = read_string(__inputs, "type")?;'
     );
     expect(haskellIdentifier('1-bad id')).toBe('cell_1_bad_id');
     expect(haskellIdentifier('data')).toBe('cell_data');
@@ -1170,5 +1182,24 @@ describe('doc runtime core', () => {
     expect(macros).toContain('macro_rules! emit_table_with_columns');
     expect(macros).not.toContain('macro_rules! emit_json');
     expect(macros).not.toContain('macro_rules! emit_line_chart');
+  });
+
+  it('accepts artifact metadata on every table macro', () => {
+    const macros = generateRustPreludeMacros(
+      'emit_table!(&rows);\nemit_table_with_columns!(&c, &r);\nemit_records_table!(&r);'
+    );
+    for (const [name, parameters] of [
+      ['emit_table', '$rows:expr'],
+      ['emit_table_with_columns', '$columns:expr, $rows:expr'],
+      ['emit_records_table', '$records:expr']
+    ]) {
+      const block = macros.slice(macros.indexOf(`macro_rules! ${name} {`));
+      expect(block).toContain(`(${parameters}) => {{`);
+      expect(block).toContain(`(${parameters}, metadata = $metadata:expr) => {{`);
+    }
+    expect(macros).not.toContain('OutputArtifact::Table(');
+    expect(generateRustLib([{ id: 'table', inputs: [], source: 'emit_table!(&rows);' }])).toContain(
+      'fn table_artifact_with_metadata(mut artifact: TableArtifact, metadata: Value) -> OutputArtifact'
+    );
   });
 });

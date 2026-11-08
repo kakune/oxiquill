@@ -32,6 +32,21 @@ describe('bounded producer cache', () => {
     expect(await resultHash({ z: 2, a: 1 })).toBe(await hash({ a: 1, z: 2 }));
     expect(await hash({ a: '1' })).not.toBe(await hash({ a: 1 }));
   });
+  it('hashes identically without crypto.subtle, as in insecure browser contexts', async () => {
+    const values = [
+      {},
+      { text: '日本語 🚀' },
+      { long: 'x'.repeat(1000) },
+      ...[55, 56, 63, 64, 119, 120].map((n) => 'a'.repeat(n))
+    ];
+    const expected = await Promise.all(values.map((value) => hash(value)));
+    vi.stubGlobal('crypto', {});
+    try {
+      expect(await Promise.all(values.map((value) => resultHash(value)))).toEqual(expected);
+    } finally {
+      vi.unstubAllGlobals();
+    }
+  });
   it('reuses complete results across configurations and forces replacement', async () => {
     const cache = createProducerResultCache({ hash });
     const run = vi.fn(async () => result());
@@ -39,7 +54,7 @@ describe('bounded producer cache', () => {
     await cache.acquire('a', 'two', run, signal());
     expect((await cache.acquire('a', 'one', run, signal())).reused).toBe(true);
     expect(run).toHaveBeenCalledTimes(2);
-    const refreshed = await cache.acquire('a', 'one', async () => result(2), signal(), true);
+    const refreshed = await cache.acquire('a', 'one', async () => result(2), signal(), { force: true });
     expect(refreshed.fingerprint).not.toBe(first.fingerprint);
     expect((await cache.acquire('a', 'one', run, signal())).result).toEqual(result(2));
   });
@@ -87,7 +102,7 @@ describe('bounded producer cache', () => {
     const fail = vi.fn(async () => {
       throw new Error(message);
     });
-    await expect(cache.acquire('a', 'key', fail, signal(), true)).rejects.toThrow(message);
+    await expect(cache.acquire('a', 'key', fail, signal(), { force: true })).rejects.toThrow(message);
     expect((await cache.acquire('a', 'key', fail, signal())).reused).toBe(true);
     await expect(cache.acquire('b', 'key', fail, signal())).rejects.toThrow(message);
     await expect(cache.acquire('b', 'key', fail, signal())).rejects.toThrow(message);
@@ -145,12 +160,12 @@ describe('bounded producer cache', () => {
     const cache = createProducerResultCache({ hash });
     const task = deferred<ReturnType<typeof result>>();
     const old = cache.acquire('a', '1', () => task.promise, signal());
-    await cache.acquire('a', '1', async () => result(2), signal(), true);
+    await cache.acquire('a', '1', async () => result(2), signal(), { force: true });
     task.resolve(result());
     await old;
     expect((await cache.acquire('a', '1', async () => result(3), signal())).result).toEqual(result(2));
   });
-  it('rejects already obsolete subscribers and drops invalidated in-flight entries', async () => {
+  it('rejects already obsolete subscribers and detaches invalidated in-flight entries', async () => {
     const cache = createProducerResultCache({ hash });
     const controller = new AbortController();
     controller.abort();
@@ -158,13 +173,61 @@ describe('bounded producer cache', () => {
     await expect(cache.acquire('a', '1', run, controller.signal)).rejects.toMatchObject({ name: 'AbortError' });
     expect(run).not.toHaveBeenCalled();
     const task = deferred<ReturnType<typeof result>>();
-    const pending = cache.acquire('a', '1', () => task.promise, signal());
-    const rejected = expect(pending).rejects.toMatchObject({ name: 'AbortError' });
+    let computationSignal: AbortSignal | undefined;
+    const pending = cache.acquire(
+      'a',
+      '1',
+      (signal) => {
+        computationSignal = signal;
+        return task.promise;
+      },
+      signal()
+    );
     await Promise.resolve();
     cache.clearProducer('a');
+    // A later request does not join the detached computation.
+    const fresh = cache.acquire('a', '1', async () => result(2), signal());
+    expect(computationSignal?.aborted).toBe(false);
     task.resolve(result());
-    await rejected;
+    await expect(pending).resolves.toMatchObject({ reused: false, result: result() });
+    await expect(fresh).resolves.toMatchObject({ reused: false, result: result(2) });
+    // Only the fresh computation is stored.
+    expect(cache.size).toBe(1);
+    expect((await cache.acquire('a', '1', run, signal())).result).toEqual(result(2));
+  });
+  it('shares in-flight work without storing results unless asked to', async () => {
+    const cache = createProducerResultCache({ hash });
+    const task = deferred<ReturnType<typeof result>>();
+    const run = vi.fn(() => task.promise);
+    const first = cache.acquire('a', 'key', run, signal(), { store: false });
+    const second = cache.acquire('a', 'key', run, signal(), { store: false });
+    await Promise.resolve();
+    task.resolve(result());
+    await expect(first).resolves.toMatchObject({ reused: false });
+    await expect(second).resolves.toMatchObject({ reused: false });
+    expect(run).toHaveBeenCalledTimes(1);
     expect(cache.size).toBe(0);
+    await cache.acquire('a', 'key', async () => result(), signal(), { store: false });
+    expect(cache.size).toBe(0);
+  });
+  it('fingerprints exports only', async () => {
+    const cache = createProducerResultCache({ hash });
+    const printed = (text: string) =>
+      normalizeCellExecutionResult({
+        exports: { value: 1 },
+        outputs: [{ kind: 'text', content: text, stream: 'stdout' }]
+      });
+    const first = await cache.acquire('a', '1', async () => printed('one'), signal());
+    const second = await cache.acquire('a', '2', async () => printed('two'), signal());
+    expect(first.fingerprint).toBe(await hash({ value: 1 }));
+    expect(second.fingerprint).toBe(first.fingerprint);
+    const exportless = await cache.acquire(
+      'b',
+      '1',
+      async () => normalizeCellExecutionResult({ outputs: [] }),
+      signal()
+    );
+    expect(exportless.fingerprint).toBeUndefined();
   });
 });
 

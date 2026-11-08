@@ -1,21 +1,6 @@
 import path from 'node:path';
 import { hashText } from './hashing.mjs';
 
-export function compilerMessages(output) {
-  return String(output ?? '')
-    .split('\n')
-    .flatMap((line) => {
-      try {
-        const value = JSON.parse(line);
-        return value.reason === 'compiler-message' && value.message?.level === 'error'
-          ? [{ ...value.message, targetFile: value.target?.src_path }]
-          : [];
-      } catch {
-        return [];
-      }
-    });
-}
-
 function fileMap(fileName, files, cwd) {
   const candidates = files.filter((file) =>
     [path.resolve(cwd, fileName), path.resolve(file.crateDir, fileName)].includes(path.resolve(file.file))

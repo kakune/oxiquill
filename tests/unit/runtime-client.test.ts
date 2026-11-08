@@ -1,6 +1,7 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import {
   createInteractiveCellRunner as createRunner,
+  supersededRustModuleLimit,
   preparePythonRuntime,
   getPythonPreparationState,
   subscribePythonPreparation,
@@ -200,6 +201,28 @@ describe('runtime client', () => {
     workers[0].emitMessage({ requestId: 4, ok: true, result });
     await expect(valid).resolves.toEqual(normalizedResult);
     expect(workers).toHaveLength(1);
+    runner.resetWorker('rust');
+  });
+
+  it('retires an idle Rust worker once superseded modules reach the limit', async () => {
+    const { runner, workers } = makeRunner();
+    const versions = Array.from({ length: supersededRustModuleLimit + 1 }, (_, index) => ({
+      ...rustModule,
+      id: 'first',
+      cells: ['rust-cell'],
+      fingerprint: `v${index}`
+    }));
+    let requestId = 0;
+    for (const [index, module] of versions.entries()) {
+      runner.updateRustRegistry({ version: 1, modules: [module] });
+      const run = runner.runInteractiveCell(makeCell('rust'), {}, undefined, undefined, undefined, undefined, module);
+      workers.at(-1)?.emitMessage({ requestId: ++requestId, ok: true, result });
+      await expect(run).resolves.toEqual(normalizedResult);
+      // Ordinary edits replace modules selectively in the same worker.
+      expect(workers).toHaveLength(index < supersededRustModuleLimit ? 1 : 2);
+    }
+    expect(workers[0].terminated).toBe(true);
+    expect(workers[1].terminated).toBe(false);
     runner.resetWorker('rust');
   });
 

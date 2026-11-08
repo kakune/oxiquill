@@ -133,16 +133,19 @@ export function sceneDistance(
   return { kind: 'distance', value, unit };
 }
 
+type SceneColumn = 'id' | 'label' | 'group' | 'from' | 'to';
+
 export function sceneTables(
   scene: Scene3dArtifact,
-  titles: { points: string; edges: string }
+  titles: { points: string; edges: string; columns?: Readonly<Record<SceneColumn, string>> }
 ): { points: TableArtifact; edges: TableArtifact } {
+  const column = (key: SceneColumn) => ({ key, label: titles.columns?.[key] ?? key, type: 'string' as const });
   return {
     points: {
       kind: 'table',
       title: titles.points,
       columns: [
-        ...['id', 'label', 'group'].map((key) => ({ key, label: key, type: 'string' as const })),
+        ...(['id', 'label', 'group'] as const).map(column),
         ...sceneAxes.map((key) => ({
           key,
           label: scene.axes?.[key]?.label ?? key,
@@ -155,7 +158,7 @@ export function sceneTables(
     edges: {
       kind: 'table',
       title: titles.edges,
-      columns: ['from', 'to'].map((key) => ({ key, label: key, type: 'string' as const })),
+      columns: (['from', 'to'] as const).map(column),
       rows: (scene.edges ?? []).map(({ from, to }) => [from, to])
     }
   };

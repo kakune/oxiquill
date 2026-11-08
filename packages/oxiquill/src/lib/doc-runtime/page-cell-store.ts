@@ -1,4 +1,4 @@
-import { dependencyOrder, dependentIds } from './cell-graph.mjs';
+import { dependencyOrder, dependentIds, isGraphCell } from './cell-graph.mjs';
 import { restoreSharedInputs, sharedInputsParameter } from './input-sharing.js';
 import { initialValues, reconcileInputValues } from './interactive-cell-model.js';
 import { createLatestRequestScheduler } from './interactive-cell-scheduler.js';
@@ -12,7 +12,6 @@ import { runInteractiveCell } from './runtime-client.js';
 import { boundedErrorMessage } from './output-limits.mjs';
 import { CellExecutionError } from './execution-error.js';
 import { ExecutionCancellationError } from './execution-cancellation.js';
-import { validateCellExports } from './cell-exports.js';
 import { getManifestSnapshot, subscribeManifest } from './manifest.js';
 import type { NormalizedCellExecutionResult } from './output-artifacts.js';
 import type { CellManifest, InputValues, PageCellManifest } from './types.js';
@@ -43,6 +42,12 @@ type StoreOptions = {
   hash?: typeof resultHash;
   restore?: typeof restoreSharedInputs;
   cacheBytes?: number;
+};
+type ChangeOptions = {
+  /** Schedules the changed cell and its automatic descendants. */
+  schedule?: boolean;
+  /** Restarts other requests cancelled by the change. */
+  restart?: boolean;
 };
 
 export function createPageCellStore(
@@ -101,9 +106,32 @@ export function createPageCellStore(
     return cell;
   };
   const allCells = () => [...cells.values()];
-  const closure = (roots: readonly string[]) => dependencyOrder(allCells(), roots);
+  // Roots of a request can outlive a cell removed by HMR; the rest of the request remains valid.
+  const closure = (roots: readonly string[]) =>
+    dependencyOrder(
+      allCells(),
+      roots.filter((id) => cells.has(id))
+    );
+  const closureIds = (roots: readonly string[]) => new Set(closure(roots).map((cell) => cell.id));
   const descendants = (id: string) => dependentIds(allCells(), id);
-  const rootsFor = (id: string) => [id, ...descendants(id).filter((child) => cells.get(child)?.run === 'reactive')];
+  // A root can run only when it and every prerequisite have valid inputs.
+  const runnable = (id: string) => closure([id]).every((cell) => get(cell.id).invalid.size === 0);
+  // Changing a cell refreshes it and every automatic (reactive or autorun) descendant that can run.
+  const rootsFor = (id: string) => [
+    id,
+    ...descendants(id).filter((child) => cells.get(child)?.run !== 'button' && runnable(child))
+  ];
+  const activeRoots = () =>
+    new Set([...schedulers.values()].filter((entry) => entry.active).flatMap((entry) => entry.request.roots));
+  // Marks a result whose upstream changed. Cells without a result have nothing to mark.
+  const markUpstreamChanged = (id: string) => {
+    if (get(id).result) update(id, { stale: true, upstreamChanged: true });
+  };
+  // Returns abandoned roots that no other active request still computes to `change`.
+  const settle = (roots: Iterable<string>, change: (id: string) => Partial<PageCellState>) => {
+    const busy = activeRoots();
+    for (const root of roots) if (cells.has(root) && !busy.has(root)) update(root, change(root));
+  };
 
   async function compute(request: GraphRequest, signal: AbortSignal): Promise<GraphRun> {
     const plan = closure(request.roots);
@@ -145,8 +173,9 @@ export function createPageCellStore(
           dependencyFingerprints
         ]);
         if (signal.aborted) throw new ExecutionCancellationError();
-        const run = async (runSignal: AbortSignal) => {
-          const result = await execute(
+        // The runtime client validates exports against the cell's declaration.
+        const run = (runSignal: AbortSignal) =>
+          execute(
             cell,
             values,
             moduleFor(cell.id)?.fingerprint,
@@ -156,17 +185,11 @@ export function createPageCellStore(
             moduleFor(cell.id),
             dependencies
           );
-          const exports = validateCellExports(result.exports, cell);
-          return { ...result, ...(exports ? { exports } : {}) };
-        };
-        const completed =
-          cell.cache === 'inputs'
-            ? await cache.acquire(cell.id, key, run, signal, request.force.includes(cell.id))
-            : await run(signal).then(async (result) => ({
-                result,
-                fingerprint: await hash([key, result]),
-                reused: false
-              }));
+        // Every node shares identical in-flight work; only `cache: inputs` keeps results.
+        const completed = await cache.acquire(cell.id, key, run, signal, {
+          force: request.force.includes(cell.id),
+          store: cell.cache === 'inputs'
+        });
         runs.set(cell.id, { success: true, value: completed });
       } catch (error) {
         if (signal.aborted) throw new ExecutionCancellationError();
@@ -180,19 +203,18 @@ export function createPageCellStore(
     return { runs, revisions, identities };
   }
 
-  function publish(run: GraphRun): void {
+  function publish(run: GraphRun): boolean {
     if (
       disposed ||
-      [...run.revisions].some(([id, revision]) => get(id).revision !== revision) ||
-      [...run.identities].some(([id, snapshot]) => !cells.has(id) || identity(cellFor(id)) !== snapshot)
+      [...run.identities].some(([id, snapshot]) => !cells.has(id) || identity(cellFor(id)) !== snapshot) ||
+      [...run.revisions].some(([id, revision]) => get(id).revision !== revision)
     )
-      return;
+      return false;
     // Results and the stale marks on previously published descendants form one
     // notification batch. Retained exports are never read during execution.
     for (const [id, result] of run.runs) {
       if (result.success && get(id).fingerprint !== result.value.fingerprint)
-        for (const child of descendants(id))
-          if (!run.runs.has(child)) update(child, { stale: true, upstreamChanged: true });
+        for (const child of descendants(id)) if (!run.runs.has(child)) markUpstreamChanged(child);
     }
     for (const [id, result] of run.runs) {
       if (result.success) {
@@ -219,6 +241,7 @@ export function createPageCellStore(
       }
     }
     notify();
+    return true;
   }
 
   function schedule(id: string, roots: readonly string[], force: readonly string[] = [], delay = 0): void {
@@ -226,38 +249,38 @@ export function createPageCellStore(
     const request = { roots, force };
     let entry = schedulers.get(id);
     if (!entry) {
+      const finish = (change: (root: string) => Partial<PageCellState>) => {
+        const current = schedulers.get(id);
+        if (!current) return;
+        current.active = false;
+        settle(current.request.roots, change);
+        notify();
+      };
       const scheduler = createLatestRequestScheduler<GraphRequest, GraphRun>({
         execute: compute,
         onResult: (run) => {
-          const entry = schedulers.get(id);
-          if (entry) entry.active = false;
-          publish(run);
+          const current = schedulers.get(id);
+          if (current) current.active = false;
+          // A result that lost its race with an HMR update releases its roots.
+          if (!publish(run)) finish((root) => ({ status: 'idle', stale: Boolean(get(root).result) }));
         },
+        // Only the requested roots show progress: prerequisites keep their state
+        // until the graph publishes, because their own inputs did not change.
         onScheduled: () => {
-          const entry = schedulers.get(id);
-          if (entry) entry.active = true;
-          for (const cell of closure(schedulers.get(id)?.request.roots ?? roots))
-            update(cell.id, {
+          const current = schedulers.get(id);
+          if (current) current.active = true;
+          for (const root of (current?.request.roots ?? roots).filter((candidate) => cells.has(candidate)))
+            update(root, {
               status: 'running',
-              stale: Boolean(get(cell.id).result),
+              stale: Boolean(get(root).result),
               error: undefined,
               upstreamFailure: undefined,
               partialResult: undefined
             });
           notify();
         },
-        onError: (error) => {
-          const entry = schedulers.get(id);
-          if (entry) entry.active = false;
-          update(id, { status: 'error', error: boundedErrorMessage(error) });
-          notify();
-        },
-        onCancelled: () => {
-          const entry = schedulers.get(id);
-          if (entry) entry.active = false;
-          update(id, { status: 'idle', stale: Boolean(get(id).result) });
-          notify();
-        }
+        onError: (error) => finish(() => ({ status: 'error', error: boundedErrorMessage(error) })),
+        onCancelled: () => finish((root) => ({ status: 'idle', stale: Boolean(get(root).result) }))
       });
       entry = { request, scheduler, active: false };
       schedulers.set(id, entry);
@@ -266,43 +289,51 @@ export function createPageCellStore(
     entry.scheduler.schedule(request, delay);
   }
 
-  function changed(id: string, shouldSchedule = true): void {
+  function changed(id: string, { schedule: scheduleChanged = true, restart = true }: ChangeOptions = {}): void {
     const affected = new Set([id, ...descendants(id)]);
-    const restart: [string, GraphRequest][] = [];
+    const cancelled: [string, GraphRequest][] = [];
     const abandoned = new Set<string>();
     for (const [owner, entry] of schedulers) {
-      if (closure(entry.request.roots).some((cell) => cell.id === id)) {
+      if (closureIds(entry.request.roots).has(id)) {
         entry.scheduler.cancel();
         if (entry.active) {
-          for (const cell of closure(entry.request.roots)) abandoned.add(cell.id);
-          if (owner !== id) restart.push([owner, entry.request]);
+          entry.request.roots.forEach((root) => abandoned.add(root));
+          if (owner !== id) cancelled.push([owner, entry.request]);
         }
         entry.active = false;
       }
     }
-    for (const child of abandoned) {
-      const stillNeeded = [...schedulers.values()].some(
-        (entry) => entry.active && closure(entry.request.roots).some((cell) => cell.id === child)
-      );
-      if (!stillNeeded) update(child, { status: 'idle', stale: Boolean(get(child).result) });
-    }
-    for (const child of affected)
+    settle(abandoned, (root) => ({ status: 'idle', stale: Boolean(get(root).result) }));
+    for (const child of affected) {
+      const hasResult = Boolean(get(child).result);
       update(child, {
-        stale: Boolean(get(child).result),
-        upstreamChanged: child !== id,
+        stale: hasResult,
+        upstreamChanged: child !== id && hasResult,
         status: 'idle',
         error: undefined,
         upstreamFailure: undefined,
         partialResult: undefined,
         reused: false
       });
+    }
     notify();
     const cell = cellFor(id);
-    if (shouldSchedule && !get(id).invalid.size && (cell.exports?.length || cell.run === 'reactive'))
+    if (scheduleChanged && !get(id).invalid.size && (cell.exports?.length || cell.run === 'reactive'))
       schedule(id, rootsFor(id), [], 150);
-    for (const [owner, request] of restart) {
-      if (shouldSchedule && !get(id).invalid.size && !(cell.exports?.length && rootsFor(id).includes(owner)))
-        schedule(owner, request.roots, request.force, 150);
+    if (!restart) return;
+    // Other cancelled requests continue with the roots that can still run, for
+    // example when a sibling consumer becomes invalid. Work they share with the
+    // new request runs once through the shared in-flight computations.
+    for (const [owner, request] of cancelled) {
+      const remaining = request.roots.filter((root) => cells.has(root) && runnable(root));
+      if (!remaining.length) continue;
+      const included = closureIds(remaining);
+      schedule(
+        owner,
+        remaining,
+        request.force.filter((forced) => included.has(forced)),
+        150
+      );
     }
   }
 
@@ -323,14 +354,12 @@ export function createPageCellStore(
     if (valid) invalid.delete(name);
     else invalid.add(name);
     update(id, { invalid, revision: previous.revision + 1 });
-    changed(id, false);
+    changed(id, { schedule: false });
   }
+  // Descendants are marked only when the producer publishes different exports.
   function run(id: string, recompute = false): void {
     if (get(id).invalid.size) return;
     const cell = cellFor(id);
-    if (cell.exports?.length) {
-      for (const child of descendants(id)) update(child, { stale: Boolean(get(child).result), upstreamChanged: true });
-    }
     schedule(
       id,
       cell.exports?.length ? rootsFor(id) : [id],
@@ -347,14 +376,14 @@ export function createPageCellStore(
     const previousCells = new Map(cells);
     manifest = next;
     const nextIds = new Set(next.cells.map((cell) => cell.id));
-    for (const id of cells.keys())
-      if (!nextIds.has(id)) {
-        schedulers.get(id)?.scheduler.dispose();
-        schedulers.delete(id);
-        cache.clearProducer(id);
-        state.delete(id);
-        started.delete(id);
-      }
+    const removed = new Set([...cells.keys()].filter((id) => !nextIds.has(id)));
+    for (const id of removed) {
+      schedulers.get(id)?.scheduler.dispose();
+      schedulers.delete(id);
+      cache.clearProducer(id);
+      state.delete(id);
+      started.delete(id);
+    }
     // Install the whole graph before invalidating anything: an HMR update may
     // introduce a producer referenced by an earlier cell in manifest order.
     cells.clear();
@@ -370,6 +399,21 @@ export function createPageCellStore(
           stale: false
         });
     }
+    // Requests that named a removed cell continue with their remaining roots.
+    for (const [owner, entry] of [...schedulers]) {
+      if (!entry.request.roots.some((root) => removed.has(root))) continue;
+      const roots = entry.request.roots.filter((root) => cells.has(root));
+      const active = entry.active;
+      entry.scheduler.cancel();
+      entry.active = false;
+      if (!roots.length) {
+        entry.scheduler.dispose();
+        schedulers.delete(owner);
+        continue;
+      }
+      entry.request = { roots, force: entry.request.force.filter((id) => cells.has(id)) };
+      if (active) schedule(owner, entry.request.roots, entry.request.force);
+    }
     const changedIds = next.cells
       .filter((cell) => oldIdentities.has(cell.id) && oldIdentities.get(cell.id) !== identity(cell))
       .map((cell) => cell.id);
@@ -382,63 +426,17 @@ export function createPageCellStore(
           revision: get(cell.id).revision + 1,
           inputRevision: get(cell.id).inputRevision + 1
         });
-        changed(cell.id, false);
+        changed(cell.id, { schedule: false, restart: false });
       } else if (previousCells.get(cell.id)?.cache !== cell.cache) cache.clearProducer(cell.id);
     }
     for (const id of changedIds) {
       const cell = cellFor(id);
-      const activeReactiveDescendants = descendants(id).some(
-        (child) => cellFor(child).run === 'reactive' && (started.has(child) || get(child).result)
+      const activeAutomaticDescendants = descendants(id).some(
+        (child) => cellFor(child).run !== 'button' && (started.has(child) || get(child).result)
       );
-      if ((started.has(id) && cell.run !== 'button') || (cell.exports?.length && activeReactiveDescendants))
+      if ((started.has(id) && cell.run !== 'button') || (cell.exports?.length && activeAutomaticDescendants))
         schedule(id, rootsFor(id));
     }
-    notify();
-  }
-  function recordIndependent(
-    id: string,
-    runtime: {
-      values: InputValues;
-      inputsValid: boolean;
-      isRunning: boolean;
-      isComplete: boolean;
-      isStale: boolean;
-      inputRevision: number;
-      result?: NormalizedCellExecutionResult;
-      error?: string;
-      partialResult?: NormalizedCellExecutionResult;
-    }
-  ): void {
-    const previous = get(id);
-    const status = runtime.isRunning
-      ? 'running'
-      : runtime.error !== undefined
-        ? 'error'
-        : runtime.isComplete
-          ? 'success'
-          : 'idle';
-    const inputsChanged =
-      canonicalSerialize(previous.values) !== canonicalSerialize(runtime.values) ||
-      Boolean(previous.invalid.size) === runtime.inputsValid;
-    if (
-      !inputsChanged &&
-      previous.result === runtime.result &&
-      previous.status === status &&
-      previous.error === runtime.error &&
-      previous.stale === runtime.isStale
-    )
-      return;
-    update(id, {
-      values: { ...runtime.values },
-      invalid: runtime.inputsValid ? new Set() : new Set(['invalid']),
-      revision: previous.revision + Number(inputsChanged),
-      inputRevision: runtime.inputRevision,
-      status,
-      result: runtime.result,
-      error: runtime.error,
-      partialResult: runtime.partialResult,
-      stale: runtime.isStale
-    });
     notify();
   }
   function dispose(): void {
@@ -450,13 +448,13 @@ export function createPageCellStore(
   }
   return {
     get,
+    has: (id: string) => cells.has(id),
     run,
     start,
     setValues,
     setValidity,
     reconcile,
     dispose,
-    recordIndependent,
     reset: (id: string) => setValues(id, initialValues(cellFor(id).inputs), true),
     subscribe: (listener: () => void) => {
       listeners.add(listener);
@@ -470,6 +468,11 @@ export function createPageCellStore(
 export type PageCellStore = ReturnType<typeof createPageCellStore>;
 const stores = new Map<string, { store: PageCellStore; dispose: () => void }>();
 
+/** The graph cells of one page, as published by the page data block and manifest updates. */
+export function pageGraphCells(cells: readonly CellManifest[], pagePath: string): CellManifest[] {
+  return cells.filter((candidate) => candidate.pagePath === pagePath && isGraphCell(candidate));
+}
+
 export function getPageCellStore(cell: CellManifest): PageCellStore {
   const existing = stores.get(cell.pagePath);
   if (existing) return existing.store;
@@ -481,23 +484,25 @@ export function getPageCellStore(cell: CellManifest): PageCellStore {
   const store = createPageCellStore(initial);
   const reconcile = () => {
     const next = getManifestSnapshot();
-    const cells = next.cells.filter((candidate) => candidate.pagePath === cell.pagePath);
+    const cells = pageGraphCells(next.cells, cell.pagePath);
     if (cells.length) store.reconcile({ cells, rust: next.rust });
   };
-  if (snapshot.cells.some((candidate) => candidate.pagePath === cell.pagePath)) reconcile();
+  if (pageGraphCells(snapshot.cells, cell.pagePath).length) reconcile();
   const unsubscribe = subscribeManifest(reconcile);
   let previousQuery = new URL(globalThis.location.href).searchParams.getAll(sharedInputsParameter).join('\0');
+  // Independent cells restore their own inputs; graph cells are restored here,
+  // and only those whose shared values changed are recomputed.
   const restore = () => {
     const query = new URL(globalThis.location.href).searchParams.getAll(sharedInputsParameter).join('\0');
     if (query === previousQuery) return;
     previousQuery = query;
-    const current = getManifestSnapshot().cells.filter((candidate) => candidate.pagePath === cell.pagePath);
-    for (const candidate of current.length ? current : initial.cells)
-      store.setValues(
-        candidate.id,
-        restoreSharedInputs(candidate, globalThis.location.href, store.get(candidate.id).values),
-        true
-      );
+    const current = pageGraphCells(getManifestSnapshot().cells, cell.pagePath);
+    for (const candidate of current.length ? current : initial.cells) {
+      if (!store.has(candidate.id)) continue;
+      const values = store.get(candidate.id).values;
+      const restored = restoreSharedInputs(candidate, globalThis.location.href, values);
+      if (canonicalSerialize(restored) !== canonicalSerialize(values)) store.setValues(candidate.id, restored, true);
+    }
   };
   const dispose = () => {
     store.dispose();

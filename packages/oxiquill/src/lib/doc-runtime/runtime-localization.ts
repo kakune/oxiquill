@@ -67,6 +67,7 @@ export type RuntimeLabels = {
   chartRetry: string;
   chartSummary: (details: ChartSummaryDetails) => string;
   chartKind: string;
+  chartLayerId: string;
   chartTitle: (kind: ChartKind) => string;
   clipboardUnavailable: string;
   copyCsv: string;
@@ -248,6 +249,7 @@ const runtimeLabels = {
     }) =>
       `${xLabel ? `X: ${xLabel}. ` : ''}${yLabel ? `Y: ${yLabel}. ` : ''}Series: ${seriesCount}${seriesNames ? ` (${seriesNames})` : ''}. Data items: ${dataCount}.${xCategoryCount == null ? '' : ` X categories: ${xCategoryCount}.`}${yCategoryCount == null ? '' : ` Y categories: ${yCategoryCount}.`}${xRange ? ` X range: ${xRange}.` : ''}${yRange ? ` Y range: ${yRange}.` : ''}${valueRange ? ` Heat value range: ${valueRange}.` : ''}`,
     chartKind: 'Kind',
+    chartLayerId: 'Layer ID',
     chartTitle: (kind) => chartTitles.en[kind],
     clipboardUnavailable: 'Clipboard access is unavailable.',
     copyCsv: 'Copy visible rows as CSV',
@@ -379,6 +381,7 @@ const runtimeLabels = {
     }) =>
       `${xLabel ? `X: ${xLabel}。` : ''}${yLabel ? `Y: ${yLabel}。` : ''}系列数: ${seriesCount}${seriesNames ? `（${seriesNames}）` : ''}。データ数: ${dataCount}。${xCategoryCount == null ? '' : `X カテゴリ数: ${xCategoryCount}。`}${yCategoryCount == null ? '' : `Y カテゴリ数: ${yCategoryCount}。`}${xRange ? `X の範囲: ${xRange}。` : ''}${yRange ? `Y の範囲: ${yRange}。` : ''}${valueRange ? `ヒート値の範囲: ${valueRange}。` : ''}`,
     chartKind: '種類',
+    chartLayerId: 'レイヤー ID',
     chartTitle: (kind) => chartTitles.ja[kind],
     clipboardUnavailable: 'クリップボードを利用できません。',
     copyCsv: '表示中の行を CSV としてコピー',

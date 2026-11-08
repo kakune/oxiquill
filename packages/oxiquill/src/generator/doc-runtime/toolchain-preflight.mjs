@@ -22,6 +22,8 @@ export async function preflightRequiredToolchains({
   trackChild
 }) {
   if (mode === undefined) return Object.freeze({});
+  // Probes of the real host can be reused within one process (see resolveWasmOpt).
+  const memoize = fileSystem === defaultFileSystem && runCommand === runCommandWithCapturedOutput;
   const execute = trackRuntimeCommand(runCommand, trackChild);
   runCommand = (command, args, options) => execute(command, args, { captureOutput: true, ...options });
 
@@ -35,6 +37,8 @@ export async function preflightRequiredToolchains({
           runCommand,
           runtimeInputs: runtimeInputs.rust,
           explain,
+          mode,
+          memoize,
           paths
         })
       : undefined,
@@ -72,6 +76,8 @@ export async function preflightRustToolchain({
   platform = process.platform,
   fileSystem = defaultFileSystem,
   explain = false,
+  mode = 'build',
+  memoize = false,
   paths,
   runCommand,
   runtimeInputs
@@ -137,7 +143,9 @@ export async function preflightRustToolchain({
     runCommand,
     paths,
     provision: Boolean(paths),
-    memoize: fileSystem === defaultFileSystem && runCommand === runCommandWithCapturedOutput
+    // Only release builds run wasm-opt; development continues on hosts without a verified release.
+    required: mode === 'build',
+    memoize
   });
   return Object.freeze({ ...versions, wasmOpt, target: runtimeInputs.target });
 }
