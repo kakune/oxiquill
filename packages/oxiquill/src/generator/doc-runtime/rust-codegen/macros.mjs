@@ -2,6 +2,14 @@ import { scanRustMacroInvocations } from './macro-invocations.mjs';
 import { hasAnyMacro } from './capabilities.mjs';
 
 const macroDescriptors = [
+  [
+    ['export'],
+    () => `    macro_rules! export {
+        ($name:ident, $value:expr) => {{
+            __exports.borrow_mut().write(stringify!($name), &$value)?;
+        }};
+    }`
+  ],
   [['println'], generatePrintlnMacro],
   [['emit_text'], generateTextMacro],
   [['emit_json'], generateJsonMacro],

@@ -30,7 +30,19 @@ export interface InputCase {
   inputs: InputValues;
 }
 
+export type JsonValue = null | boolean | number | string | readonly JsonValue[] | JsonObject;
+export type JsonObject = { readonly [name: string]: JsonValue };
+export type CellDependency = { readonly cell: string; readonly type?: string };
+export interface PageCellManifest {
+  readonly cells: readonly CellManifest[];
+  readonly rust?: RustRuntimeRegistry;
+}
+
 export interface CellManifest {
+  exports?: readonly string[];
+  dependsOn?: Readonly<Record<string, CellDependency>>;
+  cache?: 'inputs';
+  producerFingerprint?: string;
   uses?: readonly string[];
   ref?: string;
   cases?: readonly InputCase[];
@@ -380,14 +392,17 @@ export interface IntervalChartSpec extends BaseChartSpec {
 }
 
 export interface RawCellExecutionResult {
+  exports?: JsonObject;
   outputs: readonly unknown[];
 }
 
 export interface CellExecutionResult {
+  exports?: JsonObject;
   outputs: readonly OutputArtifact[];
 }
 
 export interface RuntimeWorkerRequest {
+  dependencies?: Readonly<Record<string, JsonObject>>;
   rustModule?: RustRuntimeModule;
   setup?: readonly PythonSetupStep[];
   requestId: number;

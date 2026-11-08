@@ -1,4 +1,7 @@
+import { InteractiveCellValidationError, formatInteractiveCellDiagnostic } from './cell-diagnostics.mjs';
+export { InteractiveCellValidationError, formatInteractiveCellDiagnostic };
 import YAML from 'yaml';
+import { normalizeDataMetadata } from './cell-data-dependencies.mjs';
 import { validReferenceName } from './references.mjs';
 import { normalizeCellTests } from './cell-tests.mjs';
 import { validInputValue } from './input-value-validation.mjs';
@@ -34,7 +37,10 @@ const cellFields = new Set([
   'editable',
   'setup',
   'kind',
-  'uses'
+  'uses',
+  'exports',
+  'dependsOn',
+  'cache'
 ]);
 const definitionFields = new Set(['id', 'kind', 'title', 'crates', 'uses', 'showSource']);
 const inputFields = new Set([
@@ -61,14 +67,6 @@ const optionPatterns = {
   python: /^\s*#\|\s?(.*)$/u,
   rust: /^\s*\/\/\/?\|\s?(.*)$/u
 };
-
-export class InteractiveCellValidationError extends Error {
-  constructor(diagnostics) {
-    super(diagnostics.map(formatInteractiveCellDiagnostic).join('\n'));
-    this.name = 'InteractiveCellValidationError';
-    this.diagnostics = diagnostics;
-  }
-}
 
 export function parseLanguage(info) {
   const raw = String(info ?? '')
@@ -144,6 +142,7 @@ export function parseInteractiveCellNode(node, pagePath, pythonOptions = {}, aut
         position.col + (prefix ? prefix[0].length - prefix[1].length : 0) + (node.position?.start?.column ?? 1) - 1
     };
   };
+  const dataMetadata = normalizeDataMetadata(metadata, inputs, language, context, locate, diagnostics);
   const refPosition = hasOwn(metadata, 'ref') ? locate('ref') : undefined;
   if (hasOwn(metadata, 'ref') && !validReferenceName(metadata.ref)) {
     diagnostics.push({
@@ -184,8 +183,8 @@ export function parseInteractiveCellNode(node, pagePath, pythonOptions = {}, aut
   if (!source.trim()) diagnostics.push(diagnostic(context, 'source', 'Expected non-empty cell source code.'));
   if (diagnostics.length > 0 || !localId)
     return invalidResult(
-      definitions || hasOwn(metadata, 'kind') || hasOwn(metadata, 'uses')
-        ? diagnostics.map((entry) => ({ ...entry, ...locate(entry.fieldPath.split(/[.[]/u)[0]) }))
+      definitions || hasOwn(metadata, 'kind') || hasOwn(metadata, 'uses') || Object.keys(dataMetadata).length > 0
+        ? diagnostics.map((entry) => ({ ...locate(entry.fieldPath.split(/[.[]/u)[0]), ...entry }))
         : diagnostics
     );
 
@@ -204,6 +203,7 @@ export function parseInteractiveCellNode(node, pagePath, pythonOptions = {}, aut
     cell: {
       id: scopedCellId(pagePath, localId),
       localId,
+      ...dataMetadata,
       ...(hasOwn(metadata, 'ref') ? { ref: metadata.ref, refPosition } : {}),
       language,
       ...(definitions ? { kind: 'definitions' } : {}),
@@ -349,12 +349,6 @@ export function uniqueCellIdDiagnostics(cells) {
   }
 
   return diagnostics;
-}
-
-export function formatInteractiveCellDiagnostic(value) {
-  const pagePath = value.pagePath || '(unknown page)';
-  const cell = value.cellId ? ` [cell ${JSON.stringify(value.cellId)}]` : '';
-  return `${pagePath}:${value.line ?? value.fenceStartLine}${value.column ? `:${value.column}` : ''}${cell} ${value.fieldPath}: ${value.message}`;
 }
 
 export function throwInteractiveCellDiagnostics(diagnostics) {

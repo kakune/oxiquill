@@ -108,7 +108,7 @@ describe('Rust module worker', () => {
     const { handle, postMessage, glue } = setup();
     const request = { requestId: 1, cellId: 'cell-a', inputs: { count: 2 }, rustModule: moduleA };
     await handle(request);
-    expect(glue.run_rust_cell).toHaveBeenCalledWith('cell-a', '{"count":2}');
+    expect(glue.run_rust_cell).toHaveBeenCalledWith('cell-a', '{"count":2}', '{}');
     expect(postMessage).toHaveBeenLastCalledWith({
       requestId: 1,
       rustModule: { id: 'first', fingerprint: 'a' },

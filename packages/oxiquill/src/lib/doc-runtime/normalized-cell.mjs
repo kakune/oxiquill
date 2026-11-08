@@ -15,6 +15,9 @@ export function normalizeCell(cell) {
     };
   return {
     id: cell.id,
+    ...(cell.exports ? { exports: cell.exports, producerFingerprint: cell.producerFingerprint } : {}),
+    ...(cell.dependsOn ? { dependsOn: cell.dependsOn } : {}),
+    ...(cell.cache ? { cache: cell.cache } : {}),
     ...(cell.ref !== undefined ? { ref: cell.ref } : {}),
     language: cell.language,
     title: cell.title,

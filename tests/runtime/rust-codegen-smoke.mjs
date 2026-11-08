@@ -94,7 +94,7 @@ try {
   const run = (name, inputs = {}) => {
     const cell = manifest.find((entry) => entry.id.endsWith(`__${name}`));
     assert.ok(cell, `${name} fixture must be generated`);
-    return JSON.parse(runtime.run_rust_cell(cell.id, JSON.stringify(inputs)));
+    return JSON.parse(runtime.run_rust_cell(cell.id, JSON.stringify(inputs), '{}'));
   };
   assert.deepEqual(run('multiline-literals').outputs[0].value, {
     text: 'first\nsecond',
@@ -297,7 +297,10 @@ try {
   assert.ok(settledCell, 'settled rebuild must include the newly authored cell');
   const settledRuntime = await import(`${pathToFileURL(await rustAsset('glue')).href}?settled`);
   settledRuntime.initSync({ module: await readFile(await rustAsset('wasm')) });
-  assert.equal(JSON.parse(settledRuntime.run_rust_cell(settledCell.id, '{}')).outputs[0].content, 'settled cell\n');
+  assert.equal(
+    JSON.parse(settledRuntime.run_rust_cell(settledCell.id, '{}', '{}')).outputs[0].content,
+    'settled cell\n'
+  );
   publishedWasm = await readFile(await rustAsset('wasm'));
 
   await writeFile(
@@ -334,7 +337,7 @@ try {
     const isolated = await import(`${pathToFileURL(await rustAsset('glue')).href}?${id}`);
     isolated.initSync({ module: await readFile(await rustAsset('wasm')) });
     const [cell] = JSON.parse(await readFile(paths.cellsJsonPath, 'utf8')).cells;
-    const result = JSON.parse(isolated.run_rust_cell(cell.id, '{}'));
+    const result = JSON.parse(isolated.run_rust_cell(cell.id, '{}', '{}'));
     assert.equal(result.outputs[0].kind, kind, id);
     assert.equal(validateOutputArtifacts(result.outputs)[0].status, 'valid', id);
   }

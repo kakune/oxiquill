@@ -1,7 +1,7 @@
 import { outputArtifactLimits, utf8ByteLength } from './output-limits.mjs';
 import { normalizeCellExecutionResult } from './output-artifacts.js';
 import { publicOutputArtifact, type ValidatedArtifactResult } from './output-artifact-validation.js';
-import type { OutputArtifact, RawCellExecutionResult } from './types.js';
+import type { OutputArtifact, RawCellExecutionResult, JsonObject } from './types.js';
 
 type ProducerErrorArtifact = {
   kind: '__oxiquill_error';
@@ -18,19 +18,22 @@ const responseLimitArtifact: ProducerErrorArtifact = {
 export function boundWorkerResult(result: RawCellExecutionResult): RawCellExecutionResult {
   const normalized = normalizeCellExecutionResult(result);
   const candidates = capArtifactCount(normalized.outputResults.map(workerOutputCandidate));
-  const complete = workerResultFromCandidates(candidates);
+  const complete = workerResultFromCandidates(candidates, normalized.exports);
   if (workerResultByteLength(complete) <= outputArtifactLimits.workerResponseBytes) return complete;
 
   let low = 0;
   let high = Math.min(candidates.length, outputArtifactLimits.artifactsPerRun - 1);
   while (low < high) {
     const middle = Math.ceil((low + high) / 2);
-    const candidate = workerResultFromCandidates([...candidates.slice(0, middle), responseLimitArtifact]);
+    const candidate = workerResultFromCandidates(
+      [...candidates.slice(0, middle), responseLimitArtifact],
+      normalized.exports
+    );
     if (workerResultByteLength(candidate) <= outputArtifactLimits.workerResponseBytes) low = middle;
     else high = middle - 1;
   }
 
-  return workerResultFromCandidates([...candidates.slice(0, low), responseLimitArtifact]);
+  return workerResultFromCandidates([...candidates.slice(0, low), responseLimitArtifact], normalized.exports);
 }
 
 export function workerResultByteLength(result: RawCellExecutionResult): number {
@@ -48,6 +51,9 @@ function workerOutputCandidate(result: ValidatedArtifactResult): WorkerOutputCan
     : { kind: '__oxiquill_error', message: result.message };
 }
 
-function workerResultFromCandidates(candidates: readonly WorkerOutputCandidate[]): RawCellExecutionResult {
-  return { outputs: candidates };
+function workerResultFromCandidates(
+  candidates: readonly WorkerOutputCandidate[],
+  exports?: JsonObject
+): RawCellExecutionResult {
+  return { outputs: candidates, ...(exports ? { exports } : {}) };
 }

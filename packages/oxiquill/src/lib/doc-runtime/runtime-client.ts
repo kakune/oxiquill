@@ -1,5 +1,6 @@
 import type {
   CellLanguage,
+  JsonObject,
   CellManifest,
   InputValues,
   RuntimeWorkerRequest,
@@ -18,6 +19,7 @@ import { markRuntimeEvent } from './runtime-timing.js';
 
 type PendingRequest = {
   rustModule?: RustRuntimeModule;
+  cell?: CellManifest;
   reject: (reason: Error) => void;
   timeout: ReturnType<typeof setTimeout>;
   worker: Worker;
@@ -46,14 +48,26 @@ export function runInteractiveCell(
   signal?: AbortSignal,
   onPhase?: (phase: RuntimeExecutionPhase) => void,
   overrides?: { source: string },
-  rustModule?: RustRuntimeModule
+  rustModule?: RustRuntimeModule,
+  dependencyData?: Readonly<Record<string, JsonObject>>
 ): Promise<NormalizedCellExecutionResult> {
   /* v8 ignore next -- the factory is unit-tested; this delegates to browser Worker adapters. */
-  return defaultRuntimeClient.runInteractiveCell(cell, inputs, runtimeVersion, signal, onPhase, overrides, rustModule);
+  const client = dependencyData === undefined ? defaultRuntimeClient : defaultGraphRuntimeClient;
+  return client.runInteractiveCell(
+    cell,
+    inputs,
+    runtimeVersion,
+    signal,
+    onPhase,
+    overrides,
+    rustModule,
+    dependencyData
+  );
 }
 
 export function updateRustRuntimeRegistry(registry: RustRuntimeRegistry): void {
   defaultRuntimeClient.updateRustRegistry(registry);
+  defaultGraphRuntimeClient.updateRustRegistry(registry);
 }
 
 export function preparePythonRuntime(packages: readonly string[], timeoutMs?: number): Promise<void> {
@@ -71,12 +85,14 @@ export function subscribePythonPreparation(listener: () => void): () => void {
 export function resetInteractiveRuntime(language?: CellLanguage): void {
   if (language) {
     defaultRuntimeClient.resetWorker(language);
+    defaultGraphRuntimeClient.resetWorker(language);
     return;
   }
 
   defaultRuntimeClient.resetWorker('rust');
   defaultRuntimeClient.resetWorker('python');
   defaultRuntimeClient.resetWorker('haskell');
+  defaultGraphRuntimeClient.resetWorker('rust');
 }
 
 export function createInteractiveCellRunner(dependencies: RuntimeClientDependencies) {
@@ -165,14 +181,15 @@ export function createInteractiveCellRunner(dependencies: RuntimeClientDependenc
     return promise;
   }
 
-  function runCell(
+  function executeCell(
     cell: CellManifest,
     inputs: InputValues,
     runtimeVersion?: string,
     signal?: AbortSignal,
     onPhase?: (phase: RuntimeExecutionPhase) => void,
     overrides?: { source: string },
-    rustModule?: RustRuntimeModule
+    rustModule?: RustRuntimeModule,
+    dependencyData?: Readonly<Record<string, JsonObject>>
   ): Promise<NormalizedCellExecutionResult> {
     const completeValues = completeInputValues(cell, inputs);
     try {
@@ -197,6 +214,7 @@ export function createInteractiveCellRunner(dependencies: RuntimeClientDependenc
     const requestId = nextRequestId++;
     const request = createWorkerRequest(requestId, cell, completeValues, runtimeVersion);
     if (rustModule) request.rustModule = rustModule;
+    if (dependencyData) request.dependencies = dependencyData;
     const timeoutMs = cellExecutionTimeoutMs(cell);
     if (overrides) request.source = overrides.source;
 
@@ -214,6 +232,7 @@ export function createInteractiveCellRunner(dependencies: RuntimeClientDependenc
         signal?.addEventListener('abort', abort, { once: true });
         pending.set(requestId, {
           rustModule,
+          cell,
           type: 'execute',
           onPhase,
           resolve,
@@ -240,6 +259,27 @@ export function createInteractiveCellRunner(dependencies: RuntimeClientDependenc
           reject(toError(error));
         }
       }
+    });
+  }
+
+  let rustLane = Promise.resolve();
+  function runCell(...args: Parameters<typeof executeCell>): ReturnType<typeof executeCell> {
+    if (args[0].language !== 'rust' || args[7] === undefined) return executeCell(...args);
+    const signal = args[3];
+    return new Promise((resolve, reject) => {
+      const abort = () => reject(new ExecutionCancellationError());
+      signal?.addEventListener('abort', abort, { once: true });
+      const execute = async () => {
+        try {
+          if (signal?.aborted) throw new ExecutionCancellationError();
+          resolve(await executeCell(...args));
+        } catch (error) {
+          reject(error);
+        } finally {
+          signal?.removeEventListener('abort', abort);
+        }
+      };
+      rustLane = rustLane.then(execute, execute);
     });
   }
 
@@ -296,7 +336,8 @@ export function createInteractiveCellRunner(dependencies: RuntimeClientDependenc
 
         try {
           if (request.type === 'prepare') request.resolve();
-          else if ('result' in event.data) request.resolve(normalizeCellExecutionResult(event.data.result));
+          else if ('result' in event.data)
+            request.resolve(normalizeCellExecutionResult(event.data.result, request.cell));
         } catch (error) {
           request.reject(toError(error));
         }
@@ -462,6 +503,14 @@ function inputArgument(input: CellManifest['inputs'][number], inputs: InputValue
 }
 
 const defaultRuntimeClient = createInteractiveCellRunner({
+  clearTimeout: (timeout) => globalThis.clearTimeout(timeout),
+  createWorker: createDefaultWorker,
+  setTimeout: (handler, timeout) => globalThis.setTimeout(handler, timeout)
+});
+
+// Graph work has a serialized Rust dispatch lane. Independent cells retain
+// their existing runtime lifecycle, without cancelling graph subscribers.
+const defaultGraphRuntimeClient = createInteractiveCellRunner({
   clearTimeout: (timeout) => globalThis.clearTimeout(timeout),
   createWorker: createDefaultWorker,
   setTimeout: (handler, timeout) => globalThis.setTimeout(handler, timeout)

@@ -1,5 +1,7 @@
 export const outputArtifactLimits = Object.freeze({
   artifactsPerRun: 100,
+  exportBytesPerRun: 4 * 1024 * 1024,
+  cachedResultBytesPerPage: 32 * 1024 * 1024,
   outcomeDiagnostics: 16,
   bytesPerDiagnostic: 8 * 1024,
   bytesPerError: 16 * 1024,

@@ -1,3 +1,4 @@
+import { dependencyOrder } from '../../lib/doc-runtime/cell-graph.mjs';
 import { readFile } from 'node:fs/promises';
 import { Worker } from 'node:worker_threads';
 import { pathToFileURL } from 'node:url';
@@ -47,12 +48,35 @@ export async function testGeneratedRustCells({
   const events = [];
   for (const test of tests) {
     const started = performance.now();
-    const outcome = await loadRuntime(test.cell.id)
-      .then((runtime) => execute({ ...runtime, cell: test.cell, inputs: test.inputs }))
-      .catch((error) => ({
-        kind: 'harness-error',
-        error: boundedErrorMessage(error)
-      }));
+    const completed = new Map();
+    for (const node of dependencyOrder(manifest.cells, [test.cell.id])) {
+      const cell = node.id === test.cell.id ? test.cell : node;
+      const upstream = Object.values(cell.dependsOn ?? {})
+        .map(({ cell: id }) => [id, completed.get(id)])
+        .find(([, result]) => result.kind !== 'result');
+      const dependencies = Object.fromEntries(
+        Object.entries(cell.dependsOn ?? {}).map(([name, { cell: id }]) => [
+          name,
+          completed.get(id)?.result?.exports ?? {}
+        ])
+      );
+      const inputs =
+        cell.id === test.cell.id
+          ? test.inputs
+          : Object.fromEntries(cell.inputs.map(({ name, value }) => [name, value]));
+      const outcome = upstream
+        ? {
+            kind: 'execution-error',
+            error: `Upstream cell "${manifest.cells.find((cell) => cell.id === upstream[0])?.title ?? upstream[0]}" failed: ${upstream[1].error}`
+          }
+        : await loadRuntime(cell.id)
+            .then((runtime) =>
+              execute({ ...runtime, cell, inputs, ...(cell.exports || cell.dependsOn ? { dependencies } : {}) })
+            )
+            .catch((error) => ({ kind: 'harness-error', error: boundedErrorMessage(error) }));
+      completed.set(cell.id, outcome);
+    }
+    const outcome = completed.get(test.cell.id);
     const failures = testFailures(test, outcome);
     const event = {
       type: 'test',
@@ -111,6 +135,7 @@ export function executeGeneratedRustCell({
   runtimeUrl,
   cell,
   inputs,
+  dependencies,
   createWorker = (url, options) => new Worker(url, options),
   setTimer = setTimeout,
   clearTimer = clearTimeout
@@ -140,7 +165,11 @@ export function executeGeneratedRustCell({
           () => finish({ kind: 'timeout', error: `Cell ${cell.id} timed out after ${cell.timeoutMs}ms` }),
           cell.timeoutMs
         );
-        worker.postMessage({ cellId: cell.id, inputs });
+        worker.postMessage({
+          cellId: cell.id,
+          inputs,
+          ...(dependencies ? { dependencies, cell: { title: cell.title, exports: cell.exports } } : {})
+        });
       } else finish(message);
     });
     worker.on('error', (error) => finish({ kind: 'harness-error', error: boundedErrorMessage(error) }));
