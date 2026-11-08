@@ -311,16 +311,36 @@
   min-inline-size: 0;
 }
 
-.doc-cell__updating {
+/*
+ * Run status (updating, previous inputs, upstream changes, reuse) overlays the top of the outputs
+ * instead of taking a row: editing an input and rerunning never moves charts or tables.
+ */
+.doc-cell__status {
   position: absolute;
+  z-index: 2;
   inset-block-start: 0.4rem;
   inset-inline-end: 0.4rem;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 0.25rem;
+  max-inline-size: calc(100% - 0.8rem);
+  pointer-events: none;
+}
+
+.doc-cell__status > :not(.doc-visually-hidden) {
+  margin: 0;
   padding: 0.15rem 0.5rem;
+  border: 1px solid var(--sl-color-gray-5);
   border-radius: 1rem;
   background: var(--sl-color-bg);
   color: var(--sl-color-gray-2);
   font-size: 0.8rem;
-  pointer-events: none;
+  line-height: 1.4;
+  overflow-wrap: anywhere;
+}
+
+.doc-cell__updating {
   animation: doc-cell-updating 1s ease-in-out infinite alternate;
 }
 
@@ -450,6 +470,10 @@
 }
 
 @media print {
+  .doc-cell__updating {
+    display: none;
+  }
+
   .doc-scene3d__viewport,
   .doc-scene3d__actions,
   .doc-scene3d__controls,
@@ -834,10 +858,11 @@
 .doc-cell__retained-output {
   min-width: 0;
 }
-.doc-cell__stale {
-  padding: 0.5rem 0.75rem;
-  border-inline-start: 3px solid var(--sl-color-gray-3);
+.doc-cell__status > .doc-cell__stale {
+  border-color: var(--sl-color-gray-3);
+  border-inline-start-width: 3px;
   background: var(--sl-color-bg-inline-code);
+  color: var(--sl-color-text);
 }
 /* Keep retained canvas and table dimensions stable while marking old results. */
 .doc-cell__retained-output[data-stale='true'] .doc-cell__outputs {

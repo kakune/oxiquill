@@ -347,6 +347,9 @@ test('Rust cells run from MDX code fences and redraw plots', async ({ page }) =>
   expect(initialStats.inkPixels).toBeGreaterThan(1_000);
 
   const initialImage = await canvas.evaluate((element) => (element as HTMLCanvasElement).toDataURL());
+  const chartTop = () =>
+    chart.evaluate((element) => element.getBoundingClientRect().top - document.body.getBoundingClientRect().top);
+  const initialTop = await chartTop();
   await page.evaluate('globalThis.__holdChartResults = true');
 
   await page.getByRole('slider', { name: 'r' }).evaluate((input) => {
@@ -363,6 +366,9 @@ test('Rust cells run from MDX code fences and redraw plots', async ({ page }) =>
   expect(await canvas.evaluate((node, previous) => node === previous, originalCanvas)).toBe(true);
   expect(await canvas.evaluate((node) => (node as HTMLCanvasElement).toDataURL())).toBe(initialImage);
   await expect(cell.locator('.doc-cell__updating')).toHaveAttribute('aria-hidden', 'true');
+  // The previous-input note and the updating indicator overlay the output: the chart does not move.
+  await expect(cell.locator('.doc-cell__status [role="note"]')).toHaveText('Result of previous inputs.');
+  expect(await chartTop()).toBe(initialTop);
   await page.emulateMedia({ reducedMotion: 'reduce' });
   await expect(chart).toHaveAttribute('data-chart-motion', 'reduced');
   expect(await cell.locator('.doc-cell__updating').evaluate((node) => getComputedStyle(node).animationName)).toBe(
@@ -380,6 +386,7 @@ test('Rust cells run from MDX code fences and redraw plots', async ({ page }) =>
 
   const updatedImage = await canvas.evaluate((element) => (element as HTMLCanvasElement).toDataURL());
   expect(updatedImage.length).toBeGreaterThan(1_000);
+  expect(await chartTop()).toBe(initialTop);
   expect(await canvas.evaluate((node, previous) => node === previous, originalCanvas)).toBe(true);
 });
 

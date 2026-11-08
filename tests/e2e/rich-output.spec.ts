@@ -43,9 +43,15 @@ for (const locale of ['en', 'ja']) {
       await scroller.evaluate((element) => element.scrollTo({ left: element.scrollWidth }));
       expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth + 1)).toBe(true);
       const wrapper = cell.locator('.doc-cell__retained-output');
+      const tableTop = () => table.evaluate((element) => element.getBoundingClientRect().top + scrollY);
+      const top = await tableTop();
       await cell.getByRole('spinbutton', { name: 'Iterations' }).fill('1000');
       await expect(wrapper).toHaveAttribute('data-stale', 'true');
-      await expect(wrapper.getByRole('note')).toContainText(locale === 'ja' ? '変更前の入力' : 'previous inputs');
+      // The previous-input note overlays the output, so the table does not move.
+      await expect(cell.locator('.doc-cell__status').getByRole('note')).toContainText(
+        locale === 'ja' ? '変更前の入力' : 'previous inputs'
+      );
+      expect(await tableTop()).toBe(top);
       if (browserName === 'chromium') {
         const accessibility = await new AxeBuilder({ page })
           .include(`[data-testid="${await cell.getAttribute('data-testid')}"]`)
