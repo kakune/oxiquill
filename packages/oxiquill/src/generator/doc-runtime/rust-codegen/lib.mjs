@@ -3,11 +3,17 @@ import { rustFunctionName } from '../rust-identifiers.mjs';
 import { scanRustMacroInvocations } from './macro-invocations.mjs';
 import { rustOutputCapabilities } from './capabilities.mjs';
 import { generatedBanner } from './banners.mjs';
-import { generateRustFunction } from './functions.mjs';
+import { generateRustFunctionMapped } from './functions.mjs';
+import { generatedFragment, joinFragments } from './source-map.mjs';
+import { generateDefinitionsModules } from './definitions.mjs';
 import { generateRustOutputTypes } from './output-types.mjs';
 import { outputArtifactLimits } from '../../../lib/doc-runtime/output-limits.mjs';
 
 export function generateRustLib(rustCells) {
+  return generateRustLibMapped(rustCells).text;
+}
+
+export function generateRustLibMapped(rustCells) {
   const matchArms = rustCells
     .map((cell) => `        ${JSON.stringify(cell.id)} => ${rustFunctionName(cell.id)}(&inputs),`)
     .concat('        _ => Err(format!("unknown Rust cell: {cell_id}")),')
@@ -32,7 +38,10 @@ ${matchArms}
 }`;
 
   const macroSets = rustCells.map((cell) => scanRustMacroInvocations(cell.source, cell));
-  const functions = rustCells.map((cell, index) => generateRustFunction(cell, macroSets[index])).join('\n\n');
+  const functions = rustCells.flatMap((cell, index) => [
+    generateRustFunctionMapped(cell, macroSets[index]),
+    generatedFragment('\n\n')
+  ]);
   const readers = generateRustReaders(rustCells);
   const outputTypes = generateRustOutputTypes(rustCells, rustOutputCapabilities(rustCells, macroSets));
   const serdeImport = rustCells.length === 0 ? '' : 'use serde::Serialize;\n';
@@ -51,7 +60,8 @@ ${matchArms}
     }`
       : 'bounded_error_message(&error.to_string())';
 
-  return `${generatedBanner()}${serdeImport}use serde_json::Value;
+  return joinFragments([
+    generatedFragment(`${generatedBanner()}${serdeImport}use serde_json::Value;
 use wasm_bindgen::prelude::*;
 ${outputTypes}
 
@@ -68,5 +78,8 @@ fn to_js_error(error: impl std::fmt::Display) -> JsValue {
 }
 
 ${readers}
-${functions}`;
+`),
+    generateDefinitionsModules(rustCells),
+    ...functions
+  ]);
 }

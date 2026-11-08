@@ -3,6 +3,9 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type {
   CellExecutionResult,
   RustRuntimeRegistry,
+  CellCompileError,
+  DefinitionsBlockManifest,
+  AuthoredBlockManifest,
   CellManifest,
   InputSpec,
   InputValues
@@ -16,6 +19,9 @@ import { CellExecutionError } from '../../packages/oxiquill/src/lib/doc-runtime/
 import { chart, echartsInit, echartsUse, mermaidInitialize, mermaidRender } from './mocks/external-runtime';
 
 type ManifestSnapshot = {
+  definitions?: readonly DefinitionsBlockManifest[];
+  compileErrors?: readonly CellCompileError[];
+  failedBlocks?: readonly AuthoredBlockManifest[];
   rust?: RustRuntimeRegistry;
   cells: readonly CellManifest[];
   version: string;
@@ -2425,5 +2431,76 @@ describe('TableOutput', () => {
       ok: true,
       csv: ["'=Formula,Number", "'=SUM(A1:A2),-42", "'  +1,'-42", "'\t@command,true", '"\'\r-control",'].join('\n')
     });
+  });
+});
+
+describe('definitions and compilation panels', () => {
+  it('renders definitions source with no runtime controls or execution', async () => {
+    const block: DefinitionsBlockManifest = {
+      kind: 'definitions',
+      id: 'page__model',
+      language: 'rust',
+      title: 'Model',
+      source: 'pub(crate) struct Model;',
+      sourceHtml: '<pre>pub(crate) struct Model;</pre>',
+      crates: [],
+      uses: [],
+      pagePath: 'content/docs/page.mdx',
+      showSource: false
+    };
+    manifestSnapshot = { ...manifestSnapshot, definitions: [block] };
+    render(<InteractiveCell cellId={block.id} cell={block} />);
+    expect(screen.getByRole('heading', { name: 'Model' })).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Run', exact: true })).not.toBeInTheDocument();
+    expect(screen.queryByTestId('cell-source')).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'Show code' }));
+    expect(screen.getByTestId('cell-source')).toHaveTextContent('pub(crate) struct Model;');
+    expect(mocks.runInteractiveCell).not.toHaveBeenCalled();
+  });
+
+  it('shows HMR compile errors without changing the successful runtime and clears after recovery', async () => {
+    const cell = makeCell();
+    setManifestCells([cell]);
+    render(<InteractiveCell cellId={cell.id} />);
+    const before = manifestSnapshot.rust;
+    await act(async () => {
+      manifestSnapshot = {
+        ...manifestSnapshot,
+        compileErrors: [
+          {
+            cellId: cell.id,
+            file: 'content/docs/page.mdx',
+            line: 12,
+            column: 3,
+            code: 'E0599',
+            message: 'unknown method'
+          }
+        ]
+      };
+      mocks.manifestListeners.forEach((listener) => listener());
+    });
+    expect(screen.getByTestId('cell-compile-errors')).toHaveTextContent('content/docs/page.mdx:12:3');
+    expect(screen.getByTestId('cell-compile-errors')).toHaveTextContent('E0599: unknown method');
+    expect(manifestSnapshot.rust).toBe(before);
+    expect(screen.getByRole('button', { name: 'Run', exact: true })).toBeInTheDocument();
+    await act(async () => {
+      manifestSnapshot = { ...manifestSnapshot, compileErrors: [] };
+      mocks.manifestListeners.forEach((listener) => listener());
+    });
+    expect(screen.queryByTestId('cell-compile-errors')).not.toBeInTheDocument();
+  });
+
+  it('renders a new failing cell without initializing a runtime', () => {
+    const cell = makeCell({ id: 'new__failure' });
+    manifestSnapshot = {
+      cells: [],
+      version: 'not-ready',
+      failedBlocks: [cell],
+      compileErrors: [{ cellId: cell.id, file: 'content/docs/new.mdx', line: 5, column: 1, message: 'invalid Rust' }]
+    };
+    render(<InteractiveCell cellId={cell.id} />);
+    expect(screen.getByTestId('cell-compile-errors')).toHaveTextContent('invalid Rust');
+    expect(screen.queryByRole('button', { name: 'Run', exact: true })).not.toBeInTheDocument();
+    expect(mocks.runInteractiveCell).not.toHaveBeenCalled();
   });
 });

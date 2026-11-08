@@ -232,9 +232,11 @@ const runtimeSyncOptions = Object.freeze({
 });
 
 function createRustRuntimeHarness(helperFiles) {
+  const usesHelpers = Object.keys(helperFiles ?? {}).some((file) => file.includes('/doc-rust/'));
   const paths = createDocRuntimePaths('/repo');
   const fileSystem = createMemoryFileSystem({
-    '/repo/content/docs/index.mdx': '```rust\n//| id: rust\n//| crates: []\nprintln!("ok");\n```',
+    '/repo/content/docs/index.mdx': `\`\`\`rust\n//| id: rust\n//| crates: ${usesHelpers ? '[doc-rust]' : '[]'}\nprintln!("ok");\n\`\`\``,
+    '/repo/crates/doc-rust/Cargo.toml': '[package]\nname = "doc-rust"\nversion = "0.1.0"\n',
     ...helperFiles
   });
   const buildRust = vi.fn(async ({ paths: runtimePaths }) => {
@@ -255,7 +257,7 @@ function createRustRuntimeHarness(helperFiles) {
     buildHaskell: vi.fn(),
     buildRust,
     fileSystem,
-    helperCrates: new Map(),
+    helperCrates: usesHelpers ? new Map([['doc-rust', { relativePath: '../../crates/doc-rust' }]]) : new Map(),
     highlighter,
     mode: 'build',
     paths,
@@ -906,13 +908,8 @@ describe('doc runtime service', () => {
         '```'
       ].join('\n')
     });
-    const helperCrates = await listHelperCrates({
-      fileSystem: createMemoryFileSystem({
-        '/repo/crates/doc-rust/Cargo.toml': '[package]\nname = "doc-rust"\n'
-      }),
-      paths,
-      root: '/repo'
-    });
+    await fileSystem.writeFile('/repo/crates/doc-rust/Cargo.toml', '[package]\nname = "doc-rust"\nversion = "0.1.0"\n');
+    const helperCrates = await listHelperCrates({ fileSystem, paths, root: '/repo' });
     const syncRustSupport = async ({ fileSystem: runtimeFileSystem, paths: runtimePaths }) => {
       await Promise.all(
         ['Cargo.lock', 'LICENSE-MIT', 'LICENSE-APACHE'].map((fileName) =>
@@ -999,7 +996,7 @@ describe('doc runtime service', () => {
 
   it('rebuilds Rust when authored text and extensionless helper inputs change', async () => {
     const { buildRust, fileSystem, sync } = createRustRuntimeHarness({
-      '/repo/crates/Cargo.lock': 'lock one',
+      '/repo/crates/Cargo.lock': '# lock one',
       '/repo/crates/doc-rust/build.rs': 'fn main() {}',
       '/repo/crates/doc-rust/help': 'help one'
     });
@@ -1017,12 +1014,12 @@ describe('doc runtime service', () => {
     await fileSystem.rm('/repo/crates/doc-rust/help');
     await expect(sync()).resolves.toMatchObject({ plan: { languages: { rust: { public: 'build' } } } });
 
-    await fileSystem.writeFile('/repo/crates/Cargo.lock', 'lock two');
-    await expect(sync()).resolves.toMatchObject({ plan: { languages: { rust: { public: 'build' } } } });
+    await fileSystem.writeFile('/repo/crates/Cargo.lock', '# lock two');
+    await expect(sync()).resolves.toMatchObject({ plan: { languages: { rust: { public: 'keep' } } } });
 
     await fileSystem.writeFile('/repo/crates/doc-rust/build.rs', 'fn main() { println!("changed"); }');
     await expect(sync()).resolves.toMatchObject({ plan: { languages: { rust: { public: 'build' } } } });
-    expect(buildRust).toHaveBeenCalledTimes(6);
+    expect(buildRust).toHaveBeenCalledTimes(5);
   });
 
   it('rebuilds between accepted toolchains and retains full compiler details', async () => {

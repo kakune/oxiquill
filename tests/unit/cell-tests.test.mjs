@@ -201,6 +201,12 @@ describe('test selection', () => {
     expect(createCellTestPlan([{ ...cell(), tests: [] }], {}, paths).tests).toHaveLength(1);
     expect(createCellTestPlan([], {}, paths).tests).toEqual([]);
   });
+  it('excludes definitions from default tests and rejects explicit execution', () => {
+    const block = { ...cell(), kind: 'definitions' };
+    expect(createCellTestPlan([block], {}, paths).tests).toEqual([]);
+    expect(() => createCellTestPlan([block], { cell: [block.id] }, paths)).toThrow('not executable');
+  });
+
   it('intersects selectors and enables extra smoke cases only with --all-cases', () => {
     const cells = [cell(), { ...cell(), pagePath: 'content/docs/other.mdx', id: 'other__sample' }];
     const plan = createCellTestPlan(

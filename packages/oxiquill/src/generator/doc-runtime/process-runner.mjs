@@ -26,6 +26,7 @@ export function createProcessRunner({
       let settled = false;
       let running = true;
       const captured = [];
+      const capturedStderr = [];
       let diagnostic = '';
       const child = spawnProcess(command, args, {
         cwd: options.cwd,
@@ -65,7 +66,8 @@ export function createProcessRunner({
         child[stream]?.on('data', (chunk) => {
           if (settled) return;
           lastOutput = now();
-          if (stream === 'stdout' && captureOutput) captured.push(Buffer.from(chunk));
+          if (stream === 'stderr' && options.captureFailureOutput) capturedStderr.push(Buffer.from(chunk));
+          if (stream === 'stdout' && (captureOutput || options.captureFailureOutput)) captured.push(Buffer.from(chunk));
           if (stream === 'stderr') diagnostic = `${diagnostic}${chunk}`.slice(-16_384);
           if (format === 'json') {
             pending += decoder.write(Buffer.from(chunk));
@@ -91,7 +93,8 @@ export function createProcessRunner({
             `${command} exited with ${signal ?? code}${diagnostic.trim() ? `: ${diagnostic.trim()}` : ''}`
           );
           error.exitCode = typeof code === 'number' && code > 0 ? code : 1;
-          if (captureOutput) error.stdout = Buffer.concat(captured).toString('utf8');
+          if (options.captureFailureOutput) error.stderr = Buffer.concat(capturedStderr).toString('utf8');
+          if (captureOutput || options.captureFailureOutput) error.stdout = Buffer.concat(captured).toString('utf8');
           finish(error);
         }
       };

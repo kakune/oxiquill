@@ -195,3 +195,9 @@ Put unprocessed static files such as PNG, JPEG, and PDF files in `public/media`.
 Use specific alt text for images. For PDFs, include a regular link as well as an embedded frame so readers can open the file directly.
 
 For reference curves, samples, and uncertainty in one figure, use [mixed XY layers](../../features/rich-output/#mixed-xy-layers) through Rust `emit_chart!`, Python `display_chart`, or Haskell `displayChart`. No custom HTML is required.
+
+## Sharing Rust items
+
+Add `kind: definitions` to a Rust block and reference its page-local ID with `uses: [model]`. Definitions may use other definitions, with no cycles. Export shared items and fields with `pub(crate)` or broader visibility. Keep executable statements in runnable cells.
+
+Definitions permit only `id`, `kind`, `title`, `crates`, `uses`, and `showSource`. They cannot have inputs, run modes, cases, tests, timeouts, or outputs. Dependency crates propagate through the reference graph. See [page-local Rust definitions](/features/interactive-cells/#page-local-rust-definitions) for a complete example.

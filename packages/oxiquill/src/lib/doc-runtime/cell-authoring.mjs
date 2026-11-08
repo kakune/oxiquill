@@ -32,8 +32,11 @@ const cellFields = new Set([
   'timeoutMs',
   'showSource',
   'editable',
-  'setup'
+  'setup',
+  'kind',
+  'uses'
 ]);
+const definitionFields = new Set(['id', 'kind', 'title', 'crates', 'uses', 'showSource']);
 const inputFields = new Set([
   'type',
   'label',
@@ -76,7 +79,7 @@ export function parseLanguage(info) {
   return supportedLanguages.get(raw);
 }
 
-export function parseInteractiveCellNode(node, pagePath, pythonOptions = {}) {
+export function parseInteractiveCellNode(node, pagePath, pythonOptions = {}, authoredSource) {
   if (!node || node.type !== 'code') return { kind: 'skip' };
 
   const language = parseLanguage(node.lang);
@@ -108,7 +111,13 @@ export function parseInteractiveCellNode(node, pagePath, pythonOptions = {}) {
 
   const cellId = typeof metadata.id === 'string' ? metadata.id : undefined;
   const context = { ...location, cellId };
-  const diagnostics = unknownFieldDiagnostics(metadata, cellFields, context, '');
+  const definitions = metadata.kind === 'definitions';
+  const diagnostics = unknownFieldDiagnostics(metadata, definitions ? definitionFields : cellFields, context, '');
+  if (hasOwn(metadata, 'kind') && !definitions) diagnostics.push(diagnostic(context, 'kind', 'Expected definitions.'));
+  if (definitions && language !== 'rust')
+    diagnostics.push(diagnostic(context, 'kind', `definitions blocks are not yet supported for ${language} cells`));
+  if (hasOwn(metadata, 'uses') && language !== 'rust')
+    diagnostics.push(diagnostic(context, 'uses', `uses is not yet supported for ${language} cells`));
   const localId = normalizeLocalId(metadata.id, context, diagnostics);
   const title = normalizeTitle(metadata, localId ?? '', context, diagnostics);
   const run = normalizeRunMode(metadata, context, diagnostics);
@@ -128,7 +137,7 @@ export function parseInteractiveCellNode(node, pagePath, pythonOptions = {}) {
     const fieldNode = document.getIn(keys, true);
     const position = lineCounter.linePos(fieldNode?.range?.[0] ?? 0);
     const rawLine = String(node.value).split('\n')[position.line - 1];
-    const prefix = rawLine?.match(optionPatterns[language]);
+    const prefix = rawLine?.replace(/\r$/u, '').match(optionPatterns[language]);
     return {
       line: location.fenceStartLine + position.line,
       column:
@@ -145,6 +154,11 @@ export function parseInteractiveCellNode(node, pagePath, pythonOptions = {}) {
   const tests = normalizeCellTests(metadata, cases, language, context, locate, diagnostics);
   const packages = normalizeStringArray(metadata, 'packages', context, diagnostics);
   const crates = normalizeStringArray(metadata, 'crates', context, diagnostics);
+  const uses = normalizeStringArray(metadata, 'uses', context, diagnostics, false);
+  uses.forEach((id, index) => {
+    if (!localIdPattern.test(id))
+      diagnostics.push(diagnostic(context, `uses[${index}]`, 'Expected a page-local definitions block id.'));
+  });
   const setup = metadata.setup;
   if (hasOwn(metadata, 'setup')) {
     if (language !== 'python' || !pythonOptions.experimentalSetup) {
@@ -165,9 +179,25 @@ export function parseInteractiveCellNode(node, pagePath, pythonOptions = {}) {
     diagnostics.push(diagnostic(context, 'inputs', 'Autorun cells cannot specify inputs.'));
   }
 
-  const source = split.sourceLines.join('\n').trim();
-  if (!source) diagnostics.push(diagnostic(context, 'source', 'Expected non-empty cell source code.'));
-  if (diagnostics.length > 0 || !localId) return invalidResult(diagnostics);
+  const body = split.sourceLines.join('\n');
+  const source = language === 'rust' ? body : body.trim();
+  if (!source.trim()) diagnostics.push(diagnostic(context, 'source', 'Expected non-empty cell source code.'));
+  if (diagnostics.length > 0 || !localId)
+    return invalidResult(
+      definitions || hasOwn(metadata, 'kind') || hasOwn(metadata, 'uses')
+        ? diagnostics.map((entry) => ({ ...entry, ...locate(entry.fieldPath.split(/[.[]/u)[0]) }))
+        : diagnostics
+    );
+
+  const sourceStartLine = location.fenceStartLine + split.metadataLines.length + 1;
+  const authoredLines = authoredSource === undefined ? undefined : String(authoredSource).split(/\r?\n/u);
+  const sourcePosition = source.split(/\r?\n/u).map((text, index) => {
+    const line = sourceStartLine + index;
+    const original = authoredLines?.[line - 1];
+    const column = original?.endsWith(text) ? original.length - text.length + 1 : (node.position?.start?.column ?? 1);
+    return { line, column, text: original ?? text };
+  });
+  const fieldPositions = Object.fromEntries(Object.keys(metadata).map((field) => [field, locate(field)]));
 
   return {
     kind: 'cell',
@@ -176,6 +206,10 @@ export function parseInteractiveCellNode(node, pagePath, pythonOptions = {}) {
       localId,
       ...(hasOwn(metadata, 'ref') ? { ref: metadata.ref, refPosition } : {}),
       language,
+      ...(definitions ? { kind: 'definitions' } : {}),
+      ...(uses.length ? { uses } : {}),
+      sourcePosition,
+      fieldPositions,
       title,
       run,
       source,
@@ -230,7 +264,7 @@ export function resolvePythonSetups(cells) {
 export function splitCellSource(rawSource, language, location = { fenceStartLine: 1, pagePath: '' }) {
   const lines = String(rawSource).split('\n');
   const pattern = optionPatterns[language];
-  const firstMatch = lines[0]?.match(pattern);
+  const firstMatch = lines[0]?.replace(/\r$/u, '').match(pattern);
 
   if (!firstMatch) {
     if (anyOptionPattern.test(lines[0] ?? '')) {
@@ -248,7 +282,7 @@ export function splitCellSource(rawSource, language, location = { fenceStartLine
   const metadataLines = [];
   let sourceStart = 0;
   while (sourceStart < lines.length) {
-    const match = lines[sourceStart].match(pattern);
+    const match = lines[sourceStart].replace(/\r$/u, '').match(pattern);
     if (!match) break;
     metadataLines.push(match[1]);
     sourceStart += 1;
@@ -381,7 +415,7 @@ function normalizeTimeout(metadata, context, diagnostics) {
   return 30_000;
 }
 
-function normalizeStringArray(metadata, field, context, diagnostics) {
+function normalizeStringArray(metadata, field, context, diagnostics, sort = true) {
   if (!hasOwn(metadata, field)) return [];
   const value = metadata[field];
   if (!Array.isArray(value)) {
@@ -407,7 +441,7 @@ function normalizeStringArray(metadata, field, context, diagnostics) {
     normalized.push(trimmed);
   });
 
-  return normalized.sort();
+  return sort ? normalized.sort() : normalized;
 }
 
 function normalizeInputs(metadata, context, diagnostics) {

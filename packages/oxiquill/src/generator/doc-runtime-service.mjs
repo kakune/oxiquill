@@ -1,4 +1,8 @@
 import { readBuildFailures, recordRustBuildFailure, clearBuildFailures } from './doc-runtime/build-failures.mjs';
+import { writeDevDiagnostics } from './doc-runtime/dev-diagnostics.mjs';
+import { generateRustLibMapped } from './doc-runtime/rust-codegen/lib.mjs';
+import { readRustHelperClosure } from './doc-runtime/rust-groups.mjs';
+import { isDefinitionsBlock } from '../lib/doc-runtime/rust-definitions.mjs';
 import { runProcess } from './doc-runtime/process-runner.mjs';
 import { createRuntimeEvents } from './doc-runtime/runtime-events.mjs';
 import { explainRuntimePlan, pageSourceFingerprints, sourceFingerprints } from './doc-runtime/plan-reasons.mjs';
@@ -28,7 +32,6 @@ import {
   generateCellsModule,
   generateHaskellMain,
   generateRustCargoToml,
-  generateRustLib,
   sourceThemes
 } from './doc-runtime-core.mjs';
 import { defaultFileSystem, listFiles, writeIfChanged } from './doc-runtime/file-system.mjs';
@@ -196,11 +199,13 @@ export async function syncDocRuntime({
   ]);
   const authoringCells = content.cells;
   const snapshot = createGenerationSnapshot(authoringCells, helpers, content.pages);
-  const cells = await Promise.all(authoringCells.map((cell) => createCellManifest(cell, highlighter)));
+  const allBlocks = await Promise.all(authoringCells.map((cell) => createCellManifest(cell, highlighter)));
+  const definitions = allBlocks.filter(isDefinitionsBlock);
+  const cells = allBlocks.filter((cell) => !isDefinitionsBlock(cell));
   const haskellCells = cells.filter((cell) => cell.language === 'haskell');
   const pythonCells = cells.filter((cell) => cell.language === 'python');
-  const rustCells = cells.filter((cell) => cell.language === 'rust');
-  const summary = summarizeCells(cells);
+  const rustCells = authoringCells.filter((cell) => cell.language === 'rust' && !isDefinitionsBlock(cell));
+  const summary = summarizeCells(allBlocks);
   const requestedPythonPackages = summary.pythonPackages;
   const processOptions = { events, format, trackChild };
   const execute = (command, args, options) => runCommand(command, args, { ...processOptions, ...options });
@@ -227,20 +232,26 @@ export async function syncDocRuntime({
     pythonCells.length > 0 || Object.keys(pythonOptions.additionalPackages ?? {}).length > 0
       ? await resolvePyodideInputs({ fileSystem, requestedPackages: requestedPythonPackages, paths, pythonOptions })
       : undefined;
+  const rustSource = generateRustLibMapped(rustCells);
   const generated = {
     cellsJson: generateCellsJson(cells, snapshot.generationId),
     cellsModule: generateCellsModule(cells, snapshot.generationId),
     haskellMain: generateHaskellMain(haskellCells),
     haskellOutput: generateHaskellOutput(),
     rustCargo: generateRustCargoToml(rustCells, helperCrates, runtimeInputs),
-    rustLib: generateRustLib(rustCells)
+    rustLib: rustSource.text
   };
   const identity = await generatorIdentity();
+  const rustHelpers =
+    rustOptions.grouping === 'page'
+      ? undefined
+      : await readRustHelperClosure({ cells: rustCells, helperCrates, paths, fileSystem });
   const rustBuildInputs =
     rustCells.length > 0 ? await readRustBuildInputs({ environment, fileSystem, paths }) : undefined;
   const buildOptions = rustCells.length > 0 ? await readRustBuildOptionDigests({ environment, fileSystem, paths }) : {};
   let desired = createDesiredRuntime({
     snapshot,
+    rustHelpers: rustHelpers?.inputs,
     generatorIdentity: identity,
     rustBuildInputs,
     generated,
@@ -283,7 +294,9 @@ export async function syncDocRuntime({
         language,
         {
           ...desired[language],
-          sources: sourceFingerprints(cells.filter((cell) => cell.language === language)),
+          sources: sourceFingerprints(
+            language === 'rust' ? rustCells : cells.filter((cell) => cell.language === language)
+          ),
           ...(language === 'rust' ? { buildOptions } : {})
         }
       ])
@@ -376,13 +389,30 @@ export async function syncDocRuntime({
     events.phase('validation', {}, async () => {
       if (mode === 'build') await assertGenerationSnapshot(snapshot, snapshotOptions);
       if (groupAnalysis) await assertRustGroupInputs({ groups: groupAnalysis.groups, paths, helperCrates, fileSystem });
+      if (mode === 'build' && rustHelpers) {
+        const current = await readRustHelperClosure({ cells: rustCells, helperCrates, paths, fileSystem });
+        if (stableFingerprint(current.inputs) !== stableFingerprint(rustHelpers.inputs))
+          throw new Error('Rust helper inputs changed during generation. Rerun the build after the sources settle.');
+      }
     });
   if (explain) {
     for (const phase of ['generation', 'compile', 'optimize', 'publish']) events.skipped(phase, { reason: 'explain' });
     return runtimeResult({ plan, snapshot, summary });
   }
 
+  await writeIfChanged(
+    path.join(paths.buildCacheDir, 'rust-source-maps.json'),
+    JSON.stringify({
+      version: 1,
+      files: groupAnalysis
+        ? groupAnalysis.groups.map((group) => group.sourceMap)
+        : [{ ...rustSource, file: path.join(paths.rustCellsDir, 'src/lib.rs'), crateDir: paths.rustCellsDir }]
+    }),
+    { fileSystem }
+  );
+
   if (!plan.hasChanges) {
+    if (mode === 'dev') await writeDevDiagnostics({ paths, fileSystem });
     for (const phase of ['generation', 'compile', 'optimize', 'publish']) events.skipped(phase, { cache: 'hit' });
     const licensesChanged = await syncLicenses({
       fileSystem,
@@ -448,9 +478,20 @@ export async function syncDocRuntime({
             mode,
             paths: stagedPaths,
             wasmOpt: toolchains.rust?.wasmOpt,
+            sourceFiles: [
+              {
+                ...rustSource,
+                file: path.join(stagedPaths.rustCellsDir, 'src/lib.rs'),
+                crateDir: stagedPaths.rustCellsDir
+              }
+            ],
             ...(trackChild ? { trackChild } : {})
           });
       } catch (error) {
+        if (mode === 'dev')
+          await writeDevDiagnostics({ paths, fileSystem, diagnostics: error.rustDiagnostics, blocks: allBlocks }).catch(
+            () => {}
+          );
         await recordRustBuildFailure({
           modules: groupAnalysis
             ? groupAnalysis.groups.filter((group) => group.public === 'build').map((group) => group.id)
@@ -514,9 +555,10 @@ export async function syncDocRuntime({
     generated.cellsJson = generateCellsJson(
       cells,
       snapshot.generationId,
-      rust ?? (rustCells.length === 0 ? { version: 1, modules: [] } : undefined)
+      rust ?? (rustCells.length === 0 ? { version: 1, modules: [] } : undefined),
+      definitions
     );
-    generated.cellsModule = generateCellsModule(cells, snapshot.generationId, rust);
+    generated.cellsModule = generateCellsModule(cells, snapshot.generationId, rust, definitions);
     const nextState = await createNextRuntimeState({
       desired,
       snapshot,
@@ -619,6 +661,7 @@ export async function syncDocRuntime({
       )
     );
     await clearBuildFailures({ paths, fileSystem });
+    if (mode === 'dev') await writeDevDiagnostics({ paths, fileSystem });
     if (groupAnalysis)
       for (const id of plan.removedRustGroups ?? []) {
         await fileSystem.rm(path.join(paths.rustCellsDir, 'pages', id), { recursive: true, force: true });
@@ -644,6 +687,7 @@ export async function syncDocRuntime({
 
 function createDesiredRuntime({
   snapshot,
+  rustHelpers,
   generatorIdentity,
   rustBuildInputs,
   generated,
@@ -653,7 +697,8 @@ function createDesiredRuntime({
   summary,
   toolchains
 }) {
-  const helperFingerprint = summary.rustCellCount > 0 ? stableFingerprint(snapshot.helpers) : stableFingerprint([]);
+  const helperFingerprint =
+    summary.rustCellCount > 0 ? stableFingerprint(rustHelpers ?? snapshot.helpers) : stableFingerprint([]);
   const rustSourceFingerprint = hashText(
     stableFingerprint({
       cargo: generated.rustCargo,

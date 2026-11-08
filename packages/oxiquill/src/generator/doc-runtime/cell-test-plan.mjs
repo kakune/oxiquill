@@ -40,9 +40,14 @@ export function createCellTestPlan(cells, values, paths) {
       );
     const unsupported = matched.find((cell) => cell.language !== 'rust');
     if (unsupported) fail(`test cases are not yet supported for ${unsupported.language} cells`);
+    if (matched.some((cell) => cell.kind === 'definitions'))
+      fail(`Definitions block ${JSON.stringify(id)} is not executable.`);
   });
   const selectedCells = pageCells.filter(
-    (cell) => cell.language === 'rust' && (!cellIds.length || cellIds.some((id) => matchesCell(cell, id)))
+    (cell) =>
+      cell.language === 'rust' &&
+      cell.kind !== 'definitions' &&
+      (!cellIds.length || cellIds.some((id) => matchesCell(cell, id)))
   );
   const tests = selectedCells.flatMap((cell) => {
     const declared = cell.tests ?? [];

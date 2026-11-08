@@ -31,6 +31,7 @@ export interface InputCase {
 }
 
 export interface CellManifest {
+  uses?: readonly string[];
   ref?: string;
   cases?: readonly InputCase[];
   setup?: readonly PythonSetupStep[];
@@ -47,6 +48,30 @@ export interface CellManifest {
   showSource: boolean;
   editable: boolean;
   pagePath: string;
+}
+
+export interface DefinitionsBlockManifest {
+  kind: 'definitions';
+  id: string;
+  language: 'rust';
+  title: string;
+  source: string;
+  sourceHtml: string;
+  crates: readonly string[];
+  uses: readonly string[];
+  showSource: boolean;
+  pagePath: string;
+}
+
+export type AuthoredBlockManifest = CellManifest | DefinitionsBlockManifest;
+
+export interface CellCompileError {
+  cellId: string;
+  file: string;
+  line: number;
+  column: number;
+  code?: string;
+  message: string;
 }
 
 export interface PythonSetupStep {

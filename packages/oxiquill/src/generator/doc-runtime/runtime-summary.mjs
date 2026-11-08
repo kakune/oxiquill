@@ -2,12 +2,12 @@ import { hashText, stableFingerprint } from './hashing.mjs';
 import { generateHaskellOutput } from './haskell-output-codegen.mjs';
 
 export function summarizeCells(cells) {
-  const rustCells = cells.filter((cell) => cell.language === 'rust');
+  const rustCells = cells.filter((cell) => cell.language === 'rust' && cell.kind !== 'definitions');
   const pythonCells = cells.filter((cell) => cell.language === 'python');
   const haskellCells = cells.filter((cell) => cell.language === 'haskell');
 
   return {
-    cellCount: cells.length,
+    cellCount: cells.filter((cell) => cell.kind !== 'definitions').length,
     haskellCellCount: haskellCells.length,
     haskellFingerprint: stableFingerprint({
       outputHelperSha256: hashText(generateHaskellOutput()),

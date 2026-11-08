@@ -195,3 +195,9 @@ PNG、JPEG、PDF など処理せずに配信したい静的 file は `public/med
 画像には具体的な alt text を書きます。PDF は embedded frame だけでなく、直接開ける通常 link も置きます。
 
 基準曲線・標本・不確実性を一つの図に重ねるには、Rust の `emit_chart!`、Python の `display_chart`、Haskell の `displayChart` から [混合 XY レイヤー](../../features/rich-output/#混合-xy-レイヤー)を使います。独自の HTML は不要です。
+
+## Rust アイテムの共有
+
+Rust ブロックに `kind: definitions` を指定し、同じページの ID を `uses: [model]` で参照します。定義から別の定義も参照できますが、循環参照はできません。共有するアイテムやフィールドには `pub(crate)` 以上の可視性を指定し、実行文は実行セルに置きます。
+
+定義で許可されるのは `id`、`kind`、`title`、`crates`、`uses`、`showSource` のみです。入力、実行モード、ケース、テスト、タイムアウト、出力は指定できません。ヘルパークレートの依存関係は参照先から引き継がれます。[ページ内の Rust 定義](/ja/features/interactive-cells/#ページ内の-rust-定義) に完全な例があります。
