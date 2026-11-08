@@ -23,6 +23,7 @@ const macroDescriptors = [
   [['emit_table_with_columns'], generateTableWithColumnsMacro],
   [['emit_records_table'], generateRecordsTableMacro],
   [['emit_chart'], generateChartMacro],
+  [['emit_scene3d'], generateScene3dMacro],
   [['emit_line_chart'], () => generateXyChartMacro('line')],
   [['emit_scatter_chart'], () => generateXyChartMacro('scatter')],
   [['emit_area_chart'], () => generateXyChartMacro('area')],
@@ -329,6 +330,22 @@ function generateChartMacro() {
         ($spec:expr, metadata = $metadata:expr) => {{
             __outputs.borrow_mut().push(chart_artifact(
                 serde_json::to_value(&$spec).map_err(|error| error.to_string())?,
+                serde_json::to_value(&$metadata).map_err(|error| error.to_string())?,
+            ));
+        }};
+    }`;
+}
+
+function generateScene3dMacro() {
+  return `    macro_rules! emit_scene3d {
+        ($scene:expr) => {{
+            __outputs.borrow_mut().push(scene3d_artifact(
+                serde_json::to_value(&$scene).map_err(|error| error.to_string())?, Value::Null,
+            ));
+        }};
+        ($scene:expr, metadata = $metadata:expr) => {{
+            __outputs.borrow_mut().push(scene3d_artifact(
+                serde_json::to_value(&$scene).map_err(|error| error.to_string())?,
                 serde_json::to_value(&$metadata).map_err(|error| error.to_string())?,
             ));
         }};

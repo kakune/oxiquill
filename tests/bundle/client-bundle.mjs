@@ -18,6 +18,25 @@ report.chunks.forEach((chunk) => {
 assertDynamicPackageBoundary('InteractiveCell.js', 'echarts/');
 assertDynamicPackageBoundary('MermaidDiagram.js', 'mermaid/');
 
+const interactiveEntry = findEntryChunk('InteractiveCell.js');
+const sceneInitial = collectGraph([interactiveEntry.fileName], false);
+assert.ok(
+  collectModules(sceneInitial).every(
+    (moduleId) => !/\/(?:Scene3dOutput|scene3d(?:-canvas)?)\.[jt]sx?$/u.test(moduleId)
+  ),
+  'Scene renderer is statically reachable'
+);
+const sceneDynamic = collectModules(
+  collectGraph(
+    sceneInitial.flatMap((chunk) => chunk.dynamicImports),
+    true
+  )
+);
+assert.ok(
+  sceneDynamic.some((moduleId) => moduleId.endsWith('/Scene3dOutput.tsx') || moduleId.endsWith('/Scene3dOutput.js')),
+  'Scene renderer is missing from the dynamic graph'
+);
+
 for (const worker of ['rust-worker.js', 'python-worker.js', 'haskell-worker.js']) {
   const chunk = findEntryChunk(worker);
   assert.equal(chunk.source, 'worker', `${worker} is not isolated in a worker bundle`);

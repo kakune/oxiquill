@@ -10,6 +10,8 @@ export const outputArtifactLimits = Object.freeze({
   bytesPerTextJsonOrHtml: 1024 * 1024,
   chartDataItems: 100_000,
   chartAnnotations: 100,
+  scene3dPoints: 10_000,
+  scene3dEdges: 20_000,
   bytesPerAnnotationLabel: 256,
   columnsPerTable: 100,
   decodedBytesPerImage: 10 * 1024 * 1024,

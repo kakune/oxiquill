@@ -126,7 +126,51 @@ export type ChartSpec =
   | BubbleChartSpec
   | FieldChartSpec;
 export type OutputArtifact =
-  TextArtifact | JsonArtifact | TableArtifact | ChartArtifact | ImageArtifact | HtmlArtifact | OutcomeArtifact;
+  | TextArtifact
+  | JsonArtifact
+  | TableArtifact
+  | ChartArtifact
+  | Scene3dArtifact
+  | ImageArtifact
+  | HtmlArtifact
+  | OutcomeArtifact;
+
+export interface Scene3dPoint {
+  readonly id: string;
+  readonly position: readonly [number, number, number];
+  readonly label?: string;
+  readonly group?: string;
+}
+
+export interface Scene3dEdge {
+  readonly from: string;
+  readonly to: string;
+}
+
+export interface Scene3dGroup {
+  readonly id: string;
+  readonly label?: string;
+}
+
+export interface Scene3dAxis {
+  readonly label?: string;
+  readonly unit?: string;
+}
+
+export interface Scene3dCamera {
+  readonly yaw?: number;
+  readonly pitch?: number;
+  readonly zoom?: number;
+}
+
+export interface Scene3dArtifact extends BaseArtifact {
+  readonly kind: 'scene3d';
+  readonly points: readonly Scene3dPoint[];
+  readonly edges?: readonly Scene3dEdge[];
+  readonly groups?: readonly Scene3dGroup[];
+  readonly axes?: Readonly<Partial<Record<'x' | 'y' | 'z', Scene3dAxis>>>;
+  readonly camera?: Scene3dCamera;
+}
 
 export interface BaseArtifact {
   id?: string;

@@ -24,6 +24,7 @@ import { validateOutcomeArtifact } from './output-validation-outcome.js';
 import { validateChartArtifact } from './output-validation-chart.js';
 import { validateJsonArtifact, safeJsonFormat } from './output-validation-json.js';
 import { validateImageArtifact } from './output-validation-image.js';
+import { validateScene3dArtifact } from './output-validation-scene3d.js';
 
 export { outputArtifactLimits } from './output-limits.mjs';
 export { publicOutputArtifact } from './output-validation-common.js';
@@ -98,6 +99,8 @@ function validateOutputArtifact(value: unknown, remainingBytes: number): Validat
   const kind = requiredString(record, 'kind', 'Artifact');
 
   switch (kind) {
+    case 'scene3d':
+      return validateScene3dArtifact(record, remainingBytes);
     case 'outcome':
       return validateOutcomeArtifact(record, remainingBytes);
     case 'text':

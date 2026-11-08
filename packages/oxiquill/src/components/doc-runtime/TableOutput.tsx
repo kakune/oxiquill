@@ -4,12 +4,14 @@ import { labelsForLanguage, type RuntimeLabels } from '../../lib/doc-runtime/run
 import type { TableArtifact, TableColumn } from '../../lib/doc-runtime/types.js';
 import { formatTableNumber, tableColumnGrouping, tableColumnLabel } from '../../lib/doc-runtime/table-format.js';
 import { artifactDownloadName, downloadBlob } from '../../lib/doc-runtime/download.js';
+import type { ComponentChildren } from 'preact';
 
 interface TableOutputProps {
   idPrefix?: string;
   labels?: RuntimeLabels;
   resultIdentity?: object;
   table: TableArtifact;
+  rowAction?: { label: string; render: (row: readonly unknown[]) => ComponentChildren };
 }
 
 type SortDirection = 'asc' | 'desc';
@@ -32,7 +34,8 @@ export default function TableOutput({
   idPrefix = 'doc-table',
   labels = labelsForLanguage(globalThis.document?.documentElement.lang),
   resultIdentity,
-  table
+  table,
+  rowAction
 }: TableOutputProps) {
   const [pageSize, setPageSize] = useState<(typeof pageSizes)[number]>(pageSizes[0]);
   const [page, setPage] = useState(0);
@@ -147,6 +150,7 @@ export default function TableOutput({
                   </button>
                 </th>
               ))}
+              {rowAction ? <th scope="col">{rowAction.label}</th> : null}
             </tr>
           </thead>
           <tbody>
@@ -161,6 +165,7 @@ export default function TableOutput({
                     {formatTableCell(row[columnIndex], labels, grouping[columnIndex], column)}
                   </td>
                 ))}
+                {rowAction ? <td>{rowAction.render(row)}</td> : null}
               </tr>
             ))}
           </tbody>

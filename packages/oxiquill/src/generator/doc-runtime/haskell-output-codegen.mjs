@@ -6,9 +6,10 @@ export function generateHaskellOutput() {
 module Oxiquill.Output
   ( JsonValue(..), NumberFormat(..), defaultNumberFormat, TableColumn(..), tableColumn,
     Outcome(..), outcome, OutcomeDiagnostic(..), displayOutcome,
-    displayJson, displayTable, displayTableWith, displayChart, putText ) where
+    displayJson, displayTable, displayTableWith, displayChart, displayScene3d, putText ) where
 
 import Data.Char (ord)
+import Control.Exception (SomeException, try)
 import Data.List (intercalate)
 import Numeric (showHex)
 import System.IO (hFlush, stdout)
@@ -28,6 +29,19 @@ displayJson value = emit (JsonObject [("kind", JsonString "json"), ("value", val
 
 displayChart :: JsonValue -> IO ()
 displayChart spec = emit (JsonObject [("kind", JsonString "chart"), ("spec", spec)])
+
+displayScene3d :: JsonValue -> IO ()
+displayScene3d (JsonObject fields)
+  | any ((== "kind") . fst) fields = emitSceneError "Scene3d helper adds kind; omit it from the scene object"
+  | otherwise = do
+      result <- try (emit (JsonObject (("kind", JsonString "scene3d") : fields))) :: IO (Either SomeException ())
+      case result of
+        Left problem -> emitSceneError ("Scene3d output: " ++ show problem)
+        Right () -> pure ()
+displayScene3d _ = emitSceneError "Scene3d must be an object"
+
+emitSceneError :: String -> IO ()
+emitSceneError message = emit (JsonObject [("kind", JsonString "__oxiquill_error"), ("message", JsonString message)])
 
 data NumberFormat = NumberFormat
   { significantDigits :: Maybe Int

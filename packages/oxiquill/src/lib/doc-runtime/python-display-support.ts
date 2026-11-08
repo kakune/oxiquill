@@ -618,6 +618,30 @@ def display_table(value, *, columns=None, title=None, caption=None):
 `;
 
 const pythonDisplayChartSupport = String.raw`
+def display_scene3d(points, *, edges=None, groups=None, axes=None, camera=None, title=None, caption=None):
+    try:
+        artifact = {"kind": "scene3d", "points": list(islice(iter(points), ${outputArtifactLimits.scene3dPoints + 1}))}
+        if len(artifact["points"]) > ${outputArtifactLimits.scene3dPoints}:
+            raise ValueError("Scene3d.points exceeds ${outputArtifactLimits.scene3dPoints} entries.")
+        if edges is not None:
+            artifact["edges"] = list(islice(iter(edges), ${outputArtifactLimits.scene3dEdges + 1}))
+            if len(artifact["edges"]) > ${outputArtifactLimits.scene3dEdges}:
+                raise ValueError("Scene3d.edges exceeds ${outputArtifactLimits.scene3dEdges} entries.")
+        for key, value in (("groups", groups), ("axes", axes), ("camera", camera), ("title", title), ("caption", caption)):
+            if value is not None:
+                artifact[key] = value
+        encoder = json.JSONEncoder(ensure_ascii=False, allow_nan=False, separators=(",", ":"))
+        chunks = []
+        byte_count = 0
+        for chunk in encoder.iterencode(artifact):
+            byte_count += len(chunk.encode("utf-8"))
+            if byte_count > __oxiquill_output_byte_limit - __oxiquill_output_bytes:
+                raise ValueError("Python scene3d exceeded the cumulative artifact byte limit.")
+            chunks.append(chunk)
+        __oxiquill_append_output(json.loads("".join(chunks)), json_snapshot=True)
+    except Exception as error:
+        __oxiquill_append_output(__oxiquill_error_artifact(str(error)))
+
 def __oxiquill_check_chart_size(spec):
     if not isinstance(spec, dict):
         raise ValueError("Chart spec must be a dict.")
@@ -769,6 +793,7 @@ builtins.display_table = display_table
 builtins.display_outcome = display_outcome
 builtins.display_image = display_image
 builtins.display_chart = display_chart
+builtins.display_scene3d = display_scene3d
 builtins.display_line = display_line
 `;
 

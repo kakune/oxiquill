@@ -88,7 +88,7 @@ export function createHaskellOutputCapture(
         typeof value !== 'object' ||
         Array.isArray(value) ||
         !('kind' in value) ||
-        !['json', 'table', 'chart', 'outcome'].includes(String(value.kind))
+        !['json', 'table', 'chart', 'outcome', 'scene3d', '__oxiquill_error'].includes(String(value.kind))
       ) {
         throw new Error('Expected a JSON, table, chart, or outcome artifact.');
       }
