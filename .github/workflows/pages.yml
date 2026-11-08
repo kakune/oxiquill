@@ -71,6 +71,8 @@ jobs:
         run: pnpm install --frozen-lockfile
 
       - name: Build static site
+        env:
+          GH_TOKEN: ${{ github.token }}
         run: pnpm build:clean
 
       - name: Upload Pages artifact

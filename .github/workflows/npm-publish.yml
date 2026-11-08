@@ -141,6 +141,8 @@ jobs:
         run: pnpm exec playwright install --with-deps chromium firefox webkit
 
       - name: Run release validation
+        env:
+          GH_TOKEN: ${{ github.token }}
         run: pnpm test
 
       - name: Build the release archive once

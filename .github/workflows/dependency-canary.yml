@@ -76,6 +76,7 @@ jobs:
         run: pnpm exec playwright install --with-deps chromium
       - name: Test newest allowed packed consumer with browser hydration
         env:
+          GH_TOKEN: ${{ github.token }}
           OXIQUILL_CONSUMER_ARTIFACTS: compatibility-artifacts
         run: node tests/package/consumer-smoke.mjs --package-manager ${{ matrix.package-manager }} --profile highest --browser
       - name: Upload compatibility evidence

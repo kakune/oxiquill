@@ -32,6 +32,10 @@ describe('Rust compatibility CI', () => {
         expect(job.steps.some((step) => step.run === command)).toBe(true);
       expect(job.steps.some((step) => step.run?.includes('install-ghc-wasm.sh'))).toBe(true);
       expect(job.steps.some((step) => step.run === 'bash .github/scripts/install-wasm-bindgen.sh')).toBe(true);
+      const binaryen = job.steps.find((step) => step.run === 'bash .github/scripts/install-binaryen.sh');
+      expect(binaryen?.env).toEqual({ GH_TOKEN: '${{ github.token }}' });
+      for (const command of ['pnpm test:wasm', 'pnpm test:consumer:npm', 'pnpm test:consumer:pnpm'])
+        expect(job.steps.find((step) => step.run === command).env).toEqual({ GH_TOKEN: '${{ github.token }}' });
     }
     expect(canary.env.RUSTUP_TOOLCHAIN).toBe('stable');
     expect(canary.on.schedule).toEqual([{ cron: '0 3 * * 1' }]);
@@ -44,5 +48,13 @@ describe('Rust compatibility CI', () => {
     for (const workflow of readdirSync('.github/workflows'))
       expect(readFileSync(`.github/workflows/${workflow}`, 'utf8')).not.toMatch(/wasm-pack|WASM_PACK/u);
     expect(existsSync('.github/scripts/resolve-wasm-pack.mjs')).toBe(false);
+  });
+});
+
+describe('CI release downloads', () => {
+  it('retries every failed ghc-wasm download, including transfers that fail mid-stream', () => {
+    const installer = readFileSync('.github/scripts/install-ghc-wasm.sh', 'utf8');
+    expect(installer).toContain("printf '%s\\n' 'retry-all-errors'");
+    expect(installer).toMatch(/CURL_HOME="\$curl_home" FLAVOUR=.*\.\/setup\.sh/u);
   });
 });

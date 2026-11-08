@@ -5,6 +5,7 @@ on:
     branches: [main]
     paths:
       - '.github/workflows/rust-canary.yml'
+      - '.github/scripts/install-binaryen.sh'
       - '.github/scripts/install-wasm-bindgen.sh'
       - 'packages/oxiquill/**'
       - 'examples/docs-site/**'
@@ -62,6 +63,11 @@ jobs:
           cargo --version
       - name: Report selected toolchains
         run: rustc --version && cargo --version
+      - name: Install pinned Binaryen
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: bash .github/scripts/install-binaryen.sh
       - name: Install matching prebuilt wasm-bindgen CLI
         env:
           GH_TOKEN: ${{ github.token }}
@@ -78,8 +84,14 @@ jobs:
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
       - name: Test every generated Rust cell
+        env:
+          GH_TOKEN: ${{ github.token }}
         run: pnpm test:wasm
       - name: Test packed npm consumer
+        env:
+          GH_TOKEN: ${{ github.token }}
         run: pnpm test:consumer:npm
       - name: Test packed pnpm consumer
+        env:
+          GH_TOKEN: ${{ github.token }}
         run: pnpm test:consumer:pnpm

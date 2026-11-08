@@ -55,9 +55,14 @@ if [[ ! -x "$compiler" ]]; then
   fi
 
   tar xzf "$archive" -C "$source_directory" --strip-components=1
+  # Upstream setup.sh downloads with curl --retry, which does not retry transfers
+  # that fail mid-stream, as degraded GitHub release downloads do (curl error 56).
+  curl_home="$temporary_directory/curl"
+  mkdir "$curl_home"
+  printf '%s\n' 'retry-all-errors' 'retry-delay = 15' > "$curl_home/.curlrc"
   (
     cd "$source_directory"
-    FLAVOUR="$GHC_WASM_FLAVOUR" PREFIX="$prefix" ./setup.sh
+    CURL_HOME="$curl_home" FLAVOUR="$GHC_WASM_FLAVOUR" PREFIX="$prefix" ./setup.sh
   )
 fi
 
