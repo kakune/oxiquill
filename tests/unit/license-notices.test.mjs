@@ -96,6 +96,28 @@ const runtimeManifest = {
 };
 
 describe('license notices', () => {
+  it('includes Rust runtime notices when any content-addressed module is published', async () => {
+    const paths = createDocRuntimePaths({ workspaceRoot, frameworkRoot });
+    const manifest = {
+      schemaVersion: 1,
+      artifacts: [{ ...runtimeManifest.artifacts[0], files: ['rust-wasm/*.wasm'], name: 'serde' }]
+    };
+    const files = {
+      [licensePath('MIT.txt')]: 'Runtime license text',
+      [workspacePath('public/oxiquill/rust-wasm/page-0123456789abcdef-' + 'a'.repeat(64) + '.js')]: 'glue'
+    };
+    const collect = (fileSystem) => collectRuntimeArtifactNotices({ fileSystem, licenseDataDir, manifest, paths });
+    await expect(collect(createMemoryFileSystem(files))).resolves.toEqual([]);
+    await expect(
+      collect(
+        createMemoryFileSystem({
+          ...files,
+          [workspacePath('public/oxiquill/rust-wasm/page-0123456789abcdef-' + 'b'.repeat(64) + '.wasm')]: 'wasm'
+        })
+      )
+    ).resolves.toMatchObject([{ name: 'serde' }]);
+  });
+
   it('includes configured notices for copied wheels and rejects uncovered copies', async () => {
     const paths = createDocRuntimePaths({ workspaceRoot, frameworkRoot });
     const info = { version: '1.0', file_name: 'extra.whl' };
@@ -357,9 +379,8 @@ describe('license notices', () => {
     expect(fileSystem.files.get(memoryPath(workspacePath('.oxiquill/rust-cells/LICENSE-APACHE'))).toString()).toBe(
       'Apache license'
     );
-    expect(fileSystem.files.get(memoryPath(workspacePath('.oxiquill/rust-cells/Cargo.lock'))).toString()).toBe(
-      'audited lock'
-    );
+    // The Rust module pipeline seeds and resolves its own Cargo.lock.
+    expect(fileSystem.files.has(memoryPath(workspacePath('.oxiquill/rust-cells/Cargo.lock')))).toBe(false);
     expect(
       fileSystem.files.get(memoryPath(workspacePath('public/oxiquill/licenses/THIRD_PARTY_LICENSES.txt'))).toString()
     ).toContain('Runtime example 4.5.6');

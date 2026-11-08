@@ -147,7 +147,9 @@ export async function collectRuntimeArtifactNotices({
         `${context} (${name}) is missing license text files`
       );
       const licenseText = await readManifestLicenseText(licenseFiles, { fileSystem, licenseDataDir, name });
-      const included = files.some((filePath) => fileSystem.existsSync(runtimeArtifactPath(paths, filePath)));
+      const included = (
+        await Promise.all(files.map((filePath) => runtimeArtifactExists(paths, filePath, fileSystem)))
+      ).some(Boolean);
 
       return included ? { license, licenseText, name, sources: [source], version } : undefined;
     })
@@ -172,6 +174,25 @@ export async function collectRuntimeArtifactNotices({
     );
   }
   return mergeNotices([...notices.filter(Boolean), ...configuredNotices]);
+}
+
+// A `*` in the file name matches content-addressed names such as Rust modules.
+async function runtimeArtifactExists(paths, filePath, fileSystem) {
+  const target = runtimeArtifactPath(paths, filePath);
+  const name = path.basename(target);
+  if (!name.includes('*')) return fileSystem.existsSync(target);
+  const pattern = new RegExp(`^${name.split('*').map(escapeRegExp).join('[^/\\\\]*')}$`, 'u');
+  try {
+    const entries = await fileSystem.readdir(path.dirname(target));
+    return entries.some((entry) => pattern.test(typeof entry === 'string' ? entry : entry.name));
+  } catch (error) {
+    if (error?.code === 'ENOENT' || error?.code === 'ENOTDIR') return false;
+    throw error;
+  }
+}
+
+function escapeRegExp(value) {
+  return value.replace(/[.*+?^${}()|[\]\\]/gu, '\\$&');
 }
 
 function runtimeArtifactPath(paths, filePath) {
@@ -274,11 +295,8 @@ export async function syncLicenseArtifacts({
   return copied.some(Boolean) || reportChanged;
 }
 
-export async function syncRustBuildSupportFiles({
-  fileSystem = defaultFileSystem,
-  licenseDataDir = defaultLicenseDataDir,
-  paths
-}) {
+// The generated Cargo.lock is seeded and resolved by the Rust module pipeline.
+export async function syncRustBuildSupportFiles({ fileSystem = defaultFileSystem, paths }) {
   const copies = await Promise.all([
     copyFileIfChanged(pathInUrl(paths.frameworkRoot, 'LICENSE-MIT'), pathInUrl(paths.rustCellsDir, 'LICENSE-MIT'), {
       fileSystem
@@ -286,11 +304,6 @@ export async function syncRustBuildSupportFiles({
     copyFileIfChanged(
       pathInUrl(paths.frameworkRoot, 'LICENSE-APACHE'),
       pathInUrl(paths.rustCellsDir, 'LICENSE-APACHE'),
-      { fileSystem }
-    ),
-    copyFileIfChanged(
-      path.join(licenseDataDir, 'rust/runtime-Cargo.lock'),
-      pathInUrl(paths.rustCellsDir, 'Cargo.lock'),
       { fileSystem }
     )
   ]);
