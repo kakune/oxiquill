@@ -64,7 +64,7 @@
               license = pkgs.lib.licenses.mit;
             };
           });
-          # Match wasm-pack 0.15.0's managed optimizer without changing release bytes.
+          # The verified Binaryen release used for Rust release optimization.
           binaryen = pkgs.stdenvNoCC.mkDerivation {
             pname = "binaryen";
             version = "117";
@@ -98,7 +98,6 @@
             pnpm
             pkgs.python3
             rustToolchain
-            pkgs.wasm-pack
             binaryen
             pkgs.cargo-llvm-cov
             haskellGhc
@@ -109,8 +108,7 @@
             export pnpm_config_store_dir="$PWD/.cache/pnpm-store"
             export PNPM_HOME="$PWD/.cache/pnpm-home"
             export CARGO_HOME="$PWD/.cache/cargo"
-            export WASM_PACK_CACHE="$PWD/.cache/wasm-pack"
-            mkdir -p "$XDG_CACHE_HOME" "$npm_config_cache" "$pnpm_config_store_dir" "$PNPM_HOME" "$CARGO_HOME" "$WASM_PACK_CACHE"
+            mkdir -p "$XDG_CACHE_HOME" "$npm_config_cache" "$pnpm_config_store_dir" "$PNPM_HOME" "$CARGO_HOME"
             export PATH="$PNPM_HOME:$PATH"
           '';
         in
@@ -189,13 +187,11 @@
               "cargo 1.99.0 "*) ;;
               *) echo "expected cargo 1.99.0, got $cargo_version" >&2; exit 1 ;;
             esac
-            test "$(wasm-pack --version)" = "wasm-pack 0.15.0"
             test "$(wasm-opt --version)" = "wasm-opt version 117 (version_117)"
 
             cargo llvm-cov --version
             "$LLVM_COV" --version
             "$LLVM_PROFDATA" --version
-            wasm-pack --version
             "$OXIQUILL_HASKELL_GHC" --version
             test -d "$PLAYWRIGHT_BROWSERS_PATH"
 

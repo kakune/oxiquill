@@ -152,14 +152,6 @@ jobs:
           rustup default "$RUST_TOOLCHAIN"
           test "$(rustc --version | cut -d ' ' -f 2)" = "$RUST_TOOLCHAIN"
           test "$(cargo --version | cut -d ' ' -f 2)" = "$RUST_TOOLCHAIN"
-      - name: Install wasm-pack
-        uses: taiki-e/install-action@ab6895351a88b908e96a4697860d4ffea5e57dbe # v2.87.27
-        with:
-          fallback: none
-          tool: wasm-pack@0.15.0
-      - name: Assert pinned wasm-pack
-        shell: bash
-        run: test "$(wasm-pack --version)" = "wasm-pack 0.15.0"
       - name: Cache ghc-wasm
         uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
@@ -310,17 +302,15 @@ jobs:
           rustup default "$RUST_TOOLCHAIN"
           test "$(rustc --version | cut -d ' ' -f 2)" = "$RUST_TOOLCHAIN"
           test "$(cargo --version | cut -d ' ' -f 2)" = "$RUST_TOOLCHAIN"
-      - name: Install wasm-pack
-        uses: taiki-e/install-action@ab6895351a88b908e96a4697860d4ffea5e57dbe # v2.87.27
-        with:
-          fallback: none
-          tool: wasm-pack@0.15.0
-      - name: Assert pinned wasm-pack
-        shell: bash
-        run: test "$(wasm-pack --version)" = "wasm-pack 0.15.0"
       - name: Install pinned Binaryen
         shell: bash
         run: bash .github/scripts/install-binaryen.sh
+      # Smoke workspaces are temporary; a PATH CLI avoids one verified download per workspace.
+      - name: Install matching prebuilt wasm-bindgen CLI
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: bash .github/scripts/install-wasm-bindgen.sh
       - name: Cache ghc-wasm
         uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
@@ -364,14 +354,6 @@ jobs:
           rustup default "$RUST_TOOLCHAIN"
           test "$(rustc --version | cut -d ' ' -f 2)" = "$RUST_TOOLCHAIN"
           test "$(cargo --version | cut -d ' ' -f 2)" = "$RUST_TOOLCHAIN"
-      - name: Install wasm-pack
-        uses: taiki-e/install-action@ab6895351a88b908e96a4697860d4ffea5e57dbe # v2.87.27
-        with:
-          fallback: none
-          tool: wasm-pack@0.15.0
-      - name: Assert pinned wasm-pack
-        shell: bash
-        run: test "$(wasm-pack --version)" = "wasm-pack 0.15.0"
       - name: Install matching prebuilt wasm-bindgen CLI
         env:
           GH_TOKEN: ${{ github.token }}
@@ -423,14 +405,6 @@ jobs:
           rustup default "$RUST_TOOLCHAIN"
           test "$(rustc --version | cut -d ' ' -f 2)" = "$RUST_TOOLCHAIN"
           test "$(cargo --version | cut -d ' ' -f 2)" = "$RUST_TOOLCHAIN"
-      - name: Install wasm-pack
-        uses: taiki-e/install-action@ab6895351a88b908e96a4697860d4ffea5e57dbe # v2.87.27
-        with:
-          fallback: none
-          tool: wasm-pack@0.15.0
-      - name: Assert pinned wasm-pack
-        shell: bash
-        run: test "$(wasm-pack --version)" = "wasm-pack 0.15.0"
       - name: Cache ghc-wasm
         uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
@@ -486,14 +460,6 @@ jobs:
           rustup default "$RUST_TOOLCHAIN"
           test "$(rustc --version | cut -d ' ' -f 2)" = "$RUST_TOOLCHAIN"
           test "$(cargo --version | cut -d ' ' -f 2)" = "$RUST_TOOLCHAIN"
-      - name: Install wasm-pack
-        uses: taiki-e/install-action@ab6895351a88b908e96a4697860d4ffea5e57dbe # v2.87.27
-        with:
-          fallback: none
-          tool: wasm-pack@0.15.0
-      - name: Assert pinned wasm-pack
-        shell: bash
-        run: test "$(wasm-pack --version)" = "wasm-pack 0.15.0"
       - name: Cache ghc-wasm
         uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
@@ -554,14 +520,6 @@ jobs:
           rustup default "$RUST_TOOLCHAIN"
           test "$(rustc --version | cut -d ' ' -f 2)" = "$RUST_TOOLCHAIN"
           test "$(cargo --version | cut -d ' ' -f 2)" = "$RUST_TOOLCHAIN"
-      - name: Install wasm-pack
-        uses: taiki-e/install-action@ab6895351a88b908e96a4697860d4ffea5e57dbe # v2.87.27
-        with:
-          fallback: none
-          tool: wasm-pack@0.15.0
-      - name: Assert pinned wasm-pack
-        shell: bash
-        run: test "$(wasm-pack --version)" = "wasm-pack 0.15.0"
       - name: Cache ghc-wasm
         uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
@@ -606,14 +564,6 @@ jobs:
           rustup default "$RUST_TOOLCHAIN"
           test "$(rustc --version | cut -d ' ' -f 2)" = "$RUST_TOOLCHAIN"
           test "$(cargo --version | cut -d ' ' -f 2)" = "$RUST_TOOLCHAIN"
-      - name: Install wasm-pack
-        uses: taiki-e/install-action@ab6895351a88b908e96a4697860d4ffea5e57dbe # v2.87.27
-        with:
-          fallback: none
-          tool: wasm-pack@0.15.0
-      - name: Assert pinned wasm-pack
-        shell: bash
-        run: test "$(wasm-pack --version)" = "wasm-pack 0.15.0"
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
       - name: Test unit behavior

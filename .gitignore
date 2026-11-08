@@ -20,7 +20,7 @@ playwright-report/
 test-results/
 blob-report/
 
-# Rust and wasm-pack output
+# Rust output
 target/
 examples/docs-site/crates/target/
 **/pkg/
