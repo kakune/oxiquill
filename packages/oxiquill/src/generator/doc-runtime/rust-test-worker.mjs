@@ -6,13 +6,17 @@ import { normalizeCellExecutionResult } from '../../lib/doc-runtime/output-artif
 export async function runRustTestRequest(runtime, request) {
   let raw;
   try {
-    raw = runtime.run_rust_cell(request.cellId, JSON.stringify(request.inputs));
+    raw = runtime.run_rust_cell(
+      request.cellId,
+      JSON.stringify(request.inputs),
+      JSON.stringify(request.dependencies ?? {})
+    );
   } catch (error) {
     return { kind: 'execution-error', error: boundedErrorMessage(error) };
   }
   try {
-    const { outputs } = normalizeCellExecutionResult(boundWorkerResult(JSON.parse(raw)));
-    return { kind: 'result', result: { outputs } };
+    const { outputs, exports } = normalizeCellExecutionResult(boundWorkerResult(JSON.parse(raw)), request.cell);
+    return { kind: 'result', result: { outputs, ...(exports ? { exports } : {}) } };
   } catch (error) {
     return { kind: 'harness-error', error: boundedErrorMessage(error) };
   }

@@ -1,3 +1,4 @@
+import type { UpstreamFailure } from '../../lib/doc-runtime/page-cell-store.js';
 import { useLayoutEffect, useState } from 'preact/hooks';
 import { idleOutputMessage, labelsForLanguage } from '../../lib/doc-runtime/interactive-cell-model.js';
 import {
@@ -11,6 +12,9 @@ type RuntimeLabels = ReturnType<typeof labelsForLanguage>;
 
 export function CellOutput({
   cellTitle,
+  reused = false,
+  upstreamChanged = false,
+  upstreamFailure,
   error,
   isComplete = true,
   isStale = false,
@@ -25,6 +29,9 @@ export function CellOutput({
   runMode
 }: {
   cellTitle: string;
+  reused?: boolean;
+  upstreamChanged?: boolean;
+  upstreamFailure?: UpstreamFailure;
   error?: string;
   isComplete?: boolean;
   isStale?: boolean;
@@ -85,6 +92,12 @@ export function CellOutput({
       <p class="doc-visually-hidden" aria-atomic="true" aria-live="polite" role="status">
         {liveMessage}
       </p>
+      {reused && isComplete && !isStale && !isRunning ? <p role="status">{labels.reusedResult}</p> : null}
+      {upstreamChanged ? (
+        <p class="doc-cell__stale" role="note">
+          {labels.upstreamChanged}
+        </p>
+      ) : null}
       {outcome ? (
         <p class="doc-visually-hidden" aria-atomic="true" aria-live="polite" role="status">
           {outcomeAnnouncement}
@@ -93,7 +106,15 @@ export function CellOutput({
       {error !== undefined ? (
         <div class="doc-cell__error">
           <p class="error-state" role="alert">
-            {labels.executionErrorLabel} <span>{labels.diagnosticDetail(error)}</span>
+            {labels.executionErrorLabel}{' '}
+            {upstreamFailure ? (
+              <span>
+                <a href={`#doc-cell-${upstreamFailure.id}-title`}>{labels.upstreamFailed(upstreamFailure.title)}</a>{' '}
+                {labels.diagnosticDetail(upstreamFailure.diagnostic)}
+              </span>
+            ) : (
+              <span>{labels.diagnosticDetail(error)}</span>
+            )}
           </p>
           {retry ? (
             <button type="button" onClick={retry} disabled={isRunning || !canRetry}>

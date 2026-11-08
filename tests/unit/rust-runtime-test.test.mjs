@@ -36,7 +36,7 @@ describe('Rust worker request', () => {
       kind: 'result',
       result: { outputs: [{ kind: 'json', value: 42 }] }
     });
-    expect(runtime.run_rust_cell).toHaveBeenCalledWith(cell.id, '{"n":2}');
+    expect(runtime.run_rust_cell).toHaveBeenCalledWith(cell.id, '{"n":2}', '{}');
     expect(
       await runRustTestRequest(
         {

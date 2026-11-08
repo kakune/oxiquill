@@ -357,6 +357,7 @@ function createOxiquillIntegration(
             'declare module "virtual:oxiquill/cell?*" {',
             '  import type { CellManifest } from "oxiquill/runtime/types";',
             '  export const cell: CellManifest;',
+            '  export const page: import("oxiquill/runtime/types").PageCellManifest;',
             '  export const rustModule: import("oxiquill/runtime/types").RustRuntimeModule | undefined;',
             '}',
             'declare module "virtual:oxiquill/runtime-version" {',

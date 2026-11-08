@@ -1,3 +1,5 @@
+import { getPageCellStore } from '../../lib/doc-runtime/page-cell-store.js';
+import { usePageCellRun } from './usePageCellRun.js';
 import { useEffect, useLayoutEffect, useRef, useState } from 'preact/hooks';
 import { createInputShareUrl, registerSharedInputs, sharedInputMetadata } from '../../lib/doc-runtime/input-sharing.js';
 import { boundedErrorMessage } from '../../lib/doc-runtime/output-limits.mjs';
@@ -13,7 +15,8 @@ import type {
   AuthoredBlockManifest,
   CellCompileError,
   CellManifest,
-  RustRuntimeModule
+  RustRuntimeModule,
+  PageCellManifest
 } from '../../lib/doc-runtime/types.js';
 import { CellOutput } from './CellOutput.js';
 import { cellExecutionTimeoutMs } from '../../lib/doc-runtime/interactive-cell-model.js';
@@ -64,7 +67,7 @@ export default function InteractiveCell({
 
   return (
     <InteractiveCellPanel
-      key={`${cell.id}:${cell.language}`}
+      key={`${cell.id}:${cell.language}:${Boolean(cell.exports || cell.dependsOn)}`}
       cell={cell}
       labels={labels}
       runtimeVersion={version}
@@ -149,7 +152,8 @@ function InteractiveCellPanel({
   errors: readonly CellCompileError[];
 }) {
   const [isSourceVisible, setIsSourceVisible] = useState(cell.showSource);
-  const runtime = useInteractiveCellRun(
+  const useCellRun = cell.exports || cell.dependsOn ? usePageCellRun : useIndependentRun;
+  const runtime = useCellRun(
     cell,
     cell.language === 'rust' ? (rustModule?.fingerprint ?? 'not-ready') : runtimeVersion,
     rustModule
@@ -201,6 +205,16 @@ function InteractiveCellPanel({
           <h3 id={ids.title}>{cell.title}</h3>
         </div>
         <div class="doc-cell__actions" role="group" aria-labelledby={ids.actionsLabel}>
+          {cell.cache === 'inputs' ? (
+            <button
+              type="button"
+              class="secondary-button"
+              disabled={runtime.isRunning || !runtime.inputsValid}
+              onClick={runtime.recompute}
+            >
+              {labels.recompute}
+            </button>
+          ) : null}
           <span id={ids.actionsLabel} class="doc-visually-hidden">
             {labels.cellActions}
           </span>
@@ -345,6 +359,9 @@ function InteractiveCellPanel({
         </p>
       ) : null}
       <CellOutput
+        reused={runtime.reused}
+        upstreamChanged={runtime.upstreamChanged}
+        upstreamFailure={runtime.upstreamFailure}
         cellTitle={cell.title}
         result={runtime.result}
         error={runtime.error}
@@ -374,4 +391,44 @@ function interactiveCellIds(cellId: string) {
     source: `${root}-source`,
     title: `${root}-title`
   };
+}
+
+function useIndependentRun(...args: Parameters<typeof useInteractiveCellRun>) {
+  const runtime = useInteractiveCellRun(...args);
+  const cell = args[0];
+  useLayoutEffect(() => {
+    const hasDescriptor = [...document.querySelectorAll<HTMLScriptElement>('script[data-oxiquill-page]')].some(
+      (element) => element.dataset.oxiquillPage === cell.pagePath
+    );
+    if (hasDescriptor) getPageCellStore(cell).recordIndependent(cell.id, runtime);
+  }, [
+    cell,
+    runtime.values,
+    runtime.result,
+    runtime.error,
+    runtime.isRunning,
+    runtime.isComplete,
+    runtime.inputsValid,
+    runtime.isStale,
+    runtime.inputRevision
+  ]);
+  return {
+    ...runtime,
+    reused: false,
+    upstreamChanged: false,
+    upstreamFailure: undefined,
+    recompute: undefined
+  };
+}
+
+// One descriptor per page makes offscreen producers available before their
+// islands hydrate. Escaping '<' prevents authored source from ending the script.
+export function PageCellData({ page }: { page: PageCellManifest }) {
+  return (
+    <script
+      type="application/json"
+      data-oxiquill-page={page.cells[0]?.pagePath}
+      dangerouslySetInnerHTML={{ __html: JSON.stringify(page).replace(/</gu, '\\u003c') }}
+    />
+  );
 }

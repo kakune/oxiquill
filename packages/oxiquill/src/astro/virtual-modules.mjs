@@ -80,6 +80,23 @@ export function oxiquillVirtualModulesPlugin(paths, { generation, base: astroBas
         if (rust) validateRustRegistry(rust, manifest.cells);
         const rustModule =
           cell.language === 'rust' ? rust?.modules.find((module) => module.cells.includes(cell.id)) : undefined;
+        if (new URLSearchParams(moduleQuery(id)).get('page') === '1') {
+          const pageCells = manifest.cells.filter((candidate) => candidate.pagePath === cell.pagePath);
+          const page = {
+            cells: pageCells,
+            ...(rust
+              ? {
+                  rust: {
+                    version: 1,
+                    modules: rust.modules.filter((module) =>
+                      pageCells.some((member) => module.cells.includes(member.id))
+                    )
+                  }
+                }
+              : {})
+          };
+          return `export const page = ${JSON.stringify(page)};\n`;
+        }
         return `export const cell = ${JSON.stringify(cell)};\nexport const rustModule = ${JSON.stringify(rustModule)};\n`;
       }
 

@@ -1,3 +1,4 @@
+import { generateRustExportSupport } from './exports.mjs';
 import { generateRustReaders } from '../rust-readers.mjs';
 import { rustFunctionName } from '../rust-identifiers.mjs';
 import { scanRustMacroInvocations } from './macro-invocations.mjs';
@@ -15,20 +16,22 @@ export function generateRustLib(rustCells) {
 
 export function generateRustLibMapped(rustCells) {
   const matchArms = rustCells
-    .map((cell) => `        ${JSON.stringify(cell.id)} => ${rustFunctionName(cell.id)}(&inputs),`)
+    .map((cell) => `        ${JSON.stringify(cell.id)} => ${rustFunctionName(cell.id)}(&inputs, &dependencies),`)
     .concat('        _ => Err(format!("unknown Rust cell: {cell_id}")),')
     .join('\n');
   const runFunction =
     rustCells.length === 0
       ? `#[wasm_bindgen]
-pub fn run_rust_cell(cell_id: &str, inputs_json: &str) -> Result<String, JsValue> {
+pub fn run_rust_cell(cell_id: &str, inputs_json: &str, dependencies_json: &str) -> Result<String, JsValue> {
     let _: Value = serde_json::from_str(inputs_json).map_err(to_js_error)?;
+    let _: Value = serde_json::from_str(dependencies_json).map_err(to_js_error)?;
 
     Err(JsValue::from_str(&format!("unknown Rust cell: {cell_id}")))
 }`
       : `#[wasm_bindgen]
-pub fn run_rust_cell(cell_id: &str, inputs_json: &str) -> Result<String, JsValue> {
+pub fn run_rust_cell(cell_id: &str, inputs_json: &str, dependencies_json: &str) -> Result<String, JsValue> {
     let inputs: Value = serde_json::from_str(inputs_json).map_err(to_js_error)?;
+    let dependencies: Value = serde_json::from_str(dependencies_json).map_err(to_js_error)?;
     let output = match cell_id {
 ${matchArms}
     }
@@ -64,6 +67,7 @@ ${matchArms}
     generatedFragment(`${generatedBanner()}${serdeImport}use serde_json::Value;
 use wasm_bindgen::prelude::*;
 ${outputTypes}
+${generateRustExportSupport(rustCells)}
 
 #[wasm_bindgen(start)]
 pub fn start() {

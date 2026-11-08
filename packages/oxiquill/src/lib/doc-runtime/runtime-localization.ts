@@ -22,6 +22,10 @@ export type RuntimeLabels = {
   artifactError: (index: number, detail: string) => string;
   artifactRenderError: (index: number, detail: string) => string;
   cellActions: string;
+  recompute: string;
+  reusedResult: string;
+  upstreamChanged: string;
+  upstreamFailed: (title: string) => string;
   cellCompleted: string;
   cellCompletedWithoutOutput: string;
   cellInputs: string;
@@ -187,6 +191,10 @@ const runtimeLabels = {
     artifactError: (index, detail) => `Artifact ${index}: ${detail}`,
     artifactRenderError: (index, detail) => `Artifact ${index} failed to render: ${detail}`,
     cellActions: 'Cell actions',
+    recompute: 'Recompute',
+    reusedResult: 'Reused result for these inputs',
+    upstreamChanged: 'Upstream changed',
+    upstreamFailed: (title) => `Upstream cell "${title}" failed`,
     cellCompleted: 'Cell completed.',
     cellCompletedWithoutOutput: 'Cell completed without output.',
     cellInputs: 'Cell inputs',
@@ -314,6 +322,10 @@ const runtimeLabels = {
     artifactError: (index, detail) => `成果物 ${index}: ${detail}`,
     artifactRenderError: (index, detail) => `成果物 ${index} を表示できませんでした: ${detail}`,
     cellActions: 'セルの操作',
+    recompute: '再計算',
+    reusedResult: '同じ入力の結果を再利用しました',
+    upstreamChanged: '依存元が変更されました',
+    upstreamFailed: (title) => `依存元のセル「${title}」が失敗しました`,
     cellCompleted: 'セルの実行が完了しました。',
     cellCompletedWithoutOutput: 'セルの実行が完了しました。出力はありません。',
     cellInputs: 'セルの入力',

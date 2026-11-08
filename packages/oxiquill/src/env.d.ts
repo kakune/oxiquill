@@ -33,6 +33,7 @@ declare module 'virtual:oxiquill/cells' {
 declare module 'virtual:oxiquill/cell?*' {
   import type { CellManifest } from './lib/doc-runtime/types';
 
+  export const page: import('./lib/doc-runtime/types.js').PageCellManifest;
   export const cell: CellManifest;
   export const rustModule: import('./lib/doc-runtime/types.js').RustRuntimeModule | undefined;
 }

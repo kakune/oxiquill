@@ -1,4 +1,5 @@
-import type { CellExecutionResult, OutputArtifact } from './types.js';
+import { validateCellExports } from './cell-exports.js';
+import type { CellExecutionResult, OutputArtifact, CellManifest } from './types.js';
 import {
   publicOutputArtifact,
   validateOutputArtifacts,
@@ -9,7 +10,10 @@ export interface NormalizedCellExecutionResult extends CellExecutionResult {
   outputResults: readonly ValidatedArtifactResult[];
 }
 
-export function normalizeCellExecutionResult(result: unknown): NormalizedCellExecutionResult {
+export function normalizeCellExecutionResult(
+  result: unknown,
+  producer?: Pick<CellManifest, 'title' | 'exports'>
+): NormalizedCellExecutionResult {
   const outputs = resultOutputs(result);
   const outputResults = validateOutputArtifacts(
     outputs ?? [
@@ -20,7 +24,9 @@ export function normalizeCellExecutionResult(result: unknown): NormalizedCellExe
       }
     ]
   );
+  const exports = validateCellExports(resultField(result, 'exports'), producer);
   return {
+    ...(exports ? { exports } : {}),
     outputs: outputResults.flatMap((output) =>
       output.status === 'valid' ? [publicOutputArtifact(output.artifact)] : []
     ),
@@ -42,4 +48,13 @@ function resultOutputs(result: unknown): readonly unknown[] | undefined {
 
 export function isOutputArtifact(value: unknown): value is OutputArtifact {
   return validateOutputArtifacts([value])[0]?.status === 'valid';
+}
+
+function resultField(result: unknown, name: string): unknown {
+  if (typeof result !== 'object' || result === null) return undefined;
+  try {
+    return Object.getOwnPropertyDescriptor(result, name)?.value;
+  } catch {
+    return undefined;
+  }
 }

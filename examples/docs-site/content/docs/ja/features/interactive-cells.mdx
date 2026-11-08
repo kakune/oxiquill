@@ -336,3 +336,84 @@ println!("{}", value(&make_model()));
 出力は計算に使った入力を記憶します。入力の編集、ケースの選択、入力の復元、再実行を行うと、保持された出力に変更前の入力による結果という表示と `data-stale="true"` が付きます。不正な数値入力でも付きます。リアクティブセルは待機・実行中も表示を維持し、ボタンセルは実行が成功するまで維持します。元と同じ入力に戻すだけでは消えません。キャンセル、古い応答、実行失敗でも消えず、実行エラーと古い結果を区別して表示します。現在の入力で実行が成功すると消えます。ソースやランタイムの更新でも古い結果を無効化します。
 
 著者は [計算結果](/ja/features/rich-output/#列の表示形式と計算結果) を出力して、正常に実行された計算が条件を満たしたかを明示できます。表、グラフ、テキストと同様に古い入力の結果として表示され、実行エラーを置き換えることはありません。
+
+## ページ内のデータ依存関係
+
+生成元は `exports` を宣言し、`export!(name, value)` で値を書き出します。利用側の `dependsOn` は生成元のエクスポートオブジェクト全体を受け取ります。セル ID だけなら変更できない `&serde_json::Value`、`{ cell, type }` なら指定した Rust 型にデシリアライズします。`uses` の共有型も使えます。現在は Rust のみ対応しています。
+
+```rust
+//| id: data-model
+//| kind: definitions
+#[derive(serde::Deserialize)]
+pub(crate) struct Dataset {
+    pub(crate) points: Vec<i32>,
+    pub(crate) truth: i32,
+}
+```
+
+```rust
+//| id: generate-data
+//| title: データ生成
+//| run: button
+//| exports: [points, truth]
+//| cache: inputs
+//| inputs:
+//|   samples: { type: integer, label: サンプル数, value: 20, min: 1, max: 100, share: true }
+//|   seed: { type: integer, label: シード, value: 1, min: 0, max: 100, share: true }
+let points: Vec<i32> = (0..samples).map(|n| (n + seed) % 17).collect();
+let truth = seed;
+println!("Generated {} points with seed {seed}", points.len());
+export!(points, &points);
+export!(truth, &truth);
+```
+
+```rust
+//| id: summarize-data
+//| title: データ集計
+//| run: button
+//| uses: [data-model]
+//| dependsOn:
+//|   data: { cell: generate-data, type: Dataset }
+//| exports: [total]
+//| cache: inputs
+let total: i32 = data.points.iter().sum::<i32>() + data.truth;
+println!("Total: {total}");
+export!(total, &total);
+```
+
+```rust
+//| id: analyze-data
+//| title: データ分析
+//| run: reactive
+//| dependsOn:
+//|   data: summarize-data
+//| inputs:
+//|   bias: { type: integer, label: 補正, value: 0, min: 0, max: 100 }
+//| cases:
+//|   - id: adjusted
+//|     label: 補正あり
+//|     inputs: { bias: 5 }
+//| tests:
+//|   - case: default
+//|     expect: [{ path: /outputs/0/content, equals: "Analysis: 143\n" }]
+//|   - case: adjusted
+//|     expect: [{ path: /outputs/0/content, equals: "Analysis: 148\n" }]
+let total = data["total"].as_i64().ok_or("total must be an integer")?;
+println!("Analysis: {}", total + i64::from(bias));
+```
+
+依存関係は同じページ内の非循環グラフです。セルを実行すると、必要な依存元を現在の入力で決定的な順序に従って一度ずつ計算します。画面外の生成元も復元済みまたは既定の入力で計算し、ハイドレーション後に結果を表示します。名前付きケースが変更するのは自分のセルだけです。`oxiquill test-wasm` は依存元を既定の入力で実行します。
+
+生成元の入力変更は、そのセルとリアクティブな依存先を再計算します。ボタン実行の依存先は「依存元が変更されました」と表示して実行を待ちます。ただしリアクティブな依存先の計算に必要なら自動実行します。入力のスナップショットが最新の場合だけ結果をまとめて公開します。生成元の失敗、タイムアウト、キャンセル時は依存先を実行せず、診断と生成元へのリンクを表示します。古いエクスポートへのフォールバックはありません。
+
+エクスポートは表示用の出力とは別です。自動表示も共有 URL への保存も行いません。宣言したすべての値を書き出す必要があります。未宣言の値、入れ子を含む非有限数、**4 MiB** を超えるオブジェクトは実行エラーとなり、部分的なデータは渡しません。名前は `^[a-z][a-z0-9_]*$` に一致する必要があります。依存関係の変数名も同じ形式で、入力、生成された名前、Rust の予約語と重複できません。
+
+### 明示的なプロデューサーキャッシュ
+
+`cache: inputs` はエクスポートを宣言した Rust セルだけで使えます。正規化したソース、使用する定義、ランタイムモジュールのフィンガープリント、型付きの完全な入力、エクスポート名、直接の依存元の結果によって出力が決まるという宣言です。シードなど変化する値はすべて入力として公開してください。純粋性を自動検出する機能ではありません。
+
+例で Bias だけを変えると両方の生成元の結果を再利用します。以前のシードに戻した場合も再利用できます。各生成元は最大 **4 件**、ページ全体で **32 MiB** まで保持します。容量は正規化した結果のシリアライズサイズで計測し、最後の利用が古いものから削除します。表示用の出力とエクスポートの両方を保存します。失敗、キャンセル、タイムアウト、不正なエクスポートや出力、切り詰めた結果は保存しません。
+
+再利用時は「同じ入力の結果を再利用しました」と表示します。「再計算」は対象のキャッシュを使わず、成功後に保存結果を置き換えます。ボタン実行の生成元で「実行」を押した場合も再計算します。同じキーの同時リクエストは計算を共有し、一方のキャンセルで他方に必要な計算を止めません。
+
+ソース、ヘルパー、定義、モジュールの変更は該当するキーを無効化します。無効化の範囲はコンパイルモジュール単位です。サイト単位では再ビルドしたモジュール内の生成元が無効になり、ページ単位では変更のないページの結果を保持します。キャッシュはメモリ内に限り、ページ移動やセッション終了時に破棄します。

@@ -8,6 +8,9 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ### Added
 
+- Rust cells share computed data through page-local `exports`, `export!`, and typed or JSON `dependsOn` bindings, with atomic graph execution, offscreen producer state, propagation, and linked upstream diagnostics.
+- Producers can opt into `cache: inputs` with bounded page-local LRU storage, shared in-flight computation, localized reuse status, and forced recomputation.
+
 - Narrow charts offer compact data/reset/export controls and collapsible legends; series isolation and show-all actions work at every width, with visibility markers in original-data tables and CSV.
 
 - Shared `NumberFormat` supports per-column table precision, standard/scientific/SI notation, header units, and custom null text while preserving raw sorting and CSV values in Rust, Python, and Haskell.

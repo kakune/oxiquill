@@ -11,7 +11,7 @@ import { boundWorkerResult } from './worker-output.js';
 
 type RustGlue = {
   default: (options: { module_or_path: Response }) => Promise<unknown>;
-  run_rust_cell: (cellId: string, inputs: string) => string;
+  run_rust_cell: (cellId: string, inputs: string, dependencies: string) => string;
 };
 
 type WorkerScope = {
@@ -77,7 +77,9 @@ export function createRustWorkerRequestHandler({
       const glue = await loader.load(rustModule);
       if (!loader.isCurrent(rustModule)) throw new Error(`Rust module ${rustModule.id} has an obsolete fingerprint.`);
       const result = boundWorkerResult(
-        JSON.parse(glue.run_rust_cell(request.cellId, JSON.stringify(request.inputs))) as RawCellExecutionResult
+        JSON.parse(
+          glue.run_rust_cell(request.cellId, JSON.stringify(request.inputs), JSON.stringify(request.dependencies ?? {}))
+        ) as RawCellExecutionResult
       );
       postMessage({ requestId: request.requestId, ...identity, ok: true, result });
     } catch (error) {

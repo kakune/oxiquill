@@ -1,9 +1,11 @@
+import { needsExports } from './exports.mjs';
 import { rustOutputCapabilities } from './capabilities.mjs';
 import { generateRustChartHelpers } from './chart-helpers.mjs';
 import { outputArtifactLimits } from '../../../lib/doc-runtime/output-limits.mjs';
 
 export function generateRustOutputTypes(rustCells, capabilities = rustOutputCapabilities(rustCells)) {
   if (rustCells.length === 0) return '';
+  const exports = rustCells.some(needsExports);
 
   const outputVariants = [
     `    #[serde(rename = "__oxiquill_error")]
@@ -304,6 +306,7 @@ ${generateRustChartHelpers(capabilities)}
 #[derive(Debug, Serialize)]
 struct CellOutput {
     outputs: Vec<OutputArtifact>,
+${exports ? '    #[serde(skip_serializing_if = "Option::is_none")]\n    exports: Option<Value>,' : ''}
 }
 
 fn finish_cell_output(
@@ -321,9 +324,12 @@ fn finish_cell_output(
                 truncated,
             }),
         );
-        outputs.truncate(${outputArtifactLimits.artifactsPerRun});
+        if outputs.len() > ${outputArtifactLimits.artifactsPerRun} {
+            outputs.truncate(${outputArtifactLimits.artifactsPerRun - 1});
+            outputs.push(producer_error("Rust output exceeded its artifact limit after stdout"));
+        }
     }
-    CellOutput { outputs }
+    CellOutput { outputs${exports ? ', exports: None' : ''} }
 }
 
 fn serialize_cell_output(mut output: CellOutput) -> Result<String, String> {
@@ -339,6 +345,10 @@ fn serialize_cell_output(mut output: CellOutput) -> Result<String, String> {
                     return Ok(with_diagnostic);
                 }
                 output.outputs.pop();
+                if output.outputs.pop().is_none() {
+                    return Err("Rust response exceeded the complete response byte limit".to_owned());
+                }
+                continue;
             }
             return Ok(serialized);
         }

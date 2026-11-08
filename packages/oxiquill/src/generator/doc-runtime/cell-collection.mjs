@@ -1,3 +1,4 @@
+import { resolveDataDependencies } from '../../lib/doc-runtime/cell-data-dependencies.mjs';
 import { createRuntimeEvents } from './runtime-events.mjs';
 import { resolveRustDefinitions, isDefinitionsBlock } from '../../lib/doc-runtime/rust-definitions.mjs';
 import path from 'node:path';
@@ -56,7 +57,10 @@ export async function collectAuthoringContent({
     assertUniqueHaskellInputBindings(haskell);
     assertUniqueRustFunctionNames(rust);
     assertUniqueRustInputBindings(rust);
-    return { cells: resolveRustDefinitions(resolvePythonSetups(cells)), pages: parsedPages.map(({ page }) => page) };
+    return {
+      cells: resolveDataDependencies(resolveRustDefinitions(resolvePythonSetups(cells))),
+      pages: parsedPages.map(({ page }) => page)
+    };
   });
 }
 

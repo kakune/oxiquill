@@ -481,7 +481,7 @@ try {
   rustRuntime.initSync({ module: await readFile(rustAsset('wasm')) });
   const packedRustCell = generatedCells.cells.find((cell) => cell.id.endsWith('__package-rust'));
   assert.ok(packedRustCell, 'packed Rust cell must be generated');
-  const rustResult = JSON.parse(rustRuntime.run_rust_cell(packedRustCell.id, '{}'));
+  const rustResult = JSON.parse(rustRuntime.run_rust_cell(packedRustCell.id, '{}', '{}'));
   assert.ok(JSON.stringify(rustResult.outputs).includes('packed consumer'), 'registry helper dependency must execute');
 
   const pyodidePublicDir = path.join(projectRoot, 'static files/oxiquill assets/python runtime');
