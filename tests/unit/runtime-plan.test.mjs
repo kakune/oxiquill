@@ -61,7 +61,8 @@ describe('runtime generation plan', () => {
     const selected = plan({
       desired: current,
       state,
-      outputComplete: { ...emptyOutputs, generated: true, rustSource: true, rustPublic: true }
+      rust: { source: 'keep', public: 'keep' },
+      outputComplete: { ...emptyOutputs, generated: true }
     });
     expect(selected.generated).toBe('write');
     expect(selected.languages.rust).toEqual({ source: 'keep', public: 'keep' });
@@ -137,31 +138,33 @@ describe('runtime generation plan', () => {
     expect(selected.languages.rust).toEqual({ public: 'remove', source: 'remove' });
   });
 
-  it('performs no work for complete unchanged outputs and upgrades dev output for a production build', () => {
+  it('takes Rust actions from the module plan and removes Rust output without cells', () => {
     const rustDesired = { ...desired, rust: { ...desired.rust, cellCount: 1 } };
-    const state = {
-      schemaVersion: 1,
-      manifestFingerprint: 'manifest',
-      languages: {
-        rust: {
-          buildFingerprint: artifactBuildFingerprint('rust-build', 'dev'),
-          mode: 'dev',
-          publicFiles: ['doc_rust_cells.js'],
-          sourceFingerprint: 'rust-source',
-          status: 'ready'
-        }
-      }
-    };
-    const complete = { ...emptyOutputs, generated: true, rustPublic: true, rustSource: true };
-
-    expect(plan({ desired: rustDesired, outputComplete: complete, outputPresent: complete, state })).toMatchObject({
-      generated: 'keep',
-      hasChanges: false
+    const state = { schemaVersion: 1, manifestFingerprint: 'manifest', languages: {} };
+    const complete = { ...emptyOutputs, generated: true };
+    expect(
+      plan({ desired: rustDesired, rust: { source: 'keep', public: 'keep' }, outputComplete: complete, state })
+    ).toMatchObject({ generated: 'keep', hasChanges: false });
+    expect(
+      plan({
+        desired: rustDesired,
+        mode: 'build',
+        rust: { source: 'keep', public: 'build' },
+        outputComplete: complete,
+        state
+      }).languages.rust
+    ).toEqual({ source: 'keep', public: 'build' });
+    expect(plan({ desired: rustDesired, mode: 'dev', outputComplete: complete, state }).languages.rust).toEqual({
+      source: 'write',
+      public: 'build'
     });
     expect(
-      plan({ desired: rustDesired, mode: 'build', outputComplete: complete, outputPresent: complete, state }).languages
-        .rust.public
-    ).toBe('build');
+      plan({
+        outputComplete: complete,
+        outputPresent: { ...emptyOutputs, rustSource: true },
+        state: { ...state, rust: { version: 1, modules: [{ id: 'page-0000000000000000' }] } }
+      }).languages.rust
+    ).toEqual({ source: 'remove', public: 'remove' });
   });
 });
 

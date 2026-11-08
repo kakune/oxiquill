@@ -1,4 +1,5 @@
 import { spawn } from 'node:child_process';
+import { StringDecoder } from 'node:string_decoder';
 import { collectAuthoringContent } from '../generator/doc-runtime/cell-collection.mjs';
 import { createCellTestPlan } from '../generator/doc-runtime/cell-test-plan.mjs';
 import {
@@ -7,7 +8,8 @@ import {
   readHelperInputs,
   sourceChangedError
 } from '../generator/doc-runtime/generation-snapshot.mjs';
-import { buildHaskellWasm, buildRustWasm } from '../generator/doc-runtime/wasm-build.mjs';
+import { buildHaskellWasm } from '../generator/doc-runtime/wasm-build.mjs';
+import { buildRustModules } from '../generator/doc-runtime/rust-module-build.mjs';
 import { testGeneratedHaskellCells } from '../generator/doc-runtime/haskell-runtime-test.mjs';
 import { testGeneratedRustCells } from '../generator/doc-runtime/rust-runtime-test.mjs';
 import { createEventReporter } from './events.mjs';
@@ -41,7 +43,7 @@ export async function runWasmTests({
         values.format === 'json'
           ? {
               runCommand: runCommandToStderr,
-              buildRust: (options) => buildRustWasm({ ...options, runCommand: runCommandToStderr }),
+              buildRust: (options) => buildRustModules({ ...options, runCommand: runCommandToStderr }),
               buildHaskell: (options) => buildHaskellWasm({ ...options, runCommand: runCommandToStderr })
             }
           : {}
@@ -81,16 +83,31 @@ function runCommandToStderr(command, args, options) {
       detached,
       cwd: options.cwd,
       env: options.env,
-      stdio: ['ignore', options.captureOutput ? 'pipe' : 2, 2]
+      stdio: ['ignore', options.captureOutput || options.onStdoutLine ? 'pipe' : 2, 2]
     });
     options.trackChild?.(child, detached);
     const chunks = [];
-    child.stdout?.on('data', (chunk) => chunks.push(chunk));
+    const decoder = new StringDecoder('utf8');
+    let pending = '';
+    child.stdout?.on('data', (chunk) => {
+      if (!options.onStdoutLine) {
+        chunks.push(chunk);
+        return;
+      }
+      const lines = `${pending}${decoder.write(chunk)}`.split(/\r?\n/u);
+      pending = lines.pop();
+      lines.forEach(options.onStdoutLine);
+    });
     child.on('error', reject);
-    child.on('close', (code, signal) =>
-      code === 0
-        ? resolve(Buffer.concat(chunks).toString('utf8'))
-        : reject(new Error(`${command} exited with ${signal ?? code}`))
-    );
+    child.on('close', (code, signal) => {
+      const rest = `${pending}${decoder.end()}`;
+      if (options.onStdoutLine && rest) options.onStdoutLine(rest);
+      if (code === 0) resolve(Buffer.concat(chunks).toString('utf8'));
+      else {
+        const error = new Error(`${command} exited with ${signal ?? code}`);
+        error.exitCode = typeof code === 'number' && code > 0 ? code : 1;
+        reject(error);
+      }
+    });
   });
 }

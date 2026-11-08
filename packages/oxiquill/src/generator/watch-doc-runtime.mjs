@@ -5,7 +5,7 @@ import { pathToFileURL } from 'node:url';
 import { parseArgs } from 'node:util';
 import { pathFromUrl } from '../config/paths.mjs';
 import { loadOxiquillProjectConfig } from '../config/project-config.mjs';
-import { createDocRuntimeContext, syncDocRuntime } from './doc-runtime-service.mjs';
+import { createDocRuntimeContext, createRuntimeSession, syncDocRuntime } from './doc-runtime-service.mjs';
 import { acquireRuntimeLock } from './runtime-lock.mjs';
 import { prepareCleanupOwnership } from './cleanup-ownership.mjs';
 import { pythonLicensePaths } from './doc-runtime/python-package-notices.mjs';
@@ -59,6 +59,8 @@ export async function watchDocRuntime({ projectConfig, serviceOverrides = {}, sk
   let licensePaths = pythonLicensePaths(pythonOptions, paths);
   let reloadConfig = false;
   let highlighter;
+  // Parse results, highlighted sources, and toolchain probes are reused across syncs.
+  const session = createRuntimeSession();
   let changeKinds = skipInitial ? new Set() : new Set(['docs']);
   const controller = new AbortController();
   let closing = false;
@@ -87,10 +89,17 @@ export async function watchDocRuntime({ projectConfig, serviceOverrides = {}, sk
         const updated = await services.loadProjectConfig({ cwd: workspaceRoot, configFile: projectConfig.configFile });
         pythonOptions = updated.python;
         rustOptions = updated.rust;
+        session.clearToolchains();
         licensePaths = pythonLicensePaths(pythonOptions, paths);
         watcher.add(licensePaths);
       }
-      const context = await services.createDocRuntimeContext({ paths, highlighter, pythonOptions, rustOptions });
+      const context = await services.createDocRuntimeContext({
+        paths,
+        highlighter,
+        pythonOptions,
+        rustOptions,
+        session
+      });
       highlighter = context.highlighter;
 
       console.log(`[runtime] syncing after ${describeChangeKinds(currentKinds)}`);
@@ -99,7 +108,8 @@ export async function watchDocRuntime({ projectConfig, serviceOverrides = {}, sk
         forceRustBuild: false,
         mode: 'dev',
         trackChild: lease.trackChild,
-        tolerateHaskellBuildFailure: true
+        tolerateHaskellBuildFailure: true,
+        tolerateRustModuleFailures: true
       });
 
       if (current.plan.languages.rust.public === 'build') {
@@ -107,6 +117,10 @@ export async function watchDocRuntime({ projectConfig, serviceOverrides = {}, sk
       }
       if (current.plan.languages.haskell.public === 'build') {
         console.log('[runtime] rebuilt Haskell/WASI cells');
+      }
+      if (current.rustBuildResult && !current.rustBuildResult.ok) {
+        console.warn('[runtime] some Rust modules failed; their pages keep the last working module');
+        console.warn(formatCliError(current.rustBuildResult.error));
       }
       if (current.haskellBuildResult && !current.haskellBuildResult.ok) {
         console.warn(`[runtime] Haskell/WASI runtime unavailable: ${current.haskellBuildResult.error.message}`);

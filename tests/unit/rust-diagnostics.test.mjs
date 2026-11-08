@@ -1,13 +1,12 @@
 // @vitest-environment node
-import path from 'node:path';
-import { describe, expect, it, vi } from 'vitest';
+import { describe, expect, it } from 'vitest';
 import {
   mapRustSpan,
   mapRustDiagnostic,
   formatRustDiagnostic,
-  diagnoseRustFailure,
   compilerMessages,
-  isRustCompilerFailure
+  formatRustFailure,
+  mapRustCompilerMessages
 } from '../../packages/oxiquill/src/generator/doc-runtime/rust-diagnostics.mjs';
 import {
   generatedFragment,
@@ -137,77 +136,29 @@ describe('Rust diagnostic attribution', () => {
     expect(authoredFragment({ ...cell, sourcePosition: undefined }).regions[0].line).toBe(1);
   });
 
-  it.each([
-    'wasm-pack exited with 1: download failed',
-    'wasm-bindgen failed',
-    'wasm-opt exited with 1',
-    'error: failed to select a version',
-    'error: failed to run custom build command; could not compile `helper`'
-  ])('skips non-compiler failure %s', async (text) => {
-    const error = new Error(text);
-    const runCommand = vi.fn();
-    expect(await diagnoseRustFailure({ error, runCommand })).toBe(error);
-    expect(runCommand).not.toHaveBeenCalled();
-  });
+  const pagePath = [...Array(14).fill(''), ...cell.sourcePosition.map((position) => position.text)].join('\n');
+  const paths = { workspaceRoot: '/repo', rustCellsDir: file.crateDir };
 
-  it('recognizes colored compiler output and excludes failed wasm-pack tool compilation', () => {
-    const compiler = 'error[E0599]: unknown method\nerror: could not compile `generated`';
-    expect(isRustCompilerFailure({ message: `${String.fromCharCode(27)}[31m${compiler}` })).toBe(true);
-    expect(isRustCompilerFailure({ message: `[INFO]: Installing wasm-bindgen...\n${compiler}` })).toBe(false);
-    expect(isRustCompilerFailure({ message: `[INFO]: Optimizing wasm binaries...\n${compiler}` })).toBe(false);
-  });
-
-  it('runs one matching failure-only check and preserves the original failure status', async () => {
-    const error = Object.assign(new Error('wasm-pack exited with 7'), {
-      exitCode: 7,
-      stderr: 'error[E0599]: no method\nerror: could not compile `doc-rust-cells`'
-    });
-    const runCommand = vi.fn().mockRejectedValue({ stdout: compilerOutput, exitCode: 101 });
-    const result = await diagnoseRustFailure({
-      error,
+  it('maps messages captured from the build and keeps the original failure text', async () => {
+    const result = await mapRustCompilerMessages({
+      messages: compilerMessages(compilerOutput),
       files: [file],
-      paths: { workspaceRoot: '/repo', rustCellsDir: file.crateDir },
-      mode: 'build',
-      env: { RUSTFLAGS: '--cfg test_cfg' },
-      packages: ['example'],
-      runCommand,
-      fileSystem: {
-        readFile: async (name) =>
-          name.endsWith('.mdx')
-            ? [...Array(14).fill(''), ...cell.sourcePosition.map((position) => position.text)].join('\n')
-            : generated.text
-      }
+      paths,
+      fileSystem: { readFile: async (name) => (name.endsWith('.mdx') ? pagePath : generated.text) }
     });
-    expect(result).toBe(error);
-    expect(result.exitCode).toBe(7);
-    expect(result.message).toContain('wasm-pack exited with 7');
-    expect(runCommand).toHaveBeenCalledOnce();
-    expect(runCommand.mock.calls[0][1]).toEqual([
-      'check',
-      '--manifest-path',
-      path.join(file.crateDir, 'Cargo.toml'),
-      '--locked',
-      '--target',
-      'wasm32-unknown-unknown',
-      '--message-format=json',
-      '--release',
-      '--package',
-      'example'
-    ]);
-    expect(runCommand.mock.calls[0][2].env.RUSTFLAGS).toBe('--cfg test_cfg');
+    expect(result.unmapped).toBe(false);
+    expect(result.diagnostics[0].spans[0]).toMatchObject({ kind: 'authored', cellId: cell.id });
+    const message = formatRustFailure({ ...result, original: 'cargo exited with 101' });
+    expect(message).toContain('demo.mdx:15');
+    expect(message).toContain('Original build error:\ncargo exited with 101');
+    expect(message).not.toContain('could not map');
   });
 
-  it('reports unavailable mapping without replacing the original error when the check fails to reproduce', async () => {
-    const error = Object.assign(new Error('original'), { stdout: compilerOutput });
-    await diagnoseRustFailure({
-      error,
-      paths: { workspaceRoot: '/repo', rustCellsDir: file.crateDir },
-      runCommand: async () => 'noise',
-      fileSystem: {}
-    });
-    expect(error.message).toContain('could not map this error to an authored cell');
-    expect(error.message).toContain('original');
-    expect(isRustCompilerFailure({ message: 'other', stdout: compilerOutput })).toBe(true);
+  it('reports unavailable mapping without replacing the original error', async () => {
+    const result = await mapRustCompilerMessages({ messages: [], paths, fileSystem: {} });
+    expect(formatRustFailure({ ...result, original: 'original' })).toContain(
+      'could not map this error to an authored cell\n\nOriginal build error:\noriginal'
+    );
   });
 
   it('rejects source maps for changed or unavailable generated files', async () => {
@@ -217,17 +168,18 @@ describe('Rust diagnostic attribution', () => {
         throw new Error('missing');
       }
     ]) {
-      const error = Object.assign(new Error('original'), { stdout: compilerOutput });
-      await diagnoseRustFailure({
-        error,
+      const result = await mapRustCompilerMessages({
+        messages: compilerMessages(compilerOutput),
         files: [file],
-        paths: { workspaceRoot: '/repo', rustCellsDir: file.crateDir },
-        runCommand: async () => compilerOutput,
+        paths,
         fileSystem: { readFile }
       });
-      expect(error.rustDiagnostics[0].spans[0].kind).toBe('external');
+      expect(result.unmapped).toBe(true);
+      expect(result.diagnostics[0].spans[0].kind).toBe('external');
+      expect(formatRustFailure({ ...result, original: 'x' })).toContain('could not map this error');
     }
   });
+
   it('rejects a previous page revision even when the old source lines still match', async () => {
     const stale = {
       ...file,
@@ -235,17 +187,14 @@ describe('Rust diagnostic attribution', () => {
         region.kind === 'authored' ? { ...region, pageFingerprint: 'old page revision' } : region
       )
     };
-    const error = Object.assign(new Error('original'), { stdout: compilerOutput });
-    const page = [...Array(14).fill(''), ...cell.sourcePosition.map((position) => position.text)].join('\n');
-    await diagnoseRustFailure({
-      error,
+    const result = await mapRustCompilerMessages({
+      messages: compilerMessages(compilerOutput),
       files: [stale],
-      paths: { workspaceRoot: '/repo', rustCellsDir: file.crateDir },
-      runCommand: async () => compilerOutput,
-      fileSystem: { readFile: async (name) => (name.endsWith('.mdx') ? page : file.text) }
+      paths,
+      fileSystem: { readFile: async (name) => (name.endsWith('.mdx') ? pagePath : file.text) }
     });
-    expect(error.message).toContain('could not map this error to an authored cell');
-    expect(error.rustDiagnostics[0].spans[0].kind).toBe('external');
+    expect(result.unmapped).toBe(true);
+    expect(result.diagnostics[0].spans[0].kind).toBe('external');
   });
   it('retains ownership on secondary generated spans', () => {
     const mapped = mapRustDiagnostic(

@@ -7,12 +7,28 @@
  * @returns {asserts registry is RustRuntimeRegistry}
  */
 export function validateRustRegistry(registry, cells) {
-  if (!isRecord(registry) || registry.version !== 1 || !Array.isArray(registry.modules)) {
-    throw new Error('Rust runtime registry must use version 1 and contain modules.');
-  }
   const rustCells = new Set(
     cells.filter((cell) => cell.language === 'rust' && cell.kind !== 'definitions').map((cell) => cell.id)
   );
+  const assignments = validateRustRegistryShape(registry, (cell, context) => {
+    if (!rustCells.has(cell)) throw new Error(`${context} assigns unknown or non-Rust cell ${JSON.stringify(cell)}.`);
+  });
+  const missing = [...rustCells].filter((cell) => !assignments.has(cell));
+  if (missing.length)
+    throw new Error(
+      `Rust registry modules [${registry.modules.map((module) => module.id).join(', ')}] are missing cells: ${missing.join(', ')}.`
+    );
+}
+
+/** Validate ids, asset metadata, and unique cell assignment without requiring coverage.
+ * @param {unknown} registry
+ * @param {(cell: string, context: string) => void} [checkCell]
+ * @returns {Map<string, string>} cell id to module id
+ */
+export function validateRustRegistryShape(registry, checkCell = () => {}) {
+  if (!isRecord(registry) || registry.version !== 1 || !Array.isArray(registry.modules)) {
+    throw new Error('Rust runtime registry must use version 1 and contain modules.');
+  }
   const assignments = new Map();
   const ids = new Set();
   for (const module of registry.modules) {
@@ -38,16 +54,15 @@ export function validateRustRegistry(registry, cells) {
     )
       throw new Error(`${context} has invalid asset metadata.`);
     for (const cell of module.cells) {
-      if (!rustCells.has(cell)) throw new Error(`${context} assigns unknown or non-Rust cell ${JSON.stringify(cell)}.`);
+      if (typeof cell !== 'string') throw new Error(`${context} has an invalid cell id.`);
+      checkCell(cell, context);
       if (assignments.has(cell)) {
         throw new Error(`${context} duplicates cell ${cell}, already assigned to module ${assignments.get(cell)}.`);
       }
       assignments.set(cell, module.id);
     }
   }
-  const missing = [...rustCells].filter((cell) => !assignments.has(cell));
-  if (missing.length)
-    throw new Error(`Rust registry modules [${[...ids].join(', ')}] are missing cells: ${missing.join(', ')}.`);
+  return assignments;
 }
 
 /** @param {RustRuntimeRegistry} registry @param {string} cellId @returns {RustRuntimeModule} */

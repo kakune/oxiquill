@@ -147,19 +147,46 @@ describe('runtime watcher entrypoint', () => {
     expect(services.createDocRuntimeContext).toHaveBeenNthCalledWith(1, {
       highlighter: undefined,
       paths,
-      pythonOptions: undefined
+      pythonOptions: undefined,
+      session: expect.any(Object)
     });
     expect(services.createDocRuntimeContext).toHaveBeenNthCalledWith(2, {
       highlighter,
       paths,
-      pythonOptions: undefined
+      pythonOptions: undefined,
+      session: expect.any(Object)
     });
+    // One session keeps parse, highlight, and toolchain results across syncs.
+    expect(services.createDocRuntimeContext.mock.calls[1][0].session).toBe(
+      services.createDocRuntimeContext.mock.calls[0][0].session
+    );
     expect(services.syncDocRuntime).toHaveBeenNthCalledWith(
       2,
-      expect.objectContaining({ forceRustBuild: false, mode: 'dev', tolerateHaskellBuildFailure: true })
+      expect.objectContaining({
+        forceRustBuild: false,
+        mode: 'dev',
+        tolerateHaskellBuildFailure: true,
+        tolerateRustModuleFailures: true
+      })
     );
     expect(log).toHaveBeenCalledWith('[runtime] rebuilt Rust/Wasm cells');
     expect(log).toHaveBeenCalledWith('[runtime] rebuilt Haskell/WASI cells');
+  });
+
+  it('warns about failed Rust modules while keeping the watcher running', async () => {
+    const error = new Error('Rust module page-0123456789abcdef (guides/a.mdx) failed');
+    const { services } = createServices({
+      syncDocRuntime: vi.fn(async () => ({ ...runtimeSummary(), rustBuildResult: { ok: false, error } }))
+    });
+    vi.spyOn(console, 'log').mockImplementation(() => undefined);
+    const warning = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
+    await main([], services);
+    await waitForCallCount(services.syncDocRuntime, 1);
+    await flushMicrotasks();
+    expect(warning).toHaveBeenCalledWith(
+      '[runtime] some Rust modules failed; their pages keep the last working module'
+    );
+    expect(warning.mock.calls.flat().join('\n')).toContain('page-0123456789abcdef');
   });
 
   it('rebuilds for helper data-file add, change, and unlink events while ignoring generated paths', async () => {

@@ -81,9 +81,15 @@ export function actionReasons({ action, desired, previous, kind, mode, forced = 
       ['helpers', 'helper-inputs-changed'],
       ['toolchain', 'toolchain-changed'],
       ['generatorIdentity', 'generator-changed'],
-      ['package', 'package-changed']
+      ['package', 'package-changed'],
+      ['lock', 'dependencies-changed'],
+      ['features', 'dependencies-changed']
     ]) {
-      if (stableFingerprint(before[field]) !== stableFingerprint(after[field])) add(code);
+      if (
+        stableFingerprint(before[field]) !== stableFingerprint(after[field]) &&
+        !reasons.some((reason) => reason.code === code)
+      )
+        add(code);
     }
     if (before.rustBuildInputs !== after.rustBuildInputs) {
       const oldOptions = previous?.buildOptions ?? {};
