@@ -1,3 +1,4 @@
+import { useLayoutEffect, useState } from 'preact/hooks';
 import { idleOutputMessage, labelsForLanguage } from '../../lib/doc-runtime/interactive-cell-model.js';
 import {
   normalizeCellExecutionResult,
@@ -12,6 +13,7 @@ export function CellOutput({
   cellTitle,
   error,
   isComplete = true,
+  isStale = false,
   isRunning,
   isPreparing = false,
   labels,
@@ -25,6 +27,7 @@ export function CellOutput({
   cellTitle: string;
   error?: string;
   isComplete?: boolean;
+  isStale?: boolean;
   isRunning: boolean;
   isPreparing?: boolean;
   labels: RuntimeLabels;
@@ -44,11 +47,32 @@ export function CellOutput({
     ? isPreparing
       ? labels.pythonPreparing
       : labels.cellRunningAnnouncement
-    : result && isComplete && error === undefined
+    : result && isComplete && !isStale && error === undefined
       ? outputResults?.length
         ? labels.cellCompleted
         : labels.cellCompletedWithoutOutput
       : '';
+
+  const outcome = outputResults?.find((output) => output.status === 'valid' && output.artifact.kind === 'outcome');
+  const [outcomeAnnouncement, setOutcomeAnnouncement] = useState('');
+  useLayoutEffect(() => {
+    setOutcomeAnnouncement('');
+    if (
+      !isComplete ||
+      isRunning ||
+      isStale ||
+      error !== undefined ||
+      outcome?.status !== 'valid' ||
+      outcome.artifact.kind !== 'outcome'
+    )
+      return;
+    const artifact = outcome.artifact;
+    const timer = setTimeout(
+      () => setOutcomeAnnouncement(labels.outcomeAnnouncement(artifact.state, artifact.label)),
+      0
+    );
+    return () => clearTimeout(timer);
+  }, [result, isComplete, isRunning, isStale, error, labels]);
 
   return (
     <div
@@ -61,6 +85,11 @@ export function CellOutput({
       <p class="doc-visually-hidden" aria-atomic="true" aria-live="polite" role="status">
         {liveMessage}
       </p>
+      {outcome ? (
+        <p class="doc-visually-hidden" aria-atomic="true" aria-live="polite" role="status">
+          {outcomeAnnouncement}
+        </p>
+      ) : null}
       {error !== undefined ? (
         <div class="doc-cell__error">
           <p class="error-state" role="alert">
@@ -79,16 +108,25 @@ export function CellOutput({
           <OutputRenderer
             idPrefix={`${outputId}-failed`}
             labels={labels}
-            outputs={partialResult.outputResults}
+            outputs={partialResult.outputResults.filter(
+              (output) => output.status !== 'valid' || output.artifact.kind !== 'outcome'
+            )}
             resultIdentity={partialResult}
           />
         </section>
       ) : null}
       {result ? (
-        <div class="doc-cell__outputs" key="outputs">
-          {error !== undefined ? <p>{labels.previousSuccessfulOutput}</p> : null}
-          <OutputRenderer idPrefix={outputId} labels={labels} outputs={outputResults ?? []} resultIdentity={result} />
-          {outputResults?.length ? null : <p class="empty-state">{labels.cellCompletedWithoutOutput}</p>}
+        <div class="doc-cell__retained-output" data-stale={isStale ? 'true' : undefined} key="outputs">
+          {isStale ? (
+            <p class="doc-cell__stale" role="note">
+              {labels.previousInputsOutput}
+            </p>
+          ) : null}
+          <div class="doc-cell__outputs">
+            {error !== undefined ? <p>{labels.previousSuccessfulOutput}</p> : null}
+            <OutputRenderer idPrefix={outputId} labels={labels} outputs={outputResults ?? []} resultIdentity={result} />
+            {outputResults?.length ? null : <p class="empty-state">{labels.cellCompletedWithoutOutput}</p>}
+          </div>
         </div>
       ) : error !== undefined ? null : isRunning ? (
         <p class="empty-state">{isPreparing ? labels.pythonPreparing : labels.runningCell}</p>

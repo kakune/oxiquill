@@ -5,6 +5,7 @@ const macroDescriptors = [
   [['println'], generatePrintlnMacro],
   [['emit_text'], generateTextMacro],
   [['emit_json'], generateJsonMacro],
+  [['emit_outcome'], generateOutcomeMacro],
   [['emit_html'], generateHtmlMacro],
   [['emit_image_svg', 'emit_svg'], generateImageSvgMacro],
   [['emit_image_png', 'emit_png_base64'], generateImagePngMacro],
@@ -322,6 +323,14 @@ function generateChartMacro() {
                 serde_json::to_value(&$spec).map_err(|error| error.to_string())?,
                 serde_json::to_value(&$metadata).map_err(|error| error.to_string())?,
             ));
+        }};
+    }`;
+}
+
+function generateOutcomeMacro() {
+  return `    macro_rules! emit_outcome {
+        ($outcome:expr) => {{
+            __outputs.borrow_mut().push(OutputArtifact::Outcome($outcome));
         }};
     }`;
 }

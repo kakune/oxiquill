@@ -518,10 +518,42 @@ def display_image(data, mime, *, alt=None, title=None):
         artifact["alt"] = str(alt)
     __oxiquill_append_output(__oxiquill_meta(artifact, title))
 
-def display_table(value, *, title=None, caption=None):
+def __oxiquill_table_columns(artifact, descriptors):
+    if descriptors is None or artifact.get("kind") != "table":
+        return artifact
+    existing = artifact["columns"]
+    if isinstance(descriptors, (list, tuple)):
+        if len(descriptors) != len(existing) or not all(isinstance(label, str) for label in descriptors):
+            return __oxiquill_error_artifact("Table column labels must match the table width.")
+        columns = [{**column, "label": label} for column, label in zip(existing, descriptors)]
+    elif isinstance(descriptors, dict):
+        columns = []
+        for column in existing:
+            descriptor = descriptors.get(column["key"], descriptors.get(column["label"], {}))
+            if not isinstance(descriptor, dict):
+                return __oxiquill_error_artifact("Table column descriptor must be a mapping.")
+            columns.append({**column, **descriptor})
+    else:
+        return __oxiquill_error_artifact("Table columns must be labels or a descriptor mapping.")
+    return {**artifact, "columns": columns}
+
+def display_outcome(state, label, *, explanation=None, status=None, diagnostics=None):
+    artifact = {"kind": "outcome", "state": state, "label": label}
+    for key, value in (("explanation", explanation), ("status", status), ("diagnostics", diagnostics)):
+        if value is not None:
+            artifact[key] = value
+    if isinstance(artifact.get("diagnostics"), (list, tuple)):
+        artifact["diagnostics"] = [
+            {**item, "value": None} if isinstance(item, dict) and isinstance(item.get("value"), float) and not math.isfinite(item["value"]) else item
+            for item in artifact["diagnostics"]
+        ]
+    __oxiquill_append_output(artifact, json_snapshot=True)
+
+def display_table(value, *, columns=None, title=None, caption=None):
+    descriptors = columns
     dataframe_artifact = __oxiquill_dataframe_artifact(value, title=title, caption=caption)
     if dataframe_artifact is not None:
-        __oxiquill_append_output(dataframe_artifact)
+        __oxiquill_append_output(__oxiquill_table_columns(dataframe_artifact, descriptors))
         return
     table_rows = []
     keys = None
@@ -580,7 +612,7 @@ def display_table(value, *, title=None, caption=None):
     }
     if row_count is not None:
         artifact["rowCount"] = row_count
-    __oxiquill_append_output(__oxiquill_meta(artifact, title, caption))
+    __oxiquill_append_output(__oxiquill_table_columns(__oxiquill_meta(artifact, title, caption), descriptors))
     if failure is not None:
         __oxiquill_append_output(__oxiquill_error_artifact(failure))
 `;
@@ -734,6 +766,7 @@ builtins.display = display
 builtins.display_json = display_json
 builtins.display_html = display_html
 builtins.display_table = display_table
+builtins.display_outcome = display_outcome
 builtins.display_image = display_image
 builtins.display_chart = display_chart
 builtins.display_line = display_line

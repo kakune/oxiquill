@@ -113,7 +113,8 @@ export type ChartSpec =
   | BoxplotChartSpec
   | BubbleChartSpec
   | FieldChartSpec;
-export type OutputArtifact = TextArtifact | JsonArtifact | TableArtifact | ChartArtifact | ImageArtifact | HtmlArtifact;
+export type OutputArtifact =
+  TextArtifact | JsonArtifact | TableArtifact | ChartArtifact | ImageArtifact | HtmlArtifact | OutcomeArtifact;
 
 export interface BaseArtifact {
   id?: string;
@@ -146,6 +147,8 @@ export interface TableColumn {
   key: string;
   label: string;
   type?: TableColumnType;
+  format?: NumberFormat;
+  nullText?: string;
 }
 
 export interface ChartArtifact extends BaseArtifact {
@@ -171,11 +174,30 @@ export interface ChartPalette {
   dark?: readonly string[];
 }
 
-export interface ChartNumberFormat {
+export interface NumberFormat {
   significantDigits?: number;
   fractionDigits?: number;
   unit?: string;
-  notation?: 'auto' | 'si';
+  notation?: 'auto' | 'standard' | 'scientific' | 'si';
+}
+
+export type ChartNumberFormat = NumberFormat;
+
+export type OutcomeState = 'satisfied' | 'partial' | 'failed' | 'unavailable';
+
+export interface OutcomeDiagnostic {
+  name: string;
+  value: number;
+  unit?: string;
+}
+
+export interface OutcomeArtifact extends BaseArtifact {
+  kind: 'outcome';
+  state: OutcomeState;
+  label: string;
+  explanation?: string;
+  status?: string;
+  diagnostics?: readonly OutcomeDiagnostic[];
 }
 
 export interface BaseChartStyle {

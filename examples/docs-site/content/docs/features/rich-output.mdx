@@ -15,19 +15,21 @@ Oxiquill renders these output kinds:
 - Charts rendered with ECharts.
 - Images from SVG, PNG, or JPEG data.
 - Sandboxed HTML in an iframe.
+- Author-declared computation outcomes.
 
 Every artifact may have optional string `id`, `title`, and `caption` fields. Values received from workers are untrusted: Oxiquill validates discriminators, fields, plain-record structure, array shapes, finite numbers, row widths, MIME/base64 data, and nested values before a renderer receives them. One rejected or failing artifact shows a local diagnostic without removing valid siblings.
 
 ## Artifact Schema
 
-| Kind    | Required fields                                                | Optional behavior                                                                                   |
-| ------- | -------------------------------------------------------------- | --------------------------------------------------------------------------------------------------- |
-| `text`  | `stream: "stdout" \| "stderr" \| "display"`, `content: string` | `truncated` indicates bounded content.                                                              |
-| `json`  | `value`                                                        | Cycle-aware formatting represents BigInt explicitly; `truncated` indicates bounded serialized data. |
-| `table` | `columns`, rectangular `rows`                                  | `rowCount` records the original size; `truncated` marks a preview.                                  |
-| `chart` | Valid `spec` described below                                   | Oversize/invalid charts become a local artifact error.                                              |
-| `image` | `mime: image/png \| image/jpeg \| image/svg+xml`, valid data   | `alt` supplies the image alternative.                                                               |
-| `html`  | `html: string`, `sandboxed: true`                              | Rendered with an empty sandbox, no referrer, and the restrictive CSP described below.               |
+| Kind      | Required fields                                                | Optional behavior                                                                                   |
+| --------- | -------------------------------------------------------------- | --------------------------------------------------------------------------------------------------- |
+| `text`    | `stream: "stdout" \| "stderr" \| "display"`, `content: string` | `truncated` indicates bounded content.                                                              |
+| `json`    | `value`                                                        | Cycle-aware formatting represents BigInt explicitly; `truncated` indicates bounded serialized data. |
+| `table`   | `columns`, rectangular `rows`                                  | `rowCount` records the original size; `truncated` marks a preview.                                  |
+| `chart`   | Valid `spec` described below                                   | Oversize/invalid charts become a local artifact error.                                              |
+| `image`   | `mime: image/png \| image/jpeg \| image/svg+xml`, valid data   | `alt` supplies the image alternative.                                                               |
+| `html`    | `html: string`, `sandboxed: true`                              | Rendered with an empty sandbox, no referrer, and the restrictive CSP described below.               |
+| `outcome` | `state`, nonblank `label`                                      | One computational outcome per successful result; optional explanation, status, and diagnostics.     |
 
 Table columns contain `key`, `label`, and optional `type`: `string`, `number`, `integer`, `boolean`, `date`, `datetime`, `null`, or `unknown`. Every row must have exactly the declared column count.
 
@@ -191,7 +193,7 @@ The macro serializes the argument into `spec.style`; normal chart validation enf
 
 Set `style.xFormat` or `style.yFormat` on value/log axes; heatmaps, grid fields, and bubbles use `style.valueFormat` for their color values. The same settings format ticks, pointers, tooltips, and summaries. Category and time axes retain their own formatting.
 
-Each format accepts `significantDigits` (integer 1–17), `fractionDigits` (integer 0–20), `unit` (text), and `notation` (`auto` or `si`). The two precision fields are mutually exclusive. Fixed decimals keep trailing zeros and may round small values to zero; negative zero displays as zero. Without overrides the default formatting remains in effect. Removing a format restores it.
+Each format accepts `significantDigits` (integer 1–17), `fractionDigits` (integer 0–20), `unit` (text), and `notation` (`auto`, `standard`, `scientific`, or `si`). The two precision fields are mutually exclusive. Fixed decimals keep trailing zeros and may round small values to zero; negative zero displays as zero. Without overrides the default formatting remains in effect. Removing a format restores it.
 
 Units follow numbers; axis names remain in `xLabel/yLabel`. SI chooses one prefix from the data range (10⁻²⁴ through 10²⁴), including rounding at prefix boundaries, and falls back to scientific notation outside that range. Formatting never changes stored values. No callbacks, format strings, HTML, or raw ECharts options are accepted.
 
@@ -581,3 +583,74 @@ Use stdout for short explanatory text. Use JSON when readers need the exact stru
 Copy, sort, pagination, validation, running, completion, and failure states are keyboard-operable and announced with localized English/Japanese labels. Sandboxed HTML intentionally has no script or same-origin permission, sends no referrer, and blocks external subresources by default; see [Support and Security](/guides/support-and-security/) for the exact policy and trust boundary.
 
 Table interaction state is scoped to one execution result. A new result resets the page, sort, and copy status. Rerenders of the same result preserve a compatible sort and page, but row shrinkage stores the clamped page and a removed or replaced sorted column clears the sort.
+
+## Column formats and computation outcomes
+
+Tables and charts share `NumberFormat`: `significantDigits` (1–17) or `fractionDigits` (0–20), never both; `notation` (`auto`, `standard`, `scientific`, `si`); and a plain-text `unit`. `ChartNumberFormat` remains an alias. Standard notation never uses an exponent; scientific always does except for zero. SI uses prefixes from yocto to yotta and scientific notation outside that scale. Table prefixes are chosen per cell; charts keep a shared scale per axis. Defaults are unchanged.
+
+A table column is `{ key, label, type?, format?, nullText? }`. Only `number` and `integer` columns accept `format`; any column accepts `nullText`. Units appear in visible and CSV headers as `Label (unit)`, never in cells, and values are never converted. Nulls display `nullText` (default `null`) but export as empty fields. Tables render exact zero and negative zero as `0`; existing fixed-precision chart zeros keep their trailing decimals. Precision rounds the stored double without manufacturing additional digits. Sorting, numeric hover details, copy, and CSV retain raw values and spreadsheet safety.
+
+An `outcome` declares the author's criterion separately from execution: `satisfied` means met, `partial` means incomplete, `failed` means no valid result, and `unavailable` means impossible in this environment. All four are successful executions. Oxiquill does not infer convergence. One outcome per result is pinned above the other outputs, with localized state text and an icon. Run completion and the outcome have separate announcements. Worker failures still show an error, and outcomes emitted before a failure are not presented as successful results.
+
+The artifact requires `kind: "outcome"`, `state`, and a nonblank `label` (1–256 UTF-8 bytes). Optional fields are `explanation` (16 KiB), `status` (256 bytes, shown verbatim), and up to 16 `diagnostics` of `{ name, value, unit? }`: a nonblank name (1–64 bytes), finite numeric value, and unit (32 bytes). Common `id`, `title`, and `caption` metadata is supported. Text is literal, including markup. Unknown fields, invalid formats, and duplicate outcomes report artifact errors while other outputs remain usable. Column errors also identify the column. Column units and null text use the 16 KiB metadata limit.
+
+The following button cell demonstrates an exact count, a scientific residual, a fixed-precision quantity with units, and custom null text. Change Iterations after running to see the previous-input banner; it stays until a current run succeeds.
+
+```rust
+//| id: column-formats
+//| run: button
+//| crates: []
+//| inputs:
+//|   iterations: { type: integer, label: Iterations, min: 1, max: 1000, value: 500 }
+//| tests:
+//|   - { case: default, expect: [{ path: /outputs/1/state, equals: partial }] }
+let residual = 1.0 / f64::from(iterations);
+let columns = serde_json::json!([
+    { "key": "0", "label": "Count", "type": "integer" },
+    { "key": "1", "label": "Residual", "type": "number", "format": { "notation": "scientific", "significantDigits": 3 } },
+    { "key": "2", "label": "Time", "type": "number", "format": { "fractionDigits": 2, "unit": "s" } },
+    { "key": "3", "label": "Optional", "type": "number", "nullText": "Not measured" }
+]);
+emit_table_with_columns!(columns, serde_json::json!([
+    [iterations, residual, 1.2349, null],
+    [iterations, residual, 1.2341, 0]
+]));
+let outcome = if iterations >= 1000 {
+    Outcome::satisfied("Target iteration count reached")
+} else {
+    Outcome::partial("Iteration limit reached")
+        .explanation("Stopped before the demonstration target of 1000 iterations.")
+        .status("MaxIterations")
+};
+emit_outcome!(outcome.diagnostic("residual", residual, None));
+```
+
+Rust accepts any serde column descriptor through `emit_table_with_columns!`, as well as existing label strings and key/label tuples. Use `Outcome::satisfied`, `::partial`, `::failed`, or `::unavailable`, then chain `.explanation(...)`, `.status(...)`, and `.diagnostic(name, value, unit)` before `emit_outcome!`.
+
+Python accepts `display_table(value, columns=...)`: a list of labels, or a mapping from column key or label to descriptor fields. Keys take precedence over labels; specify `type: "number"` for numeric formats on ordinary row lists whose inferred type is `unknown`. This example also reports an environment limitation explicitly:
+
+```python
+#| id: unavailable-outcome
+#| run: button
+display_table([[1.234, None]], columns={
+    "0": {"label": "Time", "type": "number", "format": {"fractionDigits": 2, "unit": "s"}},
+    "1": {"label": "Acceleration", "nullText": "Unavailable"},
+})
+display_outcome("unavailable", "GPU computation unavailable",
+                explanation="This example provides a CPU preview only.", status="NoGpu")
+```
+
+Haskell provides `TableColumn` and `displayTableWith` alongside unchanged `displayTable`. Start with `tableColumn key label` and `defaultNumberFormat`, then update record fields. `Outcome` and `OutcomeDiagnostic` records are emitted with `displayOutcome`; `outcome state label` supplies empty optional fields.
+
+```haskell
+--| id: satisfied-outcome
+--| run: button
+import Oxiquill.Output
+let quantity = (tableColumn "time" "Time")
+      { columnType = Just "number"
+      , columnFormat = Just (defaultNumberFormat { fractionDigits = Just 2, unit = Just "s" })
+      , columnNullText = Just "Not measured" }
+displayTableWith [quantity] [[JsonNumber 1.234], [JsonNull]]
+displayOutcome ((outcome "satisfied" "Criterion met")
+  { outcomeDiagnostics = [OutcomeDiagnostic "residual" 0.00001 Nothing] })
+```

@@ -10,6 +10,10 @@ export function generateRustOutputTypes(rustCells, capabilities = rustOutputCapa
     ProducerError(ProducerErrorArtifact),`,
     `    #[serde(rename = "text")]
     Text(TextArtifact),`,
+    capabilities.outcome
+      ? `    #[serde(rename = "outcome")]
+    Outcome(Outcome),`
+      : '',
     capabilities.json
       ? `    #[serde(rename = "json")]
     Json(JsonArtifact),`
@@ -62,6 +66,7 @@ export function generateRustOutputTypes(rustCells, capabilities = rustOutputCapa
     .filter(Boolean)
     .join('\n');
   const emitsArtifacts =
+    capabilities.outcome ||
     capabilities.text ||
     capabilities.json ||
     capabilities.html ||
@@ -190,6 +195,8 @@ impl std::fmt::Write for BoundedText {
         Ok(())
     }
 }
+
+${capabilities.outcome ? generateRustOutcomeTypes() : ''}
 
 ${outputCollector}
 
@@ -360,6 +367,8 @@ struct TableColumn {
     label: String,
     #[serde(rename = "type")]
     column_type: &'static str,
+    #[serde(flatten)]
+    presentation: serde_json::Map<String, Value>,
 }
 
 fn table_artifact_from_value(value: Value) -> Result<TableArtifact, String> {
@@ -410,6 +419,7 @@ fn infer_table_columns(rows: &[Value]) -> Vec<TableColumn> {
                 key: key.clone(),
                 label: key.clone(),
                 column_type: table_value_type(value),
+                presentation: serde_json::Map::new(),
             })
             .collect(),
         Value::Array(values) => values
@@ -420,12 +430,14 @@ fn infer_table_columns(rows: &[Value]) -> Vec<TableColumn> {
                 key: index.to_string(),
                 label: (index + 1).to_string(),
                 column_type: table_value_type(value),
+                presentation: serde_json::Map::new(),
             })
             .collect(),
         value => vec![TableColumn {
             key: "value".to_owned(),
             label: "Value".to_owned(),
             column_type: table_value_type(value),
+            presentation: serde_json::Map::new(),
         }],
     }
 }
@@ -448,6 +460,7 @@ fn parse_table_column(index: usize, value: Value) -> Result<TableColumn, String>
             key: index.to_string(),
             label,
             column_type: "unknown",
+            presentation: serde_json::Map::new(),
         }),
         Value::Array(values) if values.len() >= 2 => {
             let key = values[0]
@@ -462,6 +475,7 @@ fn parse_table_column(index: usize, value: Value) -> Result<TableColumn, String>
                 key,
                 label,
                 column_type: "unknown",
+            presentation: serde_json::Map::new(),
             })
         }
         Value::Object(object) => {
@@ -484,6 +498,7 @@ fn parse_table_column(index: usize, value: Value) -> Result<TableColumn, String>
                 key,
                 label,
                 column_type,
+                presentation: object.into_iter().filter(|(key, _)| !["key", "label", "type"].contains(&key.as_str())).collect(),
             })
         }
         _ => Err("table column must be a string, tuple, or object".to_owned()),
@@ -536,6 +551,49 @@ fn normalize_table_column_type(value: &str) -> Option<&'static str> {
         "null" => Some("null"),
         "unknown" => Some("unknown"),
         _ => None,
+    }
+}
+`;
+}
+
+function generateRustOutcomeTypes() {
+  return `#[derive(Debug, Serialize)]
+pub struct Outcome {
+    state: &'static str,
+    label: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    explanation: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    status: Option<String>,
+    #[serde(skip_serializing_if = "Vec::is_empty")]
+    diagnostics: Vec<OutcomeDiagnostic>,
+}
+
+#[derive(Debug, Serialize)]
+struct OutcomeDiagnostic {
+    name: String,
+    value: f64,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    unit: Option<String>,
+}
+
+impl Outcome {
+${['satisfied', 'partial', 'failed', 'unavailable']
+  .map(
+    (state) => `    pub fn ${state}(label: impl Into<String>) -> Self {
+        Self { state: "${state}", label: label.into(), explanation: None, status: None, diagnostics: Vec::new() }
+    }`
+  )
+  .join('\n')}
+    pub fn explanation(self, explanation: impl Into<String>) -> Self {
+        Self { explanation: Some(explanation.into()), ..self }
+    }
+    pub fn status(self, status: impl Into<String>) -> Self {
+        Self { status: Some(status.into()), ..self }
+    }
+    pub fn diagnostic(mut self, name: impl Into<String>, value: f64, unit: Option<&str>) -> Self {
+        self.diagnostics.push(OutcomeDiagnostic { name: name.into(), value, unit: unit.map(str::to_owned) });
+        self
     }
 }
 `;

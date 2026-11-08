@@ -15,19 +15,21 @@ Oxiquill は次の出力を表示します。
 - ECharts で render される chart。
 - SVG、PNG、JPEG data から作る image。
 - iframe 内の sandboxed HTML。
+- 著者が宣言する計算条件の達成状況。
 
 各 artifact は optional string の `id`、`title`、`caption` を持てます。worker から受け取る value は untrusted です。Oxiquill は renderer に渡す前に discriminator、field、plain-record structure、array shape、finite number、row width、MIME/base64 data、nested value を検証します。reject/render failure になった一つの artifact は local diagnostic を表示し、valid sibling を消しません。
 
 ## Artifact schema
 
-| Kind    | Required field                                                 | Optional behavior                                                                                  |
-| ------- | -------------------------------------------------------------- | -------------------------------------------------------------------------------------------------- |
-| `text`  | `stream: "stdout" \| "stderr" \| "display"`, `content: string` | `truncated` が bounded content を示します。                                                        |
-| `json`  | `value`                                                        | cycle-aware formatting が BigInt を明示表現し、`truncated` が bounded serialized data を示します。 |
-| `table` | `columns`、rectangular `rows`                                  | `rowCount` が original size、`truncated` が preview を示します。                                   |
-| `chart` | 下記の valid `spec`                                            | oversize/invalid chart は local artifact error。                                                   |
-| `image` | `mime: image/png \| image/jpeg \| image/svg+xml`、valid data   | `alt` が image alternative。                                                                       |
-| `html`  | `html: string`, `sandboxed: true`                              | empty sandbox、no-referrer、下記の restrictive CSP で表示。                                        |
+| Kind      | Required field                                                 | Optional behavior                                                                                  |
+| --------- | -------------------------------------------------------------- | -------------------------------------------------------------------------------------------------- |
+| `text`    | `stream: "stdout" \| "stderr" \| "display"`, `content: string` | `truncated` が bounded content を示します。                                                        |
+| `json`    | `value`                                                        | cycle-aware formatting が BigInt を明示表現し、`truncated` が bounded serialized data を示します。 |
+| `table`   | `columns`、rectangular `rows`                                  | `rowCount` が original size、`truncated` が preview を示します。                                   |
+| `chart`   | 下記の valid `spec`                                            | oversize/invalid chart は local artifact error。                                                   |
+| `image`   | `mime: image/png \| image/jpeg \| image/svg+xml`、valid data   | `alt` が image alternative。                                                                       |
+| `html`    | `html: string`, `sandboxed: true`                              | empty sandbox、no-referrer、下記の restrictive CSP で表示。                                        |
+| `outcome` | `state`、空白だけではない `label`                              | 正常な実行の計算結果を一つだけ指定。説明、ステータス、診断値は任意。                               |
 
 table column は `key`、`label`、optional `type` を持ちます。type は `string`、`number`、`integer`、`boolean`、`date`、`datetime`、`null`、`unknown` です。各 row は declared column count と正確に一致する必要があります。
 
@@ -191,7 +193,7 @@ macro は `spec.style` にシリアライズし、通常のグラフ検証が同
 
 value/log 軸には `style.xFormat` と `style.yFormat`、heatmap・field・bubble の色の値には `style.valueFormat` を指定できます。目盛、ポインター、tooltip、要約に同じ設定を使います。category と time は専用の表示書式を保ちます。
 
-各書式は `significantDigits`（整数 1–17）、`fractionDigits`（整数 0–20）、`unit`（文字列）、`notation`（`auto` または `si`）を受け付けます。2 種類の桁指定は併用できません。固定小数では末尾のゼロを保持し、小さい値がゼロに丸まる場合があります。負のゼロはゼロと表示します。未指定の書式は従来の規則に従い、設定を削除すると既定値へ戻ります。
+各書式は `significantDigits`（整数 1–17）、`fractionDigits`（整数 0–20）、`unit`（文字列）、`notation`（`auto`、`standard`、`scientific`、`si`）を受け付けます。2 種類の桁指定は併用できません。固定小数では末尾のゼロを保持し、小さい値がゼロに丸まる場合があります。負のゼロはゼロと表示します。未指定の書式は従来の規則に従い、設定を削除すると既定値へ戻ります。
 
 単位は数値の後ろに表示し、軸名は `xLabel/yLabel` で指定します。SI はデータ範囲から共通の接頭辞（10⁻²⁴〜10²⁴）を選び、境界での丸めを考慮します。範囲外は指数表記に戻ります。元データを変更せず、callback、書式文字列、HTML、生の ECharts options は受け付けません。
 
@@ -581,3 +583,74 @@ display_chart({"kind": "field", "xEdges": x_edges, "yEdges": y_edges,
 copy、sort、pagination、validation、running、completion、failure state は keyboard 操作可能で、localized English/Japanese label とともに announce されます。sandboxed HTML には意図的に script/same-origin permission がなく、referrer を送らず、external subresource を default で block します。正確な policy と trust boundary は [サポートとセキュリティ](/ja/guides/support-and-security/) を参照してください。
 
 table interaction state は一つの execution result に限定されます。新しい result では page、sort、copy status を reset します。同じ result の rerender は互換性のある sort/page を維持しますが、row が減った場合は clamp 後の page を保存し、sort 対象 column が削除・置換された場合は sort を解除します。
+
+## 列の表示形式と計算結果
+
+表とグラフは `NumberFormat` を共有します。`significantDigits`（1–17）と `fractionDigits`（0–20）は併用できません。`notation` は `auto`、`standard`、`scientific`、`si`、`unit` はプレーンテキストです。`ChartNumberFormat` は別名として残ります。`standard` は指数を使わず、`scientific` はゼロ以外を指数表示します。SI はヨクトからヨタまでの接頭辞を使い、その範囲外は指数表示します。表ではセルごと、グラフでは軸全体で接頭辞を選びます。既定の表示は変わりません。
+
+表の列は `{ key, label, type?, format?, nullText? }` です。`format` は `number` と `integer` 列だけに指定できます。`nullText` はすべての列で使えます。単位は画面と CSV の見出しに `Label (unit)` と表示され、セルには付かず、値の変換もしません。null は `nullText`（既定は `null`）で表示し、CSV では空欄です。表のゼロと負のゼロは `0`、既存の固定小数点グラフは末尾のゼロを維持します。精度指定は倍精度数の値を丸め、余分な桁を作りません。並べ替え、数値のツールチップ、コピー、CSV は元の値と数式対策を維持します。
+
+`outcome` は実行の成否と別に、著者が定めた計算条件の達成を示します。`satisfied` は達成、`partial` は未完了、`failed` は有効な結果なし、`unavailable` は環境上実行不可です。いずれもコードの実行自体は成功しています。収束を自動判定しません。結果ごとに一つだけ指定でき、他の出力より上にアイコンと翻訳された状態名で表示します。実行完了と計算結果は別々に読み上げます。ワーカーの失敗ではエラーを表示し、失敗前に出力された outcome を成功結果として表示しません。
+
+必須フィールドは `kind: "outcome"`、`state`、空白だけではない `label`（1–256 UTF-8 バイト）です。任意の `explanation` は 16 KiB、`status` は 256 バイトで原文表示します。`diagnostics` は最大 16 件の `{ name, value, unit? }` で、名前は空白だけではない 1–64 バイト、値は有限数、単位は 32 バイトまでです。共通の `id`、`title`、`caption` も使えます。マークアップを含めテキストはそのまま表示します。未知のフィールド、不正な形式、重複 outcome は成果物エラーになり、他の出力は残ります。列のエラーには列番号も含まれます。列の単位と null テキストは 16 KiB のメタデータ制限に従います。
+
+次のセルは整数の件数、指数表示の残差、単位付き固定小数点の量、null の代替テキストを示します。実行後に Iterations を変更すると、前の入力による結果であることを示す表示が出ます。現在の入力で実行が成功するまで表示は残ります。
+
+```rust
+//| id: column-formats
+//| run: button
+//| crates: []
+//| inputs:
+//|   iterations: { type: integer, label: Iterations, min: 1, max: 1000, value: 500 }
+//| tests:
+//|   - { case: default, expect: [{ path: /outputs/1/state, equals: partial }] }
+let residual = 1.0 / f64::from(iterations);
+let columns = serde_json::json!([
+    { "key": "0", "label": "Count", "type": "integer" },
+    { "key": "1", "label": "Residual", "type": "number", "format": { "notation": "scientific", "significantDigits": 3 } },
+    { "key": "2", "label": "Time", "type": "number", "format": { "fractionDigits": 2, "unit": "s" } },
+    { "key": "3", "label": "Optional", "type": "number", "nullText": "Not measured" }
+]);
+emit_table_with_columns!(columns, serde_json::json!([
+    [iterations, residual, 1.2349, null],
+    [iterations, residual, 1.2341, 0]
+]));
+let outcome = if iterations >= 1000 {
+    Outcome::satisfied("Target iteration count reached")
+} else {
+    Outcome::partial("Iteration limit reached")
+        .explanation("Stopped before the demonstration target of 1000 iterations.")
+        .status("MaxIterations")
+};
+emit_outcome!(outcome.diagnostic("residual", residual, None));
+```
+
+Rust の `emit_table_with_columns!` は serde で直列化できる列記述子、従来のラベル文字列、キーとラベルのタプルに対応します。`Outcome::satisfied`、`::partial`、`::failed`、`::unavailable` を作り、`.explanation(...)`、`.status(...)`、`.diagnostic(name, value, unit)` を連結して `emit_outcome!` に渡します。
+
+Python の `display_table(value, columns=...)` にはラベル一覧、または列キー・ラベルから記述子フィールドへのマッピングを渡せます。キーがラベルより優先されます。通常の行一覧では推定型が `unknown` なので、数値形式を指定する列には `type: "number"` も指定します。次の例は環境の制限も明示します。
+
+```python
+#| id: unavailable-outcome
+#| run: button
+display_table([[1.234, None]], columns={
+    "0": {"label": "Time", "type": "number", "format": {"fractionDigits": 2, "unit": "s"}},
+    "1": {"label": "Acceleration", "nullText": "Unavailable"},
+})
+display_outcome("unavailable", "GPU computation unavailable",
+                explanation="This example provides a CPU preview only.", status="NoGpu")
+```
+
+Haskell は従来の `displayTable` に加えて `TableColumn` と `displayTableWith` を提供します。`tableColumn key label` と `defaultNumberFormat` のレコードを更新して使います。`Outcome` と `OutcomeDiagnostic` レコードは `displayOutcome` で出力します。`outcome state label` は任意フィールドを空にした初期値を作ります。
+
+```haskell
+--| id: satisfied-outcome
+--| run: button
+import Oxiquill.Output
+let quantity = (tableColumn "time" "Time")
+      { columnType = Just "number"
+      , columnFormat = Just (defaultNumberFormat { fractionDigits = Just 2, unit = Just "s" })
+      , columnNullText = Just "Not measured" }
+displayTableWith [quantity] [[JsonNumber 1.234], [JsonNull]]
+displayOutcome ((outcome "satisfied" "Criterion met")
+  { outcomeDiagnostics = [OutcomeDiagnostic "residual" 0.00001 Nothing] })
+```

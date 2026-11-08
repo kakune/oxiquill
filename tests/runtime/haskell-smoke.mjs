@@ -26,6 +26,16 @@ const result = await testGeneratedHaskellCells({
       validateOutputArtifacts(outputs).filter((artifact) => artifact.status === 'error'),
       []
     );
+    if (options.cell.id.endsWith('__satisfied-outcome')) {
+      assert.deepEqual(
+        outputs.map((output) => output.kind),
+        ['table', 'outcome']
+      );
+      assert.deepEqual(outputs[0].columns[0].format, { fractionDigits: 2, unit: 's' });
+      assert.equal(outputs[0].columns[0].nullText, 'Not measured');
+      assert.equal(outputs[1].state, 'satisfied');
+      assert.deepEqual(outputs[1].diagnostics, [{ name: 'residual', value: 0.00001 }]);
+    }
     if (options.cell.id.endsWith('__haskell-mixed-xy')) {
       assert.deepEqual(outputs[0].spec, { kind: 'xy', layers: [{ id: 'samples', kind: 'scatter', points: [[0, 1]] }] });
     }

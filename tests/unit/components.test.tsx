@@ -2504,3 +2504,72 @@ describe('definitions and compilation panels', () => {
     expect(mocks.runInteractiveCell).not.toHaveBeenCalled();
   });
 });
+
+describe('result freshness', () => {
+  it.each(['rust', 'python', 'haskell'] as const)(
+    'keeps %s button output stale after edits, restoration, and failure until success',
+    async (language) => {
+      const cell = makeCell({ language });
+      setManifestCells([cell]);
+      mocks.runInteractiveCell.mockResolvedValue({
+        outputs: [{ kind: 'text', stream: 'stdout', content: 'original result' }]
+      });
+      render(<InteractiveCell cellId={cell.id} />);
+      fireEvent.click(screen.getByRole('button', { name: 'Run', exact: true }));
+      const output = await screen.findByTestId('run-output');
+      const wrapper = output.closest('.doc-cell__retained-output');
+      expect(wrapper).not.toHaveAttribute('data-stale');
+      const input = screen.getByRole('spinbutton', { name: 'count' });
+      fireEvent.input(input, { target: { value: '9' } });
+      expect(wrapper).toHaveAttribute('data-stale', 'true');
+      fireEvent.click(screen.getByRole('button', { name: 'Reset inputs' }));
+      expect(wrapper).toHaveAttribute('data-stale', 'true');
+      mocks.runInteractiveCell.mockRejectedValueOnce(
+        new CellExecutionError('runtime failed', {
+          outputs: [{ kind: 'outcome', state: 'satisfied', label: 'Must not render' }]
+        })
+      );
+      fireEvent.click(screen.getByRole('button', { name: 'Run', exact: true }));
+      await screen.findByRole('alert');
+      expect(screen.queryByText('Must not render')).not.toBeInTheDocument();
+      expect(wrapper).toHaveAttribute('data-stale', 'true');
+      fireEvent.click(screen.getByRole('button', { name: 'Retry cell' }));
+      await waitFor(() => expect(wrapper).not.toHaveAttribute('data-stale'));
+      expect(screen.getByTestId('run-output')).toBe(output);
+    }
+  );
+
+  it.each(['button', 'reactive'] as const)(
+    'discards obsolete %s responses and keeps all output stale while pending',
+    async (run) => {
+      const cell = makeCell({ run });
+      setManifestCells([cell]);
+      mocks.runInteractiveCell.mockResolvedValueOnce({
+        outputs: [{ kind: 'text', stream: 'stdout', content: 'original' }]
+      });
+      render(<InteractiveCell cellId={cell.id} />);
+      if (run === 'button') fireEvent.click(screen.getByRole('button', { name: 'Run', exact: true }));
+      const output = await screen.findByTestId('run-output');
+      const wrapper = output.closest('.doc-cell__retained-output');
+      const old = createDeferredResult();
+      const current = createDeferredResult();
+      mocks.runInteractiveCell.mockReturnValueOnce(old.promise).mockReturnValueOnce(current.promise);
+      const input = screen.getByRole('spinbutton', { name: 'count' });
+      fireEvent.input(input, { target: { value: '7' } });
+      if (run === 'button') fireEvent.click(screen.getByRole('button', { name: 'Run', exact: true }));
+      await waitFor(() => expect(mocks.runInteractiveCell).toHaveBeenCalledTimes(2));
+      fireEvent.input(input, { target: { value: '8' } });
+      expect(wrapper).toHaveAttribute('data-stale', 'true');
+      if (run === 'button') fireEvent.click(screen.getByRole('button', { name: 'Run', exact: true }));
+      await waitFor(() => expect(mocks.runInteractiveCell).toHaveBeenCalledTimes(3));
+      await act(async () => old.resolve({ outputs: [{ kind: 'text', stream: 'stdout', content: 'obsolete' }] }));
+      expect(output).toHaveTextContent('original');
+      expect(wrapper).toHaveAttribute('data-stale', 'true');
+      await act(async () => current.resolve({ outputs: [{ kind: 'text', stream: 'stdout', content: 'current' }] }));
+      await waitFor(() => expect(wrapper).not.toHaveAttribute('data-stale'));
+      expect(output).toHaveTextContent('current');
+      fireEvent.input(input, { target: { value: '' } });
+      expect(wrapper).toHaveAttribute('data-stale', 'true');
+    }
+  );
+});

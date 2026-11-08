@@ -88,10 +88,16 @@ import { createOxiquillCollections } from 'oxiquill/content';
 import type { OxiquillCollections, OxiquillContentDependencies } from 'oxiquill/content';
 import InteractiveCell from 'oxiquill/runtime/InteractiveCell';
 import MermaidDiagram from 'oxiquill/runtime/MermaidDiagram';
-import type { CellManifest, CellExecutionResult, RawCellExecutionResult, InputSpec, JsonArtifact } from 'oxiquill/runtime/types';
+import type { CellManifest, CellExecutionResult, RawCellExecutionResult, InputSpec, JsonArtifact, NumberFormat, ChartNumberFormat, OutcomeArtifact, TableColumn } from 'oxiquill/runtime/types';
 // @ts-expect-error Legacy plot result types have been removed.
 import type { PlotSpec, LinePlotSpec } from 'oxiquill/runtime/types';
 
+const numberFormat: NumberFormat = { notation: 'scientific', significantDigits: 3 };
+const chartFormat: ChartNumberFormat = numberFormat;
+const formattedColumn: TableColumn = { key: 'x', label: 'X', type: 'number', format: chartFormat, nullText: 'Missing' };
+const computationOutcome: OutcomeArtifact = { kind: 'outcome', state: 'partial', label: 'Incomplete' };
+void formattedColumn;
+void computationOutcome;
 const cell = {} as CellManifest;
 const execution = { outputs: [{ kind: 'json', value: null }] } satisfies CellExecutionResult;
 const raw: RawCellExecutionResult = { outputs: execution.outputs };

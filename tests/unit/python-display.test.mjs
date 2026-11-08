@@ -193,3 +193,22 @@ display_chart(spec)
 assert __oxiquill_take_outputs()[0].to_py()["spec"] == spec
 `);
 });
+
+it('emits column descriptors and outcomes while preserving plain table calls', () => {
+  python.runPython(`
+display_table([[1.234, None]], columns={"0": {"type": "number", "format": {"fractionDigits": 2, "unit": "s"}}, "2": {"nullText": "Missing"}})
+table = __oxiquill_take_outputs()[0]
+assert table["columns"][0]["format"] == {"fractionDigits": 2, "unit": "s"}
+assert table["columns"][1]["nullText"] == "Missing"
+assert table["rows"] == [[1.234, None]]
+display_table([[1]], columns=["Count"])
+assert __oxiquill_take_outputs()[0]["columns"][0] == {"key": "0", "label": "Count", "type": "unknown"}
+display_outcome("partial", "Iteration limit reached", status="MaxIterations", diagnostics=[{"name": "residual", "value": 0.0013}])
+result = __oxiquill_take_outputs()[0]
+assert result.kind == "outcome" and result.state == "partial"
+assert result.diagnostics[0].value == 0.0013
+display_outcome("failed", "Invalid", diagnostics=[{"name": "residual", "value": float("nan")}])
+from js import JSON
+assert json.loads(JSON.stringify(__oxiquill_take_outputs()[0]))["diagnostics"][0]["value"] is None
+`);
+});
