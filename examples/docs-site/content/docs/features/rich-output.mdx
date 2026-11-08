@@ -209,7 +209,7 @@ emit_line_chart!(&points, "Time", "Voltage", &serde_json::json!({
 
 ### Series identity and style
 
-Series in every chart kind with `series[]` accept an optional non-empty, unique `id`. Give a series the same ID on each execution to preserve its identity and legend selection when reordering or renaming it. Names are display labels; even same-named series can be selected independently. Without IDs, identity follows the series index. Adding or removing series does not reset zoom. Default palette colors still follow authored order; use explicit colors when a series needs a fixed color.
+Series in every chart kind with `series[]` accept an optional non-empty, unique `id`. Stable IDs preserve identity and legend selection when reordering or renaming series within the same result. A new successful cell result starts with all series visible. Names are display labels; even same-named series can be selected independently. Without IDs, identity follows the series index. Adding or removing series does not reset zoom. Default palette colors still follow authored order; use explicit colors when a series needs a fixed color.
 
 Set `series.style.color` to a `#RGB/#RRGGBB` string or `{ light, dark }` with at least one theme. An omitted theme uses the chart palette. Line/area series also accept `lineType` (solid/dashed/dotted), `step` (false/start/middle/end), `smooth` (boolean), `symbol`, and `showSymbol`. Scatter and bubble series support color and symbol; bar, error bar, band, and box plot series support color. Symbols are circle/emptyCircle/rect/triangle/diamond/none.
 
@@ -248,6 +248,22 @@ Producers enforce limits inside each language worker before `postMessage`; the m
 `truncated: true` is valid only for text, JSON, and table artifacts. Chart, image, and HTML artifacts are never silently truncated. Invalid/cyclic/over-deep JSON, ragged tables, non-finite chart values, invalid base64/MIME pairs, or unsafe structural records cannot crash the cell component. Execution results contain only `outputs`; stream text and JSON values are artifacts rather than duplicate top-level fields.
 
 ## Chart images
+
+Charts narrower than 36rem use one action row: **Data**, **Reset view** (when available), and **Export ▾**. Export offers the same PNG/SVG downloads as wide charts. The chart container determines this layout, even inside a wide page. Press Escape or click outside a disclosure to close it and return focus to its trigger.
+
+Every legend entry offers **Only this series**, and **Show all series** restores every series across all legend pages. Toggling every series off is allowed. Narrow charts with more than six legend entries collapse them into **Series (selected/total)**; open it to reach the same actions and 25-per-page pagination. Theme, zoom/reset, and export preserve selection. The summary states how many series are visible; the data table and CSV retain hidden series with a **Visible** column, subject to the existing row limit.
+
+```rust
+//| id: compact-series
+//| title: Twelve series
+//| run: autorun
+//| crates: []
+let series: Vec<_> = (0..12).map(|i| serde_json::json!({
+    "id": format!("series-{i}"), "name": format!("Series {}", i + 1),
+    "points": [[0, i], [1, i + 2], [2, i + 1]]
+})).collect();
+emit_chart!(serde_json::json!({ "kind": "line", "title": "Twelve series", "series": series }));
+```
 
 **Show data as a table** exposes the original values, including hidden series, histogram boundaries and counts, heatmap coordinates, interval bounds, box plot statistics, bubble sizes and colors, and grid-field cell boundaries. Whole epoch milliseconds on time axes appear as the UTC ISO-8601 instants the chart displays. Conversion occurs only when opened and retains at most 10,000 rows; totals and truncation are shown. The table supports keyboard sorting, paging, and CSV download. Series buttons show their selection with `aria-pressed` and use color, line pattern, and symbols. **Reset zoom** restores the authored full range without resetting series selections. These controls are usable with the keyboard; chart summaries remain available to assistive technology.
 
