@@ -85,6 +85,7 @@ for (const fixture of [
       await page.locator('.doc-chart-output').screenshot({ path: testInfo.outputPath('gallery-' + fixture + '.png') });
     await page.getByRole('button', { name: 'Show data as a table' }).click();
     await expect(page.getByRole('table')).toBeVisible();
+    await page.getByRole('button', { name: 'Export', exact: true }).click();
     const download = page.waitForEvent('download');
     await page.getByRole('button', { name: 'Save SVG', exact: true }).click();
     expect((await download).suggestedFilename()).toMatch(/\.svg$/u);
