@@ -37,6 +37,7 @@ import {
   referencedRustFiles
 } from '../../packages/oxiquill/src/generator/doc-runtime/rust-module-publish.mjs';
 import { createTaskPool } from '../../packages/oxiquill/src/generator/doc-runtime/task-pool.mjs';
+import { rustFailureError } from '../../packages/oxiquill/src/generator/doc-runtime/rust-module-service.mjs';
 import {
   reusePreviousHighlights,
   sourceHighlightFingerprint
@@ -432,5 +433,36 @@ describe('source highlight reuse', () => {
     expect(await reused.codeToHtml('b', { lang: 'rust' })).toBe('<new>b');
     expect(reusePreviousHighlights({ highlighter, previousManifest, reusable: false })).toBe(highlighter);
     expect(reusePreviousHighlights({ highlighter, reusable: true })).toBe(highlighter);
+  });
+});
+
+describe('Rust failure reports', () => {
+  const group = (index) => ({ id: `page-${String(index).padStart(16, '0')}`, pages: [`p${index}.mdx`] });
+
+  it('reports one shared tool failure once with the modules it stopped', () => {
+    const cause = Object.assign(new Error('Unable to resolve wasm-opt'), { exitCode: 7 });
+    const failures = [1, 2, 3, 4, 5, 6, 7].map((index) => ({
+      group: group(index),
+      kind: 'tool',
+      diagnostics: [],
+      error: cause
+    }));
+    failures.push({
+      group: group(8),
+      kind: 'compile',
+      diagnostics: [],
+      unmapped: true,
+      error: new Error('cargo exited with 101')
+    });
+    const error = rustFailureError(failures);
+    expect(error.message.match(/Unable to resolve wasm-opt/gu)).toHaveLength(1);
+    expect(error.message).toContain('7 Rust modules page-0000000000000001 (p1.mdx), ');
+    expect(error.message).toContain('and 2 more compiled but could not be finished');
+    expect(error.message).not.toContain('p6.mdx');
+    expect(error.message).toContain('Rust module page-0000000000000008 (p8.mdx) failed:\n\ncould not map');
+    expect(error.cause).toBe(cause);
+    expect(error.exitCode).toBe(7);
+    expect(error.rustModules).toHaveLength(8);
+    expect(rustFailureError([failures[0]]).message).toMatch(/^Rust module page-0000000000000001 \(p1\.mdx\) compiled/u);
   });
 });

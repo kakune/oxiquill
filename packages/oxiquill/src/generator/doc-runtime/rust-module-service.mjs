@@ -239,18 +239,46 @@ export async function describeRustFailures({ failures, paths, fileSystem }) {
   );
 }
 
+const MAX_LISTED_MODULES = 5;
+
+// A post-link tool failure (for example an unavailable wasm-bindgen or wasm-opt)
+// usually affects every compiled module; it is reported once with the modules it
+// stopped instead of once per module as an unmappable cell error.
+function describeToolFailure(groups, message) {
+  const listed = groups
+    .slice(0, MAX_LISTED_MODULES)
+    .map((group) => describeRustGroup(group))
+    .join(', ');
+  const more = groups.length > MAX_LISTED_MODULES ? ` and ${groups.length - MAX_LISTED_MODULES} more` : '';
+  return `${groups.length === 1 ? 'Rust module' : `${groups.length} Rust modules`} ${listed}${more} compiled but could not be finished:\n${message}`;
+}
+
 export function rustFailureError(failures) {
   const original = failures.find((failure) => failure.error)?.error;
-  const message = failures
-    .map(
-      (failure) =>
+  const sections = [];
+  const toolFailures = new Map();
+  for (const failure of failures) {
+    const originalMessage = failure.error?.message ?? String(failure.error ?? 'unknown failure');
+    if (failure.kind === 'tool') {
+      const groups = toolFailures.get(originalMessage);
+      if (groups) groups.push(failure.group);
+      else {
+        const shared = [failure.group];
+        toolFailures.set(originalMessage, shared);
+        sections.push(() => describeToolFailure(shared, originalMessage));
+      }
+      continue;
+    }
+    sections.push(
+      () =>
         `Rust module ${describeRustGroup(failure.group)} failed:\n${formatRustFailure({
           diagnostics: failure.diagnostics,
           unmapped: failure.unmapped,
-          original: failure.error?.message ?? String(failure.error ?? 'unknown failure')
+          original: originalMessage
         })}`
-    )
-    .join('\n\n');
+    );
+  }
+  const message = sections.map((section) => section()).join('\n\n');
   const error = new Error(message, original ? { cause: original } : undefined);
   error.exitCode = failures.map((failure) => failure.error?.exitCode).find((code) => Number.isInteger(code)) ?? 1;
   error.rustDiagnostics = failures.flatMap((failure) => failure.diagnostics);
