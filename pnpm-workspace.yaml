@@ -15,3 +15,5 @@ overrides:
   '@expressive-code/core>postcss-nested': 7.0.2
   # Mermaid and remark-math's micromark extension still declare KaTeX 0.16; keep one patched KaTeX that matches the package pin.
   katex: 0.19.0
+  # ESLint's minimatch 10 range is affected by GHSA-g3hv-75wg-m249; use the patched implementation.
+  'minimatch@10': 11.0.1
