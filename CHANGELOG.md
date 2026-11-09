@@ -75,6 +75,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ### Security
 
+- Override the development toolchain's vulnerable minimatch 10 dependency with 11.0.1 to address GHSA-g3hv-75wg-m249.
+
 ## [0.4.1] - 2026-10-31
 
 ### Added
