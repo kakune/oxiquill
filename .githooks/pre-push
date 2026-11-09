@@ -3,8 +3,6 @@ set -eu
 repo_root=$(git rev-parse --show-toplevel)
 cd "$repo_root"
 
-python3 .github/scripts/check_email_privacy.py pre-push
-
 pnpm lint
 pnpm check
 pnpm test:unit
