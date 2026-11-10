@@ -8,6 +8,20 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ### Added
 
+### Changed
+
+### Deprecated
+
+### Removed
+
+### Fixed
+
+### Security
+
+## [0.5.0] - 2026-11-10
+
+### Added
+
 - Opt-in `missingTranslations: 'omit'` generates only translated pages for each locale and limits the language select, sidebar, previous/next links, and `hreflang` alternates to them; the default `'fallback'` keeps Starlight's fallback pages.
 - `docRedirects` maps moved pages to base-relative documentation paths, prefixes them with `base`, and fails the build when a destination produced no page.
 - Pages can set `contentWidth: full` in frontmatter to drop the reading measure while keeping both navigation columns.
@@ -64,6 +78,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 ### Deprecated
 
 ### Removed
+
+- Removed the email privacy CI workflow, local email guards, and their documentation; the existing lint, type, and test checks remain.
 
 ### Fixed
 
@@ -234,7 +250,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 This release predates the maintained changelog. See the [v0.2.0 GitHub Release](https://github.com/kakune/oxiquill/releases/tag/v0.2.0) and tagged source for its complete contents.
 
-[Unreleased]: https://github.com/kakune/oxiquill/compare/v0.4.1...HEAD
+[Unreleased]: https://github.com/kakune/oxiquill/compare/v0.5.0...HEAD
+[0.5.0]: https://github.com/kakune/oxiquill/releases/tag/v0.5.0
 [0.4.1]: https://github.com/kakune/oxiquill/releases/tag/v0.4.1
 [0.4.0]: https://github.com/kakune/oxiquill/releases/tag/v0.4.0
 [0.3.1]: https://github.com/kakune/oxiquill/releases/tag/v0.3.1
