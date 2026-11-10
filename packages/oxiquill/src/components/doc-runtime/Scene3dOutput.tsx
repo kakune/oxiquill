@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'preact/hooks';
+import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'preact/hooks';
 import type { Scene3dArtifact } from '../../lib/doc-runtime/types.js';
 import { labelsForLanguage, type RuntimeLabels } from '../../lib/doc-runtime/runtime-localization.js';
 import { scene3dLabels } from '../../lib/doc-runtime/scene3d-localization.js';
@@ -136,46 +136,40 @@ export default function Scene3dOutput({
     };
   }, []);
 
-  useEffect(() => {
-    const frame = requestAnimationFrame(() => {
-      if (!canvas.current || !viewport.current) return;
-      const style = getComputedStyle(viewport.current);
-      const chrome = {
-        background: style.getPropertyValue('--sl-color-bg').trim() || (theme === 'dark' ? '#18181b' : '#fff'),
-        text: style.getPropertyValue('--sl-color-text').trim() || (theme === 'dark' ? '#eee' : '#18181b'),
-        edge: style.getPropertyValue('--sl-color-gray-3').trim() || '#888'
-      };
-      try {
-        setAvailable(
-          drawScene(canvas.current, artifact, view.camera, view.hidden, view.selected, chrome, size.width, size.height)
-        );
-      } catch (caught) {
-        setAvailable(false);
-        setError(boundedErrorMessage(caught));
-      }
-    });
-    return () => cancelAnimationFrame(frame);
+  useLayoutEffect(() => {
+    if (!canvas.current || !viewport.current) return;
+    const style = getComputedStyle(viewport.current);
+    const chrome = {
+      background: style.getPropertyValue('--sl-color-bg').trim() || (theme === 'dark' ? '#18181b' : '#fff'),
+      text: style.getPropertyValue('--sl-color-text').trim() || (theme === 'dark' ? '#eee' : '#18181b'),
+      edge: style.getPropertyValue('--sl-color-gray-3').trim() || '#888'
+    };
+    try {
+      setAvailable(
+        drawScene(canvas.current, artifact, view.camera, view.hidden, view.selected, chrome, size.width, size.height)
+      );
+    } catch (caught) {
+      setAvailable(false);
+      setError(boundedErrorMessage(caught));
+    }
   }, [artifact, view.camera, view.hidden, view.selected, theme, size, pixelRatio]);
 
-  useEffect(() => {
-    const frame = requestAnimationFrame(() => {
-      if (!printCanvas.current) return;
-      try {
-        drawScene(
-          printCanvas.current,
-          artifact,
-          authoredCamera(artifact),
-          new Set(),
-          [],
-          { background: '#fff', text: '#18181b', edge: '#666' },
-          size.width,
-          size.height
-        );
-      } catch (caught) {
-        setError(boundedErrorMessage(caught));
-      }
-    });
-    return () => cancelAnimationFrame(frame);
+  useLayoutEffect(() => {
+    if (!printCanvas.current) return;
+    try {
+      drawScene(
+        printCanvas.current,
+        artifact,
+        authoredCamera(artifact),
+        new Set(),
+        [],
+        { background: '#fff', text: '#18181b', edge: '#666' },
+        size.width,
+        size.height
+      );
+    } catch (caught) {
+      setError(boundedErrorMessage(caught));
+    }
   }, [artifact, size]);
 
   useEffect(() => {

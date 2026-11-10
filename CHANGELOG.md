@@ -18,7 +18,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ### Security
 
-## [0.5.0] - 2026-11-10
+## [0.5.0] - 2026-11-11
 
 ### Added
 
@@ -83,6 +83,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ### Fixed
 
+- Camera resets and data updates keep 3D scene bitmaps current for display, PNG export, and printing.
 - Production builds validate one interactive cell generation across runtime compilation, MDX transforms, and build completion, reporting source changes with affected paths and preserving the previous complete runtime on failure.
 - Generated Rust embeds cell source verbatim, preserving multiline string, raw string, and byte string contents and authored source columns.
 - Rust cells can name inputs `inputs` or `dependencies`; generated wrapper parameters no longer shadow them.
@@ -92,6 +93,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 ### Security
 
 - Override the development toolchain's vulnerable minimatch 10 dependency with 11.0.1 to address GHSA-g3hv-75wg-m249.
+- Fresh npm consumers without the repository's KaTeX override can still report [GHSA-238p-pmpm-9mq7](https://github.com/advisories/GHSA-238p-pmpm-9mq7) through Mermaid and remark-math: one low-severity advisory across five audit entries. Oxiquill's own math renderer uses patched KaTeX 0.19.0.
 
 ## [0.4.1] - 2026-10-31
 
