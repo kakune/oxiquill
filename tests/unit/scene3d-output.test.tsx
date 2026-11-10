@@ -74,6 +74,37 @@ it.each(['', '  '])('keeps a labelled view for a blank authored title %j', (titl
   expect(screen.getByRole('group', { name: '3D scene' })).toHaveAttribute('tabindex', '0');
 });
 
+it.each(['keyboard', 'button'])('paints a %s camera reset before the next animation frame', async (control) => {
+  render(<Scene3dOutput artifact={tetrahedron} idPrefix="scene" />);
+  const viewport = screen.getByRole('group', { name: 'Tetrahedron' });
+  await waitFor(() => expect(camera()?.yaw).toBe(30));
+  fireEvent.keyDown(viewport, { key: 'ArrowRight' });
+  await waitFor(() => expect(camera()?.yaw).toBe(45));
+  vi.stubGlobal(
+    'requestAnimationFrame',
+    vi.fn(() => 1)
+  );
+  if (control === 'keyboard') fireEvent.keyDown(viewport, { key: '0' });
+  else fireEvent.click(screen.getByRole('button', { name: 'Reset view' }));
+  expect(camera()).toEqual({ yaw: 30, pitch: 20, zoom: 1 });
+  fireEvent.click(screen.getByRole('button', { name: 'Save PNG' }));
+  expect(scenePng).toHaveBeenCalledWith(screen.getByTestId('scene3d-canvas'));
+});
+
+it('updates the authored print bitmap before the next animation frame', async () => {
+  const output = (yaw: number) => <Scene3dOutput artifact={{ ...tetrahedron, camera: { yaw } }} idPrefix="scene" />;
+  const result = render(output(30));
+  const printedCamera = () =>
+    draw.mock.calls.filter(([canvas]) => canvas.classList.contains('doc-scene3d__print')).at(-1)?.[2];
+  await waitFor(() => expect(printedCamera()?.yaw).toBe(30));
+  vi.stubGlobal(
+    'requestAnimationFrame',
+    vi.fn(() => 1)
+  );
+  result.rerender(output(80));
+  expect(printedCamera()?.yaw).toBe(80);
+});
+
 it('offers keyboard and table measurement without interpreting labels as markup', async () => {
   const result = render(<Scene3dOutput artifact={tetrahedron} idPrefix="scene" />);
   const viewport = screen.getByRole('group', { name: 'Tetrahedron' });
